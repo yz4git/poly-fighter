@@ -1,0 +1,282 @@
+{
+  "source": "public/reference/female-turnaround.jpeg",
+  "grid": {
+    "sourceWidth": 1536,
+    "sourceHeight": 1024,
+    "xDividers": [
+      8,
+      389,
+      759,
+      1133,
+      1527
+    ],
+    "yTop": 116,
+    "yBottom": 1014
+  },
+  "canonicalSize": {
+    "width": 256,
+    "height": 512
+  },
+  "views": {
+    "front": {
+      "crop": {
+        "x": 8,
+        "y": 116,
+        "width": 381,
+        "height": 898
+      },
+      "canonicalWidth": 256,
+      "canonicalHeight": 512,
+      "maskPixelsNative": 91362,
+      "maskPixelsCanonical": 34985,
+      "maskBoundsNative": {
+        "minX": 40,
+        "minY": 70,
+        "maxX": 326,
+        "maxY": 834
+      },
+      "regions": {
+        "skin": {
+          "pixels": 14196,
+          "bbox": {
+            "minX": 48,
+            "minY": 104,
+            "maxX": 317,
+            "maxY": 506
+          }
+        },
+        "blue": {
+          "pixels": 27865,
+          "bbox": {
+            "minX": 62,
+            "minY": 84,
+            "maxX": 308,
+            "maxY": 830
+          }
+        },
+        "silver": {
+          "pixels": 3693,
+          "bbox": {
+            "minX": 48,
+            "minY": 78,
+            "maxX": 317,
+            "maxY": 798
+          }
+        },
+        "hair": {
+          "pixels": 44356,
+          "bbox": {
+            "minX": 40,
+            "minY": 70,
+            "maxX": 326,
+            "maxY": 834
+          }
+        },
+        "black": {
+          "pixels": 7621,
+          "bbox": {
+            "minX": 45,
+            "minY": 72,
+            "maxX": 319,
+            "maxY": 830
+          }
+        }
+      }
+    },
+    "three-quarter": {
+      "crop": {
+        "x": 389,
+        "y": 116,
+        "width": 370,
+        "height": 898
+      },
+      "canonicalWidth": 256,
+      "canonicalHeight": 512,
+      "maskPixelsNative": 86336,
+      "maskPixelsCanonical": 34072,
+      "maskBoundsNative": {
+        "minX": 55,
+        "minY": 71,
+        "maxX": 307,
+        "maxY": 842
+      },
+      "regions": {
+        "skin": {
+          "pixels": 13679,
+          "bbox": {
+            "minX": 57,
+            "minY": 110,
+            "maxX": 289,
+            "maxY": 507
+          }
+        },
+        "blue": {
+          "pixels": 24000,
+          "bbox": {
+            "minX": 72,
+            "minY": 77,
+            "maxX": 286,
+            "maxY": 838
+          }
+        },
+        "silver": {
+          "pixels": 3803,
+          "bbox": {
+            "minX": 58,
+            "minY": 73,
+            "maxX": 288,
+            "maxY": 810
+          }
+        },
+        "hair": {
+          "pixels": 46487,
+          "bbox": {
+            "minX": 55,
+            "minY": 71,
+            "maxX": 307,
+            "maxY": 842
+          }
+        },
+        "black": {
+          "pixels": 5469,
+          "bbox": {
+            "minX": 56,
+            "minY": 73,
+            "maxX": 306,
+            "maxY": 839
+          }
+        }
+      }
+    },
+    "side": {
+      "crop": {
+        "x": 759,
+        "y": 116,
+        "width": 374,
+        "height": 898
+      },
+      "canonicalWidth": 256,
+      "canonicalHeight": 512,
+      "maskPixelsNative": 59663,
+      "maskPixelsCanonical": 23283,
+      "maskBoundsNative": {
+        "minX": 98,
+        "minY": 73,
+        "maxX": 270,
+        "maxY": 844
+      },
+      "regions": {
+        "skin": {
+          "pixels": 10410,
+          "bbox": {
+            "minX": 135,
+            "minY": 85,
+            "maxX": 250,
+            "maxY": 507
+          }
+        },
+        "blue": {
+          "pixels": 15610,
+          "bbox": {
+            "minX": 122,
+            "minY": 91,
+            "maxX": 258,
+            "maxY": 839
+          }
+        },
+        "silver": {
+          "pixels": 4276,
+          "bbox": {
+            "minX": 123,
+            "minY": 82,
+            "maxX": 252,
+            "maxY": 617
+          }
+        },
+        "hair": {
+          "pixels": 29110,
+          "bbox": {
+            "minX": 98,
+            "minY": 73,
+            "maxX": 270,
+            "maxY": 844
+          }
+        },
+        "black": {
+          "pixels": 4468,
+          "bbox": {
+            "minX": 124,
+            "minY": 75,
+            "maxX": 268,
+            "maxY": 840
+          }
+        }
+      }
+    },
+    "back": {
+      "crop": {
+        "x": 1133,
+        "y": 116,
+        "width": 394,
+        "height": 898
+      },
+      "canonicalWidth": 256,
+      "canonicalHeight": 512,
+      "maskPixelsNative": 94641,
+      "maskPixelsCanonical": 35040,
+      "maskBoundsNative": {
+        "minX": 49,
+        "minY": 77,
+        "maxX": 325,
+        "maxY": 829
+      },
+      "regions": {
+        "skin": {
+          "pixels": 9250,
+          "bbox": {
+            "minX": 58,
+            "minY": 92,
+            "maxX": 323,
+            "maxY": 506
+          }
+        },
+        "blue": {
+          "pixels": 30463,
+          "bbox": {
+            "minX": 67,
+            "minY": 108,
+            "maxX": 316,
+            "maxY": 827
+          }
+        },
+        "silver": {
+          "pixels": 3038,
+          "bbox": {
+            "minX": 59,
+            "minY": 81,
+            "maxX": 323,
+            "maxY": 778
+          }
+        },
+        "hair": {
+          "pixels": 55885,
+          "bbox": {
+            "minX": 49,
+            "minY": 77,
+            "maxX": 325,
+            "maxY": 829
+          }
+        },
+        "black": {
+          "pixels": 3771,
+          "bbox": {
+            "minX": 56,
+            "minY": 77,
+            "maxX": 324,
+            "maxY": 828
+          }
+        }
+      }
+    }
+  }
+}

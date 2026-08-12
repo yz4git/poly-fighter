@@ -1,0 +1,127 @@
+{
+  "parameters": {
+    "width": 1.1,
+    "height": 0.9199999999999999,
+    "depth": 0.7599999999999998,
+    "lateral": 0
+  },
+  "totalLoss": 0.44333612854151305,
+  "views": {
+    "front": {
+      "view": "front",
+      "metrics": {
+        "width": 381,
+        "height": 898,
+        "referencePixels": 91362,
+        "generatedPixels": 126133,
+        "intersection": 71311,
+        "union": 146184,
+        "iou": 0.4878167241284956,
+        "falsePositivePixels": 54822,
+        "falseNegativePixels": 20051,
+        "xorPixels": 74873,
+        "referenceBounds": {
+          "minX": 40,
+          "minY": 70,
+          "maxX": 326,
+          "maxY": 834
+        },
+        "generatedBounds": {
+          "minX": 58,
+          "minY": 99,
+          "maxX": 322,
+          "maxY": 845
+        },
+        "contourErrorPx": 23.681351716124567
+      },
+      "loss": 0.5130329556889627
+    },
+    "three-quarter": {
+      "view": "three-quarter",
+      "metrics": {
+        "width": 370,
+        "height": 898,
+        "referencePixels": 86336,
+        "generatedPixels": 112697,
+        "intersection": 72405,
+        "union": 126628,
+        "iou": 0.5717929683798212,
+        "falsePositivePixels": 40292,
+        "falseNegativePixels": 13931,
+        "xorPixels": 54223,
+        "referenceBounds": {
+          "minX": 55,
+          "minY": 71,
+          "maxX": 307,
+          "maxY": 842
+        },
+        "generatedBounds": {
+          "minX": 82,
+          "minY": 93,
+          "maxX": 283,
+          "maxY": 850
+        },
+        "contourErrorPx": 18.1403195481411
+      },
+      "loss": 0.428860744646927
+    },
+    "side": {
+      "view": "side",
+      "metrics": {
+        "width": 374,
+        "height": 898,
+        "referencePixels": 59663,
+        "generatedPixels": 62548,
+        "intersection": 49102,
+        "union": 73109,
+        "iou": 0.6716272962289185,
+        "falsePositivePixels": 13446,
+        "falseNegativePixels": 10561,
+        "xorPixels": 24007,
+        "referenceBounds": {
+          "minX": 98,
+          "minY": 73,
+          "maxX": 270,
+          "maxY": 844
+        },
+        "generatedBounds": {
+          "minX": 101,
+          "minY": 95,
+          "maxX": 254,
+          "maxY": 843
+        },
+        "contourErrorPx": 12.47329284853613
+      },
+      "loss": 0.328821489804223
+    },
+    "back": {
+      "view": "back",
+      "metrics": {
+        "width": 394,
+        "height": 898,
+        "referencePixels": 94641,
+        "generatedPixels": 122929,
+        "intersection": 72352,
+        "union": 145218,
+        "iou": 0.4982302469390847,
+        "falsePositivePixels": 50577,
+        "falseNegativePixels": 22289,
+        "xorPixels": 72866,
+        "referenceBounds": {
+          "minX": 49,
+          "minY": 77,
+          "maxX": 325,
+          "maxY": 829
+        },
+        "generatedBounds": {
+          "minX": 65,
+          "minY": 104,
+          "maxX": 328,
+          "maxY": 834
+        },
+        "contourErrorPx": 24.083519443065804
+      },
+      "loss": 0.5026293240259397
+    }
+  }
+}

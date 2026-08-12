@@ -1331,27 +1331,15 @@ export function projectGeneratedLandmarks(visual: FighterVisual, camera: THREE.C
   }));
 }
 
-function rasterTriangle(mask: Uint8Array, resolution: number, a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2): void {
-  const minX = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x)));
-  const maxX = Math.min(resolution - 1, Math.ceil(Math.max(a.x, b.x, c.x)));
-  const minY = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y)));
-  const maxY = Math.min(resolution - 1, Math.ceil(Math.max(a.y, b.y, c.y)));
-  const edge = (p: THREE.Vector2, q: THREE.Vector2, x: number, y: number): number => (x - p.x) * (q.y - p.y) - (y - p.y) * (q.x - p.x);
-  const orientation = edge(a, b, c.x, c.y);
-  if (Math.abs(orientation) < 0.00001) return;
-  for (let y = minY; y <= maxY; y += 1) for (let x = minX; x <= maxX; x += 1) {
-    const e0 = edge(a, b, x + 0.5, y + 0.5);
-    const e1 = edge(b, c, x + 0.5, y + 0.5);
-    const e2 = edge(c, a, x + 0.5, y + 0.5);
-    if ((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0)) mask[y * resolution + x] = 1;
-  }
-}
-
-/** CPU projected-triangle rasterizer used for honest silhouette QA. */
-export function measureProjectedSilhouette(root: THREE.Object3D, camera: THREE.Camera, resolution = 64): ProjectedSilhouetteMetrics {
+/**
+ * CPU projected-triangle rasterizer used for honest Golden Master QA.  The
+ * returned pixels are the generated render mask itself; bounds are only a
+ * derived convenience and are never used as a substitute for pixel overlap.
+ */
+export function rasterProjectedSilhouette(root: THREE.Object3D, camera: THREE.Camera, width = 64, height = width): Uint8Array {
   root.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);
-  const mask = new Uint8Array(resolution * resolution);
+  const mask = new Uint8Array(width * height);
   const a = new THREE.Vector3(); const b = new THREE.Vector3(); const c = new THREE.Vector3();
   const projected = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   root.traverse((object) => {
@@ -1360,10 +1348,78 @@ export function measureProjectedSilhouette(root: THREE.Object3D, camera: THREE.C
     for (let triangle = 0; triangle < triangleCount(mesh); triangle += 1) {
       if (!trianglePositions(mesh, triangle, a, b, c)) continue;
       projected[0].copy(a).project(camera); projected[1].copy(b).project(camera); projected[2].copy(c).project(camera);
-      const screen = projected.map((point) => new THREE.Vector2((point.x + 1) * 0.5 * resolution, (1 - point.y) * 0.5 * resolution));
-      rasterTriangle(mask, resolution, screen[0], screen[1], screen[2]);
+      const screen = projected.map((point) => new THREE.Vector2((point.x + 1) * 0.5 * width, (1 - point.y) * 0.5 * height));
+      rasterTriangle(mask, width, height, screen[0], screen[1], screen[2]);
     }
   });
+  return mask;
+}
+
+/** Rasterize actual generated material-tagged triangles into independent masks. */
+export function rasterProjectedRegionMasks(root: THREE.Object3D, camera: THREE.Camera, width = 64, height = width): Record<string, Uint8Array> {
+  root.updateMatrixWorld(true);
+  camera.updateMatrixWorld(true);
+  const masks: Record<string, Uint8Array> = {};
+  const labels = new Int16Array(width * height); labels.fill(-1);
+  const depths = new Float32Array(width * height); depths.fill(Number.POSITIVE_INFINITY);
+  const regionNames: string[] = [];
+  const a = new THREE.Vector3(); const b = new THREE.Vector3(); const c = new THREE.Vector3();
+  const projected = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || object.userData.excludeFromMetrics) return;
+    const region = typeof object.userData.region === "string" ? object.userData.region : "default";
+    if (!regionNames.includes(region)) regionNames.push(region);
+    const mesh = object;
+    for (let triangle = 0; triangle < triangleCount(mesh); triangle += 1) {
+      if (!trianglePositions(mesh, triangle, a, b, c)) continue;
+      projected[0].copy(a).project(camera); projected[1].copy(b).project(camera); projected[2].copy(c).project(camera);
+      const screen = projected.map((point) => new THREE.Vector2((point.x + 1) * 0.5 * width, (1 - point.y) * 0.5 * height));
+      rasterTriangleDepth(labels, depths, regionNames.indexOf(region), width, height, screen[0], screen[1], screen[2], projected[0].z, projected[1].z, projected[2].z);
+    }
+  });
+  for (const region of regionNames) masks[region] = new Uint8Array(width * height);
+  for (let i = 0; i < labels.length; i += 1) if (labels[i] >= 0) masks[regionNames[labels[i]]][i] = 1;
+  return masks;
+}
+
+function rasterTriangleDepth(labels: Int16Array, depths: Float32Array, label: number, width: number, height: number, a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, za: number, zb: number, zc: number): void {
+  const minX = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x)));
+  const maxX = Math.min(width - 1, Math.ceil(Math.max(a.x, b.x, c.x)));
+  const minY = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y)));
+  const maxY = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y, c.y)));
+  const edge = (p: THREE.Vector2, q: THREE.Vector2, x: number, y: number): number => (x - p.x) * (q.y - p.y) - (y - p.y) * (q.x - p.x);
+  const orientation = edge(a, b, c.x, c.y);
+  if (Math.abs(orientation) < 0.00001) return;
+  for (let y = minY; y <= maxY; y += 1) for (let x = minX; x <= maxX; x += 1) {
+    const px = x + 0.5; const py = y + 0.5;
+    const e0 = edge(a, b, px, py); const e1 = edge(b, c, px, py); const e2 = edge(c, a, px, py);
+    if (!((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0))) continue;
+    const wa = edge(b, c, px, py) / orientation; const wb = edge(c, a, px, py) / orientation; const wc = edge(a, b, px, py) / orientation;
+    const depth = wa * za + wb * zb + wc * zc;
+    const index = y * width + x;
+    if (depth < depths[index]) { depths[index] = depth; labels[index] = label; }
+  }
+}
+
+function rasterTriangle(mask: Uint8Array, width: number, height: number, a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2): void {
+  const minX = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x)));
+  const maxX = Math.min(width - 1, Math.ceil(Math.max(a.x, b.x, c.x)));
+  const minY = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y)));
+  const maxY = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y, c.y)));
+  const edge = (p: THREE.Vector2, q: THREE.Vector2, x: number, y: number): number => (x - p.x) * (q.y - p.y) - (y - p.y) * (q.x - p.x);
+  const orientation = edge(a, b, c.x, c.y);
+  if (Math.abs(orientation) < 0.00001) return;
+  for (let y = minY; y <= maxY; y += 1) for (let x = minX; x <= maxX; x += 1) {
+    const e0 = edge(a, b, x + 0.5, y + 0.5);
+    const e1 = edge(b, c, x + 0.5, y + 0.5);
+    const e2 = edge(c, a, x + 0.5, y + 0.5);
+    if ((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0)) mask[y * width + x] = 1;
+  }
+}
+
+/** CPU projected-triangle rasterizer used for honest silhouette QA. */
+export function measureProjectedSilhouette(root: THREE.Object3D, camera: THREE.Camera, resolution = 64): ProjectedSilhouetteMetrics {
+  const mask = rasterProjectedSilhouette(root, camera, resolution, resolution);
   let occupiedPixels = 0; let sumX = 0; let sumY = 0; let minX = resolution; let minY = resolution; let maxX = -1; let maxY = -1;
   for (let y = 0; y < resolution; y += 1) for (let x = 0; x < resolution; x += 1) if (mask[y * resolution + x]) {
     occupiedPixels += 1; sumX += x; sumY += y; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);

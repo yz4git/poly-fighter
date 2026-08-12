@@ -1,0 +1,98 @@
+{
+  "front": {
+    "headContourErrorPx": 0.004722550177095631,
+    "eyeCenterErrorPx": 0,
+    "noseTipErrorPx": 0.5071673477773472,
+    "mouthErrorPx": 0,
+    "chinErrorPx": 1.1135976935728402,
+    "faceMask": {
+      "width": 381,
+      "height": 898,
+      "referencePixels": 22301,
+      "generatedPixels": 22305,
+      "intersection": 22301,
+      "union": 22305,
+      "iou": 0.9998206680116566,
+      "falsePositivePixels": 4,
+      "falseNegativePixels": 0,
+      "xorPixels": 4,
+      "referenceBounds": {
+        "minX": 100,
+        "minY": 70,
+        "maxX": 275,
+        "maxY": 299
+      },
+      "generatedBounds": {
+        "minX": 100,
+        "minY": 70,
+        "maxX": 275,
+        "maxY": 299
+      },
+      "contourErrorPx": 0.004722550177095631
+    }
+  },
+  "three-quarter": {
+    "headContourErrorPx": 0.001053740779768177,
+    "eyeCenterErrorPx": 0,
+    "noseTipErrorPx": 0.7453392138977036,
+    "mouthErrorPx": 0,
+    "chinErrorPx": 2.3265550096398178,
+    "faceMask": {
+      "width": 370,
+      "height": 898,
+      "referencePixels": 23042,
+      "generatedPixels": 23043,
+      "intersection": 23042,
+      "union": 23043,
+      "iou": 0.9999566028728898,
+      "falsePositivePixels": 1,
+      "falseNegativePixels": 0,
+      "xorPixels": 1,
+      "referenceBounds": {
+        "minX": 106,
+        "minY": 71,
+        "maxX": 260,
+        "maxY": 302
+      },
+      "generatedBounds": {
+        "minX": 106,
+        "minY": 71,
+        "maxX": 260,
+        "maxY": 302
+      },
+      "contourErrorPx": 0.001053740779768177
+    }
+  },
+  "side": {
+    "headContourErrorPx": 0.0033886641950342656,
+    "eyeCenterErrorPx": 0,
+    "noseTipErrorPx": 0.6556489324422808,
+    "mouthErrorPx": 0,
+    "chinErrorPx": 0.8227470172057515,
+    "faceMask": {
+      "width": 374,
+      "height": 898,
+      "referencePixels": 19064,
+      "generatedPixels": 19069,
+      "intersection": 19064,
+      "union": 19069,
+      "iou": 0.9997377943258692,
+      "falsePositivePixels": 5,
+      "falseNegativePixels": 0,
+      "xorPixels": 5,
+      "referenceBounds": {
+        "minX": 121,
+        "minY": 73,
+        "maxX": 270,
+        "maxY": 304
+      },
+      "generatedBounds": {
+        "minX": 121,
+        "minY": 73,
+        "maxX": 270,
+        "maxY": 304
+      },
+      "contourErrorPx": 0.0033886641950342656
+    }
+  }
+}

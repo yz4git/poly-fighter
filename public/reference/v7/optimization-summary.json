@@ -1,0 +1,18 @@
+{
+  "optimizer": "deterministic coordinate descent / finite rendered mask loss",
+  "iterations": 8,
+  "initialTotalLoss": 0.5071452720173175,
+  "finalTotalLoss": 0.44333612854151305,
+  "initialParameters": {
+    "width": 1,
+    "height": 1,
+    "depth": 1,
+    "lateral": 0
+  },
+  "finalParameters": {
+    "width": 1.1,
+    "height": 0.9199999999999999,
+    "depth": 0.7599999999999998,
+    "lateral": 0
+  }
+}

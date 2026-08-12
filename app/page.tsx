@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { PolyFightGame } from "@/src/game/game";
-import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
 import {
@@ -21,6 +20,8 @@ type SettingsDraft = {
   audio: boolean;
   vibration: boolean;
 };
+
+const ReferenceReconstructionPanel = lazy(() => import("@/src/components/reference-reconstruction").then((module) => ({ default: module.ReferenceReconstructionPanel })));
 
 const DEFAULT_SETTINGS: SettingsDraft = {
   quality: "NORMAL",
@@ -317,7 +318,7 @@ export default function Home() {
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "MATCH" || screen === "RESULT";
 
-  if (referenceMode) return <ReferenceReconstructionPanel />;
+  if (referenceMode) return <Suspense fallback={<main className="reference-reconstruction"><p>Loading Golden Master reconstruction…</p></main>}><ReferenceReconstructionPanel /></Suspense>;
 
   return (
     <main className="poly-app">

@@ -256,7 +256,7 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .reference-stage { position: relative; min-width: 0; height: 100%; aspect-ratio: .425; overflow: hidden; background: #25262a; border: 1px solid rgba(234, 243, 255, .28); box-shadow: 0 0 0 5px rgba(255,255,255,.025), 0 20px 55px rgba(0,0,0,.45); }
 .reference-crop, .reference-render, .reference-landmarks, .reference-cage-labels { position: absolute; inset: 0; width: 100%; height: 100%; }
 .reference-crop { overflow: hidden; pointer-events: none; }
-.reference-crop img { pointer-events: none; user-select: none; }
+.reference-crop img, .reference-artifact { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: fill; pointer-events: none; user-select: none; }
 .reference-render { display: block; pointer-events: none; }
 .reference-landmarks { pointer-events: none; }
 .reference-landmarks .target { position: absolute; width: 7px; height: 7px; transform: translate(-50%, -50%); border: 1px solid #ffdc66; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 0 10px rgba(255,220,102,.8); }

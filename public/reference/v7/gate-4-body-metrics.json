@@ -1,0 +1,106 @@
+{
+  "triangleCount": 43168,
+  "vertexCount": 86336,
+  "measured": {
+    "front": {
+      "width": 381,
+      "height": 898,
+      "referencePixels": 91362,
+      "generatedPixels": 92555,
+      "intersection": 91362,
+      "union": 92555,
+      "iou": 0.9871103668089244,
+      "falsePositivePixels": 1193,
+      "falseNegativePixels": 0,
+      "xorPixels": 1193,
+      "referenceBounds": {
+        "minX": 40,
+        "minY": 70,
+        "maxX": 326,
+        "maxY": 834
+      },
+      "generatedBounds": {
+        "minX": 40,
+        "minY": 70,
+        "maxX": 326,
+        "maxY": 834
+      },
+      "contourErrorPx": 0.3492119644409353
+    },
+    "three-quarter": {
+      "width": 370,
+      "height": 898,
+      "referencePixels": 86336,
+      "generatedPixels": 86373,
+      "intersection": 86336,
+      "union": 86373,
+      "iou": 0.9995716253921944,
+      "falsePositivePixels": 37,
+      "falseNegativePixels": 0,
+      "xorPixels": 37,
+      "referenceBounds": {
+        "minX": 55,
+        "minY": 71,
+        "maxX": 307,
+        "maxY": 842
+      },
+      "generatedBounds": {
+        "minX": 55,
+        "minY": 71,
+        "maxX": 307,
+        "maxY": 842
+      },
+      "contourErrorPx": 0.008747706628472489
+    },
+    "side": {
+      "width": 374,
+      "height": 898,
+      "referencePixels": 59663,
+      "generatedPixels": 59691,
+      "intersection": 59663,
+      "union": 59691,
+      "iou": 0.999530917558761,
+      "falsePositivePixels": 28,
+      "falseNegativePixels": 0,
+      "xorPixels": 28,
+      "referenceBounds": {
+        "minX": 98,
+        "minY": 73,
+        "maxX": 270,
+        "maxY": 844
+      },
+      "generatedBounds": {
+        "minX": 98,
+        "minY": 73,
+        "maxX": 270,
+        "maxY": 844
+      },
+      "contourErrorPx": 0.008204208160757627
+    },
+    "back": {
+      "width": 394,
+      "height": 898,
+      "referencePixels": 94641,
+      "generatedPixels": 95232,
+      "intersection": 94641,
+      "union": 95232,
+      "iou": 0.9937941028225806,
+      "falsePositivePixels": 591,
+      "falseNegativePixels": 0,
+      "xorPixels": 591,
+      "referenceBounds": {
+        "minX": 49,
+        "minY": 77,
+        "maxX": 325,
+        "maxY": 829
+      },
+      "generatedBounds": {
+        "minX": 49,
+        "minY": 77,
+        "maxX": 325,
+        "maxY": 829
+      },
+      "contourErrorPx": 0.1758103093189953
+    }
+  }
+}

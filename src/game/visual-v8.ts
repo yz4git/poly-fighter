@@ -267,7 +267,7 @@ function helpers(rig: FighterRig, l: FighterVisualLayout): {leftArm:LimbVisual;r
   return {leftArm:{root:rig.bones.leftUpperArm,upper:rig.bones.leftUpperArm,lower:rig.bones.leftForearm,end:lh},rightArm:{root:rig.bones.rightUpperArm,upper:rig.bones.rightUpperArm,lower:rig.bones.rightForearm,end:rh},leftLeg:{root:rig.bones.leftThigh,upper:rig.bones.leftThigh,lower:rig.bones.leftShin,end:lf},rightLeg:{root:rig.bones.rightThigh,upper:rig.bones.rightThigh,lower:rig.bones.rightShin,end:rf}};
 }
 
-export function createFemaleV8Visual(definition: FighterDefinition, quality: FighterVisualQuality): any {
+export function createFemaleV8Visual(definition: FighterDefinition, quality: FighterVisualQuality): unknown {
   const l=layout(quality); const rig=rigFor(l); const builder=new Builder(); buildCharacter(builder,l,rig); const geometry=builder.build(); const mats=materials(definition);
   const bodyMesh=new THREE.SkinnedMesh(geometry,mats); bodyMesh.name="v8-sera-single-skinned-mesh"; bodyMesh.userData.singleCharacterGeometry=true;
   const root=new THREE.Group(); root.name=`fighter-v8-${definition.id}`; root.scale.setScalar(l.worldScale); root.add(rig.root,bodyMesh); root.updateMatrixWorld(true); bodyMesh.bind(rig.skeleton);

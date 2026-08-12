@@ -21,7 +21,7 @@ function assertFiniteAttribute(geometry: THREE.BufferGeometry, name: string, lab
   }
 }
 
-test("Fighter Visual V4 follows reference proportions and real skinning", () => {
+test("Fighter Visual V5 follows reference proportions and real skinning", () => {
   for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     const visual = createFighterVisual(definition, "NORMAL");
     const target = definition.archetype === "POWER" ? REFERENCE_STYLE.KAIRO : REFERENCE_STYLE.SERA;
@@ -29,7 +29,9 @@ test("Fighter Visual V4 follows reference proportions and real skinning", () => 
 
     assert.ok(visual.stats.triangleCount >= 7_000, `${definition.name} V4 is below the efficient density budget`);
     assert.ok(visual.stats.triangleCount <= 30_000, `${definition.name} V4 exceeds the mobile density budget`);
-    assert.ok(visual.stats.meshCount <= 40);
+    // V5 adds explicit deltoid, patella, elbow, hip, face and hair masses,
+    // while keeping a bounded draw-call budget.
+    assert.ok(visual.stats.meshCount <= 52);
     assert.ok(visual.stats.materialCount <= 8);
     assert.equal(Object.keys(visual.rig.bones).length, 21);
     assert.equal(visual.stats.skinnedMesh, true);
@@ -100,7 +102,7 @@ test("Fighter Visual V4 follows reference proportions and real skinning", () => 
   }
 });
 
-test("Fighter Visual V4 quality tiers keep the same design with ordered budgets", () => {
+test("Fighter Visual V5 quality tiers keep the same design with ordered budgets", () => {
   for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     const low = createFighterVisual(definition, "LOW");
     const normal = createFighterVisual(definition, "NORMAL");
@@ -111,7 +113,7 @@ test("Fighter Visual V4 quality tiers keep the same design with ordered budgets"
     assert.ok(normal.stats.vertexCount >= low.stats.vertexCount);
     assert.equal(normal.stats.materialCount, low.stats.materialCount);
     assert.equal(normal.stats.materialCount, high.stats.materialCount);
-    assert.ok(high.stats.meshCount <= 40);
+    assert.ok(high.stats.meshCount <= 52);
     disposeFighterVisual(low);
     disposeFighterVisual(normal);
     disposeFighterVisual(high);

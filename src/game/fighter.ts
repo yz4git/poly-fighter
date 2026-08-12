@@ -1,6 +1,16 @@
 import * as THREE from "three";
 import { CommandParser, InputBuffer } from "./input";
-import { createFighterVisual, getVisualContactPoint, type FighterVisual } from "./visual";
+import {
+  createFighterVisual,
+  getSoleContactPoint,
+  getVisualContactPoint,
+  getWalkFootTarget,
+  releaseFootPlants,
+  updateFootPlants,
+  visualGroundOffset,
+  type FighterVisual,
+  type FootPlantMode,
+} from "./visual";
 import { attackHitboxCenter, fighterBasis, fighterRootQuaternion, orientBoneForward, solveTwoBoneIK } from "./rig";
 import type {
   FighterDefinition,
@@ -252,6 +262,7 @@ export class FighterRuntime {
     this.inputBuffer.clear();
     this.state = "IDLE";
     this.invariantError = null;
+    releaseFootPlants(this.visual);
   }
 
   validateInvariants(): boolean {
@@ -389,7 +400,14 @@ export class FighterAnimationController {
     const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
     const scale = visual.root.scale.x;
 
-    visual.root.position.copy(fighter.position);
+    // Gameplay Y is the ground-contact coordinate.  The visual root carries
+    // the authored boot sole to that plane; this keeps the rig and the
+    // deterministic fighter position in separate, explicit spaces.
+    visual.root.position.set(
+      fighter.position.x,
+      fighter.position.y + visualGroundOffset(visual),
+      fighter.position.z,
+    );
     visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
     visual.root.updateMatrixWorld(true);
 
@@ -417,6 +435,12 @@ export class FighterAnimationController {
     if (visual.aura.material instanceof THREE.MeshBasicMaterial) visual.aura.material.opacity = 0.22;
     visual.root.updateMatrixWorld(true);
 
+    const passivePose = ["KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(state);
+    const footMode: FootPlantMode = !fighter.grounded || state === "JUMP" || state === "SIDESTEP" || passivePose
+      ? "RELEASE"
+      : state === "WALK" ? "WALK" : "LOCK_BOTH";
+    const plantedFeet = updateFootPlants(visual, footMode, 0, fighter.grounded);
+
     const solveArm = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
       const prefix = side < 0 ? "left" : "right";
       // The hand bone origin is at the wrist; the visible fist is offset
@@ -436,9 +460,10 @@ export class FighterAnimationController {
     };
     const solveLeg = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
       const prefix = side < 0 ? "left" : "right";
+      const endLocal = visual.footContacts[side < 0 ? "left" : "right"].endLocal;
       const ikTarget = target.clone()
-        .addScaledVector(basis.up, 0.026 * scale)
-        .addScaledVector(basis.forward, -layout.footLength * 0.22 * scale);
+        .addScaledVector(basis.up, -endLocal.y * scale)
+        .addScaledVector(basis.forward, -endLocal.z * scale);
       solveTwoBoneIK({
         root: visual.rig.bones[`${prefix}Thigh`],
         mid: visual.rig.bones[`${prefix}Shin`],
@@ -449,22 +474,49 @@ export class FighterAnimationController {
       orientBoneForward(visual.rig.bones[`${prefix}Foot`], basis.forward);
     };
 
+    const solveLegToSole = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
+      const prefix = side < 0 ? "left" : "right";
+      const soleLocal = visual.footContacts[side < 0 ? "left" : "right"].soleLocal;
+      const ikTarget = target.clone()
+        .addScaledVector(basis.up, -soleLocal.y * scale)
+        .addScaledVector(basis.forward, -soleLocal.z * scale);
+      solveTwoBoneIK({
+        root: visual.rig.bones[`${prefix}Thigh`],
+        mid: visual.rig.bones[`${prefix}Shin`],
+        end: visual.rig.bones[`${prefix}Foot`],
+        target: ikTarget,
+        pole,
+      });
+      orientBoneForward(visual.rig.bones[`${prefix}Foot`], basis.forward);
+    };
+
+    const legPole = (side: -1 | 1): THREE.Vector3 => {
+      const prefix = side < 0 ? "left" : "right";
+      return visual.rig.bones[`${prefix}Thigh`].getWorldPosition(new THREE.Vector3())
+        .addScaledVector(basis.forward, scale * 0.12)
+        .addScaledVector(basis.side, side * scale * 0.12);
+    };
+
+    const solvePlantedFeet = (): void => {
+      if (plantedFeet.left) solveLegToSole(-1, plantedFeet.left, legPole(-1));
+      if (plantedFeet.right) solveLegToSole(1, plantedFeet.right, legPole(1));
+    };
+
     if (state === "WALK") {
       const stride = Math.sin(timeSeconds * 12) * 0.24;
       visual.hips.rotation.y = -stride * 0.10;
       visual.hips.position.x = Math.sin(timeSeconds * 6) * 0.008;
-      visual.leftLeg.root.rotation.z = stride;
-      visual.rightLeg.root.rotation.z = -stride;
       visual.leftArm.root.rotation.z = -stride * 0.7;
       visual.rightArm.root.rotation.z = stride * 0.7;
       visual.rig.bones.spineLower.rotation.y = -stride * 0.12;
       visual.rig.bones.spineUpper.rotation.y = stride * 0.16;
+      solveLegToSole(-1, getWalkFootTarget(visual, "left", timeSeconds), legPole(-1));
+      solveLegToSole(1, getWalkFootTarget(visual, "right", timeSeconds), legPole(1));
     } else if (state === "CROUCH") {
       visual.hips.position.y = layout.hipsY - 0.06;
       visual.rig.bones.spineLower.rotation.x = 0.10;
       visual.rig.bones.spineUpper.rotation.x = 0.12;
-      solveLeg(-1, getVisualContactPoint(visual, "LEFT_FOOT"), visual.rig.bones.leftThigh.getWorldPosition(new THREE.Vector3()).add(basis.forward.clone().multiplyScalar(scale * 0.12)));
-      solveLeg(1, getVisualContactPoint(visual, "RIGHT_FOOT"), visual.rig.bones.rightThigh.getWorldPosition(new THREE.Vector3()).add(basis.forward.clone().multiplyScalar(scale * 0.12)));
+      solvePlantedFeet();
     } else if (state === "JUMP") {
       visual.hips.rotation.z = -fighter.facing * 0.08;
       visual.rig.bones.spineUpper.rotation.x = -0.16;
@@ -481,6 +533,7 @@ export class FighterAnimationController {
       solveArm(-1, head.clone().addScaledVector(basis.side, -scale * 0.16).addScaledVector(basis.forward, scale * 0.08), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.25));
       solveArm(1, head.clone().addScaledVector(basis.side, scale * 0.16).addScaledVector(basis.forward, scale * 0.08), visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.25));
       visual.rig.bones.spineUpper.rotation.x = state === "BLOCK_STUN" ? 0.08 : 0;
+      solvePlantedFeet();
     } else if (state === "ATTACK" && move) {
       const windup = Math.min(1, fighter.moveTick / Math.max(1, move.startup));
       const snap = fighter.isActive() ? Math.sin(Math.min(1, (fighter.moveTick - move.startup + 1) / Math.max(1, move.active)) * Math.PI) : 0;
@@ -520,10 +573,12 @@ export class FighterAnimationController {
         solveLeg(kickSide, target, pole);
         const supportSide = (kickSide * -1) as -1 | 1;
         const supportPrefix = supportSide < 0 ? "left" : "right";
-        const support = getVisualContactPoint(visual, supportSide < 0 ? "LEFT_FOOT" : "RIGHT_FOOT");
-        solveLeg(supportSide, support, visual.rig.bones[`${supportPrefix}Thigh`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, supportSide * scale * 0.12));
+        const support = plantedFeet[supportSide < 0 ? "left" : "right"] ?? getSoleContactPoint(visual, supportSide < 0 ? "left" : "right");
+        solveLegToSole(supportSide, support, visual.rig.bones[`${supportPrefix}Thigh`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, supportSide * scale * 0.12));
         solveArm(-1, visual.root.localToWorld(new THREE.Vector3(-0.15, layout.shoulderY - 0.08, 0.16)), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.20));
         solveArm(1, visual.root.localToWorld(new THREE.Vector3(0.15, layout.shoulderY - 0.10, 0.15)), visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.20));
+        if (supportSide === -1 && plantedFeet.left) solveLegToSole(-1, plantedFeet.left, legPole(-1));
+        if (supportSide === 1 && plantedFeet.right) solveLegToSole(1, plantedFeet.right, legPole(1));
       } else {
         solveArm(-1, combatTarget, visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.20));
         solveArm(1, combatTarget, visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.20));
@@ -551,8 +606,14 @@ export class FighterAnimationController {
     } else if (state === "WAKEUP") {
       visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
       visual.root.rotateZ(fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22)));
+      solvePlantedFeet();
     } else {
       visual.torso.rotation.y = Math.sin(timeSeconds * 2.4) * 0.018;
+      solvePlantedFeet();
+    }
+    for (const [index, hair] of visual.ponytailMasses.entries()) {
+      hair.rotation.z += Math.sin(timeSeconds * 5.5 + index * 0.65) * 0.006;
+      hair.rotation.x += Math.cos(timeSeconds * 4.2 + index * 0.4) * 0.004;
     }
     visual.root.updateMatrixWorld(true);
   }

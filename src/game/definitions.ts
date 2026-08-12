@@ -21,6 +21,13 @@ function move(
     width: 0.65,
     height: 1.25,
     power: 1,
+    visualContact:
+      definition.visualContact ??
+      (definition.animation === "kick"
+        ? "RIGHT_FOOT"
+        : definition.animation === "punch"
+          ? "RIGHT_FIST"
+          : "BODY"),
     ...definition,
   };
 }

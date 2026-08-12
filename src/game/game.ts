@@ -134,6 +134,10 @@ export class PolyFightGame {
     };
     this.round.start();
     this.resetPositions();
+    // Apply the initial rig pose before the first render so Safari never sees
+    // a one-frame unpositioned/overlapping character shell.
+    this.animation.update(this.p1, this.p2, 0);
+    this.animation.update(this.p2, this.p1, 0.22);
     this.publishHud(true);
   }
 
@@ -266,8 +270,8 @@ export class PolyFightGame {
         this.audio.roundStart();
       }
     }
-    this.animation.update(this.p1, this.renderTime);
-    this.animation.update(this.p2, this.renderTime + 0.22);
+    this.animation.update(this.p1, this.p2, this.renderTime);
+    this.animation.update(this.p2, this.p1, this.renderTime + 0.22);
     this.publishHud(false);
   }
 

@@ -35,6 +35,13 @@ export type ActionButton = "punch" | "kick" | "guard";
 export type DirectionButton = "left" | "right" | "up" | "down";
 export type InputAction = ActionButton | DirectionButton;
 
+export type VisualContactPoint =
+  | "LEFT_FIST"
+  | "RIGHT_FIST"
+  | "LEFT_FOOT"
+  | "RIGHT_FOOT"
+  | "BODY";
+
 export interface InputFrame {
   left: boolean;
   right: boolean;
@@ -76,6 +83,7 @@ export interface MoveDefinition {
   width: number;
   height: number;
   power: number;
+  visualContact?: VisualContactPoint;
   knockdown?: boolean;
   launcher?: boolean;
 }

@@ -5,8 +5,9 @@ import type {
   MoveDefinition,
 } from "./types";
 import { FighterRuntime } from "./fighter";
+import { attackHitboxCenter } from "./rig";
 
-interface Hitbox {
+export interface Hitbox {
   centerX: number;
   centerY: number;
   centerZ: number;
@@ -56,16 +57,11 @@ export class HurtboxSystem {
 
 export class HitboxSystem {
   getHitbox(attacker: FighterRuntime, move: MoveDefinition): Hitbox {
-    const centerY =
-      move.hitLevel === "LOW"
-        ? attacker.position.y + 0.48
-        : move.hitLevel === "HIGH"
-          ? attacker.position.y + 1.78
-          : attacker.position.y + 1.2;
+    const center = attackHitboxCenter(attacker.position, attacker.facing, move);
     return {
-      centerX: attacker.position.x + attacker.facing * move.reach * 0.72,
-      centerY,
-      centerZ: attacker.position.z,
+      centerX: center.x,
+      centerY: center.y,
+      centerZ: center.z,
       halfX: move.reach * 0.48,
       halfY: move.hitLevel === "LOW" ? 0.25 : move.height * 0.42,
       halfZ: move.width * 0.55,

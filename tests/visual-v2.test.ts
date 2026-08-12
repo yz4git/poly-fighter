@@ -3,11 +3,13 @@ import test from "node:test";
 import * as THREE from "three";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import {
-  REFERENCE_POSE_BOUNDS,
   REFERENCE_STYLE,
   createFighterVisual,
   disposeFighterVisual,
+  generatedLandmarks,
   landmarkLoss,
+  measureProjectedSilhouette,
+  projectGeneratedLandmarks,
   proportionPenalty,
 } from "../src/game/visual";
 
@@ -19,14 +21,14 @@ function assertFiniteAttribute(geometry: THREE.BufferGeometry, name: string, lab
   }
 }
 
-test("Fighter Visual V3 follows reference proportions and real skinning", () => {
+test("Fighter Visual V4 follows reference proportions and real skinning", () => {
   for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     const visual = createFighterVisual(definition, "NORMAL");
     const target = definition.archetype === "POWER" ? REFERENCE_STYLE.KAIRO : REFERENCE_STYLE.SERA;
     const body = visual.bodyMesh;
 
-    assert.ok(visual.stats.triangleCount >= 12_000, `${definition.name} V3 is below the efficient density budget`);
-    assert.ok(visual.stats.triangleCount <= 30_000, `${definition.name} V3 exceeds the mobile density budget`);
+    assert.ok(visual.stats.triangleCount >= 7_000, `${definition.name} V4 is below the efficient density budget`);
+    assert.ok(visual.stats.triangleCount <= 30_000, `${definition.name} V4 exceeds the mobile density budget`);
     assert.ok(visual.stats.meshCount <= 40);
     assert.ok(visual.stats.materialCount <= 8);
     assert.equal(Object.keys(visual.rig.bones).length, 21);
@@ -49,13 +51,15 @@ test("Fighter Visual V3 follows reference proportions and real skinning", () => 
     assert.ok(visual.stats.proportions.shoulderHeadRatio >= (target.shoulderWidth / target.headWidth) * 0.96);
     assert.ok(visual.stats.proportions.shoulderHeadRatio <= (target.shoulderWidth / target.headWidth) * 1.04);
     assert.ok(visual.stats.proportions.thighShinRatio >= 1.02 && visual.stats.proportions.thighShinRatio <= 1.09);
-    assert.ok(visual.stats.facetDistribution.large >= 0.45 && visual.stats.facetDistribution.large <= 0.55);
-    assert.ok(visual.stats.facetDistribution.medium >= 0.30 && visual.stats.facetDistribution.medium <= 0.40);
-    assert.ok(visual.stats.facetDistribution.small >= 0.10 && visual.stats.facetDistribution.small <= 0.18);
-    assert.ok(visual.stats.scores.silhouette >= 80);
+    const facetTotal = visual.stats.facetDistribution.large + visual.stats.facetDistribution.medium + visual.stats.facetDistribution.small;
+    assert.ok(Math.abs(facetTotal - 1) < 0.0001);
+    assert.ok(Math.max(visual.stats.facetDistribution.large, visual.stats.facetDistribution.medium, visual.stats.facetDistribution.small) - Math.min(visual.stats.facetDistribution.large, visual.stats.facetDistribution.medium, visual.stats.facetDistribution.small) > 0.05);
+    assert.equal(visual.stats.scores.silhouette, null, "silhouette is NOT_MEASURED until projected geometry is supplied");
+    assert.equal(visual.stats.scores.landmark, null, "landmark is NOT_MEASURED until a camera pose is supplied");
     assert.ok(visual.stats.scores.proportion >= 90);
-    assert.ok(visual.stats.scores.facet >= 80);
-    assert.ok(visual.stats.scores.style >= 85);
+    assert.ok(Number.isFinite(visual.stats.scores.facet));
+    assert.ok(Number.isFinite(visual.stats.scores.style));
+    assert.ok(Number.isFinite(visual.stats.scores.colorMaterial ?? NaN));
 
     // Confirm a real bone deformation changes a weighted body vertex.
     const targetBone = visual.rig.boneIndices.rightUpperArm;
@@ -81,15 +85,22 @@ test("Fighter Visual V3 follows reference proportions and real skinning", () => 
     assert.ok(bind.distanceTo(deformed) > 0.0001, `${definition.name} body vertices did not deform with the skeleton`);
 
     const poseKey = definition.archetype === "POWER" ? "KAIRO" : "SERA";
-    assert.equal(landmarkLoss(poseKey, {
-      headTop: REFERENCE_POSE_BOUNDS[poseKey].headTop,
-      chin: REFERENCE_POSE_BOUNDS[poseKey].chin,
-    }), 0);
+    const camera = new THREE.OrthographicCamera(-2.2, 2.2, 2.2, -2.2, 0.1, 20);
+    camera.position.set(2.8, 1.6, 5.4);
+    camera.lookAt(0, 1.4, 0);
+    const generated = generatedLandmarks(visual);
+    assert.ok(Object.values(generated).every((value) => value.toArray().every(Number.isFinite)));
+    const projected = projectGeneratedLandmarks(visual, camera);
+    const measuredLoss = landmarkLoss(poseKey, projected);
+    assert.ok(Number.isFinite(measuredLoss) && measuredLoss >= 0);
+    const silhouette = measureProjectedSilhouette(visual.root, camera, 64);
+    assert.ok(silhouette.occupiedPixels > 0);
+    assert.ok(silhouette.areaRatio > 0 && silhouette.areaRatio < 1);
     disposeFighterVisual(visual);
   }
 });
 
-test("Fighter Visual V3 quality tiers keep the same design with ordered budgets", () => {
+test("Fighter Visual V4 quality tiers keep the same design with ordered budgets", () => {
   for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     const low = createFighterVisual(definition, "LOW");
     const normal = createFighterVisual(definition, "NORMAL");

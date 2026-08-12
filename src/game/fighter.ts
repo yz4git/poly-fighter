@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { CommandParser, InputBuffer } from "./input";
-import { createFighterVisual, type FighterVisual } from "./visual";
+import { createFighterVisual, getVisualContactPoint, type FighterVisual } from "./visual";
+import { attackHitboxCenter, fighterBasis, fighterRootQuaternion, orientBoneForward, solveTwoBoneIK } from "./rig";
 import type {
   FighterDefinition,
   FighterState,
@@ -379,59 +380,77 @@ export class FighterController {
 }
 
 export class FighterAnimationController {
-  update(fighter: FighterRuntime, timeSeconds: number): void {
+  update(fighter: FighterRuntime, opponent: FighterRuntime, timeSeconds: number): void {
     const visual = fighter.visual;
     const layout = visual.layout;
     const state = fighter.state;
     const move = fighter.currentMove;
     const activePulse = move && fighter.isActive() ? 1 : 0;
-    visual.root.position.copy(fighter.position);
-    visual.root.rotation.y = fighter.facing > 0 ? 0 : Math.PI;
-    visual.root.rotation.x = 0;
-    visual.root.rotation.z = 0;
+    const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
+    const scale = visual.root.scale.x;
 
-    // V3 joints are solved from the normalized body layout.  Keep the bind
-    // offsets stable each frame so a crouch or a previous pose cannot slowly
-    // move the skeleton away from the generated proportions.
-    visual.hips.position.y = layout.hipsY + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006);
-    visual.hips.position.x = 0;
-    visual.hips.position.z = 0;
+    visual.root.position.copy(fighter.position);
+    visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+    visual.root.updateMatrixWorld(true);
+
+    // Reset bind offsets before each solve.  The action state selects a pose;
+    // it never owns vertical physics or the model's coordinate convention.
+    visual.hips.position.set(0, layout.hipsY + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006), 0);
     visual.hips.rotation.set(0, 0, 0);
     visual.rig.bones.spineLower.position.y = layout.pelvisTopY - layout.hipsY;
     visual.rig.bones.spineUpper.position.y = layout.ribY - layout.pelvisTopY;
     visual.rig.bones.chest.position.y = layout.shoulderY - layout.ribY;
     visual.rig.bones.neck.position.y = layout.headBottom - layout.shoulderY;
-    visual.torso.rotation.z = 0;
-    visual.torso.rotation.x = 0;
-    visual.head.rotation.z = 0;
-    visual.panels.rotation.z = 0;
+    visual.torso.rotation.set(0, 0, 0);
+    visual.head.rotation.set(0, 0, 0);
+    visual.panels.rotation.set(0, 0, 0);
     visual.leftArm.root.rotation.set(0, 0, 0.06);
     visual.rightArm.root.rotation.set(0, 0, -0.06);
     visual.leftLeg.root.rotation.set(0, 0, 0.02);
     visual.rightLeg.root.rotation.set(0, 0, -0.02);
-    visual.leftArm.lower.rotation.x = 0;
-    visual.rightArm.lower.rotation.x = 0;
-    visual.leftLeg.lower.rotation.x = 0;
-    visual.rightLeg.lower.rotation.x = 0;
-    visual.rig.bones.spineLower.rotation.set(0, 0, 0);
-    visual.rig.bones.spineUpper.rotation.set(0, 0, 0);
-    visual.rig.bones.chest.rotation.set(0, 0, 0);
-    visual.rig.bones.head.rotation.set(0, 0, 0);
-    visual.rig.bones.leftShoulder.rotation.set(0, 0, 0);
-    visual.rig.bones.rightShoulder.rotation.set(0, 0, 0);
-    visual.rig.bones.leftUpperArm.rotation.set(0, 0, 0);
-    visual.rig.bones.rightUpperArm.rotation.set(0, 0, 0);
-    visual.rig.bones.leftForearm.rotation.set(0, 0, 0);
-    visual.rig.bones.rightForearm.rotation.set(0, 0, 0);
-    visual.rig.bones.leftHand.rotation.set(0, 0, 0);
-    visual.rig.bones.rightHand.rotation.set(0, 0, 0);
-    visual.rig.bones.leftFoot.rotation.set(0, 0, 0);
-    visual.rig.bones.rightFoot.rotation.set(0, 0, 0);
+    visual.leftArm.lower.rotation.set(0, 0, 0);
+    visual.rightArm.lower.rotation.set(0, 0, 0);
+    visual.leftLeg.lower.rotation.set(0, 0, 0);
+    visual.rightLeg.lower.rotation.set(0, 0, 0);
+    for (const name of ["spineLower", "spineUpper", "chest", "head", "leftShoulder", "rightShoulder", "leftUpperArm", "rightUpperArm", "leftForearm", "rightForearm", "leftHand", "rightHand", "leftFoot", "rightFoot"]) visual.rig.bones[name].rotation.set(0, 0, 0);
     visual.aura.visible = false;
     if (visual.aura.material instanceof THREE.MeshBasicMaterial) visual.aura.material.opacity = 0.22;
+    visual.root.updateMatrixWorld(true);
+
+    const solveArm = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
+      const prefix = side < 0 ? "left" : "right";
+      // The hand bone origin is at the wrist; the visible fist is offset
+      // along local -Y and a small local +Z knuckle offset. Solve the wrist
+      // for the visible contact point, not for an invisible joint center.
+      const ikTarget = target.clone()
+        .addScaledVector(basis.up, layout.handLength * 0.48 * scale)
+        .addScaledVector(basis.forward, -0.030 * scale);
+      solveTwoBoneIK({
+        root: visual.rig.bones[`${prefix}UpperArm`],
+        mid: visual.rig.bones[`${prefix}Forearm`],
+        end: visual.rig.bones[`${prefix}Hand`],
+        target: ikTarget,
+        pole,
+      });
+      orientBoneForward(visual.rig.bones[`${prefix}Hand`], basis.forward);
+    };
+    const solveLeg = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
+      const prefix = side < 0 ? "left" : "right";
+      const ikTarget = target.clone()
+        .addScaledVector(basis.up, 0.026 * scale)
+        .addScaledVector(basis.forward, -layout.footLength * 0.22 * scale);
+      solveTwoBoneIK({
+        root: visual.rig.bones[`${prefix}Thigh`],
+        mid: visual.rig.bones[`${prefix}Shin`],
+        end: visual.rig.bones[`${prefix}Foot`],
+        target: ikTarget,
+        pole,
+      });
+      orientBoneForward(visual.rig.bones[`${prefix}Foot`], basis.forward);
+    };
 
     if (state === "WALK") {
-      const stride = Math.sin(timeSeconds * 12) * 0.28;
+      const stride = Math.sin(timeSeconds * 12) * 0.24;
       visual.hips.rotation.y = -stride * 0.10;
       visual.hips.position.x = Math.sin(timeSeconds * 6) * 0.008;
       visual.leftLeg.root.rotation.z = stride;
@@ -442,73 +461,72 @@ export class FighterAnimationController {
       visual.rig.bones.spineUpper.rotation.y = stride * 0.16;
     } else if (state === "CROUCH") {
       visual.hips.position.y = layout.hipsY - 0.06;
-      visual.torso.rotation.z = fighter.facing * 0.08;
-      visual.leftArm.root.rotation.z = -0.35;
-      visual.rightArm.root.rotation.z = 0.35;
-      visual.leftLeg.root.rotation.z = 0.22;
-      visual.rightLeg.root.rotation.z = -0.22;
-      visual.leftLeg.lower.rotation.z = -0.42;
-      visual.rightLeg.lower.rotation.z = 0.42;
       visual.rig.bones.spineLower.rotation.x = 0.10;
       visual.rig.bones.spineUpper.rotation.x = 0.12;
+      solveLeg(-1, getVisualContactPoint(visual, "LEFT_FOOT"), visual.rig.bones.leftThigh.getWorldPosition(new THREE.Vector3()).add(basis.forward.clone().multiplyScalar(scale * 0.12)));
+      solveLeg(1, getVisualContactPoint(visual, "RIGHT_FOOT"), visual.rig.bones.rightThigh.getWorldPosition(new THREE.Vector3()).add(basis.forward.clone().multiplyScalar(scale * 0.12)));
     } else if (state === "JUMP") {
       visual.hips.rotation.z = -fighter.facing * 0.08;
-      visual.torso.rotation.z = -fighter.facing * 0.08;
-      visual.leftLeg.root.rotation.z = -0.38;
-      visual.rightLeg.root.rotation.z = 0.38;
-      visual.leftLeg.lower.rotation.z = 0.22;
-      visual.rightLeg.lower.rotation.z = -0.22;
+      visual.rig.bones.spineUpper.rotation.x = -0.16;
+      visual.leftLeg.root.rotation.z = -0.30;
+      visual.rightLeg.root.rotation.z = 0.30;
       visual.leftArm.root.rotation.z = -0.28;
       visual.rightArm.root.rotation.z = 0.28;
-      visual.rig.bones.spineUpper.rotation.x = -0.16;
     } else if (state === "SIDESTEP") {
       visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.12;
-      visual.leftLeg.root.rotation.z = 0.28;
-      visual.rightLeg.root.rotation.z = -0.28;
-      visual.leftLeg.lower.rotation.z = -0.18;
-      visual.rightLeg.lower.rotation.z = 0.18;
+      visual.leftLeg.root.rotation.z = 0.24;
+      visual.rightLeg.root.rotation.z = -0.24;
     } else if (state === "GUARD" || state === "BLOCK_STUN") {
-      visual.leftArm.root.rotation.z = -0.8;
-      visual.rightArm.root.rotation.z = 0.72;
-      visual.leftArm.lower.rotation.x = -0.25;
-      visual.rightArm.lower.rotation.x = 0.25;
-      visual.torso.rotation.z = state === "BLOCK_STUN" ? fighter.facing * 0.12 : 0;
-      visual.rig.bones.leftUpperArm.rotation.z = -0.28;
-      visual.rig.bones.rightUpperArm.rotation.z = 0.28;
+      const head = visual.root.localToWorld(new THREE.Vector3(0, layout.headBottom + layout.headHeight * 0.52, layout.chestDepth * 0.42));
+      solveArm(-1, head.clone().addScaledVector(basis.side, -scale * 0.16).addScaledVector(basis.forward, scale * 0.08), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.25));
+      solveArm(1, head.clone().addScaledVector(basis.side, scale * 0.16).addScaledVector(basis.forward, scale * 0.08), visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.25));
+      visual.rig.bones.spineUpper.rotation.x = state === "BLOCK_STUN" ? 0.08 : 0;
     } else if (state === "ATTACK" && move) {
       const windup = Math.min(1, fighter.moveTick / Math.max(1, move.startup));
       const snap = fighter.isActive() ? Math.sin(Math.min(1, (fighter.moveTick - move.startup + 1) / Math.max(1, move.active)) * Math.PI) : 0;
+      const combatTarget = attackHitboxCenter(fighter.position, fighter.facing, move);
+      const targetBlend = fighter.isActive() ? 1 : windup * 0.35;
       if (move.animation === "punch") {
+        const punchSide: -1 | 1 = move.visualContact === "LEFT_FIST" ? -1 : 1;
+        const punchPrefix = punchSide < 0 ? "left" : "right";
+        const bindFist = getVisualContactPoint(visual, punchSide < 0 ? "LEFT_FIST" : "RIGHT_FIST");
+        const target = bindFist.lerp(combatTarget, targetBlend);
+        visual.hips.rotation.y = -snap * 0.12;
+        visual.rig.bones.spineLower.rotation.y = -snap * 0.15;
+        visual.rig.bones.spineUpper.rotation.y = snap * 0.22;
+        visual.rig.bones.chest.rotation.z = -snap * 0.06;
         visual.leftLeg.root.rotation.z = 0.12;
         visual.rightLeg.root.rotation.z = -0.20;
-        visual.rightLeg.lower.rotation.z = 0.10;
-        visual.rightArm.root.rotation.z = -1.1 - snap * 0.35;
-        visual.rightArm.lower.rotation.x = -0.18 - snap * 0.22;
-        visual.leftArm.root.rotation.z = 0.38;
-        visual.torso.rotation.z = -fighter.facing * (0.06 + snap * 0.16);
-        visual.hips.rotation.z = -fighter.facing * snap * 0.12;
-        visual.rig.bones.spineLower.rotation.y = -fighter.facing * snap * 0.16;
-        visual.rig.bones.spineUpper.rotation.y = fighter.facing * snap * 0.24;
-        visual.rig.bones.rightUpperArm.rotation.z = -0.3 - snap * 0.18;
-        visual.rig.bones.rightForearm.rotation.z = -0.24 - snap * 0.18;
+        visual.root.updateMatrixWorld(true);
+        const shoulder = visual.rig.bones[`${punchPrefix}Shoulder`].getWorldPosition(new THREE.Vector3());
+        const pole = shoulder.clone().addScaledVector(basis.side, punchSide * scale * 0.22).addScaledVector(basis.up, -scale * 0.08).addScaledVector(basis.forward, scale * 0.08);
+        solveArm(punchSide, target, pole);
+        const recoverySide = (punchSide * -1) as -1 | 1;
+        const recoveryX = recoverySide * 0.16;
+        const recoveryPrefix = recoverySide < 0 ? "left" : "right";
+        solveArm(recoverySide, visual.root.localToWorld(new THREE.Vector3(recoveryX, layout.shoulderY - 0.07, 0.18)), visual.rig.bones[`${recoveryPrefix}Shoulder`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, recoverySide * scale * 0.20));
       } else if (move.animation === "kick") {
-        visual.leftLeg.root.rotation.z = 0.12 - snap * 0.08;
-        visual.leftLeg.lower.rotation.z = -0.12;
-        visual.rightLeg.root.rotation.z = -1.08 - snap * 0.42;
-        visual.rightLeg.lower.rotation.z = 0.18 + snap * 0.28;
-        visual.rightLeg.lower.rotation.x = -0.28 - snap * 0.4;
-        visual.leftArm.root.rotation.z = -0.58;
-        visual.rightArm.root.rotation.z = 0.7;
-        visual.torso.rotation.z = fighter.facing * (0.1 + snap * 0.18);
-        visual.hips.rotation.z = fighter.facing * snap * 0.18;
-        visual.rig.bones.spineLower.rotation.y = fighter.facing * snap * 0.18;
-        visual.rig.bones.spineUpper.rotation.y = -fighter.facing * snap * 0.2;
-        visual.rig.bones.rightUpperArm.rotation.z = 0.24;
+        const kickSide: -1 | 1 = move.visualContact === "LEFT_FOOT" ? -1 : 1;
+        const kickPrefix = kickSide < 0 ? "left" : "right";
+        const bindFoot = getVisualContactPoint(visual, kickSide < 0 ? "LEFT_FOOT" : "RIGHT_FOOT");
+        const target = bindFoot.lerp(combatTarget, targetBlend);
+        visual.hips.rotation.y = snap * 0.16;
+        visual.rig.bones.spineLower.rotation.y = snap * 0.16;
+        visual.rig.bones.spineUpper.rotation.y = -snap * 0.20;
+        visual.rig.bones.chest.rotation.z = snap * 0.08;
+        visual.root.updateMatrixWorld(true);
+        const hip = visual.rig.bones[`${kickPrefix}Thigh`].getWorldPosition(new THREE.Vector3());
+        const pole = hip.clone().addScaledVector(basis.side, kickSide * scale * 0.18).addScaledVector(basis.forward, scale * 0.14).addScaledVector(basis.up, scale * 0.02);
+        solveLeg(kickSide, target, pole);
+        const supportSide = (kickSide * -1) as -1 | 1;
+        const supportPrefix = supportSide < 0 ? "left" : "right";
+        const support = getVisualContactPoint(visual, supportSide < 0 ? "LEFT_FOOT" : "RIGHT_FOOT");
+        solveLeg(supportSide, support, visual.rig.bones[`${supportPrefix}Thigh`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, supportSide * scale * 0.12));
+        solveArm(-1, visual.root.localToWorld(new THREE.Vector3(-0.15, layout.shoulderY - 0.08, 0.16)), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.20));
+        solveArm(1, visual.root.localToWorld(new THREE.Vector3(0.15, layout.shoulderY - 0.10, 0.15)), visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.20));
       } else {
-        visual.leftArm.root.rotation.z = -0.72;
-        visual.rightArm.root.rotation.z = 0.72;
-        visual.torso.rotation.z = -fighter.facing * 0.14;
-        visual.panels.rotation.z = fighter.facing * 0.2;
+        solveArm(-1, combatTarget, visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.20));
+        solveArm(1, combatTarget, visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.20));
       }
       if (move.power > 1.35 || activePulse > 0) {
         visual.aura.visible = true;
@@ -517,27 +535,26 @@ export class FighterAnimationController {
       }
       visual.head.rotation.z = (windup - 0.5) * 0.12;
     } else if (state === "HIT") {
-      visual.torso.rotation.z = -fighter.facing * 0.25;
-      visual.head.rotation.z = fighter.facing * 0.18;
+      visual.rig.bones.spineUpper.rotation.z = -0.18;
+      visual.head.rotation.z = 0.18;
       visual.leftArm.root.rotation.z = -0.42;
       visual.rightArm.root.rotation.z = 0.42;
     } else if (state === "KNOCKDOWN" || state === "THROW" || state === "KO" || state === "RING_OUT") {
-      visual.root.rotation.z = THREE.MathUtils.lerp(0, fighter.facing * 1.35, Math.min(1, fighter.stateMachine.stateTicks / 22));
-      visual.torso.rotation.z = fighter.facing * 0.16;
+      visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      visual.root.rotateZ(fighter.facing * THREE.MathUtils.lerp(0, 1.35, Math.min(1, fighter.stateMachine.stateTicks / 22)));
+      visual.rig.bones.spineUpper.rotation.z = 0.20;
+      visual.head.rotation.z = 0.16;
       visual.leftLeg.root.rotation.z = -0.5;
       visual.rightLeg.root.rotation.z = 0.5;
-      visual.leftLeg.lower.rotation.z = 0.32;
-      visual.rightLeg.lower.rotation.z = -0.32;
       visual.leftArm.root.rotation.z = -0.65;
       visual.rightArm.root.rotation.z = 0.65;
-      visual.rig.bones.spineUpper.rotation.z = fighter.facing * 0.2;
-      visual.rig.bones.head.rotation.z = fighter.facing * 0.16;
     } else if (state === "WAKEUP") {
-      visual.root.rotation.z = fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22));
+      visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      visual.root.rotateZ(fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22)));
     } else {
-      visual.root.rotation.z = 0;
       visual.torso.rotation.y = Math.sin(timeSeconds * 2.4) * 0.018;
     }
+    visual.root.updateMatrixWorld(true);
   }
 }
 

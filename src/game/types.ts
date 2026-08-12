@@ -83,14 +83,26 @@ export interface MoveDefinition {
 export interface BodySpec {
   height: number;
   shoulderWidth: number;
+  clavicleWidth?: number;
+  chestWidth?: number;
   chestDepth: number;
   waistWidth: number;
+  pelvisWidth?: number;
   hipWidth: number;
   armLength: number;
+  upperArmMass?: number;
+  forearmMass?: number;
   legLength: number;
+  thighMass?: number;
+  calfMass?: number;
+  neckLength?: number;
   muscle: number;
   headWidth: number;
+  headDepth?: number;
   jawWidth: number;
+  cheekWidth?: number;
+  browDepth?: number;
+  noseLength?: number;
   handScale: number;
   footScale: number;
   longPanels?: boolean;

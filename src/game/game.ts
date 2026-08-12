@@ -16,7 +16,7 @@ import { FightHUD } from "./hud";
 import { RoundManager } from "./round";
 import { SettingsManager } from "./settings";
 import { FixedStepClock } from "./fixed";
-import { disposeFighterVisual } from "./visual";
+import { createFighterVisual, disposeFighterVisual } from "./visual";
 import type { FighterDefinition, HudSnapshot, InputAction } from "./types";
 
 export interface PolyFightGameOptions {
@@ -112,8 +112,8 @@ export class PolyFightGame {
     this.arena = new Arena();
     this.effects = new EffectsManager();
     this.scene.add(this.arena.group, this.effects.group);
-    this.p1 = new FighterRuntime("p1", options.p1Definition, false);
-    this.p2 = new FighterRuntime("p2", options.p2Definition, true);
+    this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality));
+    this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality));
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
     this.fightCamera = new FightCamera(this.camera);
     this.effects.onShake = (amount) => {
@@ -208,9 +208,8 @@ export class PolyFightGame {
 
   private step(): void {
     if (this.paused) return;
-    // INTRO and ROUND_END are simulation barriers. Rendering, idle poses, and
-    // camera damping continue in the outer loop, but no input, CPU decision,
-    // movement, attack, combat, or ring-out logic may run here.
+    // INTRO and ROUND_END gate active combat. Passive fighter simulation is
+    // deliberately handled below so terminal knockback can still land.
     if (this.round.canSimulateCombat()) {
       const p1Input = this.input.frame();
       const p2Input = this.cpu.update(this.p2, this.p1);
@@ -225,6 +224,10 @@ export class PolyFightGame {
     if (result && !this.outcome) {
       this.outcome = result;
       this.audio.ko();
+    }
+    if (this.round.canSimulatePassive() && !this.round.canSimulateCombat()) {
+      this.controller.updatePassive(this.p1, this.fixedStep);
+      this.controller.updatePassive(this.p2, this.fixedStep);
     }
     if (this.round.phase === "ROUND_END" && this.round.phaseTicks > 120 && this.outcome) {
       const phaseResult = this.round.finishRound(this.outcome.winner);

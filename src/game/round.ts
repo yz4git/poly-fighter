@@ -21,6 +21,10 @@ export class RoundManager {
     return this.phase === "FIGHT";
   }
 
+  canSimulatePassive(): boolean {
+    return this.phase === "FIGHT" || this.phase === "ROUND_END";
+  }
+
   tick(p1: FighterRuntime, p2: FighterRuntime): { winner: FighterRuntime | null; ringOut: boolean } | null {
     this.phaseTicks += 1;
     if (this.phase === "INTRO") {

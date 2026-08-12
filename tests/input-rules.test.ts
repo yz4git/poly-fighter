@@ -3,6 +3,12 @@ import test from "node:test";
 import { CommandParser, InputBuffer } from "../src/game/input";
 import { FixedStepClock } from "../src/game/fixed";
 import { EMPTY_INPUT, type InputFrame } from "../src/game/types";
+import {
+  directionToInput,
+  quantizeDirection,
+  VirtualPadTracker,
+  VIRTUAL_PAD_DEADZONE,
+} from "../src/game/virtual-pad";
 
 const input = (patch: Partial<InputFrame>): InputFrame => ({ ...EMPTY_INPUT, ...patch });
 
@@ -57,4 +63,54 @@ test("multitouch action owners keep direction plus simultaneous P, K, and G inpu
   inputSystem.clear();
   assert.deepEqual(inputSystem.frame(), EMPTY_INPUT);
   inputSystem.destroy();
+});
+
+test("virtual pad quantizes cardinal, diagonal, and deadzone vectors", () => {
+  assert.equal(quantizeDirection(1, 0, 1), "RIGHT");
+  assert.equal(quantizeDirection(-1, 0, 1), "LEFT");
+  assert.equal(quantizeDirection(0, 1, 1), "UP");
+  assert.equal(quantizeDirection(1, 1, 1), "UP_RIGHT");
+  assert.equal(quantizeDirection(-1, -1, 1), "DOWN_LEFT");
+  assert.equal(quantizeDirection(VIRTUAL_PAD_DEADZONE * 0.5, 0, 1), "NEUTRAL");
+  assert.deepEqual(directionToInput("DOWN_LEFT"), input({ down: true, left: true }));
+  assert.deepEqual(directionToInput("UP_RIGHT"), input({ up: true, right: true }));
+});
+
+test("virtual pad hysteresis prevents boundary chatter and preserves continuous direction changes", () => {
+  assert.equal(quantizeDirection(0.92, -0.39, 1, "RIGHT"), "RIGHT");
+  assert.equal(quantizeDirection(0.92, -0.39, 1, "RIGHT"), "RIGHT");
+  assert.equal(quantizeDirection(0.7, -0.72, 1, "RIGHT"), "DOWN_RIGHT");
+
+  const buffer = new InputBuffer();
+  for (const sample of [
+    input({ right: true }),
+    input({ right: true }),
+    input({}),
+    input({ down: true, right: true }),
+    input({ down: true }),
+    input({ down: true, left: true }),
+    input({ left: true }),
+  ]) buffer.push(sample);
+  assert.deepEqual(buffer.directionTransitions(), ["RIGHT", "NEUTRAL", "DOWN_RIGHT", "DOWN", "DOWN_LEFT", "LEFT"]);
+});
+
+test("dash accepts two digital taps without requiring a held direction", () => {
+  const buffer = new InputBuffer();
+  const samples = [input({ right: true }), input({}), input({ right: true })];
+  samples.forEach((sample) => buffer.push(sample));
+  const dash = input({ right: true, kick: true });
+  buffer.push(dash);
+  assert.equal(CommandParser.parse(dash, buffer, 1), "DASH_KICK");
+});
+
+test("virtual pad pointer ownership supports direction changes and release-to-neutral", () => {
+  const pad = new VirtualPadTracker();
+  assert.equal(pad.begin(7, 1, 0, 1), "RIGHT");
+  assert.equal(pad.move(7, 1, -1, 1), "DOWN_RIGHT");
+  assert.equal(pad.move(7, 0, -1, 1), "DOWN");
+  assert.equal(pad.move(7, -1, -1, 1), "DOWN_LEFT");
+  assert.equal(pad.move(7, -1, 0, 1), "LEFT");
+  assert.equal(pad.move(8, 1, 0, 1), "LEFT");
+  assert.equal(pad.release(7), "NEUTRAL");
+  assert.equal(pad.pointerId, null);
 });

@@ -6,6 +6,11 @@ import {
   type InputAction,
   type InputFrame,
 } from "./types";
+import {
+  collapseDirectionTransitions,
+  directionOfInput,
+  type DigitalDirection,
+} from "./virtual-pad";
 
 type InputOwner = number | string;
 
@@ -55,6 +60,32 @@ export class InputBuffer {
     return false;
   }
 
+  directionHistory(window = 18): DigitalDirection[] {
+    const start = Math.max(0, this.samples.length - window);
+    return this.samples.slice(start).map(directionOfInput);
+  }
+
+  directionTransitions(window = 18): DigitalDirection[] {
+    return collapseDirectionTransitions(this.directionHistory(window));
+  }
+
+  hasDirectionTap(direction: DirectionButton, window = 14): boolean {
+    const target: DigitalDirection = direction === "left" ? "LEFT" : direction === "right" ? "RIGHT" : direction === "up" ? "UP" : "DOWN";
+    const history = this.directionHistory(window);
+    // A target direction appearing at the start of the sampled window is the
+    // first tap; a later neutral/other direction opens the second tap.
+    let released = true;
+    let taps = 0;
+    for (const current of history) {
+      if (current !== target) released = true;
+      if (current === target && released) {
+        taps += 1;
+        released = false;
+      }
+    }
+    return taps >= 2;
+  }
+
   clear(): void {
     this.samples.length = 0;
   }
@@ -72,7 +103,7 @@ export class CommandParser {
 
     const toward: DirectionButton = facing >= 0 ? "right" : "left";
     const back: DirectionButton = facing >= 0 ? "left" : "right";
-    if (frame.kick && buffer.consecutiveDirection(toward, 2)) return "DASH_KICK";
+    if (frame.kick && (buffer.consecutiveDirection(toward, 2) || buffer.hasDirectionTap(toward, 14))) return "DASH_KICK";
     if (frame.punch && buffer.hadDirection(back, 8)) return "BACKFIST";
     if (frame.punch && buffer.hadDirection(toward, 8)) return "STRAIGHT";
     if (frame.punch && frame.down) return "BODY_BLOW";

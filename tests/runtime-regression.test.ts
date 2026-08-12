@@ -210,7 +210,7 @@ test("ring out is one terminal result, blocks further combat, and resets the nex
   arena.dispose();
 });
 
-test("INTRO and ROUND_END act as simulation barriers", () => {
+test("INTRO gates combat while ROUND_END keeps passive physics alive", () => {
   const { p1, p2 } = makeFighters();
   const beforeP1 = p1.position.clone();
   const beforeP2 = p2.position.clone();
@@ -230,11 +230,46 @@ test("INTRO and ROUND_END act as simulation barriers", () => {
   p2.receiveDamage(100, 20, 0.2, 1, false, 0);
   round.phase = "ROUND_END";
   const roundEndPosition = p2.position.clone();
+  const roundEndHealth = p1.health;
+  const roundEndState = p2.state;
+  const roundEndVelocity = p2.velocity.clone();
+  const roundEndController = new FighterController();
   for (let tick = 0; tick < 60; tick += 1) {
     assert.equal(round.canSimulateCombat(), false);
+    assert.equal(round.canSimulatePassive(), true);
+    roundEndController.updatePassive(p2, DT);
     round.tick(p1, p2);
   }
-  assert.deepEqual(p2.position.toArray(), roundEndPosition.toArray());
+  assert.notDeepEqual(p2.position.toArray(), roundEndPosition.toArray());
+  assert.notEqual(p2.velocity.y, roundEndVelocity.y);
+  assert.equal(p1.health, roundEndHealth);
+  assert.equal(p2.state, roundEndState);
+  for (let tick = 0; tick < 180; tick += 1) roundEndController.updatePassive(p2, DT);
+  assert.equal(p2.grounded, true);
+  assert.equal(p2.position.y, 0);
+  assert.equal(p2.state, "KO");
+});
+
+test("ROUND_END ring-out trajectory continues without a second result", () => {
+  const { p1, p2 } = makeFighters();
+  const round = new RoundManager();
+  const controller = new FighterController();
+  p1.position.x = 4.2;
+  p1.state = "RING_OUT";
+  p1.grounded = false;
+  p1.velocity.set(2.6, 3.6, 0);
+  round.phase = "FIGHT";
+  const result = round.tick(p1, p2);
+  assert.equal(result?.winner, p2);
+  const startX = p1.position.x;
+  for (let tick = 0; tick < 120; tick += 1) {
+    controller.updatePassive(p1, DT);
+    round.tick(p1, p2);
+  }
+  assert.ok(p1.position.x > startX);
+  assert.equal(round.phase, "ROUND_END");
+  assert.equal(p1.state, "RING_OUT");
+  assertFinite(p1);
 });
 
 test("fixed-step outcomes stay aligned across 30, 60, and 120 render fps", () => {

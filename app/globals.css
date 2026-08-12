@@ -175,16 +175,13 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .pause-button { position: absolute; z-index: 12; top: max(16px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); width: 34px; height: 34px; display: none; background: rgba(5, 13, 27, .75); border: 1px solid rgba(183, 219, 249, .4); font-size: 14px; }
 
 .touch-controls { position: absolute; z-index: 9; bottom: max(18px, env(safe-area-inset-bottom)); left: max(18px, env(safe-area-inset-left)); right: max(18px, env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: end; pointer-events: none; }
-.dpad { position: relative; width: min(210px, 29vw); height: min(145px, 21vw); pointer-events: auto; }
+.virtual-pad { position: relative; width: clamp(142px, 23vw, 180px); aspect-ratio: 1; border-radius: 50%; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: radial-gradient(circle at 50% 50%, rgba(19, 56, 87, .68) 0 31%, rgba(9, 24, 45, .72) 32% 67%, rgba(34, 115, 162, .18) 68% 70%, rgba(6, 18, 35, .26) 71% 100%); border: 1px solid rgba(177, 224, 251, .44); box-shadow: 0 7px 26px rgba(0, 0, 0, .28), inset 0 0 0 7px rgba(6, 19, 37, .42); }
+.virtual-pad-ring { position: absolute; inset: 8%; border: 1px solid rgba(155, 214, 246, .35); border-radius: 50%; pointer-events: none; }
+.virtual-pad-sector { position: absolute; inset: 13%; border-radius: 50%; pointer-events: none; opacity: .52; background: repeating-conic-gradient(from -22.5deg, rgba(111, 208, 255, .12) 0 43deg, rgba(111, 208, 255, 0) 43deg 45deg); }
+.virtual-pad-knob { position: absolute; left: 50%; top: 50%; width: clamp(47px, 7vw, 60px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; background: radial-gradient(circle at 36% 31%, #eafaff 0 6%, #7edbff 7% 24%, #246895 56%, #102b4c 100%); border: 1px solid rgba(220, 249, 255, .78); box-shadow: 0 0 16px rgba(83, 207, 255, .26), inset -5px -7px 0 rgba(4, 20, 39, .24); transition: transform .045s linear; }
+.virtual-pad-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(205, 237, 250, .45); font-size: 7px; letter-spacing: .16em; pointer-events: none; }
 .touch-action { position: absolute; display: flex; align-items: center; justify-content: center; background: rgba(10, 30, 55, .72); border: 1px solid rgba(173, 220, 252, .44); color: #e9f7ff; box-shadow: 0 5px 15px rgba(0,0,0,.2); transition: background .08s, transform .08s; }
 .touch-action:active { background: rgba(67, 148, 202, .9); transform: scale(.94); }
-.dpad .touch-action { width: min(53px, 8vw); height: min(53px, 8vw); font-size: clamp(14px, 2.6vw, 22px); }
-.dpad .up { top: 0; left: 50%; transform: translateX(-50%); }
-.dpad .down { bottom: 0; left: 50%; transform: translateX(-50%); }
-.dpad .left { left: 0; top: 50%; transform: translateY(-50%); }
-.dpad .right { right: 0; top: 50%; transform: translateY(-50%); }
-.dpad-core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #7798b7; text-align: center; font-size: 8px; letter-spacing: .1em; line-height: 1.6; pointer-events: none; }
-.dpad-core span { color: var(--cyan); }
 .action-buttons { display: flex; gap: min(15px, 2vw); align-items: end; pointer-events: auto; }
 .action-buttons .touch-action { position: relative; inset: auto; width: min(74px, 10vw); height: min(74px, 10vw); border-radius: 50%; clip-path: polygon(50% 0, 90% 15%, 100% 50%, 84% 89%, 50% 100%, 11% 84%, 0 50%, 15% 12%); font-size: clamp(22px, 3.5vw, 34px); font-weight: 900; font-style: italic; }
 .action-buttons .guard { border-color: rgba(133, 205, 255, .6); color: #b7eaff; }
@@ -240,6 +237,6 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
   .round-readout b { font-size: 24px; }
   .match-badge { top: 82px; font-size: 6px; }
   .action-buttons .touch-action { width: 64px; height: 64px; }
-  .dpad { width: 180px; height: 125px; }
+  .virtual-pad { width: min(170px, 31vw); }
   .pause-button { display: block; }
 }

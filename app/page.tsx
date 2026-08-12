@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { PolyFightGame } from "@/src/game/game";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
+import {
+  directionToInput,
+  directionVector,
+  VirtualPadTracker,
+  type DigitalDirection,
+} from "@/src/game/virtual-pad";
 
 type Screen = "TITLE" | "SELECT" | "MATCH" | "RESULT";
 type SettingsDraft = {
@@ -60,6 +66,124 @@ function pressableAction(
     >
       {children}
     </button>
+  );
+}
+
+const PAD_DIRECTIONS: InputAction[] = ["left", "right", "up", "down"];
+
+function VirtualPad({
+  gameRef,
+  paused,
+}: {
+  gameRef: { current: PolyFightGame | null };
+  paused: boolean;
+}) {
+  const padRef = useRef<HTMLDivElement>(null);
+  const trackerRef = useRef(new VirtualPadTracker());
+  const ownerRef = useRef<string | null>(null);
+  const directionRef = useRef<DigitalDirection>("NEUTRAL");
+  const [direction, setDirection] = useState<DigitalDirection>("NEUTRAL");
+
+  const clear = useCallback(() => {
+    const owner = ownerRef.current;
+    if (owner) gameRef.current?.releaseOwner(owner);
+    trackerRef.current.reset();
+    ownerRef.current = null;
+    directionRef.current = "NEUTRAL";
+    setDirection("NEUTRAL");
+  }, [gameRef]);
+
+  const applyPointer = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const pad = padRef.current;
+    const pointerId = trackerRef.current.pointerId;
+    const owner = ownerRef.current;
+    if (!pad || pointerId === null || owner === null || pointerId !== event.pointerId) return;
+    const rect = pad.getBoundingClientRect();
+    const radius = Math.min(rect.width, rect.height) * 0.5;
+    const centerX = rect.left + rect.width * 0.5;
+    const centerY = rect.top + rect.height * 0.5;
+    const next = trackerRef.current.move(
+      event.pointerId,
+      event.clientX - centerX,
+      centerY - event.clientY,
+      radius,
+    );
+    if (next === directionRef.current) return;
+    directionRef.current = next;
+    setDirection(next);
+    gameRef.current?.releaseOwner(owner);
+    const frame = directionToInput(next);
+    for (const action of PAD_DIRECTIONS) {
+      if (frame[action]) gameRef.current?.press(action, owner);
+    }
+  }, [gameRef]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) clear();
+    };
+    const onOrientationChange = () => clear();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("orientationchange", onOrientationChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("orientationchange", onOrientationChange);
+    };
+  }, [clear]);
+
+  useEffect(() => {
+    if (!paused) return undefined;
+    const timeout = window.setTimeout(clear, 0);
+    return () => window.clearTimeout(timeout);
+  }, [clear, paused]);
+
+  useEffect(() => () => clear(), [clear]);
+
+  const vector = directionVector(direction);
+  const knobStyle = {
+    transform: `translate(calc(-50% + ${vector.x * 31}px), calc(-50% - ${vector.y * 31}px))`,
+  };
+
+  const begin = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (paused || trackerRef.current.pointerId !== null) return;
+    event.preventDefault();
+    const rect = padRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const radius = Math.min(rect.width, rect.height) * 0.5;
+    ownerRef.current = `virtual-pad-${event.pointerId}`;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    gameRef.current?.interact();
+    trackerRef.current.begin(event.pointerId, event.clientX - (rect.left + rect.width * 0.5), (rect.top + rect.height * 0.5) - event.clientY, radius);
+    applyPointer(event);
+  };
+  const move = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    applyPointer(event);
+  };
+  const end = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (trackerRef.current.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    trackerRef.current.release(event.pointerId);
+    clear();
+  };
+
+  return (
+    <div
+      ref={padRef}
+      className="virtual-pad"
+      aria-label={`8-way direction input: ${direction}`}
+      data-direction={direction}
+      onPointerDown={begin}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onLostPointerCapture={end}
+    >
+      <div className="virtual-pad-sector" aria-hidden="true" />
+      <div className="virtual-pad-ring" aria-hidden="true" />
+      <div className="virtual-pad-knob" style={knobStyle} aria-hidden="true" />
+      <span className="virtual-pad-label">8-WAY</span>
+    </div>
   );
 }
 
@@ -238,20 +362,14 @@ export default function Home() {
           <div className="match-badge">HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</div>
           <button type="button" className="pause-button" aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
-            <div className="dpad" aria-label="Direction input">
-              {pressableAction(gameRef, "up", "Jump or axis up", "▲", "up")}
-              {pressableAction(gameRef, "left", "Move left", "◀", "left")}
-              <div className="dpad-core">AXIS<br /><span>G + ↕</span></div>
-              {pressableAction(gameRef, "right", "Move right", "▶", "right")}
-              {pressableAction(gameRef, "down", "Crouch or axis down", "▼", "down")}
-            </div>
+            <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons">
               {pressableAction(gameRef, "guard", "Guard", "G", "guard")}
               {pressableAction(gameRef, "punch", "Punch", "P", "punch")}
               {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
             </div>
           </section>
-          <div className="input-hint">PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + ▲▼ TO SIDESTEP</div>
+          <div className="input-hint">PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</div>
         </>
       )}
 

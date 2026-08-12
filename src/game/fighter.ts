@@ -367,6 +367,15 @@ export class FighterController {
 
     fighter.updatePhysics(deltaSeconds);
   }
+
+  /**
+   * Advances only state-independent simulation.  ROUND_END still needs this
+   * path so an already-launched fighter can finish its knockback arc and land,
+   * while no new input, command, attack, or combat resolution is accepted.
+   */
+  updatePassive(fighter: FighterRuntime, deltaSeconds: number): void {
+    fighter.updatePhysics(deltaSeconds);
+  }
 }
 
 export class FighterAnimationController {
@@ -391,6 +400,14 @@ export class FighterAnimationController {
     visual.rightArm.lower.rotation.x = 0;
     visual.leftLeg.lower.rotation.x = 0;
     visual.rightLeg.lower.rotation.x = 0;
+    visual.rig.bones.spineLower.rotation.set(0, 0, 0);
+    visual.rig.bones.spineUpper.rotation.set(0, 0, 0);
+    visual.rig.bones.chest.rotation.set(0, 0, 0);
+    visual.rig.bones.head.rotation.set(0, 0, 0);
+    visual.rig.bones.leftUpperArm.rotation.set(0, 0, 0);
+    visual.rig.bones.rightUpperArm.rotation.set(0, 0, 0);
+    visual.rig.bones.leftForearm.rotation.set(0, 0, 0);
+    visual.rig.bones.rightForearm.rotation.set(0, 0, 0);
     visual.aura.visible = false;
     if (visual.aura.material instanceof THREE.MeshBasicMaterial) visual.aura.material.opacity = 0.22;
 
@@ -400,6 +417,8 @@ export class FighterAnimationController {
       visual.rightLeg.root.rotation.z = -stride;
       visual.leftArm.root.rotation.z = -stride * 0.7;
       visual.rightArm.root.rotation.z = stride * 0.7;
+      visual.rig.bones.spineLower.rotation.y = -stride * 0.12;
+      visual.rig.bones.spineUpper.rotation.y = stride * 0.16;
     } else if (state === "CROUCH") {
       visual.hips.position.y = 0.8;
       visual.torso.rotation.z = fighter.facing * 0.08;
@@ -407,12 +426,15 @@ export class FighterAnimationController {
       visual.rightArm.root.rotation.z = 0.35;
       visual.leftLeg.root.rotation.z = 0.22;
       visual.rightLeg.root.rotation.z = -0.22;
+      visual.rig.bones.spineLower.position.y = -0.06;
+      visual.rig.bones.spineUpper.rotation.x = 0.12;
     } else if (state === "JUMP") {
       visual.torso.rotation.z = -fighter.facing * 0.08;
       visual.leftLeg.root.rotation.z = -0.38;
       visual.rightLeg.root.rotation.z = 0.38;
       visual.leftArm.root.rotation.z = -0.28;
       visual.rightArm.root.rotation.z = 0.28;
+      visual.rig.bones.spineUpper.rotation.x = -0.16;
     } else if (state === "SIDESTEP") {
       visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.12;
       visual.leftLeg.root.rotation.z = 0.28;
@@ -423,6 +445,8 @@ export class FighterAnimationController {
       visual.leftArm.lower.rotation.x = -0.25;
       visual.rightArm.lower.rotation.x = 0.25;
       visual.torso.rotation.z = state === "BLOCK_STUN" ? fighter.facing * 0.12 : 0;
+      visual.rig.bones.leftUpperArm.rotation.z = -0.28;
+      visual.rig.bones.rightUpperArm.rotation.z = 0.28;
     } else if (state === "ATTACK" && move) {
       const windup = Math.min(1, fighter.moveTick / Math.max(1, move.startup));
       const snap = fighter.isActive() ? Math.sin(Math.min(1, (fighter.moveTick - move.startup + 1) / Math.max(1, move.active)) * Math.PI) : 0;
@@ -432,6 +456,10 @@ export class FighterAnimationController {
         visual.leftArm.root.rotation.z = 0.38;
         visual.torso.rotation.z = -fighter.facing * (0.06 + snap * 0.16);
         visual.hips.rotation.z = -fighter.facing * snap * 0.12;
+        visual.rig.bones.spineLower.rotation.y = -fighter.facing * snap * 0.16;
+        visual.rig.bones.spineUpper.rotation.y = fighter.facing * snap * 0.24;
+        visual.rig.bones.rightUpperArm.rotation.z = -0.3 - snap * 0.18;
+        visual.rig.bones.rightForearm.rotation.z = -0.24 - snap * 0.18;
       } else if (move.animation === "kick") {
         visual.rightLeg.root.rotation.z = -1.08 - snap * 0.42;
         visual.rightLeg.lower.rotation.x = -0.28 - snap * 0.4;
@@ -439,6 +467,9 @@ export class FighterAnimationController {
         visual.rightArm.root.rotation.z = 0.7;
         visual.torso.rotation.z = fighter.facing * (0.1 + snap * 0.18);
         visual.hips.rotation.z = fighter.facing * snap * 0.18;
+        visual.rig.bones.spineLower.rotation.y = fighter.facing * snap * 0.18;
+        visual.rig.bones.spineUpper.rotation.y = -fighter.facing * snap * 0.2;
+        visual.rig.bones.rightUpperArm.rotation.z = 0.24;
       } else {
         visual.leftArm.root.rotation.z = -0.72;
         visual.rightArm.root.rotation.z = 0.72;
@@ -456,13 +487,15 @@ export class FighterAnimationController {
       visual.head.rotation.z = fighter.facing * 0.18;
       visual.leftArm.root.rotation.z = -0.42;
       visual.rightArm.root.rotation.z = 0.42;
-    } else if (state === "KNOCKDOWN" || state === "THROW" || state === "KO") {
+    } else if (state === "KNOCKDOWN" || state === "THROW" || state === "KO" || state === "RING_OUT") {
       visual.root.rotation.z = THREE.MathUtils.lerp(0, fighter.facing * 1.35, Math.min(1, fighter.stateMachine.stateTicks / 22));
       visual.torso.rotation.z = fighter.facing * 0.16;
       visual.leftLeg.root.rotation.z = -0.5;
       visual.rightLeg.root.rotation.z = 0.5;
       visual.leftArm.root.rotation.z = -0.65;
       visual.rightArm.root.rotation.z = 0.65;
+      visual.rig.bones.spineUpper.rotation.z = fighter.facing * 0.2;
+      visual.rig.bones.head.rotation.z = fighter.facing * 0.16;
     } else if (state === "WAKEUP") {
       visual.root.rotation.z = fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22));
     } else {

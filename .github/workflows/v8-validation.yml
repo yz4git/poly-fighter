@@ -1,0 +1,26 @@
+name: V8 validation
+
+on:
+  push:
+    branches:
+      - chatgpt/visual-v8-single-mesh
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run test:rules
+      - run: npm run test:pwa
+      - run: node --test tests/rendered-html.test.mjs
+      - run: npm run lint

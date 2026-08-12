@@ -16,7 +16,7 @@ import { FightHUD } from "./hud";
 import { RoundManager } from "./round";
 import { SettingsManager } from "./settings";
 import { FixedStepClock } from "./fixed";
-import { createFighterVisual, disposeFighterVisual } from "./visual";
+import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterDefinition, HudSnapshot, InputAction } from "./types";
 
 export interface PolyFightGameOptions {
@@ -134,8 +134,6 @@ export class PolyFightGame {
     };
     this.round.start();
     this.resetPositions();
-    // Apply the initial rig pose before the first render so Safari never sees
-    // a one-frame unpositioned/overlapping character shell.
     this.animation.update(this.p1, this.p2, 0);
     this.animation.update(this.p2, this.p1, 0.22);
     this.publishHud(true);
@@ -162,22 +160,10 @@ export class PolyFightGame {
     }
   }
 
-  interact(): void {
-    void this.audio.resume();
-  }
-
-  press(action: InputAction, owner: number | string): void {
-    this.interact();
-    this.input.press(action, owner);
-  }
-
-  release(action: InputAction, owner: number | string): void {
-    this.input.release(action, owner);
-  }
-
-  releaseOwner(owner: number | string): void {
-    this.input.releaseOwner(owner);
-  }
+  interact(): void { void this.audio.resume(); }
+  press(action: InputAction, owner: number | string): void { this.interact(); this.input.press(action, owner); }
+  release(action: InputAction, owner: number | string): void { this.input.release(action, owner); }
+  releaseOwner(owner: number | string): void { this.input.releaseOwner(owner); }
 
   rematch(): void {
     this.p1.wins = 0;
@@ -190,15 +176,8 @@ export class PolyFightGame {
     this.publishHud(true);
   }
 
-  pause(): void {
-    this.paused = true;
-    this.input.releaseOwner("keyboard");
-  }
-
-  resume(): void {
-    this.paused = false;
-    this.lastTime = performance.now();
-  }
+  pause(): void { this.paused = true; this.input.releaseOwner("keyboard"); }
+  resume(): void { this.paused = false; this.lastTime = performance.now(); }
 
   updateSettings(patch: Parameters<SettingsManager["update"]>[0]): void {
     const settings = this.settings.update(patch);
@@ -237,8 +216,6 @@ export class PolyFightGame {
 
   private step(): void {
     if (this.paused) return;
-    // INTRO and ROUND_END gate active combat. Passive fighter simulation is
-    // deliberately handled below so terminal knockback can still land.
     if (this.round.canSimulateCombat()) {
       const p1Input = this.input.frame();
       const p2Input = this.cpu.update(this.p2, this.p1);

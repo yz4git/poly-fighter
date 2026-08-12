@@ -172,6 +172,19 @@ test("KO keeps KO state after its finite launch and ends the round", () => {
   assert.equal(round.finishRound(result?.winner ?? null), "NEXT_ROUND");
 });
 
+test("best-of-three reaches RESULT after two round wins", () => {
+  const { p1 } = makeFighters();
+  const round = new RoundManager();
+  assert.equal(round.finishRound(p1), "NEXT_ROUND");
+  assert.equal(p1.wins, 1);
+  assert.equal(round.round, 2);
+  assert.equal(round.phase, "INTRO");
+  assert.equal(round.finishRound(p1), "MATCH_RESULT");
+  assert.equal(p1.wins, 2);
+  assert.equal(round.phase, "RESULT");
+  assert.equal(round.message, "PLAYER 1 WINS");
+});
+
 test("ring out is one terminal result, blocks further combat, and resets the next round", () => {
   const { p1, p2 } = makeFighters();
   const arena = new Arena();

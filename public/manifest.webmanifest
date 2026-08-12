@@ -1,0 +1,14 @@
+{
+  "name": "POLY FIGHTER",
+  "short_name": "POLY FIGHTER",
+  "description": "HIGH-POLY FLAT SHADING 3D fighting game.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#061121",
+  "theme_color": "#061121",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

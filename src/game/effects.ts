@@ -24,11 +24,9 @@ export class EffectsManager {
 
   constructor() {
     this.group.name = "impact-effects";
+    const fragmentMaterial = this.materialFor(0xffffff);
     for (let index = 0; index < 64; index += 1) {
-      const mesh = new THREE.Mesh(
-        this.fragmentGeometry,
-        new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, emissive: 0x111111 }),
-      );
+      const mesh = new THREE.Mesh(this.fragmentGeometry, fragmentMaterial);
       mesh.visible = false;
       mesh.castShadow = true;
       this.group.add(mesh);
@@ -68,12 +66,9 @@ export class EffectsManager {
       flash.mesh.visible = true;
       flash.mesh.position.set(event.position.x, event.position.y, event.position.z);
       flash.mesh.scale.setScalar(0.7 + strength * 0.56);
-      flash.mesh.material = new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: event.blocked ? 0.62 : 0.94,
-        blending: THREE.AdditiveBlending,
-      });
+      const flashMaterial = flash.mesh.material as THREE.MeshBasicMaterial;
+      flashMaterial.color.setHex(color);
+      flashMaterial.opacity = event.blocked ? 0.62 : 0.94;
       flash.life = 0.16 + strength * 0.04;
     }
     this.onShake?.(event.blocked ? 0.035 : 0.07 + strength * 0.04);
@@ -108,12 +103,21 @@ export class EffectsManager {
     }
   }
 
+  resourceStats(): { fragmentMaterials: number; flashMaterials: number; geometries: number } {
+    return { fragmentMaterials: this.materials.size, flashMaterials: this.flashes.length, geometries: 2 };
+  }
+
   dispose(): void {
     this.fragmentGeometry.dispose();
     this.flashGeometry.dispose();
     for (const material of this.materials.values()) material.dispose();
-    for (const particle of this.fragments) (particle.mesh.material as THREE.Material).dispose();
-    for (const flash of this.flashes) (flash.mesh.material as THREE.Material).dispose();
+    const flashMaterials = new Set<THREE.Material>();
+    for (const flash of this.flashes) {
+      const material = flash.mesh.material;
+      if (Array.isArray(material)) material.forEach((entry) => flashMaterials.add(entry));
+      else flashMaterials.add(material);
+    }
+    for (const material of flashMaterials) material.dispose();
     this.group.clear();
   }
 }

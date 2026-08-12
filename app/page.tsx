@@ -94,9 +94,12 @@ export default function Home() {
   const settingsRef = useRef(settings);
 
   useEffect(() => {
+    const preventContextMenu = (event: Event) => event.preventDefault();
+    window.addEventListener("contextmenu", preventContextMenu, { passive: false });
     if ("serviceWorker" in navigator) {
       void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => undefined);
     }
+    return () => window.removeEventListener("contextmenu", preventContextMenu);
   }, []);
 
   useEffect(() => {

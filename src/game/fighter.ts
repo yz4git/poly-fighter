@@ -9,6 +9,12 @@ import type {
 } from "./types";
 import { EMPTY_INPUT, cloneInput } from "./types";
 
+export const FIGHTER_GROUND_Y = 0;
+export const FIGHTER_GRAVITY = 18;
+export const FIGHTER_MAX_HEIGHT = 12;
+export const FIGHTER_MAX_VERTICAL_SPEED = 32;
+const GROUND_EPSILON = 0.0001;
+
 export class FighterStateMachine {
   state: FighterState = "IDLE";
   stateTicks = 0;
@@ -46,6 +52,8 @@ export class FighterRuntime {
   moveTick = 0;
   readonly hitTargets = new Set<string>();
   readonly visualScale: number;
+  grounded = true;
+  invariantError: string | null = null;
 
   constructor(
     id: string,
@@ -84,6 +92,18 @@ export class FighterRuntime {
     );
   }
 
+  get airborne(): boolean {
+    return !this.grounded;
+  }
+
+  startJump(initialVelocity = 6.4): boolean {
+    if (!this.grounded || !this.canAct()) return false;
+    this.grounded = false;
+    this.velocity.y = initialVelocity;
+    this.state = "JUMP";
+    return true;
+  }
+
   beginMove(moveId: string): boolean {
     if (!this.canAct()) return false;
     const move = this.definition.moves[moveId];
@@ -115,43 +135,56 @@ export class FighterRuntime {
     if (this.moveTick >= total) {
       this.currentMove = null;
       this.moveTick = 0;
-      if (this.state === "ATTACK") this.state = "IDLE";
+      if (this.state === "ATTACK") this.state = this.grounded ? "IDLE" : "JUMP";
     }
   }
 
   updatePhysics(deltaSeconds: number): void {
+    this.assertInvariants();
     if (this.hitStop > 0) {
       this.hitStop -= 1;
       return;
     }
-    if (this.state === "JUMP") {
-      this.velocity.y -= 18 * deltaSeconds;
+
+    // Vertical physics is independent from the action state. A fighter can be
+    // ATTACK, HIT, THROW, KO, or RING_OUT while still following the same
+    // airborne trajectory.
+    const wasAirborne = !this.grounded;
+    if (!this.grounded || this.position.y > FIGHTER_GROUND_Y + GROUND_EPSILON || this.velocity.y > 0) {
+      this.grounded = false;
+      this.velocity.y -= FIGHTER_GRAVITY * deltaSeconds;
     }
     this.position.addScaledVector(this.velocity, deltaSeconds);
     this.velocity.x *= 0.82;
     this.velocity.z *= 0.78;
-    if (this.state !== "JUMP" && this.position.y <= 0.02) {
-      this.position.y = 0;
+
+    if (this.position.y <= FIGHTER_GROUND_Y) {
+      this.position.y = FIGHTER_GROUND_Y;
       this.velocity.y = 0;
+      this.grounded = true;
+      if (wasAirborne && this.state === "JUMP") this.state = "IDLE";
+    } else {
+      this.grounded = false;
     }
-    if (this.position.y <= 0.02 && this.state === "JUMP") this.state = "IDLE";
+
     if (this.hitStun > 0) {
       this.hitStun -= 1;
-      if (this.hitStun <= 0 && this.state === "HIT") this.state = "IDLE";
+      if (this.hitStun <= 0 && this.state === "HIT") this.state = this.grounded ? "IDLE" : "JUMP";
     }
     if (this.blockStun > 0) {
       this.blockStun -= 1;
-      if (this.blockStun <= 0 && this.state === "BLOCK_STUN") this.state = "IDLE";
+      if (this.blockStun <= 0 && this.state === "BLOCK_STUN") this.state = this.grounded ? "IDLE" : "JUMP";
     }
     if (this.knockdownTicks > 0) {
       this.knockdownTicks -= 1;
-      if (this.knockdownTicks <= 0 && this.state === "KNOCKDOWN") {
-        this.state = "WAKEUP";
-      }
+    }
+    if (this.grounded && this.knockdownTicks <= 0 && (this.state === "KNOCKDOWN" || this.state === "THROW")) {
+      this.state = "WAKEUP";
     } else if (this.state === "WAKEUP" && this.stateMachine.stateTicks > 22) {
       this.state = "IDLE";
     }
     this.stateMachine.tick();
+    this.assertInvariants();
   }
 
   receiveDamage(
@@ -169,6 +202,7 @@ export class FighterRuntime {
       this.state = this.health <= 0 ? "KO" : "KNOCKDOWN";
       this.knockdownTicks = 72;
       this.velocity.y = this.health <= 0 ? 1.6 : 4.1;
+      this.grounded = false;
       this.currentMove = null;
       this.moveTick = 0;
     } else {
@@ -191,6 +225,7 @@ export class FighterRuntime {
     this.hitStop = Math.max(this.hitStop, hitStop);
     this.velocity.x = attackerFacing * knockback * 22;
     this.velocity.y = 3.2;
+    this.grounded = false;
     this.state = this.health <= 0 ? "KO" : "THROW";
     this.knockdownTicks = 76;
     this.currentMove = null;
@@ -200,6 +235,7 @@ export class FighterRuntime {
   resetForRound(x: number, z: number, facing: number): void {
     this.position.set(x, 0, z);
     this.velocity.set(0, 0, 0);
+    this.grounded = true;
     this.facing = facing;
     this.health = 100;
     this.guardDamage = 0;
@@ -214,6 +250,36 @@ export class FighterRuntime {
     this.previousInput = cloneInput(EMPTY_INPUT);
     this.inputBuffer.clear();
     this.state = "IDLE";
+    this.invariantError = null;
+  }
+
+  validateInvariants(): boolean {
+    const values = [
+      this.position.x,
+      this.position.y,
+      this.position.z,
+      this.velocity.x,
+      this.velocity.y,
+      this.velocity.z,
+    ];
+    if (values.some((value) => !Number.isFinite(value))) {
+      this.invariantError = `${this.id}: non-finite position or velocity`;
+      return false;
+    }
+    if (this.position.y < FIGHTER_GROUND_Y - GROUND_EPSILON || this.position.y > FIGHTER_MAX_HEIGHT) {
+      this.invariantError = `${this.id}: unreasonable height ${this.position.y}`;
+      return false;
+    }
+    if (Math.abs(this.velocity.y) > FIGHTER_MAX_VERTICAL_SPEED) {
+      this.invariantError = `${this.id}: unreasonable vertical speed ${this.velocity.y}`;
+      return false;
+    }
+    this.invariantError = null;
+    return true;
+  }
+
+  assertInvariants(): void {
+    if (!this.validateInvariants()) throw new Error(this.invariantError ?? `${this.id}: fighter invariant failed`);
   }
 }
 
@@ -267,21 +333,30 @@ export class FighterController {
 
     const horizontal = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const axis = (input.up ? 1 : 0) - (input.down ? 1 : 0);
-    if (input.guard && axis !== 0) {
-      fighter.position.z += axis * deltaSeconds * 2.9;
-      fighter.state = "SIDESTEP";
-    } else if (fighter.justPressed("up") && !input.guard) {
-      fighter.velocity.y = 6.4;
-      fighter.state = "JUMP";
-    } else if (input.down && !input.guard) {
-      fighter.state = "CROUCH";
-    } else if (input.guard) {
-      fighter.state = "GUARD";
-    } else if (horizontal !== 0) {
-      fighter.position.x += horizontal * deltaSeconds * (fighter.definition.archetype === "SPEED" ? 3.35 : 2.72);
-      fighter.state = "WALK";
+
+    // Locomotion may move an airborne fighter, but it must never overwrite the
+    // jump/action state just because a direction is held on a later tick.
+    if (fighter.grounded) {
+      if (input.guard && axis !== 0) {
+        fighter.position.z += axis * deltaSeconds * 2.9;
+        fighter.state = "SIDESTEP";
+      } else if (fighter.justPressed("up") && !input.guard) {
+        fighter.startJump();
+      } else if (input.down && !input.guard) {
+        fighter.state = "CROUCH";
+      } else if (input.guard) {
+        fighter.state = "GUARD";
+      } else if (horizontal !== 0) {
+        fighter.position.x += horizontal * deltaSeconds * (fighter.definition.archetype === "SPEED" ? 3.35 : 2.72);
+        fighter.state = "WALK";
+      } else {
+        fighter.state = "IDLE";
+      }
     } else {
-      fighter.state = "IDLE";
+      if (input.guard && axis !== 0) fighter.position.z += axis * deltaSeconds * 2.9;
+      if (horizontal !== 0) {
+        fighter.position.x += horizontal * deltaSeconds * (fighter.definition.archetype === "SPEED" ? 3.35 : 2.72);
+      }
     }
 
     const buttonPressed = fighter.justPressed("punch") || fighter.justPressed("kick");
@@ -408,7 +483,15 @@ export class CpuController {
 
   update(fighter: FighterRuntime, opponent: FighterRuntime): InputFrame {
     this.decisionTicks -= 1;
-    if (this.decisionTicks > 0) return this.current;
+    if (this.decisionTicks > 0) {
+      const output = cloneInput(this.current);
+      // A CPU jump is a one-tick edge, while approach/retreat remains held.
+      if (output.up) {
+        output.up = false;
+        this.current.up = false;
+      }
+      return output;
+    }
     this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff;
     const random = this.seed / 0x7fffffff;
     const distance = opponent.position.distanceTo(fighter.position);

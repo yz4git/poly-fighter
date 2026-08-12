@@ -17,6 +17,10 @@ export class RoundManager {
     this.message = "ROUND 1";
   }
 
+  canSimulateCombat(): boolean {
+    return this.phase === "FIGHT";
+  }
+
   tick(p1: FighterRuntime, p2: FighterRuntime): { winner: FighterRuntime | null; ringOut: boolean } | null {
     this.phaseTicks += 1;
     if (this.phase === "INTRO") {

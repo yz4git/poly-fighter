@@ -130,6 +130,10 @@ export class InputSystem {
     return (this.owners.get(action)?.size ?? 0) > 0;
   }
 
+  clear(): void {
+    for (const entries of this.owners.values()) entries.clear();
+  }
+
   attachKeyboard(target: Document = document): () => void {
     const keyMap: Record<string, InputAction> = {
       arrowleft: "left",
@@ -169,6 +173,6 @@ export class InputSystem {
   destroy(): void {
     this.keyboardCleanup?.();
     this.keyboardCleanup = null;
-    for (const entries of this.owners.values()) entries.clear();
+    this.clear();
   }
 }

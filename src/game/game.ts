@@ -96,6 +96,7 @@ export class PolyFightGame {
       if (document.hidden) {
         this.clock.reset();
         this.lastTime = performance.now();
+        this.input.clear();
       }
     };
     document.addEventListener("visibilitychange", this.visibilityHandler);
@@ -207,14 +208,19 @@ export class PolyFightGame {
 
   private step(): void {
     if (this.paused) return;
-    const p1Input = this.input.frame();
-    const p2Input = this.cpu.update(this.p2, this.p1);
-    this.controller.update(this.p1, this.p2, p1Input, this.fixedStep);
-    this.controller.update(this.p2, this.p1, p2Input, this.fixedStep);
-    this.combat.resolve(this.p1, this.p2);
-    this.combat.resolve(this.p2, this.p1);
-    this.checkRingOut(this.p1);
-    this.checkRingOut(this.p2);
+    // INTRO and ROUND_END are simulation barriers. Rendering, idle poses, and
+    // camera damping continue in the outer loop, but no input, CPU decision,
+    // movement, attack, combat, or ring-out logic may run here.
+    if (this.round.canSimulateCombat()) {
+      const p1Input = this.input.frame();
+      const p2Input = this.cpu.update(this.p2, this.p1);
+      this.controller.update(this.p1, this.p2, p1Input, this.fixedStep);
+      this.controller.update(this.p2, this.p1, p2Input, this.fixedStep);
+      this.combat.resolve(this.p1, this.p2);
+      this.combat.resolve(this.p2, this.p1);
+      this.checkRingOut(this.p1);
+      this.checkRingOut(this.p2);
+    }
     const result = this.round.tick(this.p1, this.p2);
     if (result && !this.outcome) {
       this.outcome = result;

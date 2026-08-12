@@ -41,3 +41,20 @@ test("input buffer recognizes low and dash commands without an auto-combo", () =
   buffer.push(dashKick);
   assert.equal(CommandParser.parse(dashKick, buffer, 1), "DASH_KICK");
 });
+
+test("multitouch action owners keep direction plus simultaneous P, K, and G inputs independent", async () => {
+  const { InputSystem } = await import("../src/game/input");
+  const inputSystem = new InputSystem();
+  inputSystem.press("right", "right-1");
+  inputSystem.press("punch", "punch-2");
+  inputSystem.press("kick", "kick-3");
+  inputSystem.press("guard", "guard-4");
+  assert.deepEqual(inputSystem.frame(), input({ right: true, punch: true, kick: true, guard: true }));
+  inputSystem.release("punch", "punch-2");
+  assert.deepEqual(inputSystem.frame(), input({ right: true, kick: true, guard: true }));
+  inputSystem.releaseOwner("right-1");
+  assert.equal(inputSystem.frame().right, false);
+  inputSystem.clear();
+  assert.deepEqual(inputSystem.frame(), EMPTY_INPUT);
+  inputSystem.destroy();
+});

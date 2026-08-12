@@ -358,13 +358,17 @@ export function createFighterVisual(definition: FighterDefinition): FighterVisua
 }
 
 export function disposeFighterVisual(visual: FighterVisual): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
   visual.root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
-    object.geometry.dispose();
+    geometries.add(object.geometry);
     if (Array.isArray(object.material)) {
-      object.material.forEach((material) => material.dispose());
+      object.material.forEach((material) => materials.add(material));
     } else {
-      object.material.dispose();
+      materials.add(object.material);
     }
   });
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
 }

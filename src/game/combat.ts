@@ -18,6 +18,7 @@ interface Hitbox {
 
 export class HurtboxSystem {
   getHurtboxes(fighter: FighterRuntime): Hurtbox[] {
+    if (fighter.state === "KO" || fighter.state === "RING_OUT") return [];
     const crouching = fighter.state === "CROUCH" || fighter.input.down;
     const baseY = fighter.position.y;
     const scale = crouching ? 0.78 : 1;
@@ -88,7 +89,15 @@ export class CombatSystem {
 
   resolve(attacker: FighterRuntime, defender: FighterRuntime): HitEvent | null {
     const move = attacker.currentMove;
-    if (!move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return null;
+    if (
+      !move ||
+      !attacker.isActive() ||
+      attacker.hitTargets.has(defender.id) ||
+      attacker.state === "KO" ||
+      attacker.state === "RING_OUT" ||
+      defender.state === "KO" ||
+      defender.state === "RING_OUT"
+    ) return null;
     const hitbox = this.hitboxes.getHitbox(attacker, move);
     const defenderHurtboxes = this.hurtboxes.getHurtboxes(defender);
     const targetHurtbox = defenderHurtboxes.find((hurtbox) => {

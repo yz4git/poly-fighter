@@ -381,13 +381,26 @@ export class FighterController {
 export class FighterAnimationController {
   update(fighter: FighterRuntime, timeSeconds: number): void {
     const visual = fighter.visual;
+    const layout = visual.layout;
     const state = fighter.state;
     const move = fighter.currentMove;
     const activePulse = move && fighter.isActive() ? 1 : 0;
     visual.root.position.copy(fighter.position);
     visual.root.rotation.y = fighter.facing > 0 ? 0 : Math.PI;
+    visual.root.rotation.x = 0;
+    visual.root.rotation.z = 0;
 
-    visual.hips.position.y = 1.04 + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006);
+    // V3 joints are solved from the normalized body layout.  Keep the bind
+    // offsets stable each frame so a crouch or a previous pose cannot slowly
+    // move the skeleton away from the generated proportions.
+    visual.hips.position.y = layout.hipsY + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006);
+    visual.hips.position.x = 0;
+    visual.hips.position.z = 0;
+    visual.hips.rotation.set(0, 0, 0);
+    visual.rig.bones.spineLower.position.y = layout.pelvisTopY - layout.hipsY;
+    visual.rig.bones.spineUpper.position.y = layout.ribY - layout.pelvisTopY;
+    visual.rig.bones.chest.position.y = layout.shoulderY - layout.ribY;
+    visual.rig.bones.neck.position.y = layout.headBottom - layout.shoulderY;
     visual.torso.rotation.z = 0;
     visual.torso.rotation.x = 0;
     visual.head.rotation.z = 0;
@@ -404,15 +417,23 @@ export class FighterAnimationController {
     visual.rig.bones.spineUpper.rotation.set(0, 0, 0);
     visual.rig.bones.chest.rotation.set(0, 0, 0);
     visual.rig.bones.head.rotation.set(0, 0, 0);
+    visual.rig.bones.leftShoulder.rotation.set(0, 0, 0);
+    visual.rig.bones.rightShoulder.rotation.set(0, 0, 0);
     visual.rig.bones.leftUpperArm.rotation.set(0, 0, 0);
     visual.rig.bones.rightUpperArm.rotation.set(0, 0, 0);
     visual.rig.bones.leftForearm.rotation.set(0, 0, 0);
     visual.rig.bones.rightForearm.rotation.set(0, 0, 0);
+    visual.rig.bones.leftHand.rotation.set(0, 0, 0);
+    visual.rig.bones.rightHand.rotation.set(0, 0, 0);
+    visual.rig.bones.leftFoot.rotation.set(0, 0, 0);
+    visual.rig.bones.rightFoot.rotation.set(0, 0, 0);
     visual.aura.visible = false;
     if (visual.aura.material instanceof THREE.MeshBasicMaterial) visual.aura.material.opacity = 0.22;
 
     if (state === "WALK") {
       const stride = Math.sin(timeSeconds * 12) * 0.28;
+      visual.hips.rotation.y = -stride * 0.10;
+      visual.hips.position.x = Math.sin(timeSeconds * 6) * 0.008;
       visual.leftLeg.root.rotation.z = stride;
       visual.rightLeg.root.rotation.z = -stride;
       visual.leftArm.root.rotation.z = -stride * 0.7;
@@ -420,18 +441,23 @@ export class FighterAnimationController {
       visual.rig.bones.spineLower.rotation.y = -stride * 0.12;
       visual.rig.bones.spineUpper.rotation.y = stride * 0.16;
     } else if (state === "CROUCH") {
-      visual.hips.position.y = 0.8;
+      visual.hips.position.y = layout.hipsY - 0.06;
       visual.torso.rotation.z = fighter.facing * 0.08;
       visual.leftArm.root.rotation.z = -0.35;
       visual.rightArm.root.rotation.z = 0.35;
       visual.leftLeg.root.rotation.z = 0.22;
       visual.rightLeg.root.rotation.z = -0.22;
-      visual.rig.bones.spineLower.position.y = -0.06;
+      visual.leftLeg.lower.rotation.z = -0.42;
+      visual.rightLeg.lower.rotation.z = 0.42;
+      visual.rig.bones.spineLower.rotation.x = 0.10;
       visual.rig.bones.spineUpper.rotation.x = 0.12;
     } else if (state === "JUMP") {
+      visual.hips.rotation.z = -fighter.facing * 0.08;
       visual.torso.rotation.z = -fighter.facing * 0.08;
       visual.leftLeg.root.rotation.z = -0.38;
       visual.rightLeg.root.rotation.z = 0.38;
+      visual.leftLeg.lower.rotation.z = 0.22;
+      visual.rightLeg.lower.rotation.z = -0.22;
       visual.leftArm.root.rotation.z = -0.28;
       visual.rightArm.root.rotation.z = 0.28;
       visual.rig.bones.spineUpper.rotation.x = -0.16;
@@ -439,6 +465,8 @@ export class FighterAnimationController {
       visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.12;
       visual.leftLeg.root.rotation.z = 0.28;
       visual.rightLeg.root.rotation.z = -0.28;
+      visual.leftLeg.lower.rotation.z = -0.18;
+      visual.rightLeg.lower.rotation.z = 0.18;
     } else if (state === "GUARD" || state === "BLOCK_STUN") {
       visual.leftArm.root.rotation.z = -0.8;
       visual.rightArm.root.rotation.z = 0.72;
@@ -451,6 +479,9 @@ export class FighterAnimationController {
       const windup = Math.min(1, fighter.moveTick / Math.max(1, move.startup));
       const snap = fighter.isActive() ? Math.sin(Math.min(1, (fighter.moveTick - move.startup + 1) / Math.max(1, move.active)) * Math.PI) : 0;
       if (move.animation === "punch") {
+        visual.leftLeg.root.rotation.z = 0.12;
+        visual.rightLeg.root.rotation.z = -0.20;
+        visual.rightLeg.lower.rotation.z = 0.10;
         visual.rightArm.root.rotation.z = -1.1 - snap * 0.35;
         visual.rightArm.lower.rotation.x = -0.18 - snap * 0.22;
         visual.leftArm.root.rotation.z = 0.38;
@@ -461,7 +492,10 @@ export class FighterAnimationController {
         visual.rig.bones.rightUpperArm.rotation.z = -0.3 - snap * 0.18;
         visual.rig.bones.rightForearm.rotation.z = -0.24 - snap * 0.18;
       } else if (move.animation === "kick") {
+        visual.leftLeg.root.rotation.z = 0.12 - snap * 0.08;
+        visual.leftLeg.lower.rotation.z = -0.12;
         visual.rightLeg.root.rotation.z = -1.08 - snap * 0.42;
+        visual.rightLeg.lower.rotation.z = 0.18 + snap * 0.28;
         visual.rightLeg.lower.rotation.x = -0.28 - snap * 0.4;
         visual.leftArm.root.rotation.z = -0.58;
         visual.rightArm.root.rotation.z = 0.7;
@@ -492,6 +526,8 @@ export class FighterAnimationController {
       visual.torso.rotation.z = fighter.facing * 0.16;
       visual.leftLeg.root.rotation.z = -0.5;
       visual.rightLeg.root.rotation.z = 0.5;
+      visual.leftLeg.lower.rotation.z = 0.32;
+      visual.rightLeg.lower.rotation.z = -0.32;
       visual.leftArm.root.rotation.z = -0.65;
       visual.rightArm.root.rotation.z = 0.65;
       visual.rig.bones.spineUpper.rotation.z = fighter.facing * 0.2;

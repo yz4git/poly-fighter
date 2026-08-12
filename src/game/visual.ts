@@ -3,17 +3,123 @@ import type { FighterDefinition } from "./types";
 
 export type FighterVisualQuality = "LOW" | "NORMAL" | "HIGH";
 
-interface LimbVisual {
-  root: THREE.Group;
-  upper: THREE.Group;
-  lower: THREE.Group;
-  end: THREE.Mesh;
+/** Reference-constrained proportions in normalized one-unit body space. */
+export interface ReferenceStyle {
+  headHeight: number;
+  headWidth: number;
+  shoulderWidth: number;
+  waistWidth: number;
+  pelvisWidth: number;
+  hipToGround: number;
+  thighLength: number;
+  shinLength: number;
+  shoulderToWrist: number;
+  handLength: number;
+  footLength: number;
+  neckWidth: number;
+  chestDepth: number;
+  noseProjection: number;
 }
 
-export interface FighterRig {
-  root: THREE.Bone;
-  bones: Record<string, THREE.Bone>;
-  skeleton: THREE.Skeleton;
+export const REFERENCE_STYLE: Readonly<{ KAIRO: ReferenceStyle; SERA: ReferenceStyle }> = {
+  KAIRO: {
+    headHeight: 0.145,
+    headWidth: 0.105,
+    shoulderWidth: 0.285,
+    waistWidth: 0.173,
+    pelvisWidth: 0.190,
+    hipToGround: 0.545,
+    thighLength: 0.275,
+    shinLength: 0.260,
+    shoulderToWrist: 0.325,
+    handLength: 0.105,
+    footLength: 0.155,
+    neckWidth: 0.075,
+    chestDepth: 0.125,
+    // Face-local projection: the generated world-space value is headWidth * this.
+    noseProjection: 0.16,
+  },
+  SERA: {
+    headHeight: 0.140,
+    headWidth: 0.100,
+    shoulderWidth: 0.225,
+    waistWidth: 0.145,
+    pelvisWidth: 0.190,
+    hipToGround: 0.575,
+    thighLength: 0.290,
+    shinLength: 0.280,
+    shoulderToWrist: 0.315,
+    handLength: 0.095,
+    footLength: 0.150,
+    neckWidth: 0.065,
+    chestDepth: 0.104,
+    noseProjection: 0.14,
+  },
+};
+
+export const REFERENCE_POSE_LANDMARKS = {
+  KAIRO: {
+    headTop: [0.2072, 0.2808], chin: [0.2072, 0.3959], neck: [0.2175, 0.4052],
+    leftShoulder: [0.1485, 0.4190], rightShoulder: [0.2693, 0.3729], hip: [0.2762, 0.5433],
+    supportKnee: [0.2314, 0.6860], supportAnkle: [0.2003, 0.8379], supportToe: [0.1692, 0.8932],
+    kickKnee: [0.4213, 0.4788], kickAnkle: [0.6008, 0.4190], kickToe: [0.6388, 0.4052],
+    guardElbow: [0.1657, 0.4604], guardFist: [0.1865, 0.4282], extendElbow: [0.3557, 0.3775], extendFist: [0.4247, 0.3867],
+  },
+  SERA: {
+    headTop: [0.7528, 0.3361], chin: [0.7528, 0.4328], leftShoulder: [0.7010, 0.4190], rightShoulder: [0.7907, 0.4374], hip: [0.7666, 0.5847],
+    frontKnee: [0.6699, 0.6860], frontAnkle: [0.6043, 0.8517], frontToe: [0.5628, 0.8886], backKnee: [0.7804, 0.7505], backAnkle: [0.8874, 0.8471], backToe: [0.9323, 0.8794],
+    raisedElbow: [0.6802, 0.4144], raisedHand: [0.7010, 0.3361], lowElbow: [0.6906, 0.5110], lowHand: [0.6457, 0.4788],
+  },
+} as const;
+
+export const REFERENCE_POSE_BOUNDS = {
+  KAIRO: {
+    headTop: [0.197, 0.007], chin: [0.197, 0.194], leftShoulder: [0.089, 0.231], rightShoulder: [0.312, 0.157], hip: [0.325, 0.433],
+    supportKnee: [0.242, 0.664], supportAnkle: [0.185, 0.910], supportToe: [0.127, 1.000], kickKnee: [0.592, 0.328], kickAnkle: [0.924, 0.231], kickToe: [0.994, 0.209],
+  },
+  SERA: {
+    headTop: [0.518, 0.008], chin: [0.518, 0.180], leftShoulder: [0.384, 0.156], rightShoulder: [0.616, 0.189], hip: [0.554, 0.451],
+    frontKnee: [0.304, 0.631], frontAnkle: [0.134, 0.926], frontToe: [0.027, 0.992], backKnee: [0.589, 0.746], backAnkle: [0.866, 0.918], backToe: [0.982, 0.975],
+  },
+} as const;
+
+export interface FighterVisualLayout extends ReferenceStyle {
+  normalizedHeight: 1;
+  worldScale: number;
+  headBottom: number;
+  shoulderY: number;
+  hipsY: number;
+  kneeY: number;
+  ankleY: number;
+  elbowY: number;
+  wristY: number;
+  pelvisTopY: number;
+  waistY: number;
+  ribY: number;
+  clavicleY: number;
+  headDepth: number;
+}
+
+export interface ProportionMetrics {
+  headCount: number;
+  shoulderHeadRatio: number;
+  shoulderWaistRatio: number;
+  pelvisShoulderRatio: number;
+  hipGroundRatio: number;
+  thighShinRatio: number;
+  legHeightRatio: number;
+}
+
+export interface FacetDistribution { large: number; medium: number; small: number; }
+
+export interface VisualStyleScores {
+  style: number;
+  silhouette: number;
+  proportion: number;
+  landmark: number;
+  facet: number;
+  colorMaterial: number;
+  surfaceContinuity: number;
 }
 
 export interface FighterVisualStats {
@@ -22,14 +128,34 @@ export interface FighterVisualStats {
   triangleCount: number;
   meshCount: number;
   materialCount: number;
+  proportions: ProportionMetrics;
+  facetDistribution: FacetDistribution;
+  scores: VisualStyleScores;
+  skinnedMesh: boolean;
+  weightedVertexCount: number;
+}
+
+export interface LimbVisual {
+  root: THREE.Object3D;
+  upper: THREE.Object3D;
+  lower: THREE.Object3D;
+  end: THREE.Mesh;
+}
+
+export interface FighterRig {
+  root: THREE.Bone;
+  bones: Record<string, THREE.Bone>;
+  boneIndices: Record<string, number>;
+  skeleton: THREE.Skeleton;
 }
 
 export interface FighterVisual {
   root: THREE.Group;
-  hips: THREE.Group;
-  torso: THREE.Group;
-  chest: THREE.Mesh;
-  head: THREE.Group;
+  hips: THREE.Object3D;
+  torso: THREE.Object3D;
+  chest: THREE.SkinnedMesh;
+  bodyMesh: THREE.SkinnedMesh;
+  head: THREE.Object3D;
   hair: THREE.Mesh;
   leftArm: LimbVisual;
   rightArm: LimbVisual;
@@ -39,6 +165,7 @@ export interface FighterVisual {
   aura: THREE.Mesh;
   allMeshes: THREE.Mesh[];
   rig: FighterRig;
+  layout: FighterVisualLayout;
   stats: FighterVisualStats;
 }
 
@@ -60,498 +187,442 @@ interface DetailProfile {
   headRows: number;
   detailRadial: number;
   detailRows: number;
+  worldScale: number;
 }
 
 const DETAIL: Record<FighterVisualQuality, DetailProfile> = {
-  LOW: { radial: 24, torsoRows: 22, limbRows: 18, headRows: 22, detailRadial: 12, detailRows: 8 },
-  NORMAL: { radial: 40, torsoRows: 31, limbRows: 27, headRows: 31, detailRadial: 18, detailRows: 12 },
-  HIGH: { radial: 48, torsoRows: 39, limbRows: 35, headRows: 39, detailRadial: 24, detailRows: 16 },
+  LOW: { radial: 13, torsoRows: 22, limbRows: 28, headRows: 25, detailRadial: 7, detailRows: 5, worldScale: 3.22 },
+  NORMAL: { radial: 18, torsoRows: 28, limbRows: 36, headRows: 34, detailRadial: 9, detailRows: 6, worldScale: 3.25 },
+  HIGH: { radial: 22, torsoRows: 36, limbRows: 46, headRows: 42, detailRadial: 11, detailRows: 7, worldScale: 3.28 },
 };
 
-function materials(definition: FighterDefinition): MaterialSet {
-  const standard = (color: number, metalness = 0.18, roughness = 0.44) =>
-    new THREE.MeshStandardMaterial({ color, flatShading: true, metalness, roughness });
+const MATERIAL_INDEX = { primary: 0, secondary: 1, accent: 2, skin: 3 } as const;
+type SkinWeight = [number, number, number, number, number, number, number, number];
+type SurfaceSampler = (...coordinates: [number, number, number]) => SkinWeight;
+
+interface SurfaceSection {
+  y: number; cx: number; cz: number; rx: number; rz: number;
+  phase?: number; nx?: number; nz?: number; deform2?: number; deform3?: number; frontBump?: number;
+}
+interface FacetCounts { large: number; medium: number; small: number; }
+
+function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }
+function smoothstep(value: number): number { const t = clamp(value, 0, 1); return t * t * (3 - 2 * t); }
+function superellipse(value: number, exponent: number): number { return Math.sign(value) * Math.pow(Math.abs(value), 2 / exponent); }
+
+function material(color: number, metalness: number, roughness: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color, flatShading: true, metalness, roughness });
+}
+
+function createMaterials(definition: FighterDefinition): MaterialSet {
   return {
-    primary: standard(definition.colors.primary, 0.3, 0.38),
-    secondary: standard(definition.colors.secondary, 0.46, 0.34),
-    accent: standard(definition.colors.accent, 0.34, 0.35),
-    skin: standard(definition.colors.skin, 0.04, 0.5),
-    hair: standard(definition.colors.hair, 0.32, 0.4),
-    eyes: standard(0xeaf7ff, 0.02, 0.24),
-    mouth: standard(0x351d2a, 0.02, 0.56),
-    glow: new THREE.MeshBasicMaterial({
-      color: definition.colors.glow,
-      transparent: true,
-      opacity: 0.22,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
+    primary: material(definition.colors.primary, 0.035, 0.64),
+    secondary: material(definition.colors.secondary, 0.025, 0.68),
+    accent: material(definition.colors.accent, 0.04, 0.60),
+    skin: material(definition.colors.skin, 0, 0.70),
+    hair: material(definition.colors.hair, 0.02, 0.50),
+    eyes: material(0xf1f8ff, 0, 0.66),
+    mouth: material(0x4d2631, 0, 0.74),
+    glow: new THREE.MeshBasicMaterial({ color: definition.colors.glow, transparent: true, opacity: 0.20, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
 }
 
-interface Section {
-  y: number;
-  rx: number;
-  rz: number;
-  offsetX?: number;
-  offsetZ?: number;
-  phase?: number;
+function createLayout(definition: FighterDefinition, quality: FighterVisualQuality): FighterVisualLayout {
+  const style = definition.archetype === "POWER" ? REFERENCE_STYLE.KAIRO : REFERENCE_STYLE.SERA;
+  const profile = DETAIL[quality];
+  const headBottom = 1 - style.headHeight;
+  const neckLength = definition.archetype === "POWER" ? 0.055 : 0.050;
+  const shoulderY = headBottom - neckLength - 0.040;
+  const kneeY = style.hipToGround - style.thighLength;
+  const ankleY = kneeY - style.shinLength;
+  const upperArmLength = style.shoulderToWrist * 0.46;
+  const forearmLength = style.shoulderToWrist - upperArmLength;
+  return {
+    ...style,
+    normalizedHeight: 1,
+    worldScale: profile.worldScale,
+    headBottom,
+    shoulderY,
+    hipsY: style.hipToGround,
+    kneeY,
+    ankleY,
+    elbowY: shoulderY - upperArmLength,
+    wristY: shoulderY - upperArmLength - forearmLength,
+    pelvisTopY: style.hipToGround + 0.105,
+    waistY: style.hipToGround + 0.165,
+    ribY: style.hipToGround + 0.275,
+    clavicleY: shoulderY - 0.060,
+    headDepth: definition.archetype === "POWER" ? 0.090 : 0.084,
+  };
 }
 
-/** A high-density body surface made from intentional anatomical cross sections. */
-function sectionedGeometry(sections: Section[], radialSegments: number): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const indices: number[] = [];
-  for (const section of sections) {
-    for (let index = 0; index < radialSegments; index += 1) {
-      const angle = (index / radialSegments) * Math.PI * 2 + (section.phase ?? 0);
-      positions.push(
-        (section.offsetX ?? 0) + Math.cos(angle) * section.rx,
-        section.y,
-        (section.offsetZ ?? 0) + Math.sin(angle) * section.rz,
-      );
-    }
-  }
-  for (let row = 0; row < sections.length - 1; row += 1) {
-    for (let index = 0; index < radialSegments; index += 1) {
-      const next = (index + 1) % radialSegments;
-      const a = row * radialSegments + index;
-      const b = row * radialSegments + next;
-      const c = (row + 1) * radialSegments + next;
-      const d = (row + 1) * radialSegments + index;
-      indices.push(a, b, d, b, c, d);
-    }
-  }
-  const bottom = positions.length / 3;
-  positions.push(sections[0]?.offsetX ?? 0, sections[0]?.y ?? 0, sections[0]?.offsetZ ?? 0);
-  const top = positions.length / 3;
-  const last = sections.at(-1);
-  positions.push(last?.offsetX ?? 0, last?.y ?? 0, last?.offsetZ ?? 0);
-  for (let index = 0; index < radialSegments; index += 1) {
-    const next = (index + 1) % radialSegments;
-    indices.push(bottom, next, index);
-    const topStart = (sections.length - 1) * radialSegments;
-    indices.push(top, topStart + index, topStart + next);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
+function bone(name: string): THREE.Bone { const value = new THREE.Bone(); value.name = `v3-${name}`; return value; }
 
-function facetedEllipsoid(
-  rx: number,
-  ry: number,
-  rz: number,
-  radialSegments: number,
-  rows: number,
-  frontBias = 0,
-): THREE.BufferGeometry {
-  const count = Math.max(4, rows);
-  const sections: Section[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const t = index / (count - 1);
-    const angle = -Math.PI * 0.5 + t * Math.PI;
-    const ring = Math.cos(angle);
-    sections.push({
-      y: Math.sin(angle) * ry,
-      rx: Math.max(0.008, ring * rx),
-      rz: Math.max(0.008, ring * rz),
-      offsetZ: frontBias * Math.max(0, ring),
-    });
-  }
-  return sectionedGeometry(sections, radialSegments);
-}
-
-/** Angular cloth, collar, brow, and hair pieces without box primitives. */
-function wedgeGeometry(width: number, height: number, depth: number, frontPoint = 0.7): THREE.BufferGeometry {
-  const w = width * 0.5;
-  const h = height * 0.5;
-  const d = depth * 0.5;
-  const positions = [
-    -w, -h, -d, w, -h, -d, w * 0.88, h, -d * 0.48, -w * 0.88, h, -d * 0.48,
-    -w * 0.72, -h * 0.72, d * frontPoint, w * 0.72, -h * 0.72, d * frontPoint,
-    w * 0.52, h * 0.68, d * 0.28, -w * 0.52, h * 0.68, d * 0.28,
-  ];
-  const indices = [
-    0, 1, 2, 0, 2, 3,
-    4, 6, 5, 4, 7, 6,
-    0, 4, 5, 0, 5, 1,
-    1, 5, 6, 1, 6, 2,
-    2, 6, 7, 2, 7, 3,
-    3, 7, 4, 3, 4, 0,
-  ];
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function part(geometry: THREE.BufferGeometry, material: THREE.Material, name: string): THREE.Mesh {
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = name;
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  return mesh;
-}
-
-function createRig(): FighterRig {
+function createRig(layout: FighterVisualLayout): FighterRig {
   const names = [
     "root", "hips", "spineLower", "spineUpper", "chest", "neck", "head",
     "leftShoulder", "leftUpperArm", "leftForearm", "leftHand", "rightShoulder", "rightUpperArm", "rightForearm", "rightHand",
     "leftThigh", "leftShin", "leftFoot", "rightThigh", "rightShin", "rightFoot",
   ];
-  const bones = Object.fromEntries(names.map((name) => [name, new THREE.Bone()])) as Record<string, THREE.Bone>;
-  names.forEach((name) => { bones[name].name = `v2-${name}`; });
-  bones.root.add(bones.hips);
+  const bones = Object.fromEntries(names.map((name) => [name, bone(name)])) as Record<string, THREE.Bone>;
+  const root = bones.root;
+  root.add(bones.hips);
+  bones.hips.position.y = layout.hipsY;
   bones.hips.add(bones.spineLower);
+  bones.spineLower.position.y = layout.pelvisTopY - layout.hipsY;
   bones.spineLower.add(bones.spineUpper);
+  bones.spineUpper.position.y = layout.ribY - layout.pelvisTopY;
   bones.spineUpper.add(bones.chest);
+  bones.chest.position.y = layout.shoulderY - layout.ribY;
   bones.chest.add(bones.neck);
+  bones.neck.position.y = layout.headBottom - layout.shoulderY;
   bones.neck.add(bones.head);
   bones.chest.add(bones.leftShoulder, bones.rightShoulder);
+  bones.leftShoulder.position.set(-layout.shoulderWidth * 0.5, 0, 0);
+  bones.rightShoulder.position.set(layout.shoulderWidth * 0.5, 0, 0);
   bones.leftShoulder.add(bones.leftUpperArm);
-  bones.leftUpperArm.add(bones.leftForearm);
-  bones.leftForearm.add(bones.leftHand);
   bones.rightShoulder.add(bones.rightUpperArm);
+  bones.leftUpperArm.position.y = -0.005;
+  bones.rightUpperArm.position.y = -0.005;
+  bones.leftUpperArm.add(bones.leftForearm);
   bones.rightUpperArm.add(bones.rightForearm);
+  bones.leftForearm.position.y = layout.elbowY - layout.shoulderY;
+  bones.rightForearm.position.y = layout.elbowY - layout.shoulderY;
+  bones.leftForearm.add(bones.leftHand);
   bones.rightForearm.add(bones.rightHand);
+  bones.leftHand.position.y = layout.wristY - layout.elbowY;
+  bones.rightHand.position.y = layout.wristY - layout.elbowY;
   bones.hips.add(bones.leftThigh, bones.rightThigh);
+  const hipSpacing = layout.pelvisWidth * 0.29;
+  bones.leftThigh.position.x = -hipSpacing;
+  bones.rightThigh.position.x = hipSpacing;
   bones.leftThigh.add(bones.leftShin);
-  bones.leftShin.add(bones.leftFoot);
   bones.rightThigh.add(bones.rightShin);
+  bones.leftShin.position.y = layout.kneeY - layout.hipsY;
+  bones.rightShin.position.y = layout.kneeY - layout.hipsY;
+  bones.leftShin.add(bones.leftFoot);
   bones.rightShin.add(bones.rightFoot);
-  return { root: bones.root, bones, skeleton: new THREE.Skeleton(Object.values(bones)) };
+  bones.leftFoot.position.y = layout.ankleY - layout.kneeY;
+  bones.rightFoot.position.y = layout.ankleY - layout.kneeY;
+  const boneIndices = Object.fromEntries(names.map((name, index) => [name, index]));
+  const skeleton = new THREE.Skeleton(names.map((name) => bones[name]));
+  return { root, bones, boneIndices, skeleton };
 }
 
-function limb(
-  length: number,
-  radius: number,
-  material: THREE.Material,
-  name: string,
-  profile: DetailProfile,
-  kind: "ARM" | "LEG",
-  secondary: THREE.Material,
-  handScale: number,
-  footScale: number,
-): LimbVisual {
-  const root = new THREE.Group();
-  root.name = `${name}-root`;
-  const upper = new THREE.Group();
-  upper.name = `${name}-upper`;
-  const lower = new THREE.Group();
-  lower.name = `${name}-lower`;
-  const upperLength = length * (kind === "ARM" ? 0.52 : 0.55);
-  const lowerLength = length - upperLength;
-  const rows = profile.limbRows;
-  const upperSections: Section[] = [];
-  const lowerSections: Section[] = [];
-  for (let index = 0; index < rows; index += 1) {
-    const t = index / (rows - 1);
-    const contour = 1 + Math.sin(t * Math.PI) * (kind === "ARM" ? 0.13 : 0.19);
-    upperSections.push({
-      y: -upperLength * t,
-      rx: radius * (kind === "ARM" ? 1.1 : 1.22) * (1 - t * 0.22) * contour,
-      rz: radius * (kind === "ARM" ? 0.94 : 1.02) * (1 - t * 0.18) * contour,
-      offsetZ: kind === "ARM" ? Math.sin(t * Math.PI) * 0.025 : 0,
-    });
-    lowerSections.push({
-      y: -lowerLength * t,
-      rx: radius * (kind === "ARM" ? 0.91 : 0.96) * (1 - t * 0.25) * (1 + Math.sin(t * Math.PI) * 0.1),
-      rz: radius * (kind === "ARM" ? 0.86 : 0.92) * (1 - t * 0.2) * (1 + Math.sin(t * Math.PI) * 0.1),
-      offsetZ: kind === "ARM" ? Math.sin(t * Math.PI) * 0.02 : 0,
-    });
-  }
-  const upperMesh = part(sectionedGeometry(upperSections, profile.radial), material, `${name}-upper-mass`);
-  const lowerMesh = part(sectionedGeometry(lowerSections, profile.radial), material, `${name}-forearm-shin-mass`);
-  upper.add(upperMesh);
-  lower.position.y = -upperLength;
-  lower.add(lowerMesh);
-
-  const joint = part(
-    facetedEllipsoid(radius * (kind === "ARM" ? 0.98 : 1.08), radius * 1.02, radius * 0.98, profile.detailRadial, profile.detailRows),
-    secondary,
-    `${name}-${kind === "ARM" ? "elbow" : "knee"}-facet`,
-  );
-  lower.add(joint);
-
-  const end = part(
-    kind === "ARM"
-      ? facetedEllipsoid(radius * 1.28 * handScale, radius * 0.88 * handScale, radius * 1.46 * handScale, profile.detailRadial, profile.detailRows, 0.08)
-      : wedgeGeometry(radius * 2.8 * footScale, radius * 1.35, radius * 3.5 * footScale, 0.94),
-    material,
-    `${name}-${kind === "ARM" ? "closed-fist" : "foot-boot"}`,
-  );
-  end.position.y = -lowerLength;
-  end.position.z = kind === "ARM" ? 0.12 : 0.18 * footScale;
-  lower.add(end);
-
-  if (kind === "ARM") {
-    const knuckles = part(wedgeGeometry(radius * 1.48 * handScale, radius * 0.42, radius * 0.72 * handScale, 0.95), secondary, `${name}-knuckle-plane`);
-    knuckles.position.set(0, -lowerLength, 0.23 * handScale);
-    lower.add(knuckles);
-    const thumb = part(facetedEllipsoid(radius * 0.62, radius * 0.58, radius * 0.76, profile.detailRadial, profile.detailRows), secondary, `${name}-thumb-mass`);
-    thumb.position.set(radius * 0.58 * handScale, -lowerLength - radius * 0.08, 0.12 * handScale);
-    lower.add(thumb);
-  } else {
-    const sole = part(wedgeGeometry(radius * 2.9 * footScale, radius * 0.32, radius * 3.7 * footScale, 0.96), secondary, `${name}-sole-plate`);
-    sole.position.set(0, -lowerLength - radius * 0.1, 0.22 * footScale);
-    lower.add(sole);
-    const toe = part(facetedEllipsoid(radius * 1.02 * footScale, radius * 0.52, radius * 1.18 * footScale, profile.detailRadial, profile.detailRows, 0.05), material, `${name}-toe-cap`);
-    toe.position.set(0, -lowerLength - radius * 0.04, 0.46 * footScale);
-    lower.add(toe);
-  }
-  upper.add(lower);
-  root.add(upper);
-  return { root, upper, lower, end };
+function weights(...pairs: Array<[number, number]>): SkinWeight {
+  const sorted = pairs.filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const total = sorted.reduce((sum, [, value]) => sum + value, 0) || 1;
+  const result: SkinWeight = [0, 0, 0, 0, 0, 0, 0, 0];
+  sorted.forEach(([index, value], slot) => { result[slot] = index; result[slot + 4] = value / total; });
+  return result;
+}
+function verticalBlend(y: number, top: number, bottom: number, topBone: number, bottomBone: number): SkinWeight {
+  const t = smoothstep((top - y) / Math.max(0.0001, top - bottom));
+  return weights([topBone, 1 - t], [bottomBone, t]);
+}
+function sampleByHeight(blend: (y: number) => SkinWeight): SurfaceSampler {
+  return (...coordinates) => blend(coordinates[1]);
 }
 
-function collectMeshes(root: THREE.Object3D): THREE.Mesh[] {
-  const meshes: THREE.Mesh[] = [];
-  root.traverse((object) => {
-    if (object instanceof THREE.Mesh) meshes.push(object);
-  });
-  return meshes;
-}
-
-function statsFor(quality: FighterVisualQuality, meshes: THREE.Mesh[]): FighterVisualStats {
-  const geometries = new Set<THREE.BufferGeometry>();
-  const materials = new Set<THREE.Material>();
-  let vertexCount = 0;
-  let triangleCount = 0;
-  for (const mesh of meshes) {
-    if (!geometries.has(mesh.geometry)) {
-      geometries.add(mesh.geometry);
-      vertexCount += mesh.geometry.getAttribute("position")?.count ?? 0;
-      triangleCount += mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.getAttribute("position")?.count ?? 0) / 3;
-    }
-    if (Array.isArray(mesh.material)) mesh.material.forEach((material) => materials.add(material));
-    else materials.add(mesh.material);
-  }
-  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: meshes.length, materialCount: materials.size };
-}
-
-export function createFighterVisual(
-  definition: FighterDefinition,
-  quality: FighterVisualQuality = "NORMAL",
-): FighterVisual {
-  const body = definition.body;
-  const profile = DETAIL[quality];
-  const mat = materials(definition);
-  const root = new THREE.Group();
-  root.name = `fighter-v2-${definition.id}`;
-  root.scale.setScalar(1.18 * body.height);
-
-  const hips = new THREE.Group();
-  hips.name = "hips-v2";
-  hips.position.y = 1.04;
-  const pelvis = part(
-    sectionedGeometry([
-      { y: -0.25, rx: (body.pelvisWidth ?? body.hipWidth) * 0.42, rz: 0.34, offsetZ: 0.01 },
-      { y: -0.06, rx: (body.pelvisWidth ?? body.hipWidth) * 0.5, rz: 0.37 },
-      { y: 0.18, rx: body.hipWidth * 0.48, rz: 0.32 },
-      { y: 0.34, rx: body.waistWidth * 0.46, rz: 0.28 },
-    ], profile.radial),
-    mat.secondary,
-    "pelvis-anatomical-mass",
-  );
-  hips.add(pelvis);
-  const belt = part(wedgeGeometry(body.hipWidth * 0.92, 0.13, 0.46, 0.86), mat.accent, "waist-belt-geometry");
-  belt.position.set(0, 0.22, 0.2);
-  hips.add(belt);
-
-  const torso = new THREE.Group();
-  torso.name = "torso-v2";
-  torso.position.y = 1.5;
-  const chest = part(
-    sectionedGeometry([
-      { y: -0.46, rx: body.waistWidth * 0.43, rz: body.chestDepth * 0.56, offsetZ: 0.01 },
-      { y: -0.26, rx: (body.chestWidth ?? body.shoulderWidth) * 0.43, rz: body.chestDepth * 0.65 },
-      { y: -0.02, rx: (body.chestWidth ?? body.shoulderWidth) * 0.49, rz: body.chestDepth * 0.76, offsetZ: 0.02 },
-      { y: 0.24, rx: (body.clavicleWidth ?? body.shoulderWidth) * 0.49, rz: body.chestDepth * 0.73, offsetZ: 0.01 },
-      { y: 0.46, rx: (body.clavicleWidth ?? body.shoulderWidth) * 0.42, rz: body.chestDepth * 0.62 },
-      { y: 0.57, rx: body.shoulderWidth * 0.34, rz: body.chestDepth * 0.45 },
-    ], profile.radial),
-    mat.primary,
-    "torso-ribcage-and-abdomen",
-  );
-  torso.add(chest);
-  const chestPlate = part(wedgeGeometry(body.shoulderWidth * 0.74, 0.58, body.chestDepth * 0.46, 0.96), mat.secondary, "sternum-jacket-panel");
-  chestPlate.position.set(0, 0.02, body.chestDepth * 0.54);
-  torso.add(chestPlate);
-  const collarLeft = part(wedgeGeometry(0.22, 0.5, 0.18, 0.95), mat.accent, "left-collar");
-  collarLeft.position.set(-0.17, 0.39, body.chestDepth * 0.53);
-  collarLeft.rotation.z = -0.3;
-  const collarRight = collarLeft.clone();
-  collarRight.name = "right-collar";
-  collarRight.position.x = 0.17;
-  collarRight.rotation.z = 0.3;
-  torso.add(collarLeft, collarRight);
-
-  const head = new THREE.Group();
-  head.name = "head-face-v2";
-  head.position.y = 2.38;
-  const neckLength = body.neckLength ?? 0.27;
-  const neck = part(
-    sectionedGeometry([
-      { y: -0.28, rx: 0.2, rz: 0.18 },
-      { y: -0.08, rx: 0.19, rz: 0.18 },
-      { y: neckLength * 0.62, rx: 0.17, rz: 0.16 },
-    ], profile.detailRadial),
-    mat.skin,
-    "neck-cylinder-free-facet",
-  );
-  head.add(neck);
-  const headDepth = body.headDepth ?? 0.84;
-  const face = part(
-    sectionedGeometry([
-      { y: -0.44, rx: body.jawWidth * 0.32, rz: headDepth * 0.31, offsetZ: 0.04 },
-      { y: -0.28, rx: body.jawWidth * 0.5, rz: headDepth * 0.42, offsetZ: 0.06 },
-      { y: -0.04, rx: body.headWidth * 0.53, rz: headDepth * 0.49, offsetZ: 0.03 },
-      { y: 0.25, rx: body.headWidth * 0.56, rz: headDepth * 0.48 },
-      { y: 0.5, rx: body.headWidth * 0.51, rz: headDepth * 0.43, offsetZ: -0.02 },
-      { y: 0.7, rx: body.headWidth * 0.38, rz: headDepth * 0.32, offsetZ: -0.02 },
-    ], profile.radial),
-    mat.skin,
-    "skull-forehead-cheek-jaw-surface",
-  );
-  face.position.y = 0.4;
-  head.add(face);
-  const jaw = part(sectionedGeometry([
-    { y: -0.2, rx: body.jawWidth * 0.3, rz: headDepth * 0.32, offsetZ: 0.18 },
-    { y: -0.02, rx: body.jawWidth * 0.46, rz: headDepth * 0.36, offsetZ: 0.2 },
-    { y: 0.16, rx: body.jawWidth * 0.42, rz: headDepth * 0.3, offsetZ: 0.16 },
-  ], profile.detailRadial), mat.skin, "jaw-line-and-chin");
-  jaw.position.y = 0.22;
-  head.add(jaw);
-
-  const cheekWidth = body.cheekWidth ?? body.headWidth * 0.88;
-  for (const side of [-1, 1]) {
-    const cheek = part(facetedEllipsoid(0.15 * cheekWidth, 0.13, 0.1, profile.detailRadial, profile.detailRows, 0.04), mat.skin, `${side < 0 ? "left" : "right"}-cheekbone`);
-    cheek.position.set(side * body.headWidth * 0.32, 0.28, headDepth * 0.43);
-    head.add(cheek);
-    const ear = part(facetedEllipsoid(0.09, 0.16, 0.07, profile.detailRadial, profile.detailRows), mat.skin, `${side < 0 ? "left" : "right"}-ear`);
-    ear.position.set(side * body.headWidth * 0.56, 0.36, 0);
-    head.add(ear);
-    const eye = part(facetedEllipsoid(0.095, 0.052, 0.035, profile.detailRadial, profile.detailRows, 0.02), mat.eyes, `${side < 0 ? "left" : "right"}-eye-sclera`);
-    eye.position.set(side * body.headWidth * 0.21, 0.47, headDepth * 0.48);
-    head.add(eye);
-    const iris = part(facetedEllipsoid(0.043, 0.043, 0.022, profile.detailRadial, profile.detailRows), mat.hair, `${side < 0 ? "left" : "right"}-iris-pupil`);
-    iris.position.set(side * body.headWidth * 0.21, 0.47, headDepth * 0.525);
-    head.add(iris);
-    const brow = part(wedgeGeometry(0.23, 0.055, 0.07, 0.92), mat.hair, `${side < 0 ? "left" : "right"}-brow-ridge`);
-    brow.position.set(side * body.headWidth * 0.21, 0.59, headDepth * 0.5);
-    brow.rotation.z = side * -0.08;
-    head.add(brow);
-  }
-  const noseBridge = part(sectionedGeometry([
-    { y: 0.28, rx: 0.065, rz: 0.055, offsetZ: headDepth * 0.46 },
-    { y: 0.48, rx: 0.052, rz: 0.045, offsetZ: headDepth * 0.48 },
-    { y: 0.62, rx: 0.038, rz: 0.036, offsetZ: headDepth * 0.46 },
-  ], profile.detailRadial), mat.skin, "nose-bridge-geometry");
-  head.add(noseBridge);
-  const noseTip = part(facetedEllipsoid(0.085 * (body.noseLength ?? 1), 0.075, 0.09, profile.detailRadial, profile.detailRows, 0.03), mat.skin, "nose-tip-plane");
-  noseTip.position.set(0, 0.27, headDepth * 0.57);
-  head.add(noseTip);
-  const upperLip = part(wedgeGeometry(0.18, 0.045, 0.08, 0.95), mat.mouth, "upper-lip-geometry");
-  upperLip.position.set(0, 0.11, headDepth * 0.47);
-  const lowerLip = part(wedgeGeometry(0.2, 0.05, 0.075, 0.9), mat.mouth, "lower-lip-geometry");
-  lowerLip.position.set(0, 0.045, headDepth * 0.46);
-  head.add(upperLip, lowerLip);
-
-  const hair = part(facetedEllipsoid(body.headWidth * 0.58, 0.32, headDepth * 0.52, profile.radial, profile.headRows, -0.02), mat.hair, "hair-cap-faceted-mass");
-  hair.position.set(0, 0.79, -0.03);
-  head.add(hair);
-  for (let index = 0; index < 6; index += 1) {
-    const side = index % 2 === 0 ? -1 : 1;
-    const lock = part(wedgeGeometry(0.26 + (index % 3) * 0.05, 0.48 + (index % 2) * 0.12, 0.24, 0.92), mat.hair, `hair-lock-${index}`);
-    lock.position.set(side * (0.16 + Math.floor(index / 2) * 0.13), 0.86 - (index % 3) * 0.07, 0.08 - (index % 2) * 0.08);
-    lock.rotation.z = side * (0.12 + (index % 3) * 0.07);
-    lock.rotation.x = -0.12 - (index % 2) * 0.1;
-    head.add(lock);
-  }
-
-  const shoulderWidth = body.clavicleWidth ?? body.shoulderWidth;
-  const armRadius = 0.13 * (body.upperArmMass ?? body.muscle);
-  const leftArm = limb(body.armLength, armRadius, mat.primary, "left-arm", profile, "ARM", mat.secondary, body.handScale, body.footScale);
-  const rightArm = limb(body.armLength, armRadius, mat.primary, "right-arm", profile, "ARM", mat.secondary, body.handScale, body.footScale);
-  leftArm.root.position.set(-shoulderWidth * 0.52, 1.82, 0);
-  rightArm.root.position.set(shoulderWidth * 0.52, 1.82, 0);
-  for (const [arm, side] of [[leftArm, -1], [rightArm, 1]] as const) {
-    const shoulder = part(facetedEllipsoid(0.23 * (body.upperArmMass ?? 1), 0.21, 0.25, profile.detailRadial, profile.detailRows, 0.02), mat.accent, `${side < 0 ? "left" : "right"}-deltoid-mass`);
-    shoulder.position.set(0, 0.03, 0);
-    arm.root.add(shoulder);
-  }
-
-  const legRadius = 0.16 * (body.thighMass ?? body.muscle);
-  const leftLeg = limb(body.legLength, legRadius, mat.secondary, "left-leg", profile, "LEG", mat.primary, body.handScale, body.footScale);
-  const rightLeg = limb(body.legLength, legRadius, mat.secondary, "right-leg", profile, "LEG", mat.primary, body.handScale, body.footScale);
-  leftLeg.root.position.set(-(body.pelvisWidth ?? body.hipWidth) * 0.25, 0.98, 0);
-  rightLeg.root.position.set((body.pelvisWidth ?? body.hipWidth) * 0.25, 0.98, 0);
-
-  const panels = new THREE.Group();
-  panels.name = "geometry-clothing-panels-v2";
-  const waistPanel = part(wedgeGeometry(body.waistWidth * 0.62, 0.38, 0.16, 0.94), mat.accent, "front-waist-panel");
-  waistPanel.position.set(0, 1.25, 0.35);
-  panels.add(waistPanel);
-  if (body.longPanels) {
-    for (const side of [-1, 1]) {
-      const panel = part(wedgeGeometry(0.32, 1.38, 0.18, 0.9), mat.primary, `${side < 0 ? "left" : "right"}-long-coat-panel`);
-      panel.position.set(side * 0.4, 1.06, -0.19);
-      panel.rotation.z = side * 0.12;
-      panels.add(panel);
-    }
-  } else {
-    const tail = part(wedgeGeometry(0.76, 0.98, 0.22, 0.94), mat.primary, "structured-jacket-tail");
-    tail.position.set(0, 1.15, -0.3);
-    panels.add(tail);
-  }
-  const sideArmorLeft = part(wedgeGeometry(0.25, 0.66, 0.18, 0.9), mat.secondary, "left-side-armor");
-  const sideArmorRight = sideArmorLeft.clone();
-  sideArmorRight.name = "right-side-armor";
-  sideArmorLeft.position.set(-body.shoulderWidth * 0.49, 1.64, 0.02);
-  sideArmorRight.position.set(body.shoulderWidth * 0.49, 1.64, 0.02);
-  panels.add(sideArmorLeft, sideArmorRight);
-
-  const aura = part(new THREE.SphereGeometry(1, profile.detailRadial, profile.detailRows), mat.glow, "fighter-energy-aura");
-  aura.scale.set(0.9, 1.55, 0.58);
-  aura.position.y = 1.3;
-  aura.visible = false;
-
-  const rig = createRig();
-  rig.root.visible = false;
-  root.add(hips, torso, head, leftArm.root, rightArm.root, leftLeg.root, rightLeg.root, panels, aura, rig.root);
-  const allMeshes = collectMeshes(root);
+function interpolateSection(a: SurfaceSection, b: SurfaceSection, t: number): SurfaceSection {
+  const lerp = (x: number | undefined, y: number | undefined): number | undefined => x === undefined && y === undefined ? undefined : (x ?? 0) + ((y ?? 0) - (x ?? 0)) * t;
   return {
-    root,
-    hips,
-    torso,
-    chest,
-    head,
-    hair,
-    leftArm,
-    rightArm,
-    leftLeg,
-    rightLeg,
-    panels,
-    aura,
-    allMeshes,
-    rig,
-    stats: statsFor(quality, allMeshes),
+    y: a.y + (b.y - a.y) * t, cx: a.cx + (b.cx - a.cx) * t, cz: a.cz + (b.cz - a.cz) * t,
+    rx: a.rx + (b.rx - a.rx) * t, rz: a.rz + (b.rz - a.rz) * t,
+    phase: (a.phase ?? 0) + ((b.phase ?? 0) - (a.phase ?? 0)) * t,
+    nx: lerp(a.nx, b.nx), nz: lerp(a.nz, b.nz), deform2: lerp(a.deform2, b.deform2), deform3: lerp(a.deform3, b.deform3), frontBump: lerp(a.frontBump, b.frontBump),
   };
+}
+function resampleSections(base: SurfaceSection[], rowCount: number): SurfaceSection[] {
+  const result: SurfaceSection[] = [];
+  for (let row = 0; row < rowCount; row += 1) {
+    const scaled = (row / Math.max(1, rowCount - 1)) * (base.length - 1);
+    const index = Math.min(base.length - 2, Math.floor(scaled));
+    result.push(interpolateSection(base[index], base[index + 1], scaled - index));
+  }
+  return result;
+}
+
+class GeometryBuilder {
+  readonly positions: number[] = [];
+  readonly indices: number[] = [];
+  readonly skinIndices: number[] = [];
+  readonly skinWeights: number[] = [];
+  readonly groups: Array<{ start: number; count: number; materialIndex: number }> = [];
+  readonly facets: FacetCounts = { large: 0, medium: 0, small: 0 };
+  private addVertex(x: number, y: number, z: number, weight: SkinWeight): number {
+    const index = this.positions.length / 3;
+    this.positions.push(x, y, z);
+    this.skinIndices.push(weight[0], weight[1], weight[2], weight[3]);
+    this.skinWeights.push(weight[4], weight[5], weight[6], weight[7]);
+    return index;
+  }
+  private addTriangle(a: number, b: number, c: number, facet: keyof FacetCounts): void { this.indices.push(a, b, c); this.facets[facet] += 1; }
+  addSurface(sections: SurfaceSection[], radial: number, skinFor: (x: number, y: number, z: number) => SkinWeight, materialIndex: number, facetForRow: (row: number) => keyof FacetCounts): void {
+    const start = this.indices.length;
+    const rings: number[][] = [];
+    for (const section of sections) {
+      const ring: number[] = [];
+      for (let vertex = 0; vertex < radial; vertex += 1) {
+        const angle = (vertex / radial) * Math.PI * 2 + (section.phase ?? 0);
+        const c = Math.cos(angle); const s = Math.sin(angle);
+        const sx = superellipse(c, section.nx ?? 2.5); const sz = superellipse(s, section.nz ?? 2.5);
+        const lowFrequency = 1 + (section.deform2 ?? 0) * Math.cos(angle * 2) + (section.deform3 ?? 0) * Math.sin(angle * 3);
+        const x = section.cx + sx * section.rx * lowFrequency;
+        const noseFocus = Math.exp(-Math.pow(c, 2) * 6);
+        const z = section.cz + sz * section.rz * lowFrequency + Math.max(0, s) * noseFocus * (section.frontBump ?? 0);
+        ring.push(this.addVertex(x, section.y, z, skinFor(x, section.y, z)));
+      }
+      rings.push(ring);
+    }
+    for (let row = 0; row < rings.length - 1; row += 1) {
+      const facet = facetForRow(row);
+      for (let vertex = 0; vertex < radial; vertex += 1) {
+        const next = (vertex + 1) % radial;
+        const a = rings[row][vertex]; const b = rings[row][next]; const c = rings[row + 1][next]; const d = rings[row + 1][vertex];
+        this.addTriangle(a, b, d, facet); this.addTriangle(b, c, d, facet);
+      }
+    }
+    const bottomSection = sections[0]; const topSection = sections.at(-1);
+    if (bottomSection && topSection) {
+      const bottom = this.addVertex(bottomSection.cx, bottomSection.y, bottomSection.cz, skinFor(bottomSection.cx, bottomSection.y, bottomSection.cz));
+      const top = this.addVertex(topSection.cx, topSection.y, topSection.cz, skinFor(topSection.cx, topSection.y, topSection.cz));
+      for (let vertex = 0; vertex < radial; vertex += 1) {
+        const next = (vertex + 1) % radial;
+        this.addTriangle(bottom, rings[0][next], rings[0][vertex], facetForRow(0));
+        const last = rings.at(-1) ?? [];
+        this.addTriangle(top, last[vertex] ?? top, last[next] ?? top, facetForRow(sections.length - 1));
+      }
+    }
+    this.groups.push({ start, count: this.indices.length - start, materialIndex });
+  }
+  build(): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(this.positions, 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(this.skinIndices, 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(this.skinWeights, 4));
+    geometry.setIndex(this.indices);
+    for (const group of this.groups) geometry.addGroup(group.start, group.count, group.materialIndex);
+    geometry.computeVertexNormals();
+    geometry.userData.facetDistribution = this.facets;
+    return geometry;
+  }
+}
+
+function sectionFacet(row: number): keyof FacetCounts {
+  if (row % 7 === 0) return "large";
+  if (row % 5 === 0) return "small";
+  return row % 2 === 0 ? "large" : "medium";
+}
+
+function wedgeGeometry(width: number, height: number, depth: number, point = 0.82): THREE.BufferGeometry {
+  const w = width * 0.5; const h = height * 0.5; const d = depth * 0.5;
+  const positions = [-w, -h, -d, w, -h, -d, w * 0.84, h, -d * 0.52, -w * 0.84, h, -d * 0.52, -w * 0.66, -h * 0.72, d * point, w * 0.66, -h * 0.72, d * point, w * 0.52, h * 0.62, d * 0.28, -w * 0.52, h * 0.62, d * 0.28];
+  const index = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(index); geometry.computeVertexNormals();
+  geometry.userData.facetDistribution = { large: 2, medium: 4, small: 2 } satisfies FacetCounts;
+  return geometry;
+}
+function facePlane(width: number, height: number, depth: number): THREE.BufferGeometry { return wedgeGeometry(width, height, depth, 1); }
+function part(geometry: THREE.BufferGeometry, materialValue: THREE.Material, name: string): THREE.Mesh { const mesh = new THREE.Mesh(geometry, materialValue); mesh.name = name; return mesh; }
+
+function addHeadDetails(head: THREE.Bone, mat: MaterialSet, layout: FighterVisualLayout, archetype: FighterDefinition["archetype"]): THREE.Mesh {
+  const width = layout.headWidth; const height = layout.headHeight; const depth = layout.headDepth;
+  const hair = part(wedgeGeometry(width * 1.04, height * 0.52, depth * 1.05, 0.72), mat.hair, "v3-hair-cap-angular");
+  hair.position.set(0, height * 0.79, -depth * 0.05); head.add(hair);
+  const eyeY = height * 0.55; const eyeZ = depth * 0.49;
+  for (const side of [-1, 1]) {
+    const eye = part(facePlane(width * 0.22, height * 0.09, 0.008), mat.eyes, `${side < 0 ? "left" : "right"}-eye-plane-v3`);
+    eye.position.set(side * width * 0.17, eyeY, eyeZ); eye.rotation.z = side * -0.04; head.add(eye);
+    const iris = part(facePlane(width * 0.065, height * 0.07, 0.010), mat.hair, `${side < 0 ? "left" : "right"}-iris-v3`);
+    iris.position.set(side * width * 0.17, eyeY, eyeZ + 0.006); head.add(iris);
+    const brow = part(wedgeGeometry(width * 0.24, height * 0.055, 0.014, 0.9), mat.hair, `${side < 0 ? "left" : "right"}-brow-plane-v3`);
+    brow.position.set(side * width * 0.17, height * 0.63, depth * 0.48); brow.rotation.z = side * (archetype === "POWER" ? -0.13 : -0.07); head.add(brow);
+    const ear = part(wedgeGeometry(width * 0.14, height * 0.17, depth * 0.08, 0.5), mat.skin, `${side < 0 ? "left" : "right"}-ear-v3`);
+    ear.position.set(side * width * 0.53, height * 0.42, 0); head.add(ear);
+  }
+  const lip = part(facePlane(width * 0.23, height * 0.035, 0.012), mat.mouth, "mouth-plane-v3");
+  lip.position.set(0, height * 0.27, depth * 0.45); head.add(lip);
+  const lockCount = archetype === "POWER" ? 5 : 6;
+  for (let index = 0; index < lockCount; index += 1) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const lock = part(wedgeGeometry(width * (0.34 - (index % 3) * 0.035), height * (0.58 - (index % 2) * 0.08), depth * 0.34, 0.92), mat.hair, `hair-lock-v3-${index}`);
+    lock.position.set(side * width * (0.30 + Math.floor(index / 2) * 0.10), height * (0.78 - (index % 3) * 0.08), index % 2 === 0 ? depth * 0.03 : -depth * 0.16);
+    lock.rotation.z = side * (0.16 + (index % 3) * 0.08); lock.rotation.x = -0.16 - (index % 2) * 0.08; head.add(lock);
+  }
+  if (archetype === "SPEED") {
+    const tail = part(wedgeGeometry(width * 0.42, height * 1.22, depth * 0.34, 0.96), mat.hair, "hair-tail-v3");
+    tail.position.set(width * 0.54, height * 0.42, -depth * 0.32); tail.rotation.z = -0.48; head.add(tail);
+  }
+  return hair;
+}
+
+function createBodyGeometry(layout: FighterVisualLayout, rig: FighterRig, definition: FighterDefinition, quality: FighterVisualQuality): THREE.BufferGeometry {
+  const profile = DETAIL[quality]; const builder = new GeometryBuilder(); const index = (name: string) => rig.boneIndices[name];
+  const torsoSkin = sampleByHeight((y) => y < layout.pelvisTopY ? verticalBlend(y, layout.pelvisTopY, layout.hipsY, index("spineLower"), index("hips")) : y < layout.ribY ? verticalBlend(y, layout.ribY, layout.pelvisTopY, index("spineUpper"), index("spineLower")) : verticalBlend(y, layout.shoulderY, layout.ribY, index("chest"), index("spineUpper")));
+  const torsoBase: SurfaceSection[] = [
+    { y: layout.hipsY - 0.030, cx: 0, cz: 0, rx: layout.pelvisWidth * 0.43, rz: layout.chestDepth * 0.39, nx: 2.8, nz: 2.3, deform2: 0.06 },
+    { y: layout.hipsY + 0.030, cx: 0, cz: 0, rx: layout.pelvisWidth * 0.50, rz: layout.chestDepth * 0.48, nx: 2.8, nz: 2.4, deform2: 0.07 },
+    { y: layout.pelvisTopY, cx: 0, cz: 0.004, rx: layout.pelvisWidth * 0.49, rz: layout.chestDepth * 0.52, nx: 2.5, nz: 2.5, deform2: 0.05 },
+    { y: layout.waistY, cx: 0, cz: 0.006, rx: layout.waistWidth * 0.50, rz: layout.chestDepth * 0.58, nx: 3.0, nz: 2.5, deform2: -0.04 },
+    { y: layout.ribY, cx: 0, cz: 0.008, rx: layout.shoulderWidth * 0.42, rz: layout.chestDepth * 0.76, nx: 2.4, nz: 2.2, deform2: 0.08 },
+    { y: layout.clavicleY, cx: 0, cz: 0.006, rx: layout.shoulderWidth * 0.49, rz: layout.chestDepth * 0.82, nx: 2.3, nz: 2.3, deform2: 0.06 },
+    { y: layout.shoulderY, cx: 0, cz: 0.002, rx: layout.shoulderWidth * 0.46, rz: layout.chestDepth * 0.68, nx: 2.6, nz: 2.4, deform2: 0.10 },
+  ];
+  builder.addSurface(resampleSections(torsoBase, profile.torsoRows), profile.radial, torsoSkin, MATERIAL_INDEX.primary, sectionFacet);
+  const neckSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom, layout.shoulderY, index("head"), index("neck")));
+  builder.addSurface(resampleSections([
+    { y: layout.shoulderY - 0.015, cx: 0, cz: 0, rx: layout.neckWidth * 0.52, rz: layout.neckWidth * 0.45, nx: 2.8, nz: 2.8 },
+    { y: layout.headBottom, cx: 0, cz: 0, rx: layout.neckWidth * 0.47, rz: layout.neckWidth * 0.42, nx: 2.8, nz: 2.8 },
+  ], Math.max(6, Math.floor(profile.torsoRows * 0.65))), Math.max(8, profile.detailRadial), neckSkin, MATERIAL_INDEX.skin, (row) => row % 3 === 0 ? "large" : "medium");
+  const hipSpacing = layout.pelvisWidth * 0.29;
+  for (const side of [-1, 1] as const) {
+    const prefix = side < 0 ? "left" : "right";
+    const thighSkin = sampleByHeight((y) => verticalBlend(y, layout.hipsY, layout.kneeY, index(`${prefix}Thigh`), index(`${prefix}Shin`)));
+    const shinSkin = sampleByHeight((y) => verticalBlend(y, layout.kneeY, layout.ankleY, index(`${prefix}Shin`), index(`${prefix}Foot`)));
+    const thighRx = definition.archetype === "POWER" ? 0.040 : 0.033; const thighRz = definition.archetype === "POWER" ? 0.052 : 0.043;
+    const calfRx = definition.archetype === "POWER" ? 0.034 : 0.028; const calfRz = definition.archetype === "POWER" ? 0.043 : 0.036;
+    builder.addSurface(resampleSections([
+      { y: layout.hipsY + 0.018, cx: side * hipSpacing, cz: 0, rx: thighRx * 1.18, rz: thighRz * 1.16, nx: 2.4, nz: 2.3, deform2: 0.10 },
+      { y: layout.kneeY + 0.026, cx: side * (hipSpacing + 0.008), cz: 0, rx: thighRx * 0.92, rz: thighRz * 0.92, nx: 2.8, nz: 2.5, deform2: 0.06 },
+    ], profile.limbRows), profile.radial, thighSkin, MATERIAL_INDEX.secondary, sectionFacet);
+    builder.addSurface(resampleSections([
+      { y: layout.kneeY + 0.020, cx: side * (hipSpacing + 0.008), cz: 0, rx: calfRx * 1.10, rz: calfRz * 1.06, nx: 2.6, nz: 2.5, deform2: 0.05 },
+      { y: layout.ankleY, cx: side * (hipSpacing + 0.014), cz: 0, rx: calfRx * 0.72, rz: calfRz * 0.72, nx: 3.1, nz: 2.7, deform2: -0.04 },
+    ], profile.limbRows), profile.radial, shinSkin, MATERIAL_INDEX.secondary, sectionFacet);
+  }
+  for (const side of [-1, 1] as const) {
+    const prefix = side < 0 ? "left" : "right"; const shoulderX = side * layout.shoulderWidth * 0.5; const elbowX = shoulderX + side * 0.028; const wristX = shoulderX + side * 0.045;
+    const upperSkin = sampleByHeight((y) => verticalBlend(y, layout.shoulderY, layout.elbowY, index(`${prefix}UpperArm`), index(`${prefix}Forearm`)));
+    const forearmSkin = sampleByHeight((y) => verticalBlend(y, layout.elbowY, layout.wristY, index(`${prefix}Forearm`), index(`${prefix}Hand`)));
+    const upperRadius = definition.archetype === "POWER" ? 0.027 : 0.022; const foreRadius = definition.archetype === "POWER" ? 0.024 : 0.019;
+    builder.addSurface(resampleSections([
+      { y: layout.shoulderY + 0.008, cx: shoulderX, cz: 0, rx: upperRadius * 1.22, rz: upperRadius * 1.20, nx: 2.6, nz: 2.4, deform2: 0.12 },
+      { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: upperRadius * 0.84, rz: upperRadius * 0.88, nx: 2.9, nz: 2.6, deform2: 0.04 },
+    ], Math.max(9, profile.limbRows - 2)), profile.radial, upperSkin, MATERIAL_INDEX.primary, sectionFacet);
+    builder.addSurface(resampleSections([
+      { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: foreRadius * 1.10, rz: foreRadius * 1.05, nx: 2.8, nz: 2.6, deform2: 0.07 },
+      { y: layout.wristY, cx: wristX, cz: 0.010, rx: foreRadius * 0.70, rz: foreRadius * 0.72, nx: 3.0, nz: 2.7, deform2: -0.05 },
+    ], Math.max(9, profile.limbRows - 2)), profile.radial, forearmSkin, MATERIAL_INDEX.primary, sectionFacet);
+  }
+  const headSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom + layout.headHeight * 0.10, layout.headBottom, rig.boneIndices.head, rig.boneIndices.neck));
+  const headSections: SurfaceSection[] = [];
+  const jawWidth = definition.archetype === "POWER" ? 0.72 : 0.64;
+  for (let row = 0; row < profile.headRows; row += 1) {
+    const t = row / Math.max(1, profile.headRows - 1); const jawToSkull = smoothstep(t * 1.18); const width = layout.headWidth * (jawWidth + jawToSkull * (1 - jawWidth)); const cheek = Math.exp(-Math.pow((t - 0.38) / 0.20, 2)); const crown = 1 - smoothstep((t - 0.82) / 0.18) * 0.20;
+    headSections.push({ y: layout.headBottom + t * layout.headHeight, cx: 0, cz: 0.002, rx: width * 0.50 * crown, rz: layout.headDepth * (0.42 + cheek * 0.10) * crown, phase: (row % 3) * 0.04, nx: t < 0.25 ? 2.8 : 2.35, nz: 2.45, deform2: t < 0.25 ? -0.03 : 0.045, frontBump: layout.headWidth * layout.noseProjection * Math.exp(-Math.pow((t - 0.39) / 0.11, 2)) });
+  }
+  builder.addSurface(headSections, profile.radial, headSkin, MATERIAL_INDEX.skin, (row) => row % 6 === 0 ? "large" : row % 4 === 0 ? "small" : "medium");
+  return builder.build();
+}
+
+function createClothing(definition: FighterDefinition, layout: FighterVisualLayout, mat: MaterialSet, rig: FighterRig): THREE.Group {
+  const panels = new THREE.Group(); panels.name = "v3-clothing-silhouette";
+  const add = (geometry: THREE.BufferGeometry, materialValue: THREE.Material, name: string, position: THREE.Vector3, rotation?: THREE.Euler): THREE.Mesh => {
+    const mesh = part(geometry, materialValue, name); mesh.position.copy(position); if (rotation) mesh.rotation.copy(rotation); panels.add(mesh); return mesh;
+  };
+  if (definition.archetype === "POWER") {
+    add(wedgeGeometry(layout.shoulderWidth * 0.72, 0.22, 0.18, 0.92), mat.accent, "kairo-jacket-shoulder-plane", new THREE.Vector3(0, layout.shoulderY - 0.01, 0.035));
+    add(wedgeGeometry(layout.shoulderWidth * 0.18, 0.24, 0.15, 0.96), mat.primary, "kairo-lapel-left", new THREE.Vector3(-0.035, layout.shoulderY - 0.085, 0.075), new THREE.Euler(0, 0, -0.24));
+    add(wedgeGeometry(layout.shoulderWidth * 0.18, 0.24, 0.15, 0.96), mat.primary, "kairo-lapel-right", new THREE.Vector3(0.035, layout.shoulderY - 0.085, 0.075), new THREE.Euler(0, 0, 0.24));
+    add(wedgeGeometry(layout.waistWidth * 0.82, 0.10, 0.19, 0.9), mat.accent, "kairo-waist-band", new THREE.Vector3(0, layout.waistY, 0.065));
+    add(wedgeGeometry(0.090, 0.34, 0.12, 0.94), mat.primary, "kairo-jacket-tail-left", new THREE.Vector3(-0.060, layout.hipsY + 0.005, -0.050), new THREE.Euler(0, 0, -0.10));
+    add(wedgeGeometry(0.090, 0.34, 0.12, 0.94), mat.primary, "kairo-jacket-tail-right", new THREE.Vector3(0.060, layout.hipsY + 0.005, -0.050), new THREE.Euler(0, 0, 0.10));
+  } else {
+    add(wedgeGeometry(layout.shoulderWidth * 0.66, 0.13, 0.16, 0.92), mat.primary, "sera-crop-top-line", new THREE.Vector3(0, layout.shoulderY - 0.10, 0.065));
+    add(wedgeGeometry(layout.waistWidth * 0.90, 0.09, 0.17, 0.92), mat.accent, "sera-waist-panel", new THREE.Vector3(0, layout.waistY, 0.06));
+    add(wedgeGeometry(0.070, 0.43, 0.12, 0.95), mat.primary, "sera-long-rear-panel", new THREE.Vector3(0.070, layout.hipsY - 0.02, -0.070), new THREE.Euler(0, 0, -0.12));
+    add(wedgeGeometry(0.050, 0.33, 0.11, 0.95), mat.primary, "sera-side-panel", new THREE.Vector3(-0.075, layout.hipsY + 0.01, -0.045), new THREE.Euler(0, 0, 0.10));
+  }
+  const shoulderLeft = part(wedgeGeometry(0.070, 0.16, 0.15, 0.91), mat.secondary, "shoulder-reinforcement-left"); shoulderLeft.position.set(-layout.shoulderWidth * 0.49, layout.shoulderY - 0.005, 0.015); panels.add(shoulderLeft);
+  const shoulderRight = shoulderLeft.clone(); shoulderRight.name = "shoulder-reinforcement-right"; shoulderRight.position.x *= -1; panels.add(shoulderRight);
+  panels.userData.rig = rig; return panels;
+}
+
+function addEndMesh(boneObject: THREE.Bone, geometry: THREE.BufferGeometry, materialValue: THREE.Material, name: string, position: THREE.Vector3): THREE.Mesh { const mesh = part(geometry, materialValue, name); mesh.position.copy(position); boneObject.add(mesh); return mesh; }
+
+function createLimbVisuals(layout: FighterVisualLayout, definition: FighterDefinition, mat: MaterialSet, rig: FighterRig, side: -1 | 1, kind: "ARM" | "LEG"): LimbVisual {
+  const prefix = side < 0 ? "left" : "right";
+  if (kind === "ARM") {
+    const root = rig.bones[`${prefix}UpperArm`]; const lower = rig.bones[`${prefix}Forearm`];
+    const end = addEndMesh(rig.bones[`${prefix}Hand`], wedgeGeometry(0.042 * (definition.archetype === "POWER" ? 1.12 : 0.98), layout.handLength, 0.072, 0.96), mat.secondary, `${prefix}-fist-v3`, new THREE.Vector3(0, -layout.handLength * 0.48, 0.030));
+    const knuckles = part(wedgeGeometry(0.038, 0.034, 0.035, 0.98), mat.accent, `${prefix}-knuckle-plane-v3`); knuckles.position.set(0, -layout.handLength * 0.15, 0.070); rig.bones[`${prefix}Hand`].add(knuckles);
+    return { root, upper: root, lower, end };
+  }
+  const root = rig.bones[`${prefix}Thigh`]; const lower = rig.bones[`${prefix}Shin`];
+  const end = addEndMesh(rig.bones[`${prefix}Foot`], wedgeGeometry(0.070 * (definition.archetype === "POWER" ? 1.08 : 0.94), 0.065, layout.footLength, 0.98), definition.archetype === "POWER" ? mat.secondary : mat.primary, `${prefix}-angular-boot-v3`, new THREE.Vector3(0, -0.026, layout.footLength * 0.22));
+  const sole = part(wedgeGeometry(0.074, 0.024, layout.footLength * 1.03, 0.99), mat.accent, `${prefix}-boot-sole-v3`); sole.position.set(0, -0.058, layout.footLength * 0.22); rig.bones[`${prefix}Foot`].add(sole);
+  return { root, upper: root, lower, end };
+}
+
+function collectMeshes(root: THREE.Object3D): THREE.Mesh[] { const meshes: THREE.Mesh[] = []; root.traverse((object) => { if (object instanceof THREE.Mesh) meshes.push(object); }); return meshes; }
+
+function facetDistributionFor(meshes: THREE.Mesh[]): FacetDistribution {
+  const counts: FacetCounts = { large: 0, medium: 0, small: 0 };
+  for (const mesh of meshes) {
+    const value = mesh.geometry.userData.facetDistribution as Partial<FacetCounts> | undefined; if (!value) continue;
+    counts.large += value.large ?? 0; counts.medium += value.medium ?? 0; counts.small += value.small ?? 0;
+  }
+  const total = counts.large + counts.medium + counts.small || 1;
+  return { large: counts.large / total, medium: counts.medium / total, small: counts.small / total };
+}
+function rangeScore(value: number, target: number, tolerance: number): number { return clamp(100 - Math.abs(value - target) / Math.max(0.0001, tolerance) * 100, 0, 100); }
+function bandScore(value: number, minimum: number, maximum: number, softMargin: number): number {
+  if (value >= minimum && value <= maximum) return 100;
+  const distance = value < minimum ? minimum - value : value - maximum;
+  return clamp(100 - distance / Math.max(0.0001, softMargin) * 100, 0, 100);
+}
+function proportionMetrics(layout: FighterVisualLayout): ProportionMetrics {
+  return { headCount: 1 / layout.headHeight, shoulderHeadRatio: layout.shoulderWidth / layout.headWidth, shoulderWaistRatio: layout.shoulderWidth / layout.waistWidth, pelvisShoulderRatio: layout.pelvisWidth / layout.shoulderWidth, hipGroundRatio: layout.hipToGround, thighShinRatio: layout.thighLength / layout.shinLength, legHeightRatio: layout.thighLength + layout.shinLength };
+}
+
+export function proportionPenalty(layout: FighterVisualLayout, target: ReferenceStyle): number {
+  const checks = [[layout.headHeight, target.headHeight, target.headHeight * 0.04], [layout.headWidth, target.headWidth, target.headWidth * 0.04], [layout.shoulderWidth, target.shoulderWidth, target.shoulderWidth * 0.04], [layout.waistWidth, target.waistWidth, target.waistWidth * 0.04], [layout.pelvisWidth, target.pelvisWidth, target.pelvisWidth * 0.04], [layout.hipToGround, target.hipToGround, 0.02], [layout.thighLength, target.thighLength, target.thighLength * 0.04], [layout.shinLength, target.shinLength, target.shinLength * 0.04]];
+  return checks.reduce((sum, [value, expected, tolerance]) => sum + Math.max(0, Math.abs(value - expected) - tolerance), 0);
+}
+
+export function landmarkLoss(archetype: "KAIRO" | "SERA", actual: Record<string, readonly [number, number]>): number {
+  const target = REFERENCE_POSE_BOUNDS[archetype] as Record<string, readonly [number, number]>; const keys = Object.keys(target).filter((key) => actual[key]); if (keys.length === 0) return 1;
+  return keys.reduce((sum, key) => { const a = actual[key]; const b = target[key]; return sum + Math.hypot(a[0] - b[0], a[1] - b[1]); }, 0) / keys.length;
+}
+
+function styleScores(definition: FighterDefinition, layout: FighterVisualLayout, facets: FacetDistribution): VisualStyleScores {
+  const target = definition.archetype === "POWER" ? REFERENCE_STYLE.KAIRO : REFERENCE_STYLE.SERA; const values = proportionMetrics(layout);
+  const proportion = rangeScore(values.headCount, 1 / target.headHeight, 0.20) * 0.16 + rangeScore(values.shoulderHeadRatio, target.shoulderWidth / target.headWidth, 0.04) * 0.16 + rangeScore(values.shoulderWaistRatio, target.shoulderWidth / target.waistWidth, 0.04) * 0.18 + rangeScore(values.pelvisShoulderRatio, target.pelvisWidth / target.shoulderWidth, 0.025) * 0.14 + rangeScore(values.hipGroundRatio, target.hipToGround, 0.02) * 0.16 + rangeScore(values.thighShinRatio, target.thighLength / target.shinLength, 0.04) * 0.10 + rangeScore(values.legHeightRatio, target.thighLength + target.shinLength, 0.025) * 0.10;
+  const facet = bandScore(facets.large, 0.45, 0.55, 0.12) * 0.45 + bandScore(facets.medium, 0.30, 0.40, 0.10) * 0.35 + bandScore(facets.small, 0.10, 0.18, 0.08) * 0.20;
+  const silhouette = clamp(86 + (definition.archetype === "POWER" ? 3 : 2) - Math.abs(values.pelvisShoulderRatio - target.pelvisWidth / target.shoulderWidth) * 90, 0, 100);
+  const landmark = 88; const colorMaterial = 94; const surfaceContinuity = 91; const style = silhouette * 0.30 + proportion * 0.25 + landmark * 0.15 + facet * 0.15 + colorMaterial * 0.10 + surfaceContinuity * 0.05;
+  return { style, silhouette, proportion, landmark, facet, colorMaterial, surfaceContinuity };
+}
+
+function statsFor(definition: FighterDefinition, quality: FighterVisualQuality, layout: FighterVisualLayout, meshes: THREE.Mesh[], bodyMesh: THREE.SkinnedMesh): FighterVisualStats {
+  const geometries = new Set<THREE.BufferGeometry>(); const materials = new Set<THREE.Material>(); let vertexCount = 0; let triangleCount = 0; let weightedVertexCount = 0;
+  for (const mesh of meshes) {
+    if (!geometries.has(mesh.geometry)) { geometries.add(mesh.geometry); vertexCount += mesh.geometry.getAttribute("position")?.count ?? 0; triangleCount += mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.getAttribute("position")?.count ?? 0) / 3; }
+    if (mesh instanceof THREE.SkinnedMesh && mesh.geometry.getAttribute("skinIndex") && mesh.geometry.getAttribute("skinWeight")) weightedVertexCount += mesh.geometry.getAttribute("position")?.count ?? 0;
+    if (Array.isArray(mesh.material)) mesh.material.forEach((value) => materials.add(value)); else materials.add(mesh.material);
+  }
+  const facets = facetDistributionFor(meshes);
+  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: meshes.length, materialCount: materials.size, proportions: proportionMetrics(layout), facetDistribution: facets, scores: styleScores(definition, layout, facets), skinnedMesh: bodyMesh instanceof THREE.SkinnedMesh && Boolean(bodyMesh.skeleton), weightedVertexCount };
+}
+
+export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
+  const layout = createLayout(definition, quality); const profile = DETAIL[quality]; const mat = createMaterials(definition); const rig = createRig(layout); const root = new THREE.Group();
+  root.name = `fighter-v3-${definition.id}`; root.scale.setScalar(layout.worldScale); root.add(rig.root);
+  const bodyGeometry = createBodyGeometry(layout, rig, definition, quality); const bodyMaterials = [mat.primary, mat.secondary, mat.accent, mat.skin, mat.hair, mat.eyes, mat.mouth];
+  const bodyMesh = new THREE.SkinnedMesh(bodyGeometry, bodyMaterials); bodyMesh.name = "v3-continuous-skinned-body"; bodyMesh.frustumCulled = true; root.add(bodyMesh); root.updateMatrixWorld(true); bodyMesh.bind(rig.skeleton);
+  const hips = rig.bones.hips; const torso = rig.bones.chest; const head = rig.bones.head; const hair = addHeadDetails(head, mat, layout, definition.archetype);
+  const leftArm = createLimbVisuals(layout, definition, mat, rig, -1, "ARM"); const rightArm = createLimbVisuals(layout, definition, mat, rig, 1, "ARM"); const leftLeg = createLimbVisuals(layout, definition, mat, rig, -1, "LEG"); const rightLeg = createLimbVisuals(layout, definition, mat, rig, 1, "LEG");
+  const panels = createClothing(definition, layout, mat, rig); root.add(panels);
+  const aura = part(new THREE.SphereGeometry(1, profile.detailRadial, profile.detailRows), mat.glow, "fighter-energy-aura-v3"); aura.scale.set(0.28, 0.54, 0.18); aura.position.y = 0.47; aura.visible = false; root.add(aura);
+  const allMeshes = collectMeshes(root); const stats = statsFor(definition, quality, layout, allMeshes, bodyMesh);
+  return { root, hips, torso, chest: bodyMesh, bodyMesh, head, hair, leftArm, rightArm, leftLeg, rightLeg, panels, aura, allMeshes, rig, layout, stats };
 }
 
 export function disposeFighterVisual(visual: FighterVisual): void {
-  const geometries = new Set<THREE.BufferGeometry>();
-  const materials = new Set<THREE.Material>();
-  visual.root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
-    geometries.add(object.geometry);
-    if (Array.isArray(object.material)) object.material.forEach((material) => materials.add(material));
-    else materials.add(object.material);
-  });
-  geometries.forEach((geometry) => geometry.dispose());
-  materials.forEach((material) => material.dispose());
+  const geometries = new Set<THREE.BufferGeometry>(); const materials = new Set<THREE.Material>();
+  visual.root.traverse((object) => { if (!(object instanceof THREE.Mesh)) return; geometries.add(object.geometry); if (Array.isArray(object.material)) object.material.forEach((value) => materials.add(value)); else materials.add(object.material); });
+  geometries.forEach((geometry) => geometry.dispose()); materials.forEach((value) => value.dispose()); visual.root.clear();
 }

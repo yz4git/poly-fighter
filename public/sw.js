@@ -1,4 +1,4 @@
-const CACHE_NAME = "poly-fighter-v8";
+const CACHE_NAME = "poly-fighter-v9";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/reference/female-turnaround.jpeg"];
 
 self.addEventListener("install", (event) => {

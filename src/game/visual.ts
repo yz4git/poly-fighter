@@ -495,7 +495,10 @@ function createBodyGeometry(layout: FighterVisualLayout, rig: FighterRig, defini
     { y: layout.clavicleY, cx: 0, cz: 0.006, rx: layout.shoulderWidth * 0.49, rz: layout.chestDepth * 0.82, nx: 2.3, nz: 2.3, deform2: 0.06 },
     { y: layout.shoulderY, cx: 0, cz: 0.002, rx: layout.shoulderWidth * 0.46, rz: layout.chestDepth * 0.68, nx: 2.6, nz: 2.4, deform2: 0.10 },
   ];
-  builder.addSurface(resampleSections(torsoBase, profile.torsoRows), profile.radial, torsoSkin, MATERIAL_INDEX.primary);
+  // The body surface is the underlayer of the outfit.  Keeping it dark lets
+  // the jacket/crop-top panels carry the character color as deliberate color
+  // masses instead of painting the entire torso one flat primary material.
+  builder.addSurface(resampleSections(torsoBase, profile.torsoRows), profile.radial, torsoSkin, MATERIAL_INDEX.secondary);
   const neckSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom, layout.shoulderY, index("head"), index("neck")));
   builder.addSurface(resampleSections([
     { y: layout.shoulderY - 0.015, cx: 0, cz: 0, rx: layout.neckWidth * 0.52, rz: layout.neckWidth * 0.45, nx: 2.8, nz: 2.8 },
@@ -525,11 +528,11 @@ function createBodyGeometry(layout: FighterVisualLayout, rig: FighterRig, defini
     builder.addSurface(resampleSections([
       { y: layout.shoulderY + 0.008, cx: shoulderX, cz: 0, rx: upperRadius * 1.22, rz: upperRadius * 1.20, nx: 2.6, nz: 2.4, deform2: 0.12 },
       { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: upperRadius * 0.84, rz: upperRadius * 0.88, nx: 2.9, nz: 2.6, deform2: 0.04 },
-    ], Math.max(9, profile.limbRows - 2)), profile.radial, upperSkin, MATERIAL_INDEX.primary);
+    ], Math.max(9, profile.limbRows - 2)), profile.radial, upperSkin, definition.archetype === "SPEED" ? MATERIAL_INDEX.skin : MATERIAL_INDEX.primary);
     builder.addSurface(resampleSections([
       { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: foreRadius * 1.10, rz: foreRadius * 1.05, nx: 2.8, nz: 2.6, deform2: 0.07 },
       { y: layout.wristY, cx: wristX, cz: 0.010, rx: foreRadius * 0.70, rz: foreRadius * 0.72, nx: 3.0, nz: 2.7, deform2: -0.05 },
-    ], Math.max(9, profile.limbRows - 2)), profile.radial, forearmSkin, MATERIAL_INDEX.primary);
+    ], Math.max(9, profile.limbRows - 2)), profile.radial, forearmSkin, MATERIAL_INDEX.skin);
   }
   const headSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom + layout.headHeight * 0.10, layout.headBottom, rig.boneIndices.head, rig.boneIndices.neck));
   const headSections: SurfaceSection[] = [];

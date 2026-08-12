@@ -41,6 +41,7 @@ export function ReferenceReconstructionPanel() {
   const [mode, setMode] = useState<ReconstructionMode>("OVERLAY");
   const [opacity, setOpacity] = useState(0.50);
   const [metrics, setMetrics] = useState<V7MetricBundle>({});
+  const [webglError, setWebglError] = useState(false);
   const view = VIEW_ORDER[viewIndex] ?? "front";
   const bodyMetric = metrics.body?.[view];
 
@@ -62,6 +63,7 @@ export function ReferenceReconstructionPanel() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
+    setWebglError(false);
     const visual = createGoldenMasterV7Visual(FIGHTER_DEFINITIONS.blue, { view });
     const scene = new THREE.Scene();
     const hemi = new THREE.HemisphereLight(0xd9e9ff, 0x121522, 1.8);
@@ -70,23 +72,32 @@ export function ReferenceReconstructionPanel() {
     const fill = new THREE.DirectionalLight(0x6095ff, 1.1);
     fill.position.set(3, 2, -4);
     scene.add(hemi, key, fill, visual.root);
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: false });
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setClearColor(0x000000, 0);
-    const camera = createFemaleV6ReferenceCamera(CAMERA_VIEW[view], 0.44);
-    const resize = () => {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (!rect) return;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
-      camera.aspect = Math.max(0.1, rect.width / Math.max(1, rect.height));
-      camera.updateProjectionMatrix();
-      renderer.render(scene, camera);
-    };
-    resize();
-    const observer = new ResizeObserver(resize);
-    if (canvas.parentElement) observer.observe(canvas.parentElement);
-    return () => { observer.disconnect(); renderer.dispose(); disposeGoldenMasterV7Visual(visual); };
+    try {
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: false });
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.setClearColor(0x000000, 0);
+      const camera = createFemaleV6ReferenceCamera(CAMERA_VIEW[view], 0.44);
+      const resize = () => {
+        const rect = canvas.parentElement?.getBoundingClientRect();
+        if (!rect) return;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
+        camera.aspect = Math.max(0.1, rect.width / Math.max(1, rect.height));
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+      };
+      resize();
+      const observer = new ResizeObserver(resize);
+      if (canvas.parentElement) observer.observe(canvas.parentElement);
+      return () => { observer.disconnect(); renderer.dispose(); disposeGoldenMasterV7Visual(visual); };
+    } catch {
+      disposeGoldenMasterV7Visual(visual);
+      let active = true;
+      queueMicrotask(() => {
+        if (active) setWebglError(true);
+      });
+      return () => { active = false; };
+    }
   }, [view]);
 
   const isStaticArtifact = mode === "DIFFERENCE" || mode === "SILHOUETTE" || mode === "SILHOUETTE_XOR" || mode === "EDGES";
@@ -104,11 +115,11 @@ export function ReferenceReconstructionPanel() {
         <div className="reference-stage" data-mode={mode.toLowerCase()}>
           <ReferenceCrop view={view} opacity={referenceOpacity} />
           <canvas ref={canvasRef} className="reference-render" style={{ opacity: renderOpacity }} aria-label={`Generated V7 ${VIEW_LABELS[view]}`} />
-          <ArtifactLayer src={artifact} visible={isStaticArtifact} alt={`Measured V7 ${mode} ${VIEW_LABELS[view]}`} />
+          <ArtifactLayer src={artifact} visible={isStaticArtifact || webglError} alt={`Measured V7 ${mode} ${VIEW_LABELS[view]}`} />
         </div>
         <aside className="reference-metrics">
           <div className="reference-metric-title">{VIEW_LABELS[view]} / {mode.replace("_", " ")}</div>
-          <p>Comparison artifacts are generated from Golden Master pixels and Three.js polygon masks. Gameplay never samples the reference image.</p>
+          <p>Comparison artifacts are generated from Golden Master pixels and Three.js polygon masks. Gameplay never samples the reference image.{webglError ? " WebGL is unavailable in this browser, so the measured mask artifact is shown safely." : ""}</p>
           <dl>
             <dt>BODY IOU</dt><dd>{formatMetric(bodyMetric?.iou)} <small>actual mask</small></dd>
             <dt>CONTOUR ERROR</dt><dd>{formatMetric(bodyMetric?.contourErrorPx, 2)} px <small>actual mask</small></dd>

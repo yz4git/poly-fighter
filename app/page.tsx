@@ -30,10 +30,9 @@ const DEFAULT_SETTINGS: SettingsDraft = {
 
 function requestLandscape(): void {
   try {
-    const orientation = screen.orientation as ScreenOrientation & {
-      lock?: (value: "landscape") => Promise<void>;
-    };
-    void orientation.lock?.("landscape").catch(() => undefined);
+    const orientation = typeof window !== "undefined" ? window.screen?.orientation : undefined;
+    if (!orientation?.lock) return;
+    void orientation.lock("landscape").catch(() => undefined);
   } catch {
     // Orientation locking is optional on iOS Safari.
   }
@@ -221,7 +220,10 @@ export default function Home() {
     const preventContextMenu = (event: Event) => event.preventDefault();
     window.addEventListener("contextmenu", preventContextMenu, { passive: false });
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => undefined);
+      void navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => undefined);
     }
     return () => window.removeEventListener("contextmenu", preventContextMenu);
   }, []);
@@ -230,24 +232,43 @@ export default function Home() {
     if (screen !== "MATCH" || !mountRef.current) return undefined;
     setFallback(null);
     let game: PolyFightGame;
+    let reportedFallback = false;
     try {
       game = new PolyFightGame(mountRef.current, {
         p1Definition: FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red,
         p2Definition: FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue,
         difficulty,
         onHud: setHud,
-        onFallback: setFallback,
+        onFallback: (message) => {
+          reportedFallback = true;
+          setFallback(message);
+        },
         onResult: (winner) => {
           setHud((current) => (current ? { ...current, message: winner === "draw" ? "DRAW" : `${winner === "p1" ? "PLAYER 1" : "PLAYER 2"} WINS` } : current));
           setScreen("RESULT");
         },
       });
-    } catch {
+    } catch (error) {
+      console.error("[POLY FIGHTER] game startup failed", error);
+      mountRef.current?.replaceChildren();
+      if (!reportedFallback) {
+        window.setTimeout(() => setFallback("3D描画を開始できませんでした。Safariを再読み込みしてもう一度お試しください。"), 0);
+      }
       return undefined;
     }
     game.updateSettings(settingsRef.current);
     gameRef.current = game;
-    game.start();
+    try {
+      game.start();
+    } catch (error) {
+      console.error("[POLY FIGHTER] game loop startup failed", error);
+      gameRef.current = null;
+      game.destroy();
+      if (!reportedFallback) {
+        window.setTimeout(() => setFallback("ゲームループを開始できませんでした。Safariを再読み込みしてもう一度お試しください。"), 0);
+      }
+      return undefined;
+    }
     return () => {
       gameRef.current = null;
       game.destroy();

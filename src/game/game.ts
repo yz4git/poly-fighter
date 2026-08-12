@@ -59,6 +59,11 @@ export class PolyFightGame {
   private lastHudTick = -1;
   private finished = false;
   private paused = false;
+  private runtimeFailureReported = false;
+  private readonly contextLostHandler = (event: Event): void => {
+    event.preventDefault();
+    this.handleRuntimeFailure("WebGLコンテキストが失われました。Safariを再読み込みしてもう一度お試しください。", event);
+  };
 
   constructor(mount: HTMLElement, options: PolyFightGameOptions) {
     this.mount = mount;
@@ -86,6 +91,7 @@ export class PolyFightGame {
     this.renderer.shadowMap.enabled = false;
     this.mount.replaceChildren(this.renderer.domElement);
     this.renderer.domElement.setAttribute("aria-label", "POLY FIGHTER 3D battle arena");
+    this.renderer.domElement.addEventListener("webglcontextlost", this.contextLostHandler, false);
 
     const qualityDpr = settings.quality === "LOW" ? 1 : settings.quality === "HIGH" ? 1.9 : 1.45;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityDpr));
@@ -144,8 +150,12 @@ export class PolyFightGame {
     if (this.running) return;
     this.running = true;
     this.lastTime = performance.now();
-    this.audio.roundStart();
-    this.raf = window.requestAnimationFrame(this.loop);
+    try {
+      this.audio.roundStart();
+      this.raf = window.requestAnimationFrame(this.loop);
+    } catch (error) {
+      this.handleRuntimeFailure("ゲームを開始できませんでした。Safariを再読み込みしてもう一度お試しください。", error);
+    }
   }
 
   interact(): void {
@@ -195,16 +205,31 @@ export class PolyFightGame {
   }
 
   private loop = (now: number): void => {
-    if (!this.running) return;
-    const elapsed = Math.min(0.2, Math.max(0, (now - this.lastTime) / 1000));
-    this.lastTime = now;
-    this.clock.advance(elapsed, () => this.step());
-    this.renderTime += elapsed;
-    this.effects.update(elapsed);
-    this.fightCamera.update(this.p1, this.p2, Math.max(0.001, elapsed));
-    this.renderer.render(this.scene, this.camera);
-    this.raf = window.requestAnimationFrame(this.loop);
+    if (!this.running || this.runtimeFailureReported) return;
+    try {
+      const elapsed = Math.min(0.2, Math.max(0, (now - this.lastTime) / 1000));
+      this.lastTime = now;
+      this.clock.advance(elapsed, () => this.step());
+      this.renderTime += elapsed;
+      this.effects.update(elapsed);
+      this.fightCamera.update(this.p1, this.p2, Math.max(0.001, elapsed));
+      this.renderer.render(this.scene, this.camera);
+      this.raf = window.requestAnimationFrame(this.loop);
+    } catch (error) {
+      this.handleRuntimeFailure("ゲーム描画中にエラーが発生しました。Safariを再読み込みしてもう一度お試しください。", error);
+    }
   };
+
+  private handleRuntimeFailure(message: string, error: unknown): void {
+    if (this.runtimeFailureReported) return;
+    this.runtimeFailureReported = true;
+    this.running = false;
+    window.cancelAnimationFrame(this.raf);
+    this.clock.reset();
+    this.input.clear();
+    console.error("[POLY FIGHTER] runtime failure", error);
+    this.options.onFallback?.(message);
+  }
 
   private step(): void {
     if (this.paused) return;
@@ -285,6 +310,7 @@ export class PolyFightGame {
 
   destroy(): void {
     this.running = false;
+    this.runtimeFailureReported = true;
     window.cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.resize);
     window.removeEventListener("orientationchange", this.resize);
@@ -295,6 +321,7 @@ export class PolyFightGame {
     this.arena.dispose();
     disposeFighterVisual(this.p1.visual);
     disposeFighterVisual(this.p2.visual);
+    this.renderer.domElement.removeEventListener("webglcontextlost", this.contextLostHandler);
     this.renderer.dispose();
     this.mount.replaceChildren();
   }

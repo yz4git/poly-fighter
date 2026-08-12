@@ -10,8 +10,16 @@ export class AudioManager {
 
   async resume(): Promise<void> {
     if (!this.enabled) return;
-    this.context ??= new AudioContext();
-    if (this.context.state === "suspended") await this.context.resume();
+    try {
+      const audioWindow = window as Window & { webkitAudioContext?: typeof AudioContext };
+      const AudioContextConstructor = window.AudioContext ?? audioWindow.webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      this.context ??= new AudioContextConstructor();
+      if (this.context.state === "suspended") await this.context.resume();
+    } catch (error) {
+      console.warn("[POLY FIGHTER] audio unavailable", error);
+      this.context = null;
+    }
   }
 
   tone(frequency: number, duration = 0.08, type: OscillatorType = "triangle", gain = 0.05, slide = 0): void {

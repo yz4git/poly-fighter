@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { PolyFightGame } from "@/src/game/game";
+import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
 import {
@@ -30,7 +31,7 @@ const DEFAULT_SETTINGS: SettingsDraft = {
 
 function requestLandscape(): void {
   try {
-    const orientation = typeof window !== "undefined" ? window.screen?.orientation : undefined;
+    const orientation = (typeof window !== "undefined" ? window.screen?.orientation : undefined) as (ScreenOrientation & { lock?: (mode: string) => Promise<void> }) | undefined;
     if (!orientation?.lock) return;
     void orientation.lock("landscape").catch(() => undefined);
   } catch {
@@ -205,6 +206,7 @@ export default function Home() {
   const [fallback, setFallback] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [referenceMode, setReferenceMode] = useState(false);
   const [settings, setSettings] = useState<SettingsDraft>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
     try {
@@ -217,6 +219,9 @@ export default function Home() {
   const settingsRef = useRef(settings);
 
   useEffect(() => {
+    const referenceTimeout = window.setTimeout(() => {
+      setReferenceMode(new URLSearchParams(window.location.search).get("reference") === "1");
+    }, 0);
     const preventContextMenu = (event: Event) => event.preventDefault();
     window.addEventListener("contextmenu", preventContextMenu, { passive: false });
     if ("serviceWorker" in navigator) {
@@ -225,7 +230,10 @@ export default function Home() {
         .then((registration) => registration.update())
         .catch(() => undefined);
     }
-    return () => window.removeEventListener("contextmenu", preventContextMenu);
+    return () => {
+      window.clearTimeout(referenceTimeout);
+      window.removeEventListener("contextmenu", preventContextMenu);
+    };
   }, []);
 
   useEffect(() => {
@@ -308,6 +316,8 @@ export default function Home() {
   const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "MATCH" || screen === "RESULT";
+
+  if (referenceMode) return <ReferenceReconstructionPanel />;
 
   return (
     <main className="poly-app">

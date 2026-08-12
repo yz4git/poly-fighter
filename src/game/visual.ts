@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition, VisualContactPoint } from "./types";
 import { MODEL_FORWARD } from "./rig";
+import { FEMALE_V6_CONTROL_CAGE } from "./reference-v6";
 
 export type FighterVisualQuality = "LOW" | "NORMAL" | "HIGH";
 
@@ -168,6 +169,7 @@ export interface FighterVisualStats {
   scores: VisualStyleScores;
   skinnedMesh: boolean;
   weightedVertexCount: number;
+  visualVersion: "V5" | "V6";
 }
 
 export type FootSide = "left" | "right";
@@ -189,7 +191,7 @@ export interface FootPlantState {
 
 export interface ClothingAttachment {
   name: string;
-  category: "CHEST" | "WAIST" | "HIP" | "SHOULDER";
+  category: "CHEST" | "WAIST" | "HIP" | "SHOULDER" | "ARM" | "LEG";
   parentBone: string;
   localPosition: THREE.Vector3;
   localRotation: THREE.Euler;
@@ -258,6 +260,7 @@ export interface FighterVisual {
   hairMasses: THREE.Mesh[];
   ponytailMasses: THREE.Mesh[];
   debugGroup: THREE.Group;
+  visualVersion: "V5" | "V6";
 }
 
 interface MaterialSet {
@@ -268,6 +271,7 @@ interface MaterialSet {
   hair: THREE.MeshStandardMaterial;
   eyes: THREE.MeshStandardMaterial;
   mouth: THREE.MeshStandardMaterial;
+  metal: THREE.MeshStandardMaterial;
   glow: THREE.MeshBasicMaterial;
 }
 
@@ -313,6 +317,7 @@ function createMaterials(definition: FighterDefinition): MaterialSet {
     hair: material(definition.colors.hair, 0.02, 0.50),
     eyes: material(0xf1f8ff, 0, 0.66),
     mouth: material(0x4d2631, 0, 0.74),
+    metal: material(0xd8e1ef, 0.18, 0.52),
     glow: new THREE.MeshBasicMaterial({ color: definition.colors.glow, transparent: true, opacity: 0.20, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
 }
@@ -821,6 +826,325 @@ function createAnatomicalJointDetails(
   rig.bones.chest.add(clavicle);
 }
 
+/**
+ * V6 female reconstruction geometry.
+ *
+ * This is intentionally a separate mesh grammar from the V5 generic
+ * generator.  The named cage is read directly by these large planes and
+ * section transitions: pelvis, ribcage, shoulder, long leg, pointed boot and
+ * the high ponytail are authored as one reference-specific silhouette rather
+ * than obtained by increasing a radial cylinder count.
+ */
+function v6PanelGeometry(width: number, height: number, depth: number, bottomScale = 0.82): THREE.BufferGeometry {
+  const top = width * 0.5;
+  const bottom = width * bottomScale * 0.5;
+  const halfDepth = depth * 0.5;
+  const positions = [
+    -top, height * 0.5, halfDepth, top, height * 0.5, halfDepth,
+    bottom, -height * 0.5, halfDepth, -bottom, -height * 0.5, halfDepth,
+    -top * 0.92, height * 0.5, -halfDepth, top * 0.92, height * 0.5, -halfDepth,
+    bottom * 0.90, -height * 0.5, -halfDepth, -bottom * 0.90, -height * 0.5, -halfDepth,
+  ];
+  const index = [
+    0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6,
+    0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2,
+    2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0,
+  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createFemaleV6Layout(definition: FighterDefinition, quality: FighterVisualQuality): FighterVisualLayout {
+  const base = createLayout(definition, quality);
+  return {
+    ...base,
+    // These are the normalized 1.68m reference-space joints.  Runtime still
+    // scales the whole authoring space by the existing mobile game scale.
+    headBottom: 0.860,
+    shoulderY: 0.775,
+    hipsY: FEMALE_V6_CONTROL_CAGE.pelvis.y,
+    kneeY: FEMALE_V6_CONTROL_CAGE.leftKnee.y,
+    ankleY: FEMALE_V6_CONTROL_CAGE.leftAnkle.y,
+    elbowY: FEMALE_V6_CONTROL_CAGE.leftElbow.y,
+    wristY: FEMALE_V6_CONTROL_CAGE.leftWrist.y,
+    pelvisTopY: 0.670,
+    waistY: FEMALE_V6_CONTROL_CAGE.waist.y,
+    ribY: FEMALE_V6_CONTROL_CAGE.ribcage.y,
+    clavicleY: 0.815,
+    headDepth: 0.118,
+    chestDepth: 0.128,
+    worldScale: DETAIL[quality].worldScale,
+  };
+}
+
+function createFemaleV6BodyGeometry(layout: FighterVisualLayout, rig: FighterRig, definition: FighterDefinition, quality: FighterVisualQuality): THREE.BufferGeometry {
+  const radial = quality === "LOW" ? 10 : quality === "NORMAL" ? 13 : 15;
+  const torsoRows = quality === "LOW" ? 24 : quality === "NORMAL" ? 34 : 42;
+  const limbRows = quality === "LOW" ? 25 : quality === "NORMAL" ? 35 : 43;
+  const headRows = quality === "LOW" ? 24 : quality === "NORMAL" ? 34 : 42;
+  const builder = new GeometryBuilder();
+  const index = (name: string) => rig.boneIndices[name];
+  const torsoSkin = sampleByHeight((y) => y < layout.pelvisTopY
+    ? verticalBlend(y, layout.pelvisTopY, layout.hipsY, index("spineLower"), index("hips"))
+    : y < layout.ribY
+      ? verticalBlend(y, layout.ribY, layout.pelvisTopY, index("spineUpper"), index("spineLower"))
+      : verticalBlend(y, layout.shoulderY, layout.ribY, index("chest"), index("spineUpper")));
+  const torso = [
+    { y: 0.555, cx: 0, cz: 0.000, rx: 0.078, rz: 0.082, nx: 3.0, nz: 2.6, deform2: 0.08 },
+    { y: 0.585, cx: 0, cz: 0.000, rx: 0.095, rz: 0.101, nx: 2.8, nz: 2.5, deform2: 0.06 },
+    { y: 0.650, cx: 0, cz: 0.004, rx: 0.088, rz: 0.094, nx: 3.1, nz: 2.6, deform2: 0.02 },
+    { y: 0.700, cx: 0, cz: 0.005, rx: 0.076, rz: 0.080, nx: 3.4, nz: 2.8, deform2: -0.03 },
+    { y: 0.742, cx: 0, cz: 0.006, rx: 0.0725, rz: 0.073, nx: 3.3, nz: 2.8, deform2: -0.05 },
+    { y: 0.790, cx: 0, cz: 0.007, rx: 0.089, rz: 0.092, nx: 2.7, nz: 2.5, deform2: 0.05 },
+    { y: 0.835, cx: 0, cz: 0.009, rx: 0.103, rz: 0.108, nx: 2.5, nz: 2.3, deform2: 0.08 },
+    { y: 0.875, cx: 0, cz: 0.007, rx: 0.101, rz: 0.100, nx: 2.6, nz: 2.4, deform2: 0.06 },
+    { y: 0.915, cx: 0, cz: 0.004, rx: 0.098, rz: 0.088, nx: 2.8, nz: 2.5, deform2: 0.04 },
+    { y: 0.950, cx: 0, cz: 0.002, rx: 0.108, rz: 0.078, nx: 2.8, nz: 2.5, deform2: 0.08 },
+  ];
+  builder.addSurface(resampleSections(torso, torsoRows), radial, torsoSkin, MATERIAL_INDEX.skin, false, false);
+
+  const neckSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom, layout.shoulderY, index("head"), index("neck")));
+  builder.addSurface(resampleSections([
+    { y: layout.shoulderY - 0.008, cx: 0, cz: 0, rx: 0.034, rz: 0.032, nx: 3.0, nz: 2.8 },
+    { y: 0.815, cx: 0, cz: 0, rx: 0.031, rz: 0.030, nx: 3.0, nz: 2.8 },
+    { y: layout.headBottom, cx: 0, cz: 0.002, rx: 0.030, rz: 0.029, nx: 2.9, nz: 2.8 },
+  ], Math.max(8, Math.floor(torsoRows * 0.56))), Math.max(9, radial - 2), neckSkin, MATERIAL_INDEX.skin, false, false);
+
+  const hipSpacing = layout.pelvisWidth * 0.29;
+  for (const side of [-1, 1] as const) {
+    const prefix = side < 0 ? "left" : "right";
+    const thighSkin = sampleByHeight((y) => segmentWeights(y, layout.hipsY + 0.012, layout.kneeY + 0.026, index(`${prefix}Thigh`), index("hips"), index(`${prefix}Shin`), 0.024, 0.14, 0.42));
+    const shinSkin = sampleByHeight((y) => segmentWeights(y, layout.kneeY + 0.020, layout.ankleY, index(`${prefix}Shin`), index(`${prefix}Thigh`), index(`${prefix}Foot`), 0.020, 0.42, 0.18));
+    const x = side * hipSpacing;
+    builder.addSurface(resampleSections([
+      { y: layout.hipsY + 0.012, cx: x, cz: 0, rx: 0.048, rz: 0.057, nx: 2.6, nz: 2.4, deform2: 0.08 },
+      { y: 0.500, cx: side * (hipSpacing + 0.004), cz: 0.002, rx: 0.044, rz: 0.052, nx: 2.8, nz: 2.5, deform2: 0.06 },
+      { y: layout.kneeY + 0.026, cx: side * (hipSpacing + 0.005), cz: 0.003, rx: 0.030, rz: 0.037, nx: 3.0, nz: 2.7, deform2: 0.03 },
+    ], limbRows), radial, thighSkin, MATERIAL_INDEX.secondary, false, false);
+    builder.addSurface(resampleSections([
+      { y: layout.kneeY + 0.020, cx: side * (hipSpacing + 0.005), cz: 0.004, rx: 0.031, rz: 0.038, nx: 2.9, nz: 2.6, deform2: 0.05 },
+      { y: 0.155, cx: side * (hipSpacing + 0.010), cz: 0.002, rx: 0.026, rz: 0.033, nx: 3.1, nz: 2.8, deform2: -0.01 },
+      { y: layout.ankleY, cx: side * (hipSpacing + 0.012), cz: 0.001, rx: 0.020, rz: 0.025, nx: 3.2, nz: 2.9, deform2: -0.06 },
+    ], limbRows), radial, shinSkin, MATERIAL_INDEX.secondary, false, false);
+  }
+
+  for (const side of [-1, 1] as const) {
+    const prefix = side < 0 ? "left" : "right";
+    const shoulderX = side * layout.shoulderWidth * 0.5;
+    const elbowX = side * Math.abs(FEMALE_V6_CONTROL_CAGE.leftElbow.x);
+    const wristX = side * Math.abs(FEMALE_V6_CONTROL_CAGE.leftWrist.x);
+    const upperSkin = sampleByHeight((y) => segmentWeights(y, layout.shoulderY + 0.008, layout.elbowY, index(`${prefix}UpperArm`), index(`${prefix}Shoulder`), index(`${prefix}Forearm`), 0.022, 0.18, 0.36));
+    const forearmSkin = sampleByHeight((y) => segmentWeights(y, layout.elbowY, layout.wristY, index(`${prefix}Forearm`), index(`${prefix}UpperArm`), index(`${prefix}Hand`), 0.018, 0.36, 0.18));
+    builder.addSurface(resampleSections([
+      { y: layout.shoulderY + 0.008, cx: shoulderX, cz: 0.002, rx: 0.028, rz: 0.030, nx: 2.7, nz: 2.5, deform2: 0.12 },
+      { y: 0.690, cx: side * (Math.abs(shoulderX) + 0.012), cz: 0.004, rx: 0.025, rz: 0.026, nx: 2.9, nz: 2.6, deform2: 0.06 },
+      { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: 0.021, rz: 0.022, nx: 3.1, nz: 2.8, deform2: 0.02 },
+    ], Math.max(12, limbRows - 4)), radial, upperSkin, definition.archetype === "SPEED" ? MATERIAL_INDEX.skin : MATERIAL_INDEX.primary, false, false);
+    builder.addSurface(resampleSections([
+      { y: layout.elbowY, cx: elbowX, cz: 0.006, rx: 0.022, rz: 0.023, nx: 3.0, nz: 2.7, deform2: 0.05 },
+      { y: 0.500, cx: side * (Math.abs(elbowX) + 0.006), cz: 0.008, rx: 0.019, rz: 0.020, nx: 3.2, nz: 2.9, deform2: 0.02 },
+      { y: layout.wristY, cx: wristX, cz: 0.010, rx: 0.014, rz: 0.015, nx: 3.3, nz: 2.9, deform2: -0.05 },
+    ], Math.max(12, limbRows - 4)), radial, forearmSkin, MATERIAL_INDEX.secondary, false, false);
+  }
+
+  const headSkin = sampleByHeight((y) => verticalBlend(y, layout.headBottom + layout.headHeight * 0.10, layout.headBottom, rig.boneIndices.head, rig.boneIndices.neck));
+  const headSections: SurfaceSection[] = [];
+  for (let row = 0; row < headRows; row += 1) {
+    const t = row / Math.max(1, headRows - 1);
+    const jaw = smoothstep(t * 1.22);
+    const width = 0.064 + jaw * (0.100 - 0.064);
+    const cheek = Math.exp(-(((t - 0.40) / 0.19) ** 2));
+    const crown = 1 - smoothstep((t - 0.86) / 0.14) * 0.16;
+    headSections.push({
+      y: layout.headBottom + t * layout.headHeight,
+      cx: 0,
+      cz: 0.004,
+      rx: width * 0.5 * crown,
+      rz: (0.050 + cheek * 0.013) * crown,
+      phase: row % 2 === 0 ? 0.015 : -0.015,
+      nx: t < 0.24 ? 3.0 : 2.45,
+      nz: 2.55,
+      deform2: t < 0.28 ? -0.045 : 0.035,
+      // A low-frequency nose bridge/face profile is part of the head surface.
+      frontBump: 0.100 * Math.exp(-(((t - 0.40) / 0.12) ** 2)),
+    });
+  }
+  builder.addSurface(headSections, radial, headSkin, MATERIAL_INDEX.skin, true, false);
+  return builder.build();
+}
+
+function addFemaleV6HeadDetails(head: THREE.Bone, mat: MaterialSet, layout: FighterVisualLayout): { hair: THREE.Mesh; hairMasses: THREE.Mesh[]; ponytailMasses: THREE.Mesh[] } {
+  const width = layout.headWidth;
+  const height = layout.headHeight;
+  const depth = layout.headDepth;
+  const hairMasses: THREE.Mesh[] = [];
+  const ponytailMasses: THREE.Mesh[] = [];
+  const make = (spec: HairMassSpec, geometry: THREE.BufferGeometry): THREE.Mesh => {
+    const mesh = part(geometry, mat.hair, spec.name);
+    mesh.position.copy(spec.position);
+    mesh.rotation.copy(spec.rotation);
+    mesh.scale.copy(spec.scale);
+    mesh.userData.ponytail = Boolean(spec.ponytail);
+    head.add(mesh);
+    hairMasses.push(mesh);
+    if (spec.ponytail) ponytailMasses.push(mesh);
+    return mesh;
+  };
+  const cap = make({ name: "v6-sera-hair-cap", position: new THREE.Vector3(0, height * 0.82, -0.003), rotation: new THREE.Euler(-0.08, 0, 0), scale: new THREE.Vector3(1.04, 0.70, 1.02) }, v6PanelGeometry(width * 1.04, height * 0.58, depth * 1.00, 0.84));
+  make({ name: "v6-sera-fringe-center", position: new THREE.Vector3(0.003, height * 0.60, depth * 0.36), rotation: new THREE.Euler(-0.20, 0, 0), scale: new THREE.Vector3(0.72, 0.58, 0.82) }, v6PanelGeometry(width * 0.72, height * 0.42, depth * 0.40, 0.52));
+  make({ name: "v6-sera-fringe-left", position: new THREE.Vector3(-width * 0.27, height * 0.56, depth * 0.22), rotation: new THREE.Euler(-0.10, 0.14, -0.25), scale: new THREE.Vector3(0.48, 0.72, 0.70) }, v6PanelGeometry(width * 0.50, height * 0.54, depth * 0.32, 0.60));
+  make({ name: "v6-sera-fringe-right", position: new THREE.Vector3(width * 0.26, height * 0.58, depth * 0.22), rotation: new THREE.Euler(-0.16, -0.12, 0.20), scale: new THREE.Vector3(0.44, 0.68, 0.68) }, v6PanelGeometry(width * 0.46, height * 0.50, depth * 0.30, 0.62));
+  make({ name: "v6-sera-temple-left", position: new THREE.Vector3(-width * 0.47, height * 0.42, 0.006), rotation: new THREE.Euler(0, 0.16, -0.08), scale: new THREE.Vector3(0.34, 0.90, 0.58) }, v6PanelGeometry(width * 0.30, height * 0.72, depth * 0.30, 0.45));
+  make({ name: "v6-sera-temple-right", position: new THREE.Vector3(width * 0.46, height * 0.43, 0.006), rotation: new THREE.Euler(0, -0.15, 0.08), scale: new THREE.Vector3(0.32, 0.86, 0.56) }, v6PanelGeometry(width * 0.28, height * 0.68, depth * 0.28, 0.45));
+  make({ name: "v6-sera-ponytail-root", position: new THREE.Vector3(0, height * 0.47, -depth * 0.48), rotation: new THREE.Euler(0.18, 0, 0), scale: new THREE.Vector3(0.50, 0.58, 0.66), ponytail: true }, v6PanelGeometry(width * 0.56, height * 0.42, depth * 0.52, 0.72));
+  make({ name: "v6-sera-ponytail-upper", position: new THREE.Vector3(0, height * 0.20, -depth * 0.66), rotation: new THREE.Euler(0.30, 0, 0), scale: new THREE.Vector3(0.46, 0.84, 0.62), ponytail: true }, v6PanelGeometry(width * 0.50, height * 0.58, depth * 0.46, 0.68));
+  make({ name: "v6-sera-ponytail-mid", position: new THREE.Vector3(0, -height * 0.12, -depth * 0.78), rotation: new THREE.Euler(0.42, 0, 0), scale: new THREE.Vector3(0.38, 0.88, 0.54), ponytail: true }, v6PanelGeometry(width * 0.42, height * 0.62, depth * 0.40, 0.62));
+  make({ name: "v6-sera-ponytail-lower", position: new THREE.Vector3(0, -height * 0.30, -depth * 0.82), rotation: new THREE.Euler(0.49, 0, 0), scale: new THREE.Vector3(0.33, 0.78, 0.48), ponytail: true }, v6PanelGeometry(width * 0.38, height * 0.54, depth * 0.36, 0.56));
+  make({ name: "v6-sera-ponytail-tip", position: new THREE.Vector3(0, -height * 0.40, -depth * 0.84), rotation: new THREE.Euler(0.56, 0, 0), scale: new THREE.Vector3(0.28, 0.76, 0.44), ponytail: true }, v6PanelGeometry(width * 0.34, height * 0.56, depth * 0.34, 0.52));
+
+  const eyeY = height * 0.53;
+  const eyeZ = depth * 0.47;
+  for (const side of [-1, 1] as const) {
+    const label = side < 0 ? "left" : "right";
+    const socket = part(v6PanelGeometry(width * 0.25, height * 0.12, 0.020, 0.76), mat.secondary, `v6-${label}-eye-socket`);
+    socket.position.set(side * width * 0.17, eyeY, eyeZ - 0.006); socket.rotation.z = side * -0.05; head.add(socket);
+    const eye = part(v6PanelGeometry(width * 0.17, height * 0.050, 0.012, 0.66), mat.eyes, `v6-${label}-eye`);
+    eye.position.set(side * width * 0.17, eyeY, eyeZ + 0.008); eye.rotation.z = side * -0.08; head.add(eye);
+    const brow = part(v6PanelGeometry(width * 0.23, height * 0.038, 0.018, 0.70), mat.hair, `v6-${label}-brow`);
+    brow.position.set(side * width * 0.17, height * 0.625, depth * 0.45); brow.rotation.z = side * -0.14; head.add(brow);
+  }
+  const nose = part(v6PanelGeometry(width * 0.11, height * 0.22, depth * 0.12, 0.64), mat.skin, "v6-nose-bridge-tip");
+  nose.position.set(0, height * 0.39, depth * 0.47); nose.rotation.x = -0.05; head.add(nose);
+  const mouth = part(v6PanelGeometry(width * 0.18, height * 0.026, 0.012, 0.74), mat.mouth, "v6-mouth-plane");
+  mouth.position.set(0, height * 0.25, depth * 0.46); head.add(mouth);
+  return { hair: cap, hairMasses, ponytailMasses };
+}
+
+function createFemaleV6LimbVisuals(layout: FighterVisualLayout, mat: MaterialSet, rig: FighterRig, side: -1 | 1, kind: "ARM" | "LEG"): LimbVisual {
+  const prefix = side < 0 ? "left" : "right";
+  if (kind === "ARM") {
+    const root = rig.bones[`${prefix}UpperArm`];
+    const lower = rig.bones[`${prefix}Forearm`];
+    const end = addEndMesh(rig.bones[`${prefix}Hand`], v6PanelGeometry(0.044, layout.handLength, 0.065, 0.72), mat.secondary, `v6-${prefix}-fist`, new THREE.Vector3(0, -layout.handLength * 0.48, 0.030));
+    const thumb = part(v6PanelGeometry(0.026, 0.046, 0.030, 0.76), mat.skin, `v6-${prefix}-thumb`);
+    thumb.position.set(side * 0.017, -layout.handLength * 0.18, 0.037); rig.bones[`${prefix}Hand`].add(thumb);
+    return { root, upper: root, lower, end };
+  }
+  const root = rig.bones[`${prefix}Thigh`];
+  const lower = rig.bones[`${prefix}Shin`];
+  const end = addEndMesh(rig.bones[`${prefix}Foot`], v6PanelGeometry(0.078, 0.075, layout.footLength * 1.18, 0.45), mat.secondary, `v6-${prefix}-boot`, new THREE.Vector3(0, -0.030, layout.footLength * 0.24));
+  const toe = part(v6PanelGeometry(0.070, 0.052, layout.footLength * 0.78, 0.30), mat.primary, `v6-${prefix}-pointed-toe`);
+  toe.position.set(0, -0.030, layout.footLength * 0.45); rig.bones[`${prefix}Foot`].add(toe);
+  const sole = part(v6PanelGeometry(0.082, 0.022, layout.footLength * 1.14, 0.24), mat.accent, `v6-${prefix}-sole`);
+  sole.position.set(0, -0.066, layout.footLength * 0.23); rig.bones[`${prefix}Foot`].add(sole);
+  return { root, upper: root, lower, end };
+}
+
+function createFemaleV6Clothing(layout: FighterVisualLayout, mat: MaterialSet, rig: FighterRig): { panels: THREE.Group; attachments: ClothingAttachment[] } {
+  const panels = new THREE.Group();
+  panels.name = "v6-reference-clothing";
+  const attachments: ClothingAttachment[] = [];
+  const add = (geometry: THREE.BufferGeometry, materialValue: THREE.Material, name: string, parent: THREE.Object3D, category: ClothingAttachment["category"], localPosition: THREE.Vector3, rotation = new THREE.Euler()): THREE.Mesh => {
+    const mesh = part(geometry, materialValue, name);
+    mesh.position.copy(localPosition);
+    mesh.rotation.copy(rotation);
+    parent.add(mesh);
+    attachments.push({ name, category, parentBone: parent.name, localPosition: localPosition.clone(), localRotation: rotation.clone(), mesh });
+    return mesh;
+  };
+  const chest = rig.bones.chest;
+  const hips = rig.bones.hips;
+  add(v6PanelGeometry(0.112, 0.160, 0.078, 0.80), mat.secondary, "v6-black-crop-top", chest, "CHEST", new THREE.Vector3(0, -0.045, 0.058));
+  add(v6PanelGeometry(0.075, 0.185, 0.084, 0.78), mat.primary, "v6-blue-top-left", chest, "CHEST", new THREE.Vector3(-0.065, -0.040, 0.052), new THREE.Euler(0, 0, -0.10));
+  add(v6PanelGeometry(0.075, 0.185, 0.084, 0.78), mat.primary, "v6-blue-top-right", chest, "CHEST", new THREE.Vector3(0.065, -0.040, 0.052), new THREE.Euler(0, 0, 0.10));
+  add(v6PanelGeometry(0.055, 0.145, 0.060, 0.88), mat.primary, "v6-high-collar", chest, "CHEST", new THREE.Vector3(0, 0.045, 0.032));
+  add(v6PanelGeometry(0.178, 0.205, 0.070, 0.76), mat.primary, "v6-front-waist-panel", hips, "WAIST", new THREE.Vector3(0, 0.088, 0.074));
+  add(v6PanelGeometry(0.082, 0.210, 0.060, 0.64), mat.primary, "v6-left-side-skirt", hips, "HIP", new THREE.Vector3(-0.082, 0.045, 0.010), new THREE.Euler(0, 0, -0.08));
+  add(v6PanelGeometry(0.082, 0.210, 0.060, 0.64), mat.primary, "v6-right-side-skirt", hips, "HIP", new THREE.Vector3(0.082, 0.045, 0.010), new THREE.Euler(0, 0, 0.08));
+  add(v6PanelGeometry(0.190, 0.310, 0.050, 0.60), mat.primary, "v6-rear-waist-panel", hips, "HIP", new THREE.Vector3(0, 0.020, -0.073));
+  for (const side of [-1, 1] as const) {
+    const prefix = side < 0 ? "left" : "right";
+    add(v6PanelGeometry(0.052, 0.190, 0.044, 0.76), mat.secondary, `v6-${prefix}-upper-sleeve`, rig.bones[`${prefix}UpperArm`], "SHOULDER", new THREE.Vector3(0, -0.085, 0.004));
+    add(v6PanelGeometry(0.058, 0.205, 0.050, 0.72), mat.metal, `v6-${prefix}-forearm-armor`, rig.bones[`${prefix}Forearm`], "ARM", new THREE.Vector3(0, -0.095, 0.018));
+    add(v6PanelGeometry(0.070, 0.220, 0.056, 0.70), mat.primary, `v6-${prefix}-shin-armor`, rig.bones[`${prefix}Shin`], "LEG", new THREE.Vector3(0, -0.135, 0.010));
+    add(v6PanelGeometry(0.066, 0.110, 0.062, 0.62), mat.primary, `v6-${prefix}-ankle-guard`, rig.bones[`${prefix}Foot`], "LEG", new THREE.Vector3(0, -0.022, 0.012));
+  }
+  panels.userData.attachments = attachments;
+  return { panels, attachments };
+}
+
+function createFemaleV6Visual(definition: FighterDefinition, quality: FighterVisualQuality): FighterVisual {
+  const layout = createFemaleV6Layout(definition, quality);
+  const profile = DETAIL[quality];
+  const mat = createMaterials(definition);
+  const rig = createRig(layout);
+  const root = new THREE.Group();
+  root.name = `fighter-v6-${definition.id}`;
+  root.scale.setScalar(layout.worldScale);
+  root.add(rig.root);
+  const bodyGeometry = createFemaleV6BodyGeometry(layout, rig, definition, quality);
+  const bodyMaterials = [mat.primary, mat.secondary, mat.accent, mat.skin, mat.hair, mat.eyes, mat.mouth, mat.metal];
+  const bodyMesh = new THREE.SkinnedMesh(bodyGeometry, bodyMaterials);
+  bodyMesh.name = "v6-reference-control-cage-body";
+  bodyMesh.frustumCulled = true;
+  root.add(bodyMesh);
+  root.updateMatrixWorld(true);
+  bodyMesh.bind(rig.skeleton);
+  const headDetails = addFemaleV6HeadDetails(rig.bones.head, mat, layout);
+  const leftArm = createFemaleV6LimbVisuals(layout, mat, rig, -1, "ARM");
+  const rightArm = createFemaleV6LimbVisuals(layout, mat, rig, 1, "ARM");
+  const leftLeg = createFemaleV6LimbVisuals(layout, mat, rig, -1, "LEG");
+  const rightLeg = createFemaleV6LimbVisuals(layout, mat, rig, 1, "LEG");
+  const clothing = createFemaleV6Clothing(layout, mat, rig);
+  root.add(clothing.panels);
+  const aura = part(new THREE.SphereGeometry(1, profile.detailRadial, profile.detailRows), mat.glow, "fighter-energy-aura-v6");
+  aura.scale.set(0.25, 0.54, 0.16);
+  aura.position.y = 0.46;
+  aura.visible = false;
+  aura.userData.excludeFromMetrics = true;
+  root.add(aura);
+  const footContacts = createFootContacts(layout);
+  const footPlants: Record<FootSide, FootPlantState> = {
+    left: { active: false, world: new THREE.Vector3(), lastRootWorld: new THREE.Vector3() },
+    right: { active: false, world: new THREE.Vector3(), lastRootWorld: new THREE.Vector3() },
+  };
+  const debugGroup = new THREE.Group();
+  debugGroup.name = "v6-reference-debug";
+  debugGroup.visible = false;
+  root.add(debugGroup);
+  const allMeshes = collectMeshes(root);
+  const stats = statsFor(definition, quality, layout, allMeshes, bodyMesh, "V6");
+  return {
+    root,
+    hips: rig.bones.hips,
+    torso: rig.bones.chest,
+    chest: bodyMesh,
+    bodyMesh,
+    head: rig.bones.head,
+    hair: headDetails.hair,
+    leftArm,
+    rightArm,
+    leftLeg,
+    rightLeg,
+    panels: clothing.panels,
+    aura,
+    allMeshes,
+    rig,
+    layout,
+    stats,
+    footContacts,
+    footPlants,
+    clothingAttachments: clothing.attachments,
+    hairMasses: headDetails.hairMasses,
+    ponytailMasses: headDetails.ponytailMasses,
+    debugGroup,
+    visualVersion: "V6",
+  };
+}
+
 function addEndMesh(boneObject: THREE.Bone, geometry: THREE.BufferGeometry, materialValue: THREE.Material, name: string, position: THREE.Vector3): THREE.Mesh { const mesh = part(geometry, materialValue, name); mesh.position.copy(position); boneObject.add(mesh); return mesh; }
 
 function createLimbVisuals(layout: FighterVisualLayout, definition: FighterDefinition, mat: MaterialSet, rig: FighterRig, side: -1 | 1, kind: "ARM" | "LEG"): LimbVisual {
@@ -947,7 +1271,7 @@ function styleScores(definition: FighterDefinition, layout: FighterVisualLayout,
   return { style, silhouette: null, proportion, landmark: null, facet, colorMaterial: colorScore, surfaceContinuity: null };
 }
 
-function statsFor(definition: FighterDefinition, quality: FighterVisualQuality, layout: FighterVisualLayout, meshes: THREE.Mesh[], bodyMesh: THREE.SkinnedMesh): FighterVisualStats {
+function statsFor(definition: FighterDefinition, quality: FighterVisualQuality, layout: FighterVisualLayout, meshes: THREE.Mesh[], bodyMesh: THREE.SkinnedMesh, visualVersion: "V5" | "V6" = "V5"): FighterVisualStats {
   const geometries = new Set<THREE.BufferGeometry>(); const materials = new Set<THREE.Material>(); let vertexCount = 0; let triangleCount = 0; let weightedVertexCount = 0;
   for (const mesh of metricMeshes(meshes)) {
     if (!geometries.has(mesh.geometry)) { geometries.add(mesh.geometry); vertexCount += mesh.geometry.getAttribute("position")?.count ?? 0; triangleCount += mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.getAttribute("position")?.count ?? 0) / 3; }
@@ -957,7 +1281,7 @@ function statsFor(definition: FighterDefinition, quality: FighterVisualQuality, 
   const facets = measureFacetDistribution(meshes, layout.worldScale);
   const materialCoverage = materialCoverageFor(meshes, definition);
   const colorScore = colorMaterialScore(definition, materialCoverage);
-  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: metricMeshes(meshes).length, materialCount: materials.size, proportions: proportionMetrics(layout), facetDistribution: facets, materialCoverage, scores: styleScores(definition, layout, facets, colorScore), skinnedMesh: bodyMesh instanceof THREE.SkinnedMesh && Boolean(bodyMesh.skeleton), weightedVertexCount };
+  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: metricMeshes(meshes).length, materialCount: materials.size, proportions: proportionMetrics(layout), facetDistribution: facets, materialCoverage, scores: styleScores(definition, layout, facets, colorScore), skinnedMesh: bodyMesh instanceof THREE.SkinnedMesh && Boolean(bodyMesh.skeleton), weightedVertexCount, visualVersion };
 }
 
 function boneWorldPosition(visual: FighterVisual, name: string): THREE.Vector3 {
@@ -1129,6 +1453,7 @@ export interface ClothingWorldMetric {
   name: string;
   category: ClothingAttachment["category"];
   parentBone: string;
+  mesh: THREE.Mesh;
   center: THREE.Vector3;
   minY: number;
   maxY: number;
@@ -1142,6 +1467,7 @@ export function measureClothingWorld(visual: FighterVisual): ClothingWorldMetric
       name: attachment.name,
       category: attachment.category,
       parentBone: attachment.parentBone,
+      mesh: attachment.mesh,
       center: box.getCenter(new THREE.Vector3()),
       minY: box.min.y,
       maxY: box.max.y,
@@ -1213,16 +1539,17 @@ export function setVisualDebugMode(visual: FighterVisual, mode: VisualDebugMode,
       visual.debugGroup.add(marker);
     }
   } else if (mode === "CLOTHING_BOUNDS" || mode === "HAIR_BOUNDS") {
-    const materialValue = new THREE.LineBasicMaterial({ color: mode === "CLOTHING_BOUNDS" ? 0xff8b50 : 0x72c7ff, depthTest: false });
+    const color = mode === "CLOTHING_BOUNDS" ? 0xff8b50 : 0x72c7ff;
     const objects = mode === "CLOTHING_BOUNDS" ? visual.clothingAttachments.map((value) => value.mesh) : visual.hairMasses;
-    for (const object of objects) visual.debugGroup.add(new THREE.Box3Helper(new THREE.Box3().setFromObject(object), materialValue));
+    for (const object of objects) visual.debugGroup.add(new THREE.Box3Helper(new THREE.Box3().setFromObject(object), color));
   }
 }
 
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
+  if (definition.archetype === "SPEED") return createFemaleV6Visual(definition, quality);
   const layout = createLayout(definition, quality); const profile = DETAIL[quality]; const mat = createMaterials(definition); const rig = createRig(layout); const root = new THREE.Group();
   root.name = `fighter-v5-${definition.id}`; root.scale.setScalar(layout.worldScale); root.add(rig.root);
-  const bodyGeometry = createBodyGeometry(layout, rig, definition, quality); const bodyMaterials = [mat.primary, mat.secondary, mat.accent, mat.skin, mat.hair, mat.eyes, mat.mouth];
+  const bodyGeometry = createBodyGeometry(layout, rig, definition, quality); const bodyMaterials = [mat.primary, mat.secondary, mat.accent, mat.skin, mat.hair, mat.eyes, mat.mouth, mat.metal];
   const bodyMesh = new THREE.SkinnedMesh(bodyGeometry, bodyMaterials); bodyMesh.name = "v5-continuous-skinned-body"; bodyMesh.frustumCulled = true; root.add(bodyMesh); root.updateMatrixWorld(true); bodyMesh.bind(rig.skeleton);
   const hips = rig.bones.hips; const torso = rig.bones.chest; const head = rig.bones.head; const headDetails = addHeadDetails(head, mat, layout, definition.archetype);
   const leftArm = createLimbVisuals(layout, definition, mat, rig, -1, "ARM"); const rightArm = createLimbVisuals(layout, definition, mat, rig, 1, "ARM"); const leftLeg = createLimbVisuals(layout, definition, mat, rig, -1, "LEG"); const rightLeg = createLimbVisuals(layout, definition, mat, rig, 1, "LEG");
@@ -1241,7 +1568,7 @@ export function createFighterVisual(definition: FighterDefinition, quality: Figh
     root, hips, torso, chest: bodyMesh, bodyMesh, head, hair: headDetails.hair,
     leftArm, rightArm, leftLeg, rightLeg, panels, aura, allMeshes, rig, layout, stats,
     footContacts, footPlants, clothingAttachments: clothing.attachments,
-    hairMasses: headDetails.hairMasses, ponytailMasses: headDetails.ponytailMasses, debugGroup,
+    hairMasses: headDetails.hairMasses, ponytailMasses: headDetails.ponytailMasses, debugGroup, visualVersion: "V5",
   };
 }
 

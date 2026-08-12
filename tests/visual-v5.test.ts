@@ -57,9 +57,10 @@ test("V5 clothing stays in the parent bone's intended world height", () => {
     const metrics = measureClothingWorld(visual);
     assert.ok(metrics.length >= 6);
     for (const metric of metrics) {
-      const referenceY = metric.category === "CHEST" || metric.category === "SHOULDER" ? chestY : hipY;
+      const parentY = metric.mesh?.parent?.getWorldPosition?.(new THREE.Vector3()).y ?? undefined;
+      const referenceY = metric.category === "CHEST" || metric.category === "SHOULDER" ? chestY : metric.category === "WAIST" || metric.category === "HIP" ? hipY : parentY ?? hipY;
       assert.ok(Math.abs(metric.center.y - referenceY) < 0.62, `${metric.name} detached from ${metric.category}`);
-      assert.ok(metric.minY > 0.35, `${metric.name} unexpectedly accumulated at the feet`);
+      if (metric.category !== "LEG") assert.ok(metric.minY > 0.35, `${metric.name} unexpectedly accumulated at the feet`);
       assert.equal(metric.parentBone.startsWith("v4-"), true);
       assert.equal(metric.center.toArray().every(Number.isFinite), true);
     }
@@ -122,8 +123,8 @@ test("V5 hair uses authored masses and bounded head-relative placement", () => {
   const blueHair = measureHairBounds(blue);
   assert.equal(redHair.massCount, 7);
   assert.equal(redHair.ponytailSections, 0);
-  assert.equal(blueHair.massCount, 8);
-  assert.equal(blueHair.ponytailSections, 3);
+  assert.equal(blueHair.massCount, 11);
+  assert.equal(blueHair.ponytailSections, 5);
   assert.ok(redHair.maxNonPonytailDistance < redHair.headRadius * 1.55);
   assert.ok(blueHair.maxNonPonytailDistance < blueHair.headRadius * 1.55);
   assert.ok(blueHair.maxPonytailDistance > blueHair.headRadius * 0.75);

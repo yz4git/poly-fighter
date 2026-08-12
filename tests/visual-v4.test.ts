@@ -69,14 +69,8 @@ test("facing roots map model +Z to both fight directions", () => {
 test("V4 clothing meshes are attached to the rig instead of the world root", () => {
   for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     const visual = createFighterVisual(definition, "NORMAL");
-    const clothing = visual.root.children.flatMap((child) => {
-      const result: THREE.Object3D[] = [];
-      child.traverse((object) => { if (object.name.includes("jacket") || object.name.includes("lapel") || object.name.includes("panel") || object.name.includes("shoulder-reinforcement")) result.push(object); });
-      return result;
-    });
-    assert.ok(clothing.length >= 4);
-    assert.ok(clothing.every((object) => object.parent?.type === "Bone"));
+    assert.ok(visual.clothingAttachments.length >= 4);
+    assert.ok(visual.clothingAttachments.every((attachment) => attachment.mesh.parent?.type === "Bone"));
     disposeFighterVisual(visual);
   }
 });
-

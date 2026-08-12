@@ -58,6 +58,7 @@ test("SERA uses the dedicated V6 skinned reference mesh", () => {
   assert.ok(visual.stats.triangleCount >= 8_000 && visual.stats.triangleCount <= 18_000);
   assert.ok(visual.stats.meshCount <= 52);
   assert.ok(visual.stats.materialCount <= 8);
+  assert.equal(visual.stats.scores.style, null, "V6 composite style score stays NOT_MEASURED until golden-master comparison");
   assert.equal(visual.hairMasses.filter((mesh) => mesh.userData.ponytail).length, 5);
   assert.equal(visual.clothingAttachments.some((item) => item.name === "v6-front-waist-panel"), true);
   disposeFighterVisual(visual);

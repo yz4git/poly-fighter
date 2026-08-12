@@ -1281,7 +1281,12 @@ function statsFor(definition: FighterDefinition, quality: FighterVisualQuality, 
   const facets = measureFacetDistribution(meshes, layout.worldScale);
   const materialCoverage = materialCoverageFor(meshes, definition);
   const colorScore = colorMaterialScore(definition, materialCoverage);
-  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: metricMeshes(meshes).length, materialCount: materials.size, proportions: proportionMetrics(layout), facetDistribution: facets, materialCoverage, scores: styleScores(definition, layout, facets, colorScore), skinnedMesh: bodyMesh instanceof THREE.SkinnedMesh && Boolean(bodyMesh.skeleton), weightedVertexCount, visualVersion };
+  const measuredScores = styleScores(definition, layout, facets, colorScore);
+  // V6 deliberately does not publish a composite aesthetic score.  Its
+  // silhouette and landmark values are only meaningful after a fixed camera
+  // has projected the generated model against the supplied golden master.
+  const scores = visualVersion === "V6" ? { ...measuredScores, style: null } : measuredScores;
+  return { quality, vertexCount, triangleCount: Math.round(triangleCount), meshCount: metricMeshes(meshes).length, materialCount: materials.size, proportions: proportionMetrics(layout), facetDistribution: facets, materialCoverage, scores, skinnedMesh: bodyMesh instanceof THREE.SkinnedMesh && Boolean(bodyMesh.skeleton), weightedVertexCount, visualVersion };
 }
 
 function boneWorldPosition(visual: FighterVisual, name: string): THREE.Vector3 {

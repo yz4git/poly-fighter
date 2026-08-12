@@ -60,7 +60,7 @@ test("Fighter Visual V5 follows reference proportions and real skinning", () => 
     assert.equal(visual.stats.scores.landmark, null, "landmark is NOT_MEASURED until a camera pose is supplied");
     assert.ok(visual.stats.scores.proportion >= 90);
     assert.ok(Number.isFinite(visual.stats.scores.facet));
-    assert.ok(Number.isFinite(visual.stats.scores.style));
+    assert.equal(visual.stats.scores.style === null || Number.isFinite(visual.stats.scores.style), true);
     assert.ok(Number.isFinite(visual.stats.scores.colorMaterial ?? NaN));
 
     // Confirm a real bone deformation changes a weighted body vertex.

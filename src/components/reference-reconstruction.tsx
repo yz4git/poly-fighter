@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- exact pixel crops are required by the reconstruction tool */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";

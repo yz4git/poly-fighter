@@ -11,7 +11,9 @@ on:
       - src/game/visual-v10-polish.ts
       - src/game/visual-entry.ts
       - public/models/sera-v10.glb
+      - public/sw.js
       - scripts/capture-v10-visual-audit.mjs
+      - tests/pwa-cache.test.mjs
       - .github/workflows/v10-visual-audit.yml
 
 jobs:

@@ -11,7 +11,7 @@ sudo apt-get update -qq
 sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
 blender --version | head -n 2
 
-export PYTHONPATH="/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
 blender --background --python-use-system-env --python-expr "import numpy; print('BLENDER_NUMPY', numpy.__version__)"
 
 out="artifacts/visual-audit/blender-sera"

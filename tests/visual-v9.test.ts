@@ -14,7 +14,7 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.2_COHERENT_NEUTRAL_SHELL");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.2_PARTITIONED_COMPONENT_RIG");
   disposeFighterVisual(visual);
 });
 
@@ -30,8 +30,9 @@ test("V10 is asset-driven and cannot regress to per-view rectangles or procedura
   assert.equal(source.includes("builder.tube"), false);
   assert.equal(polish.includes("THREE.Sprite"), false);
   assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.match(polish, /FACE_UNIFORM_REGIONS/);
+  assert.match(polish, /PARTITIONED_COMPONENT_RIG/);
   assert.match(polish, /COHERENT_NEUTRAL_SHELL/);
+  assert.match(polish, /PARTITIONED_ARTICULATION/);
 });
 
 test("V10 repository contains one generated GLB from one shared four-view volume", () => {

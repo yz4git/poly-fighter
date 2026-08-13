@@ -36,7 +36,7 @@ function stanceFeet(visual: FighterVisual, depthScale = 1): void {
 }
 function idlePose(visual: FighterVisual): void {
   const b = visual.rig.bones; visual.hips.position.y -= 0.026; b.spineLower.rotation.y += 0.085; b.spineUpper.rotation.y -= 0.125; b.chest.rotation.y += 0.090; b.head.rotation.y -= 0.045;
-  solveArm(visual, -1, new THREE.Vector3(-0.175, 0.790, -0.060), new THREE.Vector3(-0.320, 0.710, -0.105));
+  solveArm(visual, -1, new THREE.Vector3(-0.175, 0.810, -0.130), new THREE.Vector3(-0.300, 0.580, -0.240));
   solveArm(visual, 1, new THREE.Vector3(0.160, 0.545, 0.180), new THREE.Vector3(0.290, 0.600, 0.075)); stanceFeet(visual, 1);
 }
 function guardPose(visual: FighterVisual): void {

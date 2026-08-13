@@ -18,6 +18,10 @@ function semanticFromRgb(r: number, g: number, b: number): Exclude<V10Semantic, 
   return "silver";
 }
 
+function valueBias(r: number, g: number, b: number): boolean {
+  return b > r * 1.03 || b > g * 1.08;
+}
+
 function resolvedSemantic(
   region: V10SkinRegion,
   semantic: Exclude<V10Semantic, "unknown">,
@@ -26,10 +30,7 @@ function resolvedSemantic(
   g: number,
   b: number,
 ): Exclude<V10Semantic, "unknown"> {
-  if (region === "HEAD") {
-    if (semantic === "silver") return "skin";
-    return semantic;
-  }
+  if (region === "HEAD") return semantic === "silver" ? "skin" : semantic;
   if (region === "HIPS") {
     if (semantic === "skin" || semantic === "silver") return b > r * 1.03 ? "blue" : "black";
     return semantic;
@@ -45,10 +46,6 @@ function resolvedSemantic(
   }
   if (region.endsWith("_THIGH") && semantic === "silver") return valueBias(r, g, b) ? "blue" : "black";
   return semantic;
-}
-
-function valueBias(r: number, g: number, b: number): boolean {
-  return b > r * 1.03 || b > g * 1.08;
 }
 
 function boneForRegion(region: V10SkinRegion, y: number, visual: FighterVisual): number {
@@ -145,9 +142,7 @@ function installRigidFacetSkinning(visual: FighterVisual): void {
 function installReferenceColorMaterial(visual: FighterVisual): void {
   if (visual.root.userData.reconstructionAssetState !== "ready") return;
   if (visual.bodyMesh.userData.v10ColorMaterial === "REFERENCE_VERTEX_COLOR") return;
-
-  const hasVertexColor = Boolean(visual.bodyMesh.geometry.getAttribute("color"));
-  if (!hasVertexColor) return;
+  if (!visual.bodyMesh.geometry.getAttribute("color")) return;
 
   const oldMaterial = visual.bodyMesh.material;
   visual.bodyMesh.material = new THREE.MeshBasicMaterial({
@@ -161,47 +156,21 @@ function installReferenceColorMaterial(visual: FighterVisual): void {
   visual.root.userData.colorPipeline = "V10.2_QUANTIZED_REFERENCE_VERTEX_COLOR";
 }
 
-function nearNeutralArms(visual: FighterVisual): boolean {
-  const bones = visual.rig.bones;
-  return Math.abs(bones.leftUpperArm.rotation.x) < 0.12
-    && Math.abs(bones.rightUpperArm.rotation.x) < 0.12
-    && Math.abs(bones.leftForearm.rotation.x) < 0.12
-    && Math.abs(bones.rightForearm.rotation.x) < 0.12
-    && Math.abs(bones.leftUpperArm.rotation.z) < 0.12
-    && Math.abs(bones.rightUpperArm.rotation.z) < 0.12;
-}
-
-function applyCompactIdleGuard(visual: FighterVisual): void {
-  const bones = visual.rig.bones;
-  bones.leftUpperArm.rotation.x = -0.32;
-  bones.leftUpperArm.rotation.z = 0.10;
-  bones.leftForearm.rotation.x = -0.58;
-  bones.rightUpperArm.rotation.x = -0.48;
-  bones.rightUpperArm.rotation.z = -0.10;
-  bones.rightForearm.rotation.x = -0.70;
-  bones.spineUpper.rotation.y += 0.035;
-  visual.root.updateMatrixWorld(true);
-  visual.rig.skeleton.update();
-}
-
 /**
  * V10.2 presentation polish. The reconstructed surface is converted to
  * independent triangular facets and each facet follows one anatomical region.
- * That intentionally trades tiny shoulder/knee seams for a far more important
- * guarantee: no triangle can be stretched between torso and limb bones.
+ * No render-time bone pose is injected here; combat animation remains the sole
+ * owner of joint rotations.
  */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;
-  visual.root.userData.authoredNeutralStance = "V10.2_RIGID_FACET_GUARD";
+  visual.root.userData.authoredNeutralStance = "V10.2_RIGID_FACET_BIND_SAFE";
 
   const previousBeforeRender = visual.bodyMesh.onBeforeRender;
   visual.bodyMesh.onBeforeRender = function onBeforeRender(...args): void {
     installRigidFacetSkinning(visual);
     installReferenceColorMaterial(visual);
-    if (visual.bodyMesh.userData.v10FacetSkinning === "RIGID_FACE_REGIONS" && nearNeutralArms(visual)) {
-      applyCompactIdleGuard(visual);
-    }
     previousBeforeRender?.apply(this, args);
   };
 

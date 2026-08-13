@@ -15,15 +15,20 @@ export class FightCamera {
     const midX = (p1.position.x + p2.position.x) * 0.5;
     const midZ = (p1.position.z + p2.position.z) * 0.5;
     const separation = Math.hypot(p1.position.x - p2.position.x, p1.position.z - p2.position.z);
-    const desiredZ = 10.1 + Math.min(4.2, separation * 0.82);
-    const desiredY = 3.4 + Math.min(1.4, separation * 0.13);
+
+    // The first deployed V9 screenshot framed the fighters at only ~40% of the
+    // viewport height. The visual reference is a much tighter arcade-fighter
+    // composition, so keep both players in frame while making the characters
+    // the dominant shapes rather than distant figures in a large arena.
+    const desiredZ = 8.1 + Math.min(3.6, separation * 0.62);
+    const desiredY = 3.15 + Math.min(1.10, separation * 0.10);
     this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, midX, 5.5, deltaSeconds);
     this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, desiredY, 5.5, deltaSeconds);
     this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, desiredZ, 5.5, deltaSeconds);
     const targetY = THREE.MathUtils.clamp(
-      1.45 + Math.max(p1.position.y, p2.position.y) * 0.24,
-      1.25,
-      2.05,
+      1.52 + Math.max(p1.position.y, p2.position.y) * 0.24,
+      1.32,
+      2.08,
     );
     this.target.set(midX, targetY, midZ * 0.18);
     if (this.shake > 0.001) {

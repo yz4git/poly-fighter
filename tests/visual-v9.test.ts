@@ -31,9 +31,11 @@ test("V10 is asset-driven and bone-parented fragments remain one persistent reco
   assert.equal(source.includes("builder.tube"), false);
   assert.equal(polish.includes("THREE.Sprite"), false);
   assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.match(polish, /BONE_PARENTED_ANATOMICAL_FRAGMENTS/);
+  assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY/);
   assert.match(polish, /boneInverse\.clone\(\)\.multiply\(bindMatrix\)/);
   assert.match(polish, /bone\.add\(mesh\)/);
+  assert.match(polish, /installArticulationUnderbody/);
+  assert.match(polish, /CylinderGeometry/);
   assert.match(polish, /bodyMesh\.visible = false/);
 });
 

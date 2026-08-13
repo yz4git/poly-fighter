@@ -68,57 +68,30 @@ async function chooseFighter(sessionId, name, playerLabel) {
   `, [name, playerLabel]);
 }
 
-async function buttonCenter(sessionId, text) {
+async function dispatchCombatPointer(sessionId, text, type, pointerId) {
   return execute(sessionId, `
     const wanted = arguments[0];
+    const type = arguments[1];
+    const pointerId = arguments[2];
     const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === wanted);
-    if (!button) return null;
+    if (!button) return { dispatched: false };
     const rect = button.getBoundingClientRect();
-    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
-  `, [text]);
-}
-
-async function pointerAction(sessionId, point, holdMs = 0) {
-  await command(`/session/${sessionId}/actions`, "POST", {
-    actions: [{
-      type: "pointer",
-      id: "audit-pointer",
-      parameters: { pointerType: "mouse" },
-      actions: [
-        { type: "pointerMove", duration: 0, origin: "viewport", x: point.x, y: point.y },
-        { type: "pointerDown", button: 0 },
-        ...(holdMs > 0 ? [{ type: "pause", duration: holdMs }] : []),
-        { type: "pointerUp", button: 0 },
-      ],
-    }],
-  });
-  await command(`/session/${sessionId}/actions`, "DELETE").catch(() => undefined);
-}
-
-async function pointerDown(sessionId, point) {
-  await command(`/session/${sessionId}/actions`, "POST", {
-    actions: [{
-      type: "pointer",
-      id: "audit-hold-pointer",
-      parameters: { pointerType: "mouse" },
-      actions: [
-        { type: "pointerMove", duration: 0, origin: "viewport", x: point.x, y: point.y },
-        { type: "pointerDown", button: 0 },
-      ],
-    }],
-  });
-}
-
-async function pointerUp(sessionId) {
-  await command(`/session/${sessionId}/actions`, "POST", {
-    actions: [{
-      type: "pointer",
-      id: "audit-hold-pointer",
-      parameters: { pointerType: "mouse" },
-      actions: [{ type: "pointerUp", button: 0 }],
-    }],
-  }).catch(() => undefined);
-  await command(`/session/${sessionId}/actions`, "DELETE").catch(() => undefined);
+    const event = new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId,
+      pointerType: 'touch',
+      isPrimary: true,
+      buttons: type === 'pointerdown' ? 1 : 0,
+      button: 0,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    });
+    let error = null;
+    try { button.dispatchEvent(event); } catch (caught) { error = String(caught); }
+    return { dispatched: true, label: button.textContent, error };
+  `, [text, type, pointerId]);
 }
 
 function siblingOutput(base, suffix) {
@@ -187,28 +160,28 @@ try {
   await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
   await capture(sessionId, output);
 
-  const guard = await buttonCenter(sessionId, "G");
-  const punch = await buttonCenter(sessionId, "P");
-  const kick = await buttonCenter(sessionId, "K");
-  if (!guard || !punch || !kick) throw new Error(`Combat buttons were not found: ${JSON.stringify({ guard, punch, kick })}`);
-
-  await pointerDown(sessionId, guard);
-  await delay(230);
-  await capture(sessionId, siblingOutput(output, "guard"));
-  await pointerUp(sessionId);
+  const guardDown = await dispatchCombatPointer(sessionId, "G", "pointerdown", 91);
+  if (!guardDown?.dispatched) throw new Error("G button was not found");
   await delay(180);
+  await capture(sessionId, siblingOutput(output, "guard"));
+  await dispatchCombatPointer(sessionId, "G", "pointerup", 91);
+  await delay(140);
 
-  await pointerAction(sessionId, punch, 70);
-  await delay(50);
+  const punchDown = await dispatchCombatPointer(sessionId, "P", "pointerdown", 92);
+  if (!punchDown?.dispatched) throw new Error("P button was not found");
+  await delay(42);
   await capture(sessionId, siblingOutput(output, "punch"));
-  await delay(330);
+  await dispatchCombatPointer(sessionId, "P", "pointerup", 92);
+  await delay(360);
 
-  await pointerAction(sessionId, kick, 70);
-  await delay(80);
+  const kickDown = await dispatchCombatPointer(sessionId, "K", "pointerdown", 93);
+  if (!kickDown?.dispatched) throw new Error("K button was not found");
+  await delay(58);
   await capture(sessionId, siblingOutput(output, "kick"));
+  await dispatchCombatPointer(sessionId, "K", "pointerup", 93);
 
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, frames: ["idle", "guard", "punch", "kick"] }));
+  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, guardDown, punchDown, kickDown, frames: ["idle", "guard", "punch", "kick"] }));
 } finally {
   if (sessionId) {
     await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

@@ -16,6 +16,8 @@ on:
       - public/models/sera-v10.glb
       - public/sw.js
       - scripts/capture-v10-visual-audit.mjs
+      - scripts/run-blender-prototype-ci.sh
+      - tools/blender/**
       - tests/pwa-cache.test.mjs
       - .github/workflows/v10-visual-audit.yml
 
@@ -25,6 +27,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout Quaternius Universal Base Characters mirror
+        uses: actions/checkout@v4
+        with:
+          repository: aaroohhiiii/ggj
+          ref: 57c0855a6622d4654fe32e9208efb820051164e3
+          path: .external/quaternius
+          sparse-checkout: |
+            first/assets/3d/characters/player
+            first/assets/3d/characters/License_Standard.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0

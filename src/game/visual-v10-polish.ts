@@ -3,7 +3,15 @@ import type { FighterVisual } from "./visual";
 import { classifyV10SkinRegion, type V10Semantic, type V10SkinRegion } from "./visual-v10";
 
 type Influence = readonly [number, number];
+type SkinModes = {
+  dynamicIndex: THREE.BufferAttribute;
+  dynamicWeight: THREE.BufferAttribute;
+  staticIndex: THREE.BufferAttribute;
+  staticWeight: THREE.BufferAttribute;
+  current: "dynamic" | "static";
+};
 
+const SKIN_MODES = new WeakMap<FighterVisual, SkinModes>();
 const PALETTE: Record<Exclude<V10Semantic, "unknown">, THREE.Color> = {
   skin: new THREE.Color(0xd3a184),
   blue: new THREE.Color(0x2452c5),
@@ -152,6 +160,8 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
 
   const skinIndices: number[] = [];
   const skinWeights: number[] = [];
+  const staticIndices: number[] = [];
+  const staticWeights: number[] = [];
   const quantizedColors: number[] = [];
   const regionCounts: Partial<Record<V10SkinRegion, number>> = {};
 
@@ -185,11 +195,19 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
     regionCounts[region] = (regionCounts[region] ?? 0) + 1;
 
     writeFaceInfluences(skinIndices, skinWeights, influencesForFace(region, y, visual));
-    for (let offset = 0; offset < 3; offset += 1) quantizedColors.push(target.r, target.g, target.b);
+    for (let offset = 0; offset < 3; offset += 1) {
+      staticIndices.push(visual.rig.boneIndices.root, 0, 0, 0);
+      staticWeights.push(1, 0, 0, 0);
+      quantizedColors.push(target.r, target.g, target.b);
+    }
   }
 
-  geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(skinIndices, 4));
-  geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(skinWeights, 4));
+  const dynamicIndex = new THREE.Uint16BufferAttribute(skinIndices, 4);
+  const dynamicWeight = new THREE.Float32BufferAttribute(skinWeights, 4);
+  const staticIndex = new THREE.Uint16BufferAttribute(staticIndices, 4);
+  const staticWeight = new THREE.Float32BufferAttribute(staticWeights, 4);
+  geometry.setAttribute("skinIndex", dynamicIndex);
+  geometry.setAttribute("skinWeight", dynamicWeight);
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(quantizedColors, 3));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
@@ -199,6 +217,7 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
   visual.bodyMesh.geometry = geometry;
   visual.bodyMesh.normalizeSkinWeights();
   source.dispose();
+  SKIN_MODES.set(visual, { dynamicIndex, dynamicWeight, staticIndex, staticWeight, current: "dynamic" });
   visual.bodyMesh.userData.v10FacetSkinning = "FACE_UNIFORM_REGIONS";
   visual.root.userData.skinningPresentation = "V10.2_FACE_UNIFORM_REGIONS";
   visual.stats.vertexCount = position.count;
@@ -223,21 +242,58 @@ function installReferenceColorMaterial(visual: FighterVisual): void {
   visual.root.userData.colorPipeline = "V10.2_SHADED_REFERENCE_VERTEX_COLOR";
 }
 
+function neutralUpperBody(visual: FighterVisual): boolean {
+  const bones = visual.rig.bones;
+  const rotations = [
+    bones.spineLower.rotation,
+    bones.spineUpper.rotation,
+    bones.chest.rotation,
+    bones.leftUpperArm.rotation,
+    bones.rightUpperArm.rotation,
+    bones.leftForearm.rotation,
+    bones.rightForearm.rotation,
+  ];
+  return rotations.every((rotation) =>
+    Math.abs(rotation.x) < 0.075
+    && Math.abs(rotation.y) < 0.075
+    && Math.abs(rotation.z) < 0.075,
+  );
+}
+
+function selectPresentationSkin(visual: FighterVisual): void {
+  const modes = SKIN_MODES.get(visual);
+  if (!modes) return;
+  const neutral = neutralUpperBody(visual);
+  const desired = neutral ? "static" : "dynamic";
+  if (modes.current !== desired) {
+    visual.bodyMesh.geometry.setAttribute("skinIndex", desired === "static" ? modes.staticIndex : modes.dynamicIndex);
+    visual.bodyMesh.geometry.setAttribute("skinWeight", desired === "static" ? modes.staticWeight : modes.dynamicWeight);
+    modes.current = desired;
+  }
+
+  // A small neutral-only yaw prevents the side-on game camera from collapsing
+  // the turnaround into a paper-thin profile. Dynamic combat returns to exact
+  // rig alignment so hit animations and visual contacts stay trustworthy.
+  visual.bodyMesh.rotation.y = neutral ? 0.16 : 0;
+  visual.bodyMesh.userData.v10PresentationMode = neutral ? "COHERENT_NEUTRAL_SHELL" : "ARTICULATED_FACETS";
+}
+
 /**
- * V10.2 presentation polish. Each triangle receives one shared anatomical
- * influence vector, so the facet can bend with a joint without stretching one
- * of its vertices toward an unrelated bone. This closes most rigid-facet seams
- * while keeping torso/limb cross-weight explosions impossible.
+ * V10.2 presentation polish. Neutral frames use the coherent reconstructed
+ * shell exactly as authored, while combat frames switch to face-uniform
+ * anatomical skinning. This keeps the first-read silhouette clean without
+ * sacrificing visible articulation during attacks, guard, hit and knockdown.
  */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;
-  visual.root.userData.authoredNeutralStance = "V10.2_FACE_UNIFORM_BIND_SAFE";
+  visual.root.userData.authoredNeutralStance = "V10.2_COHERENT_NEUTRAL_SHELL";
 
   const previousBeforeRender = visual.bodyMesh.onBeforeRender;
   visual.bodyMesh.onBeforeRender = function onBeforeRender(...args): void {
     installFaceUniformSkinning(visual);
     installReferenceColorMaterial(visual);
+    selectPresentationSkin(visual);
     previousBeforeRender?.apply(this, args);
   };
 

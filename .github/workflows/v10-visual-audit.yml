@@ -1,4 +1,4 @@
-name: SERA V10 visual audit
+name: SERA V10 WebGL visual audit
 
 on:
   workflow_dispatch:
@@ -57,13 +57,16 @@ jobs:
           fi
           WEBDRIVER_BIN="$DRIVER" \
             AUDIT_URL="http://127.0.0.1:3000/" \
-            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-3-game.png" \
+            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-canvas-idle.png" \
             node scripts/capture-v10-visual-audit.mjs
-          test -s artifacts/visual-audit/sera-v10-3-game.png
+          for pose in idle guard punch kick; do
+            test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
+            file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
+          done
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "V10.3 bone-parented fragments + articulation underbody + rendered pixel gate" > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver after npm build and production preview." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: sera-v10-3-visual-audit
+          name: sera-v10-webgl-visual-audit
           path: artifacts/visual-audit
           if-no-files-found: error

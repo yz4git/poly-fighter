@@ -72,8 +72,42 @@ function siblingOutput(base, suffix) {
   return base.replace(/\.png$/i, `-${suffix}.png`);
 }
 
-async function capture(sessionId, path) {
-  const screenshot = await command(`/session/${sessionId}/screenshot`);
+function webdriverElementId(element) {
+  return element?.["element-6066-11e4-a52e-4f735466cecf"] ?? element?.ELEMENT ?? null;
+}
+
+async function inspectWebglCanvas(sessionId) {
+  const state = await execute(sessionId, `
+    const canvas = document.querySelector('.scene-host canvas');
+    if (!canvas) return { ok: false, reason: 'scene-host canvas not found' };
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    return {
+      ok: Boolean(gl),
+      width: canvas.width,
+      height: canvas.height,
+      clientWidth: canvas.clientWidth,
+      clientHeight: canvas.clientHeight,
+      context: gl ? gl.constructor?.name ?? 'WebGLRenderingContext' : null,
+    };
+  `);
+  if (!state?.ok || state.width < 2 || state.height < 2) {
+    throw new Error(`The production page did not expose a live WebGL canvas: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
+
+async function captureCanvas(sessionId, path) {
+  const element = await command(`/session/${sessionId}/element`, "POST", {
+    using: "css selector",
+    value: ".scene-host canvas",
+  });
+  const elementId = webdriverElementId(element);
+  if (!elementId) throw new Error(`ChromeDriver returned no canvas element id: ${JSON.stringify(element)}`);
+  const screenshot = await command(`/session/${sessionId}/element/${encodeURIComponent(elementId)}/screenshot`);
+  const bytes = Buffer.from(screenshot, "base64");
+  if (bytes.length < 128 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
+    throw new Error(`Canvas screenshot is not a non-empty PNG: ${path} (${bytes.length} bytes)`);
+  }
   await writeFile(path, Buffer.from(screenshot, "base64"));
 }
 
@@ -319,6 +353,7 @@ try {
   if (!state?.canvasCount || !state?.fighterHud || state?.titleVisible || state?.selectVisible) {
     throw new Error(`Match canvas/HUD was not ready: ${JSON.stringify(state)}`);
   }
+  const canvasState = await inspectWebglCanvas(sessionId);
 
   await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
   const poses = ["IDLE", "GUARD", "PUNCH", "KICK"];
@@ -329,7 +364,7 @@ try {
     poseStates[pose] = result;
     await delay(70);
     const path = pose === "IDLE" ? output : siblingOutput(output, pose.toLowerCase());
-    await capture(sessionId, path);
+    await captureCanvas(sessionId, path);
   }
 
   const poseSeparation = validatePoseSeparation(poseStates);
@@ -338,6 +373,7 @@ try {
     { ...value, signature: { ...value.signature, values: undefined } },
   ]));
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
+  await writeFile("artifacts/visual-audit/canvas-state.json", JSON.stringify(canvasState, null, 2));
   await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(compactStates, null, 2));
   await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
   console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));

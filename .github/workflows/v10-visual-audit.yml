@@ -2,6 +2,9 @@ name: SERA V10 WebGL visual audit
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main

@@ -138,6 +138,72 @@ function bucketKey(region: V10SkinRegion, boneIndex: number): string {
   return `${region}:${boneIndex}`;
 }
 
+function addUnderbodySegment(
+  parent: THREE.Bone,
+  child: THREE.Bone,
+  parentRadius: number,
+  childRadius: number,
+  material: THREE.Material,
+  meshes: THREE.Mesh[],
+): void {
+  const direction = child.position.clone();
+  const length = direction.length();
+  if (!Number.isFinite(length) || length < 1e-4) return;
+  const geometry = new THREE.CylinderGeometry(parentRadius, childRadius, length, 6, 1, false);
+  const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+  geometry.applyQuaternion(rotation);
+  geometry.translate(direction.x * 0.5, direction.y * 0.5, direction.z * 0.5);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `v10-3-underbody-${parent.name}-${child.name}`;
+  mesh.frustumCulled = false;
+  mesh.userData.v10Underbody = true;
+  parent.add(mesh);
+  meshes.push(mesh);
+}
+
+function addUnderbodyJoint(
+  bone: THREE.Bone,
+  radius: number,
+  material: THREE.Material,
+  meshes: THREE.Mesh[],
+): void {
+  const geometry = new THREE.SphereGeometry(radius, 6, 4);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `v10-3-underbody-joint-${bone.name}`;
+  mesh.frustumCulled = false;
+  mesh.userData.v10Underbody = true;
+  bone.add(mesh);
+  meshes.push(mesh);
+}
+
+function installArticulationUnderbody(visual: FighterVisual, meshes: THREE.Mesh[]): void {
+  const b = visual.rig.bones;
+  const material = new THREE.MeshBasicMaterial({ color: 0x090b13, toneMapped: false });
+
+  addUnderbodySegment(b.leftUpperArm, b.leftForearm, 0.030, 0.024, material, meshes);
+  addUnderbodySegment(b.rightUpperArm, b.rightForearm, 0.030, 0.024, material, meshes);
+  addUnderbodySegment(b.leftForearm, b.leftHand, 0.024, 0.020, material, meshes);
+  addUnderbodySegment(b.rightForearm, b.rightHand, 0.024, 0.020, material, meshes);
+  addUnderbodySegment(b.leftThigh, b.leftShin, 0.043, 0.034, material, meshes);
+  addUnderbodySegment(b.rightThigh, b.rightShin, 0.043, 0.034, material, meshes);
+  addUnderbodySegment(b.leftShin, b.leftFoot, 0.034, 0.026, material, meshes);
+  addUnderbodySegment(b.rightShin, b.rightFoot, 0.034, 0.026, material, meshes);
+
+  addUnderbodyJoint(b.leftUpperArm, 0.034, material, meshes);
+  addUnderbodyJoint(b.rightUpperArm, 0.034, material, meshes);
+  addUnderbodyJoint(b.leftForearm, 0.028, material, meshes);
+  addUnderbodyJoint(b.rightForearm, 0.028, material, meshes);
+  addUnderbodyJoint(b.leftHand, 0.023, material, meshes);
+  addUnderbodyJoint(b.rightHand, 0.023, material, meshes);
+  addUnderbodyJoint(b.leftThigh, 0.048, material, meshes);
+  addUnderbodyJoint(b.rightThigh, 0.048, material, meshes);
+  addUnderbodyJoint(b.leftShin, 0.038, material, meshes);
+  addUnderbodyJoint(b.rightShin, 0.038, material, meshes);
+  addUnderbodyJoint(b.leftFoot, 0.030, material, meshes);
+  addUnderbodyJoint(b.rightFoot, 0.030, material, meshes);
+}
+
 function installBoneParentedFragments(visual: FighterVisual): void {
   if (visual.root.userData.reconstructionAssetState !== "ready") return;
   if (FRAGMENTS.has(visual)) return;
@@ -207,10 +273,6 @@ function installBoneParentedFragments(visual: FighterVisual): void {
     const boneInverse = skeleton.boneInverses[bucket.boneIndex];
     if (!bone || !boneInverse || bucket.positions.length === 0) continue;
 
-    // Convert original mesh-bind coordinates into the owning bone's bind-local
-    // coordinates: boneInverse * meshBind * vertex. Parenting the resulting
-    // mesh to that bone then reproduces the neutral shell exactly and follows
-    // all runtime IK/animation without relying on ambiguous smooth weights.
     const toBoneLocal = boneInverse.clone().multiply(bindMatrix);
     const transformed = new Float32Array(bucket.positions.length);
     const point = new THREE.Vector3();
@@ -245,10 +307,11 @@ function installBoneParentedFragments(visual: FighterVisual): void {
     fragments.push(mesh);
   }
 
+  installArticulationUnderbody(visual, fragments);
   source.dispose();
   visual.bodyMesh.visible = false;
   visual.bodyMesh.userData.v10PresentationMode = "BONE_PARENTED_FRAGMENT_SOURCE_HIDDEN";
-  visual.root.userData.skinningPresentation = "V10.3_BONE_PARENTED_ANATOMICAL_FRAGMENTS";
+  visual.root.userData.skinningPresentation = "V10.3_BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY";
   visual.root.userData.colorPipeline = "V10.3_SHADED_REFERENCE_VERTEX_COLOR";
   visual.root.userData.v10FragmentCount = fragments.length;
   visual.root.userData.v10RegionCounts = regionCounts;
@@ -262,9 +325,9 @@ function installBoneParentedFragments(visual: FighterVisual): void {
 
 /**
  * V10.3 presentation repair. The GLB remains the single source geometry, but
- * its triangles are rendered as bind-correct bone children after load. This is
- * a deliberate intermediate topology strategy until offline reconstruction can
- * emit independently watertight anatomical parts.
+ * its triangles are rendered as bind-correct bone children after load. A thin
+ * faceted underbody sits behind the reference fragments so fast guard/punch/
+ * kick poses remain visually continuous instead of opening empty joint gaps.
  */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;

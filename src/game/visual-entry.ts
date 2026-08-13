@@ -1,5 +1,5 @@
 import type { FighterDefinition } from "./types";
-import { applyV9AuthoredStance } from "./visual-v9-stance";
+import { applyV10SafeStance } from "./visual-v10-stance";
 import { createFemaleV10Visual } from "./visual-v10";
 import {
   createFighterVisual as createLegacyFighterVisual,
@@ -15,7 +15,7 @@ import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visua
 
 /** Runtime visual selector. SERA uses the four-view reconstructed V10 GLB; KAIRO stays on the legacy model. */
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
-  if (definition.archetype === "SPEED") return applyV9AuthoredStance(createFemaleV10Visual(definition, quality));
+  if (definition.archetype === "SPEED") return applyV10SafeStance(createFemaleV10Visual(definition, quality));
   return createLegacyFighterVisual(definition, quality);
 }
 

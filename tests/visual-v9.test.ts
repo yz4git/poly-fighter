@@ -34,6 +34,7 @@ test("V10 is asset-driven and bone-parented fragments remain one persistent reco
   assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
   assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY/);
   assert.match(polish, /PIXEL_GATED_READY/);
+  assert.match(polish, /v10PresentationRelease = "V10\.3"/);
   assert.match(polish, /boneInverse\.clone\(\)\.multiply\(bindMatrix\)/);
   assert.match(polish, /bone\.add\(mesh\)/);
   assert.match(polish, /installArticulationUnderbody/);

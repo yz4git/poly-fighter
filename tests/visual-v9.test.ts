@@ -14,7 +14,7 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.1_SAFE");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.1_BIND_SAFE");
   disposeFighterVisual(visual);
 });
 

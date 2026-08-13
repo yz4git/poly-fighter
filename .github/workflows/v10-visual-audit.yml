@@ -41,15 +41,18 @@ jobs:
         run: |
           curl --fail --silent http://127.0.0.1:3000/models/sera-v10.glb -o /tmp/sera-v10.glb
           test -s /tmp/sera-v10.glb
-      - name: Capture actual match frame through Chrome DevTools Protocol
+      - name: Capture actual match frame with ChromeDriver
         run: |
           mkdir -p artifacts/visual-audit
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          if [ -z "$CHROME" ]; then
-            echo "No Chrome/Chromium executable found"
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          if [ -z "$DRIVER" ]; then
+            echo "ChromeDriver is not available"
             exit 1
           fi
-          CHROME_BIN="$CHROME" \
+          WEBDRIVER_BIN="$DRIVER" \
             AUDIT_URL="http://127.0.0.1:3000/" \
             AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-1-game.png" \
             node scripts/capture-v10-visual-audit.mjs

@@ -53,17 +53,19 @@ async function clickButton(sessionId, text) {
   `, [text]);
 }
 
-async function choosePlayerSera(sessionId) {
+async function chooseFighter(sessionId, name, playerLabel) {
   return execute(sessionId, `
+    const name = arguments[0];
+    const playerLabel = arguments[1];
     const candidates = [...document.querySelectorAll('button')];
     const button = candidates.find((entry) => {
       const text = entry.textContent ?? '';
-      return text.includes('SERA') && text.includes('PLAYER 1 / SPEED');
+      return text.includes(name) && text.includes(playerLabel);
     });
     if (!button) return { clicked: false, buttons: candidates.map((entry) => entry.textContent).slice(0, 30) };
     button.click();
     return { clicked: true, label: button.textContent };
-  `);
+  `, [name, playerLabel]);
 }
 
 async function buttonCenter(sessionId, text) {
@@ -158,8 +160,10 @@ try {
   if (!start?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(start)}`);
   await delay(350);
 
-  const selected = await choosePlayerSera(sessionId);
-  if (!selected?.clicked) throw new Error(`PLAYER 1 SERA was not found: ${JSON.stringify(selected)}`);
+  const selectedP1 = await chooseFighter(sessionId, "SERA", "PLAYER 1 / SPEED");
+  if (!selectedP1?.clicked) throw new Error(`PLAYER 1 SERA was not found: ${JSON.stringify(selectedP1)}`);
+  const selectedP2 = await chooseFighter(sessionId, "KAIRO", "PLAYER 2 / POWER");
+  if (!selectedP2?.clicked) throw new Error(`PLAYER 2 KAIRO was not found: ${JSON.stringify(selectedP2)}`);
   await delay(150);
 
   const enter = await clickButton(sessionId, "ENTER RING");
@@ -173,7 +177,6 @@ try {
       titleVisible: document.body.innerText.includes('START MATCH'),
       selectVisible: document.body.innerText.includes('ENTER RING'),
       fighterHud: document.body.innerText.includes('SERA') && document.body.innerText.includes('KAIRO'),
-      p1Sera: document.body.innerText.indexOf('SERA') < document.body.innerText.indexOf('KAIRO') || document.body.innerText.includes('SERA / KAIRO'),
       bodyText: document.body.innerText.slice(0, 1000),
     };
   `);
@@ -205,7 +208,7 @@ try {
   await capture(sessionId, siblingOutput(output, "kick"));
 
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  console.log(JSON.stringify({ output, state, selected, frames: ["idle", "guard", "punch", "kick"] }));
+  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, frames: ["idle", "guard", "punch", "kick"] }));
 } finally {
   if (sessionId) {
     await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

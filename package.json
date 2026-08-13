@@ -12,7 +12,8 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test:rules": "node --import tsx --test tests/fight-rules.test.ts tests/input-rules.test.ts tests/runtime-regression.test.ts tests/visual-v2.test.ts tests/visual-v4.test.ts tests/visual-v5.test.ts tests/reference-v6.test.ts tests/visual-v8.test.ts tests/visual-v9.test.ts",
     "test:pwa": "node --test tests/pwa-cache.test.mjs tests/startup-safety.test.mjs",
-    "test": "npm run build && npm run test:rules && npm run test:pwa && node --test tests/rendered-html.test.mjs",
+    "blender:prototype:ci": "bash scripts/run-blender-prototype-ci.sh",
+    "test": "npm run build && npm run test:rules && npm run test:pwa && node --test tests/rendered-html.test.mjs && npm run blender:prototype:ci",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"

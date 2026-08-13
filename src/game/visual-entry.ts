@@ -16,7 +16,8 @@ import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visua
 
 /**
  * Runtime visual selector. SERA uses the shared four-view V10 GLB plus the
- * V10.3 bind-correct anatomical fragment presentation; KAIRO stays legacy.
+ * V10.3 bind-correct anatomical fragment presentation. The selector does not
+ * alter combat rules, coordinate conventions, IK targets, or KAIRO.
  */
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
   if (definition.archetype === "SPEED") {

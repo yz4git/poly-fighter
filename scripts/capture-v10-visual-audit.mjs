@@ -69,7 +69,7 @@ async function chooseFighter(sessionId, name, playerLabel) {
 }
 
 function siblingOutput(base, suffix) {
-  return base.replace(/\.png$/i, `-${suffix}.png`);
+  return base.replace(/-idle\.png$/i, `-${suffix}.png`).replace(/\.png$/i, `-${suffix}.png`);
 }
 
 function webdriverElementId(element) {

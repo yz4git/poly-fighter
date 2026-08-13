@@ -1,38 +1,45 @@
 import type { FighterVisual } from "./visual";
 
 /**
- * Deforms SERA from the old straight mannequin bind into a readable fighting
- * stance. These are persistent bone translations, not per-frame camera hacks:
- * the same skinned character keeps them from every viewing angle, while V4 IK
- * can still rotate the same joints for attacks and guards.
+ * Persistent bind-space stance for SERA. The deployed V9 screenshot showed
+ * that technically separate limbs were still too close in the actual fight
+ * camera. V9.1 opens the silhouette more aggressively while preserving the
+ * same rig, segment lengths, IK solver, and view-independent 3D character.
  */
 export function applyV9AuthoredStance(visual: FighterVisual): FighterVisual {
   const bones = visual.rig.bones;
 
-  // Put the two shoulders on different depth planes. The fight camera no
-  // longer collapses both arms into the torso in a side-on view.
-  bones.leftShoulder.position.z = -0.018;
-  bones.rightShoulder.position.z = 0.026;
+  // Three-quarter upper-body construction: shoulders live on different depth
+  // planes and the spine advances slightly toward the opponent. These are bone
+  // translations, not camera-facing rotations or billboards.
+  bones.leftShoulder.position.z = -0.040;
+  bones.rightShoulder.position.z = 0.052;
+  bones.spineLower.position.z = -0.006;
+  bones.spineUpper.position.z = 0.010;
+  bones.chest.position.z = 0.018;
+  bones.neck.position.z = 0.012;
+  bones.head.position.z = 0.010;
 
-  // Bend the arms toward canonical +Z. Existing attack/guard IK can still
-  // solve these joints because no camera-specific transform is introduced.
-  bones.leftForearm.position.set(-0.020, -0.135, 0.092);
-  bones.rightForearm.position.set(0.020, -0.112, 0.126);
-  bones.leftHand.position.set(-0.008, -0.082, 0.112);
-  bones.rightHand.position.set(0.008, -0.060, 0.128);
+  // Asymmetric ready guard. One hand sits higher and closer to the face while
+  // the other remains lower/forward, matching the negative spaces in the
+  // original fighting reference instead of forming a vertical mannequin.
+  bones.leftForearm.position.set(-0.022, -0.126, 0.112);
+  bones.leftHand.position.set(-0.010, -0.066, 0.136);
+  bones.rightForearm.position.set(0.022, -0.086, 0.146);
+  bones.rightHand.position.set(0.010, -0.046, 0.104);
 
-  // Stagger at the hip only. Earlier V9 iterations also displaced shin/foot
-  // joints in depth; that lengthened the two-bone chains enough for one planted
-  // sole to become unreachable. Keeping the lower-leg chains vertical retains
-  // a >20 cm screen-axis stagger while preserving the proven foot-plant solve.
-  bones.leftThigh.position.z = -0.045;
-  bones.rightThigh.position.z = 0.050;
+  // Increase fore/aft leg stagger. The lower-leg chains remain purely vertical
+  // so analytical IK and the proven sole-ground offset stay unchanged.
+  bones.leftThigh.position.z = -0.102;
+  bones.rightThigh.position.z = 0.112;
   bones.leftShin.position.set(0, -0.282, 0);
   bones.rightShin.position.set(0, -0.282, 0);
   bones.leftFoot.position.set(0, -0.258, 0);
   bones.rightFoot.position.set(0, -0.258, 0);
 
-  visual.root.userData.authoredNeutralStance = "V9";
+  visual.footContacts.left.homeLocal.z = -0.102;
+  visual.footContacts.right.homeLocal.z = 0.112;
+  visual.root.userData.authoredNeutralStance = "V9.1";
   visual.root.updateMatrixWorld(true);
   return visual;
 }

@@ -8,7 +8,7 @@ import bpy
 from sera_blender_helpers import clean_scene, material, render_views, save_version, setup_scene
 from sera_conformal_body import apply as apply_body
 from sera_identity_parts import apply as apply_identity
-from sera_neutral_pose import apply as apply_neutral_pose
+from sera_identity_tuning import apply as tune_identity
 
 
 def parse_args():
@@ -61,20 +61,20 @@ def main():
 
     mats = apply_body(body)
     style_face(objects)
-    apply_neutral_pose(armature)
     apply_identity(armature, mats)
+    tune_identity()
 
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(output, 'sera-blender-prototype.blend'))
     bpy.ops.export_scene.gltf(filepath=os.path.join(output, 'sera-blender-prototype.glb'), export_format='GLB', export_apply=False, export_yup=True, export_cameras=False, export_lights=False)
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
-    metrics = {'prototype':'SERA_QUATERNIUS_CONFORMAL_NEUTRAL_V6','source':'Quaternius Superhero Female FullBody','sourceLicense':'CC0 1.0 Universal','heightMeters':1.68,'bodyVertices':len(body.data.vertices),'bodyTriangles':triangles,'armature':armature.name,'runtimeSwitched':False,'design':'coherent rigged body, conformal palette, lowered-arm turnaround pose'}
+    metrics = {'prototype':'SERA_QUATERNIUS_CONFORMAL_V7','source':'Quaternius Superhero Female FullBody','sourceLicense':'CC0 1.0 Universal','heightMeters':1.68,'bodyVertices':len(body.data.vertices),'bodyTriangles':triangles,'armature':armature.name,'runtimeSwitched':False,'design':'coherent rigged body, conformal palette, tuned hair and skirt silhouette'}
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. Turnaround uses a lowered-arm neutral pose; costume color follows the skinned surface. Runtime unchanged.\n')
-    print('SERA_CONFORMAL_NEUTRAL_OK', len(body.data.vertices), triangles)
+        handle.write('Free female base remains coherent and rigged. Bind-pose turnaround is used while body, hair and costume silhouette are refined. Runtime unchanged.\n')
+    print('SERA_CONFORMAL_V7_OK', len(body.data.vertices), triangles)
 
 
 if __name__ == '__main__':

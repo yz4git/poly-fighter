@@ -1,0 +1,56 @@
+name: SERA V10 reconstruction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chatgpt/visual-v10-offline-reconstruction
+    paths:
+      - public/reference/female-turnaround.jpeg
+      - tools/reconstruct-sera-v10.py
+      - .github/workflows/sera-v10-reconstruct.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install reconstruction dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pillow opencv-python-headless scipy scikit-image trimesh fast-simplification
+      - name: Reconstruct one shared 3D volume
+        run: |
+          python tools/reconstruct-sera-v10.py \
+            --input public/reference/female-turnaround.jpeg \
+            --output public/models/sera-v10.glb \
+            --metrics public/models/sera-v10.metrics.json \
+            --debug artifacts/sera-v10
+      - name: Upload reconstruction diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: sera-v10-reconstruction
+          path: |
+            public/models/sera-v10.glb
+            public/models/sera-v10.metrics.json
+            artifacts/sera-v10
+      - name: Commit generated asset to the reconstruction branch
+        run: |
+          if git diff --quiet -- public/models/sera-v10.glb public/models/sera-v10.metrics.json; then
+            echo 'Generated asset is unchanged.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/models/sera-v10.glb public/models/sera-v10.metrics.json
+          git commit -m 'Generate SERA V10 turnaround reconstruction [skip ci]'
+          git push origin HEAD:chatgpt/visual-v10-offline-reconstruction

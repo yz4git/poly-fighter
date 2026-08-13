@@ -49,7 +49,7 @@ jobs:
           assert m['mesh']['vertices'] > 500
           assert m['mesh']['triangles'] > 500
           for name in ('front', 'three-quarter', 'side', 'back'):
-              assert float(m['views'][name]['iou']) > 0.45, (name, m['views'][name]['iou'])
+              assert float(m['views'][name]['iou']) > 0.80, (name, m['views'][name]['iou'])
           print('validated', p.stat().st_size, 'bytes')
           PY
       - name: Upload reconstruction diagnostics
@@ -62,12 +62,12 @@ jobs:
             artifacts/sera-v10
       - name: Commit generated asset to the reconstruction branch
         run: |
-          if git diff --quiet -- public/models/sera-v10.glb public/models/sera-v10.metrics.json; then
-            echo 'Generated asset is unchanged.'
-            exit 0
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/models/sera-v10.glb public/models/sera-v10.metrics.json
+          if git diff --cached --quiet; then
+            echo 'Generated asset is unchanged.'
+            exit 0
+          fi
           git commit -m 'Generate SERA V10 turnaround reconstruction [skip ci]'
           git push origin HEAD:chatgpt/visual-v10-offline-reconstruction

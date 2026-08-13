@@ -22,15 +22,15 @@ export function applyV9AuthoredStance(visual: FighterVisual): FighterVisual {
   bones.leftHand.position.set(-0.008, -0.082, 0.112);
   bones.rightHand.position.set(0.008, -0.060, 0.128);
 
-  // Stagger the legs fore/aft and introduce a shallow knee bend.  Positive Z
-  // is always "toward opponent" before fighterRootQuaternion maps the model to
-  // either side of the arena, so this mirrors correctly for P1 and P2.
+  // Stagger the legs fore/aft and introduce a shallow knee bend.  The summed
+  // vertical offsets deliberately leave both authored sole points at
+  // layout.ankleY - 0.058, so visualGroundOffset still lands both boots on Y=0.
   bones.leftThigh.position.z = -0.045;
   bones.rightThigh.position.z = 0.050;
   bones.leftShin.position.set(0, -0.268, -0.040);
   bones.rightShin.position.set(0, -0.258, 0.052);
-  bones.leftFoot.position.set(0, -0.242, -0.034);
-  bones.rightFoot.position.set(0, -0.242, 0.040);
+  bones.leftFoot.position.set(0, -0.272, -0.034);
+  bones.rightFoot.position.set(0, -0.282, 0.040);
 
   visual.root.userData.authoredNeutralStance = "V9";
   visual.root.updateMatrixWorld(true);

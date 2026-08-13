@@ -8,8 +8,9 @@ test("PWA manifest and cache version exist", async () => {
   assert.equal(manifest.name, "POLY FIGHTER");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "landscape");
-  assert.match(serviceWorker, /poly-fighter-v12/);
+  assert.match(serviceWorker, /poly-fighter-v13/);
   assert.match(serviceWorker, /models\/sera-v10\.glb/);
+  assert.match(serviceWorker, /models\/sera-v10\.metrics\.json/);
   assert.match(serviceWorker, /skipWaiting/);
   assert.match(serviceWorker, /clients\.claim/);
 });

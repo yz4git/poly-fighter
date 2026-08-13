@@ -72,7 +72,7 @@ test("V10 idle scaffold preserves grounded fighting-stance separation before/aft
   const leftSole = getSoleContactPoint(player.visual, "left");
   const rightSole = getSoleContactPoint(player.visual, "right");
   assert.ok(Math.abs(leftSole.y) < 0.08 && Math.abs(rightSole.y) < 0.08);
-  assert.ok(Math.abs(leftSole.x - rightSole.x) > 0.20);
+  assert.ok(leftSole.distanceTo(rightSole) > 0.20);
 
   const leftFist = getVisualContactPoint(player.visual, "LEFT_FIST");
   const rightFist = getVisualContactPoint(player.visual, "RIGHT_FIST");

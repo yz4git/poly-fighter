@@ -8,17 +8,15 @@ if [[ "$branch" != "chatgpt/blender-sera-prototype" ]]; then
 fi
 
 sudo apt-get update -qq
-sudo apt-get install -y blender python3-numpy
+sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
 blender --version | head -n 2
 
-# Ubuntu's Blender package uses its bundled Python search path while the glTF
-# exporter depends on NumPy. Let Blender see the distro Python packages.
 export PYTHONPATH="/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
 blender --background --python-use-system-env --python-expr "import numpy; print('BLENDER_NUMPY', numpy.__version__)"
 
 out="artifacts/visual-audit/blender-sera"
 mkdir -p "$out"
-blender --background \
+xvfb-run -a blender --background \
   --python-use-system-env \
   --python-exit-code 1 \
   --python tools/blender/build-sera-prototype.py \

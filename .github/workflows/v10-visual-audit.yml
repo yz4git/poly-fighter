@@ -61,6 +61,7 @@ jobs:
             node scripts/capture-v10-visual-audit.mjs
           test -s artifacts/visual-audit/sera-v10-3-game.png
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
+          printf '%s\n' "V10.3 bone-parented fragments + articulation underbody + rendered pixel gate" > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-3-visual-audit

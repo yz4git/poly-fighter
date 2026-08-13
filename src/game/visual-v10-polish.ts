@@ -169,10 +169,6 @@ function installArticulationUnderbody(visual: FighterVisual, meshes: THREE.Mesh[
   const b = visual.rig.bones;
   const material = new THREE.MeshBasicMaterial({ color: 0x0b0c15, toneMapped: false });
 
-  // Shoulder and hip roots are covered as well as elbow/knee chains. The
-  // reference fragments stay dominant because this underbody is deliberately
-  // smaller than the reconstructed surface, but fast poses no longer expose
-  // empty space between torso and limb fragments.
   addUnderbodySegment(b.chest, b.leftShoulder, 0.038, 0.038, material, meshes);
   addUnderbodySegment(b.chest, b.rightShoulder, 0.038, 0.038, material, meshes);
   addUnderbodySegment(b.leftShoulder, b.leftUpperArm, 0.040, 0.038, material, meshes);
@@ -316,6 +312,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
   visual.root.userData.colorPipeline = "V10.3_ANATOMY_AWARE_REFERENCE_COLORS";
   visual.root.userData.v10FragmentCount = fragments.length;
   visual.root.userData.v10RegionCounts = regionCounts;
+  visual.root.userData.v10ArticulationAudit = "PIXEL_GATED_READY";
   visual.stats.meshCount = fragments.length;
   visual.stats.materialCount = fragments.length;
   visual.stats.vertexCount = position.count;

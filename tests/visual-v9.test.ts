@@ -14,12 +14,13 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.1_BIND_SAFE");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.2_COHERENT_NEUTRAL_SHELL");
   disposeFighterVisual(visual);
 });
 
 test("V10 is asset-driven and cannot regress to per-view rectangles or procedural body primitives", () => {
   const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
+  const polish = readFileSync(new URL("../src/game/visual-v10-polish.ts", import.meta.url), "utf8");
   assert.match(source, /GLTFLoader/);
   assert.match(source, /models\/sera-v10\.glb/);
   assert.equal(source.includes("GOLDEN_MASTER_V7_RECTS"), false);
@@ -27,6 +28,10 @@ test("V10 is asset-driven and cannot regress to per-view rectangles or procedura
   assert.equal(source.includes("builder.loft"), false);
   assert.equal(source.includes("builder.prism"), false);
   assert.equal(source.includes("builder.tube"), false);
+  assert.equal(polish.includes("THREE.Sprite"), false);
+  assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
+  assert.match(polish, /FACE_UNIFORM_REGIONS/);
+  assert.match(polish, /COHERENT_NEUTRAL_SHELL/);
 });
 
 test("V10 repository contains one generated GLB from one shared four-view volume", () => {

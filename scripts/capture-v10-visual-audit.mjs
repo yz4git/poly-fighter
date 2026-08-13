@@ -117,6 +117,34 @@ async function setRuntimePose(sessionId, pose) {
       };
     }
 
+    function visualSignature(renderer, camera, visual) {
+      const canvas = renderer.domElement;
+      const width = canvas.width;
+      const height = canvas.height;
+      const root = visual.root.position.clone();
+      visual.root.getWorldPosition(root);
+      root.project(camera);
+      const rootX = (root.x * 0.5 + 0.5) * width;
+      const rootY = (-root.y * 0.5 + 0.5) * height;
+      const cropWidth = Math.min(240, width);
+      const cropHeight = Math.min(360, height);
+      const cropX = Math.max(0, Math.min(width - cropWidth, rootX - cropWidth * 0.5));
+      const cropY = Math.max(0, Math.min(height - cropHeight, rootY - cropHeight * 0.90));
+      const sample = document.createElement('canvas');
+      sample.width = 48;
+      sample.height = 72;
+      const context = sample.getContext('2d', { willReadFrequently: true });
+      if (!context) return { crop: [cropX, cropY, cropWidth, cropHeight], values: [] };
+      context.imageSmoothingEnabled = false;
+      context.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, sample.width, sample.height);
+      const rgba = context.getImageData(0, 0, sample.width, sample.height).data;
+      const values = [];
+      for (let index = 0; index < rgba.length; index += 4) {
+        values.push(Math.round(rgba[index] * 0.299 + rgba[index + 1] * 0.587 + rgba[index + 2] * 0.114));
+      }
+      return { crop: [cropX, cropY, cropWidth, cropHeight], width: sample.width, height: sample.height, values };
+    }
+
     const game = findGame();
     if (!game) return { ok: false, reason: 'PolyFightGame ref not found' };
     game.pause();
@@ -151,9 +179,8 @@ async function setRuntimePose(sessionId, pose) {
     game.animation.update(fighter, opponent, time);
     game.animation.update(opponent, fighter, time + 0.22);
 
-    // Attack aura is intentionally hidden in the audit. It previously covered
-    // SERA with a large translucent volume and made genuinely different rig
-    // poses look identical in screenshots.
+    // Attack aura is intentionally hidden in the audit so pose comparison is
+    // based on the actual reconstructed fighter surface.
     visual.aura.visible = false;
     opponent.visual.aura.visible = false;
 
@@ -187,14 +214,32 @@ async function setRuntimePose(sessionId, pose) {
       presentationMode: visual.bodyMesh.userData.v10PresentationMode ?? null,
       skinningPresentation: visual.root.userData.skinningPresentation ?? null,
       colorPipeline: visual.root.userData.colorPipeline ?? null,
+      fragmentCount: visual.root.userData.v10FragmentCount ?? null,
+      regionCounts: visual.root.userData.v10RegionCounts ?? null,
       contacts,
       screens,
+      signature: visualSignature(game.renderer, game.camera, visual),
     };
   `, [pose]);
 }
 
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
+}
+
+function signatureDifference(a, b) {
+  const first = a?.values ?? [];
+  const second = b?.values ?? [];
+  const count = Math.min(first.length, second.length);
+  if (!count) return { meanAbs: 0, changedFraction: 0, samples: 0 };
+  let total = 0;
+  let changed = 0;
+  for (let index = 0; index < count; index += 1) {
+    const delta = Math.abs(first[index] - second[index]);
+    total += delta;
+    if (delta >= 18) changed += 1;
+  }
+  return { meanAbs: total / count, changedFraction: changed / count, samples: count };
 }
 
 function validatePoseSeparation(poseStates) {
@@ -209,10 +254,18 @@ function validatePoseSeparation(poseStates) {
     guardFistScreen: Math.max(distance(idle.screens.leftFist, guard.screens.leftFist), distance(idle.screens.rightFist, guard.screens.rightFist)),
     punchFistScreen: distance(idle.screens.rightFist, punch.screens.rightFist),
     kickFootScreen: distance(idle.screens.rightFoot, kick.screens.rightFoot),
+    guardPixels: signatureDifference(idle.signature, guard.signature),
+    punchPixels: signatureDifference(idle.signature, punch.signature),
+    kickPixels: signatureDifference(idle.signature, kick.signature),
   };
   if (metrics.guardFistWorld < 0.18) throw new Error(`GUARD pose is not materially distinct: ${JSON.stringify(metrics)}`);
   if (metrics.punchFistWorld < 0.45) throw new Error(`PUNCH pose is not materially distinct: ${JSON.stringify(metrics)}`);
   if (metrics.kickFootWorld < 0.45) throw new Error(`KICK pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  for (const [label, pixel] of [["GUARD", metrics.guardPixels], ["PUNCH", metrics.punchPixels], ["KICK", metrics.kickPixels]]) {
+    if (pixel.meanAbs < 2.5 || pixel.changedFraction < 0.035) {
+      throw new Error(`${label} rendered pixels are too similar to IDLE: ${JSON.stringify(metrics)}`);
+    }
+  }
   return metrics;
 }
 
@@ -280,10 +333,14 @@ try {
   }
 
   const poseSeparation = validatePoseSeparation(poseStates);
+  const compactStates = Object.fromEntries(Object.entries(poseStates).map(([pose, value]) => [
+    pose,
+    { ...value, signature: { ...value.signature, values: undefined } },
+  ]));
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(poseStates, null, 2));
+  await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(compactStates, null, 2));
   await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
-  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates, poseSeparation }));
+  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");

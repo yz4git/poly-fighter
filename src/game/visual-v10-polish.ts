@@ -244,20 +244,20 @@ function installReferenceColorMaterial(visual: FighterVisual): void {
 
 function neutralUpperBody(visual: FighterVisual): boolean {
   const bones = visual.rig.bones;
-  const rotations = [
-    bones.spineLower.rotation,
-    bones.spineUpper.rotation,
-    bones.chest.rotation,
-    bones.leftUpperArm.rotation,
-    bones.rightUpperArm.rotation,
-    bones.leftForearm.rotation,
-    bones.rightForearm.rotation,
+  const quaternions = [
+    bones.spineLower.quaternion,
+    bones.spineUpper.quaternion,
+    bones.chest.quaternion,
+    bones.leftUpperArm.quaternion,
+    bones.rightUpperArm.quaternion,
+    bones.leftForearm.quaternion,
+    bones.rightForearm.quaternion,
   ];
-  return rotations.every((rotation) =>
-    Math.abs(rotation.x) < 0.075
-    && Math.abs(rotation.y) < 0.075
-    && Math.abs(rotation.z) < 0.075,
-  );
+  return quaternions.every((quaternion) => {
+    const w = THREE.MathUtils.clamp(Math.abs(quaternion.w), 0, 1);
+    const angle = 2 * Math.acos(w);
+    return angle < 0.035;
+  });
 }
 
 function selectPresentationSkin(visual: FighterVisual): void {

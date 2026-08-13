@@ -92,7 +92,9 @@ async function setRuntimePose(sessionId, pose) {
         while (hook) {
           const value = hook.memoizedState;
           const current = value && typeof value === 'object' && 'current' in value ? value.current : null;
-          if (current && current.constructor?.name === 'PolyFightGame' && current.p1 && current.animation && current.renderer) return current;
+          // Production bundles minify class names, so identify the ref by its
+          // stable public runtime surface instead of constructor.name.
+          if (current && current.p1 && current.p2 && current.animation && current.renderer && current.scene && current.camera) return current;
           hook = hook.next;
         }
         fiber = fiber.return;

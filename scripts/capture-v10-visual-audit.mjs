@@ -39,30 +39,41 @@ async function command(path, method = "GET", body) {
   return payload.value;
 }
 
+async function execute(sessionId, script, args = []) {
+  return command(`/session/${sessionId}/execute/sync`, "POST", { script, args });
+}
+
 async function clickButton(sessionId, text) {
-  return command(`/session/${sessionId}/execute/sync`, "POST", {
-    script: `
-      const wanted = arguments[0];
-      const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes(wanted));
-      if (!button) return { clicked: false, text: document.body.innerText.slice(0, 800) };
-      button.click();
-      return { clicked: true, label: button.textContent };
-    `,
-    args: [text],
-  });
+  return execute(sessionId, `
+    const wanted = arguments[0];
+    const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes(wanted));
+    if (!button) return { clicked: false, text: document.body.innerText.slice(0, 1000) };
+    button.click();
+    return { clicked: true, label: button.textContent };
+  `, [text]);
+}
+
+async function choosePlayerSera(sessionId) {
+  return execute(sessionId, `
+    const candidates = [...document.querySelectorAll('button')];
+    const button = candidates.find((entry) => {
+      const text = entry.textContent ?? '';
+      return text.includes('SERA') && text.includes('PLAYER 1 / SPEED');
+    });
+    if (!button) return { clicked: false, buttons: candidates.map((entry) => entry.textContent).slice(0, 30) };
+    button.click();
+    return { clicked: true, label: button.textContent };
+  `);
 }
 
 async function buttonCenter(sessionId, text) {
-  return command(`/session/${sessionId}/execute/sync`, "POST", {
-    script: `
-      const wanted = arguments[0];
-      const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === wanted);
-      if (!button) return null;
-      const rect = button.getBoundingClientRect();
-      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
-    `,
-    args: [text],
-  });
+  return execute(sessionId, `
+    const wanted = arguments[0];
+    const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === wanted);
+    if (!button) return null;
+    const rect = button.getBoundingClientRect();
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+  `, [text]);
 }
 
 async function pointerAction(sessionId, point, holdMs = 0) {
@@ -145,25 +156,27 @@ try {
 
   const start = await clickButton(sessionId, "START MATCH");
   if (!start?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(start)}`);
-  await delay(450);
+  await delay(350);
+
+  const selected = await choosePlayerSera(sessionId);
+  if (!selected?.clicked) throw new Error(`PLAYER 1 SERA was not found: ${JSON.stringify(selected)}`);
+  await delay(150);
 
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
 
   // Wait for match construction, WebGL startup and the async V10 GLB swap.
   await delay(1800);
-  const state = await command(`/session/${sessionId}/execute/sync`, "POST", {
-    script: `
-      return {
-        canvasCount: document.querySelectorAll('canvas').length,
-        titleVisible: document.body.innerText.includes('START MATCH'),
-        selectVisible: document.body.innerText.includes('ENTER RING'),
-        fighterHud: document.body.innerText.includes('SERA') && document.body.innerText.includes('KAIRO'),
-        bodyText: document.body.innerText.slice(0, 800),
-      };
-    `,
-    args: [],
-  });
+  const state = await execute(sessionId, `
+    return {
+      canvasCount: document.querySelectorAll('canvas').length,
+      titleVisible: document.body.innerText.includes('START MATCH'),
+      selectVisible: document.body.innerText.includes('ENTER RING'),
+      fighterHud: document.body.innerText.includes('SERA') && document.body.innerText.includes('KAIRO'),
+      p1Sera: document.body.innerText.indexOf('SERA') < document.body.innerText.indexOf('KAIRO') || document.body.innerText.includes('SERA / KAIRO'),
+      bodyText: document.body.innerText.slice(0, 1000),
+    };
+  `);
   if (!state?.canvasCount || !state?.fighterHud || state?.titleVisible || state?.selectVisible) {
     throw new Error(`Match canvas/HUD was not ready: ${JSON.stringify(state)}`);
   }
@@ -177,22 +190,22 @@ try {
   if (!guard || !punch || !kick) throw new Error(`Combat buttons were not found: ${JSON.stringify({ guard, punch, kick })}`);
 
   await pointerDown(sessionId, guard);
-  await delay(180);
+  await delay(230);
   await capture(sessionId, siblingOutput(output, "guard"));
   await pointerUp(sessionId);
-  await delay(120);
+  await delay(180);
 
-  await pointerAction(sessionId, punch, 55);
-  await delay(95);
+  await pointerAction(sessionId, punch, 70);
+  await delay(50);
   await capture(sessionId, siblingOutput(output, "punch"));
-  await delay(300);
+  await delay(330);
 
-  await pointerAction(sessionId, kick, 55);
-  await delay(135);
+  await pointerAction(sessionId, kick, 70);
+  await delay(80);
   await capture(sessionId, siblingOutput(output, "kick"));
 
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  console.log(JSON.stringify({ output, state, frames: ["idle", "guard", "punch", "kick"] }));
+  console.log(JSON.stringify({ output, state, selected, frames: ["idle", "guard", "punch", "kick"] }));
 } finally {
   if (sessionId) {
     await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

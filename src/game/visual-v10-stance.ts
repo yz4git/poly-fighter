@@ -44,17 +44,14 @@ function classifyReferencePose(visual: FighterVisual): ReferencePose {
   const rightFist = endpointInRoot(visual, visual.rightArm.end);
   const leftFoot = endpointInRoot(visual, visual.leftLeg.end);
   const rightFoot = endpointInRoot(visual, visual.rightLeg.end);
-
   if (Math.max(leftFoot.y, rightFoot.y) > 0.29) return "KICK";
   if (Math.max(leftFist.z, rightFist.z) > 0.255) return "PUNCH";
   if (leftFist.y > 0.72 && rightFist.y > 0.72) return "GUARD";
 
   const b = visual.rig.bones;
   const locomotionLike = Math.max(
-    Math.abs(b.leftUpperArm.rotation.z),
-    Math.abs(b.rightUpperArm.rotation.z),
-    Math.abs(b.leftThigh.rotation.z),
-    Math.abs(b.rightThigh.rotation.z),
+    Math.abs(b.leftUpperArm.rotation.z), Math.abs(b.rightUpperArm.rotation.z),
+    Math.abs(b.leftThigh.rotation.z), Math.abs(b.rightThigh.rotation.z),
   ) > 0.145;
   const passiveLike = Math.abs(b.spineUpper.rotation.z) > 0.14 || Math.abs(b.head.rotation.z) > 0.145;
   const crouchLike = Math.abs(b.spineLower.rotation.x) + Math.abs(b.spineUpper.rotation.x) > 0.17;
@@ -124,6 +121,96 @@ function applyReferencePresentationPose(visual: FighterVisual): void {
   visual.root.updateMatrixWorld(true);
 }
 
+function addArmorBox(
+  bone: THREE.Bone,
+  name: string,
+  size: THREE.Vector3,
+  position: THREE.Vector3,
+  material: THREE.Material,
+  rotation = new THREE.Euler(),
+): void {
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.copy(position);
+  mesh.rotation.copy(rotation);
+  mesh.frustumCulled = false;
+  mesh.userData.v10ReferenceCostume = true;
+  bone.add(mesh);
+}
+
+function addBonePlate(
+  parent: THREE.Bone,
+  child: THREE.Bone,
+  name: string,
+  width: number,
+  coverage: number,
+  depth: number,
+  offsetZ: number,
+  material: THREE.Material,
+): void {
+  const direction = child.position.clone();
+  const length = direction.length();
+  if (length < 1e-4) return;
+  const geometry = new THREE.BoxGeometry(width, length * coverage, depth);
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, -1, 0), direction.clone().normalize(),
+  ));
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.copy(direction).multiplyScalar(0.45);
+  mesh.position.z += offsetZ;
+  mesh.frustumCulled = false;
+  mesh.userData.v10ReferenceCostume = true;
+  parent.add(mesh);
+}
+
+function installReferenceCostume(visual: FighterVisual): void {
+  if (visual.root.userData.v10ReferenceCostume) return;
+  const blue = new THREE.MeshBasicMaterial({ color: 0x3168db, toneMapped: false });
+  const blueDark = new THREE.MeshBasicMaterial({ color: 0x173b91, toneMapped: false });
+  const silver = new THREE.MeshBasicMaterial({ color: 0xb7c4d7, toneMapped: false });
+  const black = new THREE.MeshBasicMaterial({ color: 0x0b0c13, toneMapped: false });
+  const b = visual.rig.bones;
+
+  // Cropped vest and split high collar: broad blue masses readable at fight-camera scale.
+  addArmorBox(b.chest, "v10-4-vest-left", new THREE.Vector3(0.078, 0.135, 0.052),
+    new THREE.Vector3(-0.052, -0.030, 0.058), blue, new THREE.Euler(0, -0.12, -0.06));
+  addArmorBox(b.chest, "v10-4-vest-right", new THREE.Vector3(0.078, 0.135, 0.052),
+    new THREE.Vector3(0.052, -0.030, 0.058), blue, new THREE.Euler(0, 0.12, 0.06));
+  addArmorBox(b.chest, "v10-4-collar-left", new THREE.Vector3(0.045, 0.082, 0.044),
+    new THREE.Vector3(-0.046, 0.070, 0.025), blueDark, new THREE.Euler(0, -0.12, -0.28));
+  addArmorBox(b.chest, "v10-4-collar-right", new THREE.Vector3(0.045, 0.082, 0.044),
+    new THREE.Vector3(0.046, 0.070, 0.025), blueDark, new THREE.Euler(0, 0.12, 0.28));
+
+  // Exposed-midriff break plus asymmetric waist panels.
+  addArmorBox(b.hips, "v10-4-waist-band", new THREE.Vector3(0.205, 0.034, 0.105),
+    new THREE.Vector3(0, 0.045, 0.010), black);
+  addArmorBox(b.hips, "v10-4-skirt-front", new THREE.Vector3(0.135, 0.205, 0.038),
+    new THREE.Vector3(0, -0.080, 0.088), blue, new THREE.Euler(-0.08, 0, 0));
+  addArmorBox(b.hips, "v10-4-skirt-left", new THREE.Vector3(0.078, 0.180, 0.034),
+    new THREE.Vector3(-0.092, -0.070, 0.018), blueDark, new THREE.Euler(0, -0.30, -0.10));
+  addArmorBox(b.hips, "v10-4-skirt-right", new THREE.Vector3(0.078, 0.180, 0.034),
+    new THREE.Vector3(0.092, -0.070, 0.018), blueDark, new THREE.Euler(0, 0.30, 0.10));
+
+  // Silver bracers and blue lower-leg armor from the combat sheets.
+  addBonePlate(b.leftForearm, b.leftHand, "v10-4-left-bracer", 0.072, 0.62, 0.040, 0.028, silver);
+  addBonePlate(b.rightForearm, b.rightHand, "v10-4-right-bracer", 0.072, 0.62, 0.040, 0.028, silver);
+  for (const [side, shin, foot] of [["left", b.leftShin, b.leftFoot], ["right", b.rightShin, b.rightFoot]] as const) {
+    addBonePlate(shin, foot, `v10-4-${side}-shin-plate`, 0.070, 0.72, 0.036, 0.030, blue);
+    const knee = new THREE.Mesh(new THREE.OctahedronGeometry(0.047, 0), blueDark);
+    knee.name = `v10-4-${side}-knee-cap`;
+    knee.position.set(0, 0.004, 0.032);
+    knee.rotation.set(0.12, 0, Math.PI / 4);
+    knee.frustumCulled = false;
+    knee.userData.v10ReferenceCostume = true;
+    shin.add(knee);
+    addArmorBox(foot, `v10-4-${side}-toe-cap`, new THREE.Vector3(0.074, 0.040, 0.120),
+      new THREE.Vector3(0, -0.012, 0.080), blue, new THREE.Euler(-0.08, 0, 0));
+  }
+  visual.root.userData.v10ReferenceCostume = "V10.4_BLUE_BLACK_SILVER_READABLE_MASSES";
+}
+
 function installReferencePoseAnchor(visual: FighterVisual): void {
   if (visual.root.getObjectByName("v10-4-reference-pose-anchor")) return;
   const geometry = new THREE.BufferGeometry();
@@ -138,15 +225,12 @@ function installReferencePoseAnchor(visual: FighterVisual): void {
   visual.root.add(anchor);
 }
 
-/**
- * V10.4 leaves every leg/foot result from the deterministic animation intact.
- * It only shapes torso and arm presentation toward the supplied references,
- * avoiding the second foot-IK pass that folded the V10.4 prototype stance.
- */
+/** V10.4 reference styling without re-solving planted legs. */
 export function applyV10SafeStance(visual: FighterVisual): FighterVisual {
   visual.root.userData.bindSafeStance = "V10.4_EXACT_BIND_TRANSLATIONS";
   visual.root.userData.v10CombatPoseReference = "IDLE_GUARD_PUNCH_KICK_SIGNATURE_A_B";
   visual.root.userData.v10ReferencePoseController = "RIG_ENDPOINT_UPPER_BODY_ONLY";
+  installReferenceCostume(visual);
   installReferencePoseAnchor(visual);
   visual.root.updateMatrixWorld(true);
   return visual;

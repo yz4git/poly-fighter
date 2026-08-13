@@ -10,6 +10,7 @@ on:
       - src/game/visual-v10-stance.ts
       - src/game/visual-entry.ts
       - public/models/sera-v10.glb
+      - scripts/capture-v10-visual-audit.mjs
       - .github/workflows/v10-visual-audit.yml
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
         run: |
           curl --fail --silent http://127.0.0.1:3000/models/sera-v10.glb -o /tmp/sera-v10.glb
           test -s /tmp/sera-v10.glb
-      - name: Capture deterministic game frame
+      - name: Capture actual match frame through Chrome DevTools Protocol
         run: |
           mkdir -p artifacts/visual-audit
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
@@ -48,18 +49,10 @@ jobs:
             echo "No Chrome/Chromium executable found"
             exit 1
           fi
-          "$CHROME" \
-            --headless=new \
-            --no-sandbox \
-            --disable-dev-shm-usage \
-            --ignore-gpu-blocklist \
-            --enable-webgl \
-            --use-angle=swiftshader \
-            --window-size=1536,706 \
-            --hide-scrollbars \
-            --virtual-time-budget=1600 \
-            --screenshot=artifacts/visual-audit/sera-v10-1-game.png \
-            http://127.0.0.1:3000/
+          CHROME_BIN="$CHROME" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-1-game.png" \
+            node scripts/capture-v10-visual-audit.mjs
           test -s artifacts/visual-audit/sera-v10-1-game.png
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
       - uses: actions/upload-artifact@v4

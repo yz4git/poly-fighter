@@ -15,8 +15,7 @@ function classifyPose(visual: FighterVisual): V11Pose {
 }
 function solveArm(visual: FighterVisual, side: -1 | 1, targetLocal: THREE.Vector3, poleLocal: THREE.Vector3): void {
   const prefix = side < 0 ? "left" : "right"; const scale = visual.root.scale.x;
-  const origin = rootPoint(visual, new THREE.Vector3());
-  const up = rootPoint(visual, new THREE.Vector3(0, 1, 0)).sub(origin).normalize();
+  const origin = rootPoint(visual, new THREE.Vector3()); const up = rootPoint(visual, new THREE.Vector3(0, 1, 0)).sub(origin).normalize();
   const forward = rootPoint(visual, new THREE.Vector3(0, 0, 1)).sub(origin).normalize();
   const target = rootPoint(visual, targetLocal).addScaledVector(up, visual.layout.handLength * 0.48 * scale).addScaledVector(forward, -0.030 * scale);
   solveTwoBoneIK({ root: visual.rig.bones[`${prefix}UpperArm`], mid: visual.rig.bones[`${prefix}Forearm`], end: visual.rig.bones[`${prefix}Hand`], target, pole: rootPoint(visual, poleLocal) });
@@ -37,13 +36,13 @@ function stanceFeet(visual: FighterVisual, depthScale = 1): void {
 }
 function idlePose(visual: FighterVisual): void {
   const b = visual.rig.bones; visual.hips.position.y -= 0.026; b.spineLower.rotation.y += 0.085; b.spineUpper.rotation.y -= 0.125; b.chest.rotation.y += 0.090; b.head.rotation.y -= 0.045;
-  solveArm(visual, -1, new THREE.Vector3(-0.175, 0.785, -0.040), new THREE.Vector3(-0.320, 0.710, -0.090));
-  solveArm(visual, 1, new THREE.Vector3(0.175, 0.560, 0.090), new THREE.Vector3(0.300, 0.615, -0.020)); stanceFeet(visual, 1);
+  solveArm(visual, -1, new THREE.Vector3(-0.175, 0.790, -0.060), new THREE.Vector3(-0.320, 0.710, -0.105));
+  solveArm(visual, 1, new THREE.Vector3(0.160, 0.545, 0.180), new THREE.Vector3(0.290, 0.600, 0.075)); stanceFeet(visual, 1);
 }
 function guardPose(visual: FighterVisual): void {
   const b = visual.rig.bones; visual.hips.position.y -= 0.030; b.spineLower.rotation.y += 0.060; b.spineUpper.rotation.y -= 0.085; b.chest.rotation.y += 0.055;
-  solveArm(visual, -1, new THREE.Vector3(-0.155, 0.780, 0.015), new THREE.Vector3(-0.285, 0.705, -0.060));
-  solveArm(visual, 1, new THREE.Vector3(0.135, 0.755, 0.125), new THREE.Vector3(0.260, 0.680, 0.000)); stanceFeet(visual, 0.94);
+  solveArm(visual, -1, new THREE.Vector3(-0.145, 0.775, 0.080), new THREE.Vector3(-0.275, 0.700, -0.030));
+  solveArm(visual, 1, new THREE.Vector3(0.130, 0.745, 0.185), new THREE.Vector3(0.250, 0.675, 0.055)); stanceFeet(visual, 0.94);
 }
 function punchPose(visual: FighterVisual): void {
   const lf = endpointInRoot(visual, visual.leftArm.end); const rf = endpointInRoot(visual, visual.rightArm.end); const punchSide: -1 | 1 = lf.z > rf.z ? -1 : 1; const supportSide = (punchSide * -1) as -1 | 1; const b = visual.rig.bones;
@@ -53,8 +52,7 @@ function punchPose(visual: FighterVisual): void {
 function kickPose(visual: FighterVisual): void {
   const leftFoot = endpointInRoot(visual, visual.leftLeg.end); const rightFoot = endpointInRoot(visual, visual.rightLeg.end); const kickSide: -1 | 1 = leftFoot.y > rightFoot.y ? -1 : 1; const b = visual.rig.bones;
   b.spineLower.rotation.x -= 0.060; b.spineUpper.rotation.x -= 0.040; b.chest.rotation.y += kickSide * -0.065;
-  solveArm(visual, -1, new THREE.Vector3(-0.140, 0.775, 0.070), new THREE.Vector3(-0.255, 0.705, -0.030));
-  solveArm(visual, 1, new THREE.Vector3(0.140, 0.720, 0.075), new THREE.Vector3(0.250, 0.650, -0.020));
+  solveArm(visual, -1, new THREE.Vector3(-0.140, 0.775, 0.070), new THREE.Vector3(-0.255, 0.705, -0.030)); solveArm(visual, 1, new THREE.Vector3(0.140, 0.720, 0.075), new THREE.Vector3(0.250, 0.650, -0.020));
 }
 function applyPose(visual: FighterVisual): void {
   visual.root.updateMatrixWorld(true); const pose = classifyPose(visual);

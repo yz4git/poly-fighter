@@ -9,18 +9,19 @@ import { classifyV10SkinRegion } from "../src/game/visual-v10";
 import { classifyV103FaceRegion } from "../src/game/visual-v10-polish";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
-test("SERA gameplay selects the V10 reconstruction pipeline", () => {
+test("SERA gameplay selects V11 V9.1 character on the V10-compatible canonical rig", () => {
   const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
-  assert.equal(String(visual.visualVersion), "V10");
-  assert.match(visual.root.name, /v10/);
+  assert.equal(String(visual.visualVersion), "V11");
+  assert.match(visual.root.name, /v11/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
-  assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.4_REFERENCE_MATCH");
-  assert.equal(visual.root.userData.bindSafeStance, "V10.4_EXACT_BIND_TRANSLATIONS");
+  assert.equal(visual.root.userData.v11CharacterSource, "V9.1_AUTHORED_CONTINUOUS_MESH");
+  assert.equal(visual.root.userData.v11RigSource, "V10_CANONICAL_V4_RIG_AND_IK");
+  assert.equal(visual.root.userData.v10ReferenceAsset, "/models/sera-v10.glb");
+  assert.equal(visual.bodyMesh.userData.v11PresentationMode, "V9.1_CONTINUOUS_SKINNED_CHARACTER");
   disposeFighterVisual(visual);
 });
 
-test("V10 is asset-driven and bone-parented fragments remain one persistent reconstruction", () => {
+test("V10 reconstruction pipeline remains available as reference data", () => {
   const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
   const polish = readFileSync(new URL("../src/game/visual-v10-polish.ts", import.meta.url), "utf8");
   assert.match(source, /GLTFLoader/);
@@ -65,7 +66,7 @@ test("V10.1 base classifier keeps broad torso and skirt samples away from arms",
   assert.equal(classifyV10SkinRegion(-0.16, 0.72, 0.02, "skin"), "LEFT_UPPER_ARM");
 });
 
-test("V10.3 render partition gives the fused hull explicit limb ownership", () => {
+test("V10.3 render partition remains covered as historical reconstruction logic", () => {
   assert.equal(classifyV103FaceRegion(-0.11, 0.76, 0.01, "blue"), "LEFT_UPPER_ARM");
   assert.equal(classifyV103FaceRegion(0.12, 0.61, 0.02, "silver"), "RIGHT_FOREARM");
   assert.equal(classifyV103FaceRegion(-0.13, 0.46, 0.01, "skin"), "LEFT_HAND");
@@ -76,7 +77,7 @@ test("V10.3 render partition gives the fused hull explicit limb ownership", () =
   assert.equal(classifyV103FaceRegion(0.02, 0.74, 0.01, "blue"), "TORSO");
 });
 
-test("V10 idle scaffold preserves grounded fighting-stance separation before/after asset load", () => {
+test("V11 keeps grounded fighting-stance separation", () => {
   const playerVisual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
   const cpuVisual = createFighterVisual(FIGHTER_DEFINITIONS.red, "NORMAL");
   const player = new FighterRuntime("player", FIGHTER_DEFINITIONS.blue, false, playerVisual);
@@ -99,7 +100,7 @@ test("V10 idle scaffold preserves grounded fighting-stance separation before/aft
   disposeFighterVisual(cpu.visual);
 });
 
-test("V10 remains compatible with existing punch and kick contact animation", () => {
+test("V11 remains compatible with existing punch and kick contact animation", () => {
   const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
   const opponentVisual = createFighterVisual(FIGHTER_DEFINITIONS.red, "NORMAL");
   const fighter = new FighterRuntime("player", FIGHTER_DEFINITIONS.blue, false, visual);

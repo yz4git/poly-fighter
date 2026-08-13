@@ -39,6 +39,19 @@ async function command(path, method = "GET", body) {
   return payload.value;
 }
 
+async function clickButton(sessionId, text) {
+  return command(`/session/${sessionId}/execute/sync`, "POST", {
+    script: `
+      const wanted = arguments[0];
+      const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes(wanted));
+      if (!button) return { clicked: false, text: document.body.innerText.slice(0, 800) };
+      button.click();
+      return { clicked: true, label: button.textContent };
+    `,
+    args: [text],
+  });
+}
+
 let sessionId = null;
 try {
   await waitForDriver();
@@ -63,33 +76,30 @@ try {
   });
   sessionId = session.sessionId;
   await command(`/session/${sessionId}/url`, "POST", { url });
-  await delay(1200);
+  await delay(1000);
 
-  const clicked = await command(`/session/${sessionId}/execute/sync`, "POST", {
-    script: `
-      const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes('START MATCH'));
-      if (!button) return { clicked: false, text: document.body.innerText.slice(0, 600) };
-      button.click();
-      return { clicked: true };
-    `,
-    args: [],
-  });
-  if (!clicked?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(clicked)}`);
+  const start = await clickButton(sessionId, "START MATCH");
+  if (!start?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(start)}`);
+  await delay(450);
 
-  // Wait for React match construction, WebGL startup and the async GLB swap.
+  const enter = await clickButton(sessionId, "ENTER RING");
+  if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
+
+  // Wait for match construction, WebGL startup and the async V10 GLB swap.
   await delay(1800);
   const state = await command(`/session/${sessionId}/execute/sync`, "POST", {
     script: `
       return {
         canvasCount: document.querySelectorAll('canvas').length,
         titleVisible: document.body.innerText.includes('START MATCH'),
+        selectVisible: document.body.innerText.includes('ENTER RING'),
         fighterHud: document.body.innerText.includes('SERA') && document.body.innerText.includes('KAIRO'),
         bodyText: document.body.innerText.slice(0, 800),
       };
     `,
     args: [],
   });
-  if (!state?.canvasCount || !state?.fighterHud || state?.titleVisible) {
+  if (!state?.canvasCount || !state?.fighterHud || state?.titleVisible || state?.selectVisible) {
     throw new Error(`Match canvas/HUD was not ready: ${JSON.stringify(state)}`);
   }
 

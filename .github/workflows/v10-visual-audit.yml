@@ -55,12 +55,12 @@ jobs:
           fi
           WEBDRIVER_BIN="$DRIVER" \
             AUDIT_URL="http://127.0.0.1:3000/" \
-            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-2-game.png" \
+            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-3-game.png" \
             node scripts/capture-v10-visual-audit.mjs
-          test -s artifacts/visual-audit/sera-v10-2-game.png
+          test -s artifacts/visual-audit/sera-v10-3-game.png
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
       - uses: actions/upload-artifact@v4
         with:
-          name: sera-v10-2-visual-audit
+          name: sera-v10-3-visual-audit
           path: artifacts/visual-audit
           if-no-files-found: error

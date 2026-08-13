@@ -59,17 +59,6 @@ function resolvedSemantic(
   return semantic;
 }
 
-/**
- * V10.3 anatomical partition for the turnaround-derived visual hull.
- *
- * The source asset is intentionally one persistent four-view reconstruction.
- * It is not topologically separated at elbows/knees, so conventional smooth
- * skin weights keep too much of the shell visually frozen. We therefore split
- * non-indexed triangles into stable anatomical fragments and parent each
- * fragment directly to its owning bind bone. The bind-space conversion keeps
- * the neutral shell coherent, while a moving hand/foot bone now necessarily
- * moves the visible polygons assigned to that part.
- */
 export function classifyV103FaceRegion(
   x: number,
   y: number,
@@ -178,29 +167,42 @@ function addUnderbodyJoint(
 
 function installArticulationUnderbody(visual: FighterVisual, meshes: THREE.Mesh[]): void {
   const b = visual.rig.bones;
-  const material = new THREE.MeshBasicMaterial({ color: 0x090b13, toneMapped: false });
+  const material = new THREE.MeshBasicMaterial({ color: 0x0b0c15, toneMapped: false });
 
-  addUnderbodySegment(b.leftUpperArm, b.leftForearm, 0.030, 0.024, material, meshes);
-  addUnderbodySegment(b.rightUpperArm, b.rightForearm, 0.030, 0.024, material, meshes);
-  addUnderbodySegment(b.leftForearm, b.leftHand, 0.024, 0.020, material, meshes);
-  addUnderbodySegment(b.rightForearm, b.rightHand, 0.024, 0.020, material, meshes);
-  addUnderbodySegment(b.leftThigh, b.leftShin, 0.043, 0.034, material, meshes);
-  addUnderbodySegment(b.rightThigh, b.rightShin, 0.043, 0.034, material, meshes);
-  addUnderbodySegment(b.leftShin, b.leftFoot, 0.034, 0.026, material, meshes);
-  addUnderbodySegment(b.rightShin, b.rightFoot, 0.034, 0.026, material, meshes);
+  // Shoulder and hip roots are covered as well as elbow/knee chains. The
+  // reference fragments stay dominant because this underbody is deliberately
+  // smaller than the reconstructed surface, but fast poses no longer expose
+  // empty space between torso and limb fragments.
+  addUnderbodySegment(b.chest, b.leftShoulder, 0.038, 0.038, material, meshes);
+  addUnderbodySegment(b.chest, b.rightShoulder, 0.038, 0.038, material, meshes);
+  addUnderbodySegment(b.leftShoulder, b.leftUpperArm, 0.040, 0.038, material, meshes);
+  addUnderbodySegment(b.rightShoulder, b.rightUpperArm, 0.040, 0.038, material, meshes);
+  addUnderbodySegment(b.leftUpperArm, b.leftForearm, 0.038, 0.032, material, meshes);
+  addUnderbodySegment(b.rightUpperArm, b.rightForearm, 0.038, 0.032, material, meshes);
+  addUnderbodySegment(b.leftForearm, b.leftHand, 0.032, 0.026, material, meshes);
+  addUnderbodySegment(b.rightForearm, b.rightHand, 0.032, 0.026, material, meshes);
 
-  addUnderbodyJoint(b.leftUpperArm, 0.034, material, meshes);
-  addUnderbodyJoint(b.rightUpperArm, 0.034, material, meshes);
-  addUnderbodyJoint(b.leftForearm, 0.028, material, meshes);
-  addUnderbodyJoint(b.rightForearm, 0.028, material, meshes);
-  addUnderbodyJoint(b.leftHand, 0.023, material, meshes);
-  addUnderbodyJoint(b.rightHand, 0.023, material, meshes);
-  addUnderbodyJoint(b.leftThigh, 0.048, material, meshes);
-  addUnderbodyJoint(b.rightThigh, 0.048, material, meshes);
-  addUnderbodyJoint(b.leftShin, 0.038, material, meshes);
-  addUnderbodyJoint(b.rightShin, 0.038, material, meshes);
-  addUnderbodyJoint(b.leftFoot, 0.030, material, meshes);
-  addUnderbodyJoint(b.rightFoot, 0.030, material, meshes);
+  addUnderbodySegment(b.hips, b.leftThigh, 0.055, 0.052, material, meshes);
+  addUnderbodySegment(b.hips, b.rightThigh, 0.055, 0.052, material, meshes);
+  addUnderbodySegment(b.leftThigh, b.leftShin, 0.052, 0.043, material, meshes);
+  addUnderbodySegment(b.rightThigh, b.rightShin, 0.052, 0.043, material, meshes);
+  addUnderbodySegment(b.leftShin, b.leftFoot, 0.043, 0.034, material, meshes);
+  addUnderbodySegment(b.rightShin, b.rightFoot, 0.043, 0.034, material, meshes);
+
+  addUnderbodyJoint(b.leftShoulder, 0.043, material, meshes);
+  addUnderbodyJoint(b.rightShoulder, 0.043, material, meshes);
+  addUnderbodyJoint(b.leftUpperArm, 0.042, material, meshes);
+  addUnderbodyJoint(b.rightUpperArm, 0.042, material, meshes);
+  addUnderbodyJoint(b.leftForearm, 0.035, material, meshes);
+  addUnderbodyJoint(b.rightForearm, 0.035, material, meshes);
+  addUnderbodyJoint(b.leftHand, 0.027, material, meshes);
+  addUnderbodyJoint(b.rightHand, 0.027, material, meshes);
+  addUnderbodyJoint(b.leftThigh, 0.058, material, meshes);
+  addUnderbodyJoint(b.rightThigh, 0.058, material, meshes);
+  addUnderbodyJoint(b.leftShin, 0.047, material, meshes);
+  addUnderbodyJoint(b.rightShin, 0.047, material, meshes);
+  addUnderbodyJoint(b.leftFoot, 0.036, material, meshes);
+  addUnderbodyJoint(b.rightFoot, 0.036, material, meshes);
 }
 
 function installBoneParentedFragments(visual: FighterVisual): void {
@@ -322,12 +324,6 @@ function installBoneParentedFragments(visual: FighterVisual): void {
   FRAGMENTS.set(visual, fragments);
 }
 
-/**
- * V10.3 presentation repair. The GLB remains the single source geometry, but
- * its triangles are rendered as bind-correct bone children after load. A thin
- * faceted underbody sits behind the reference fragments so fast guard/punch/
- * kick poses remain visually continuous instead of opening empty joint gaps.
- */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;

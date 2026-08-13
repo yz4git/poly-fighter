@@ -1,4 +1,5 @@
 import type { FighterDefinition } from "./types";
+import { applyV104GroundedReferenceFeet } from "./visual-v10-reference-feet";
 import { applyV10RuntimePolish } from "./visual-v10-polish";
 import { applyV10SafeStance } from "./visual-v10-stance";
 import { createFemaleV10Visual } from "./visual-v10";
@@ -16,12 +17,14 @@ import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visua
 
 /**
  * Runtime visual selector. SERA uses the shared four-view V10 GLB plus the
- * V10.4 reference head, costume and bind-correct articulated presentation.
- * Combat rules, coordinate conventions, contact targets and KAIRO remain unchanged.
+ * V10.4 reference head, costume, grounded signature stance and bind-correct
+ * articulated presentation. Combat rules, contact targets and KAIRO remain
+ * unchanged.
  */
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
   if (definition.archetype === "SPEED") {
-    return applyV10RuntimePolish(applyV10SafeStance(createFemaleV10Visual(definition, quality)));
+    const visual = createFemaleV10Visual(definition, quality);
+    return applyV10RuntimePolish(applyV104GroundedReferenceFeet(applyV10SafeStance(visual)));
   }
   return createLegacyFighterVisual(definition, quality);
 }

@@ -6,6 +6,7 @@ import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { FighterAnimationController, FighterRuntime } from "../src/game/fighter";
 import { createFighterVisual, disposeFighterVisual } from "../src/game/visual-entry";
 import { classifyV10SkinRegion } from "../src/game/visual-v10";
+import { classifyV103FaceRegion } from "../src/game/visual-v10-polish";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
 test("SERA gameplay selects the V10 reconstruction pipeline", () => {
@@ -14,11 +15,12 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.2_COHERENT_NEUTRAL_SHELL");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.3_BONE_PARENTED_FRAGMENTS");
+  assert.equal(visual.root.userData.bindSafeStance, "V10.3_EXACT_BIND_TRANSLATIONS");
   disposeFighterVisual(visual);
 });
 
-test("V10 is asset-driven and cannot regress to per-view rectangles or procedural body primitives", () => {
+test("V10 is asset-driven and bone-parented fragments remain one persistent reconstruction", () => {
   const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
   const polish = readFileSync(new URL("../src/game/visual-v10-polish.ts", import.meta.url), "utf8");
   assert.match(source, /GLTFLoader/);
@@ -30,8 +32,14 @@ test("V10 is asset-driven and cannot regress to per-view rectangles or procedura
   assert.equal(source.includes("builder.tube"), false);
   assert.equal(polish.includes("THREE.Sprite"), false);
   assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.match(polish, /FACE_UNIFORM_REGIONS/);
-  assert.match(polish, /COHERENT_NEUTRAL_SHELL/);
+  assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY/);
+  assert.match(polish, /PIXEL_GATED_READY/);
+  assert.match(polish, /v10PresentationRelease = "V10\.3"/);
+  assert.match(polish, /boneInverse\.clone\(\)\.multiply\(bindMatrix\)/);
+  assert.match(polish, /bone\.add\(mesh\)/);
+  assert.match(polish, /installArticulationUnderbody/);
+  assert.match(polish, /CylinderGeometry/);
+  assert.match(polish, /bodyMesh\.visible = false/);
 });
 
 test("V10 repository contains one generated GLB from one shared four-view volume", () => {
@@ -48,7 +56,7 @@ test("V10 repository contains one generated GLB from one shared four-view volume
   }
 });
 
-test("V10.1 never assigns broad torso or skirt samples to arm regions", () => {
+test("V10.1 base classifier keeps broad torso and skirt samples away from arms", () => {
   assert.equal(classifyV10SkinRegion(0.10, 0.60, 0.02, "black"), "HIPS");
   assert.equal(classifyV10SkinRegion(0.16, 0.55, 0.05, "blue"), "HIPS");
   assert.equal(classifyV10SkinRegion(-0.15, 0.58, -0.02, "blue"), "HIPS");
@@ -57,11 +65,15 @@ test("V10.1 never assigns broad torso or skirt samples to arm regions", () => {
   assert.equal(classifyV10SkinRegion(-0.16, 0.72, 0.02, "skin"), "LEFT_UPPER_ARM");
 });
 
-test("V10.1 lower-body samples stay on the correct articulated chain", () => {
-  assert.equal(classifyV10SkinRegion(-0.06, 0.48, 0.01, "skin"), "LEFT_THIGH");
-  assert.equal(classifyV10SkinRegion(0.06, 0.36, 0.01, "black"), "RIGHT_THIGH");
-  assert.equal(classifyV10SkinRegion(-0.06, 0.22, 0.01, "black"), "LEFT_SHIN");
-  assert.equal(classifyV10SkinRegion(0.07, 0.04, 0.06, "blue"), "RIGHT_FOOT");
+test("V10.3 render partition gives the fused hull explicit limb ownership", () => {
+  assert.equal(classifyV103FaceRegion(-0.11, 0.76, 0.01, "blue"), "LEFT_UPPER_ARM");
+  assert.equal(classifyV103FaceRegion(0.12, 0.61, 0.02, "silver"), "RIGHT_FOREARM");
+  assert.equal(classifyV103FaceRegion(-0.13, 0.46, 0.01, "skin"), "LEFT_HAND");
+  assert.equal(classifyV103FaceRegion(-0.02, 0.47, 0.01, "black"), "LEFT_THIGH");
+  assert.equal(classifyV103FaceRegion(0.02, 0.24, 0.01, "black"), "RIGHT_SHIN");
+  assert.equal(classifyV103FaceRegion(0.03, 0.06, 0.05, "blue"), "RIGHT_FOOT");
+  assert.equal(classifyV103FaceRegion(0.02, 0.60, 0.01, "blue"), "HIPS");
+  assert.equal(classifyV103FaceRegion(0.02, 0.74, 0.01, "blue"), "TORSO");
 });
 
 test("V10 idle scaffold preserves grounded fighting-stance separation before/after asset load", () => {

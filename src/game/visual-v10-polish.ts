@@ -1,34 +1,22 @@
 import * as THREE from "three";
 import type { FighterVisual } from "./visual";
-import { classifyV10SkinRegion, type V10Semantic, type V10SkinRegion } from "./visual-v10";
+import type { V10Semantic, V10SkinRegion } from "./visual-v10";
 
-type Influence = readonly [number, number];
-type SkinModes = {
-  dynamicIndex: THREE.BufferAttribute;
-  dynamicWeight: THREE.BufferAttribute;
-  staticIndex: THREE.BufferAttribute;
-  staticWeight: THREE.BufferAttribute;
-  current: "dynamic" | "static";
-};
-
-const SKIN_MODES = new WeakMap<FighterVisual, SkinModes>();
 const PALETTE: Record<Exclude<V10Semantic, "unknown">, THREE.Color> = {
-  skin: new THREE.Color(0xd3a184),
-  blue: new THREE.Color(0x2452c5),
-  black: new THREE.Color(0x0e0e16),
-  silver: new THREE.Color(0xb9c3d0),
+  skin: new THREE.Color(0xd7a38a),
+  blue: new THREE.Color(0x387ad3),
+  black: new THREE.Color(0x0d0e16),
+  silver: new THREE.Color(0x9fadc2),
 };
 
-function smoothBlend(value: number, start: number, end: number): number {
-  const t = THREE.MathUtils.clamp((value - start) / Math.max(1e-6, end - start), 0, 1);
-  return t * t * (3 - 2 * t);
-}
+const FRAGMENTS = new WeakMap<FighterVisual, THREE.Mesh[]>();
 
-function normalizeInfluences(pairs: Influence[]): Influence[] {
-  const active = pairs.filter(([, weight]) => weight > 0).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const total = active.reduce((sum, [, weight]) => sum + weight, 0) || 1;
-  return active.map(([bone, weight]) => [bone, weight / total] as const);
-}
+type FragmentBucket = {
+  boneIndex: number;
+  region: V10SkinRegion;
+  positions: number[];
+  colors: number[];
+};
 
 function semanticFromRgb(r: number, g: number, b: number): Exclude<V10Semantic, "unknown"> {
   const value = (r + g + b) / 3;
@@ -37,10 +25,6 @@ function semanticFromRgb(r: number, g: number, b: number): Exclude<V10Semantic, 
   if (r > b * 1.12 && r > g * 1.03) return "skin";
   if (b > 0.48 && r < 0.52) return "blue";
   return "silver";
-}
-
-function valueBias(r: number, g: number, b: number): boolean {
-  return b > r * 1.03 || b > g * 1.08;
 }
 
 function resolvedSemantic(
@@ -52,6 +36,12 @@ function resolvedSemantic(
   b: number,
 ): Exclude<V10Semantic, "unknown"> {
   if (region === "HEAD") return semantic === "silver" ? "skin" : semantic;
+  if (region.endsWith("_HAND")) return semantic === "black" ? "black" : "skin";
+  if (region.endsWith("_FOREARM")) return semantic === "silver" ? "silver" : "black";
+  if (region.endsWith("_UPPER_ARM")) {
+    if (semantic === "skin" && y > 0.735) return "skin";
+    return semantic === "silver" ? "black" : semantic === "blue" ? "black" : semantic;
+  }
   if (region === "HIPS") {
     if (semantic === "skin" || semantic === "silver") return b > r * 1.03 ? "blue" : "black";
     return semantic;
@@ -65,104 +55,167 @@ function resolvedSemantic(
     if (semantic === "skin" || semantic === "silver") return b > r * 1.02 ? "blue" : "black";
     return semantic;
   }
-  if (region.endsWith("_THIGH") && semantic === "silver") return valueBias(r, g, b) ? "blue" : "black";
+  if (region.endsWith("_THIGH") && semantic === "silver") return b > r * 1.03 ? "blue" : "black";
   return semantic;
 }
 
-function influencesForFace(region: V10SkinRegion, y: number, visual: FighterVisual): Influence[] {
-  const b = visual.rig.boneIndices;
-  switch (region) {
-    case "HEAD":
-      return [[b.head, 1]];
-    case "HIPS": {
-      const spine = smoothBlend(y, 0.575, 0.690) * 0.38;
-      return normalizeInfluences([[b.hips, 1 - spine], [b.spineLower, spine]]);
-    }
-    case "TORSO": {
-      if (y < 0.748) {
-        const upper = smoothBlend(y, 0.690, 0.748);
-        return normalizeInfluences([[b.spineLower, 1 - upper * 0.78], [b.spineUpper, upper * 0.78]]);
-      }
-      if (y < 0.818) {
-        const chest = smoothBlend(y, 0.748, 0.818);
-        return normalizeInfluences([[b.spineUpper, 1 - chest * 0.82], [b.chest, chest * 0.82]]);
-      }
-      return normalizeInfluences([[b.chest, 0.90], [b.neck, 0.10]]);
-    }
-    case "LEFT_UPPER_ARM":
-    case "RIGHT_UPPER_ARM": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const elbow = (1 - smoothBlend(y, 0.630, 0.690)) * 0.34;
-      return normalizeInfluences([[b[`${prefix}UpperArm`], 1 - elbow], [b[`${prefix}Forearm`], elbow]]);
-    }
-    case "LEFT_FOREARM":
-    case "RIGHT_FOREARM": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const hand = (1 - smoothBlend(y, 0.475, 0.535)) * 0.28;
-      const upper = smoothBlend(y, 0.610, 0.660) * 0.18;
-      return normalizeInfluences([
-        [b[`${prefix}Forearm`], 1 - hand - upper],
-        [b[`${prefix}Hand`], hand],
-        [b[`${prefix}UpperArm`], upper],
-      ]);
-    }
-    case "LEFT_HAND":
-    case "RIGHT_HAND": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      return normalizeInfluences([[b[`${prefix}Hand`], 0.94], [b[`${prefix}Forearm`], 0.06]]);
-    }
-    case "LEFT_THIGH":
-    case "RIGHT_THIGH": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const hips = smoothBlend(y, 0.500, 0.590) * 0.22;
-      const shin = (1 - smoothBlend(y, 0.290, 0.340)) * 0.30;
-      return normalizeInfluences([[b[`${prefix}Thigh`], 1 - hips - shin], [b.hips, hips], [b[`${prefix}Shin`], shin]]);
-    }
-    case "LEFT_SHIN":
-    case "RIGHT_SHIN": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const thigh = smoothBlend(y, 0.265, 0.315) * 0.25;
-      const foot = (1 - smoothBlend(y, 0.070, 0.115)) * 0.24;
-      return normalizeInfluences([[b[`${prefix}Shin`], 1 - thigh - foot], [b[`${prefix}Thigh`], thigh], [b[`${prefix}Foot`], foot]]);
-    }
-    case "LEFT_FOOT":
-    case "RIGHT_FOOT": {
-      const prefix = region.startsWith("LEFT") ? "left" : "right";
-      return normalizeInfluences([[b[`${prefix}Foot`], 0.94], [b[`${prefix}Shin`], 0.06]]);
+export function classifyV103FaceRegion(
+  x: number,
+  y: number,
+  z: number,
+  semantic: Exclude<V10Semantic, "unknown">,
+): V10SkinRegion {
+  const side = x < 0 ? "LEFT" : "RIGHT";
+  const absX = Math.abs(x);
+
+  const ponytail = y > 0.665 && z < -0.080 && absX < 0.175;
+  if (y >= 0.830 || ponytail) return "HEAD";
+
+  if (y >= 0.405 && y < 0.515 && absX > 0.100) {
+    const handMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.165);
+    if (handMaterial) return `${side}_HAND` as V10SkinRegion;
+  }
+  if (y >= 0.485 && y < 0.625 && absX > 0.092) {
+    const lowerArmMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.145);
+    if (lowerArmMaterial) return `${side}_FOREARM` as V10SkinRegion;
+  }
+  if (y >= 0.625) {
+    const threshold = y >= 0.720 ? 0.060 : 0.074;
+    if (absX > threshold) {
+      return y >= 0.675
+        ? `${side}_UPPER_ARM` as V10SkinRegion
+        : `${side}_FOREARM` as V10SkinRegion;
     }
   }
+
+  if (y < 0.105) return `${side}_FOOT` as V10SkinRegion;
+  if (y < 0.320) return `${side}_SHIN` as V10SkinRegion;
+  if (y < 0.545) return `${side}_THIGH` as V10SkinRegion;
+
+  if (y < 0.690) return "HIPS";
+  return "TORSO";
 }
 
-function writeFaceInfluences(indices: number[], weights: number[], pairs: Influence[]): void {
-  const normalized = normalizeInfluences(pairs);
-  for (let vertex = 0; vertex < 3; vertex += 1) {
-    for (let slot = 0; slot < 4; slot += 1) {
-      indices.push(normalized[slot]?.[0] ?? 0);
-      weights.push(normalized[slot]?.[1] ?? 0);
-    }
+function ownerBoneIndex(region: V10SkinRegion, y: number, visual: FighterVisual): number {
+  const b = visual.rig.boneIndices;
+  switch (region) {
+    case "HEAD": return b.head;
+    case "HIPS": return b.hips;
+    case "TORSO": return y < 0.748 ? b.spineLower : y < 0.815 ? b.spineUpper : b.chest;
+    case "LEFT_UPPER_ARM": return b.leftUpperArm;
+    case "RIGHT_UPPER_ARM": return b.rightUpperArm;
+    case "LEFT_FOREARM": return b.leftForearm;
+    case "RIGHT_FOREARM": return b.rightForearm;
+    case "LEFT_HAND": return b.leftHand;
+    case "RIGHT_HAND": return b.rightHand;
+    case "LEFT_THIGH": return b.leftThigh;
+    case "RIGHT_THIGH": return b.rightThigh;
+    case "LEFT_SHIN": return b.leftShin;
+    case "RIGHT_SHIN": return b.rightShin;
+    case "LEFT_FOOT": return b.leftFoot;
+    case "RIGHT_FOOT": return b.rightFoot;
   }
 }
 
 function shadedFacetColor(base: THREE.Color, sourceValue: number): THREE.Color {
-  const factor = THREE.MathUtils.clamp(0.76 + sourceValue * 0.48, 0.76, 1.12);
+  const factor = THREE.MathUtils.clamp(0.72 + sourceValue * 0.46, 0.72, 1.08);
   return base.clone().multiplyScalar(factor);
 }
 
-function installFaceUniformSkinning(visual: FighterVisual): void {
+function bucketKey(region: V10SkinRegion, boneIndex: number): string {
+  return `${region}:${boneIndex}`;
+}
+
+function addUnderbodySegment(
+  parent: THREE.Bone,
+  child: THREE.Bone,
+  parentRadius: number,
+  childRadius: number,
+  material: THREE.Material,
+  meshes: THREE.Mesh[],
+): void {
+  const direction = child.position.clone();
+  const length = direction.length();
+  if (!Number.isFinite(length) || length < 1e-4) return;
+  const geometry = new THREE.CylinderGeometry(parentRadius, childRadius, length, 6, 1, false);
+  const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+  geometry.applyQuaternion(rotation);
+  geometry.translate(direction.x * 0.5, direction.y * 0.5, direction.z * 0.5);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `v10-3-underbody-${parent.name}-${child.name}`;
+  mesh.frustumCulled = false;
+  mesh.userData.v10Underbody = true;
+  parent.add(mesh);
+  meshes.push(mesh);
+}
+
+function addUnderbodyJoint(
+  bone: THREE.Bone,
+  radius: number,
+  material: THREE.Material,
+  meshes: THREE.Mesh[],
+): void {
+  const geometry = new THREE.SphereGeometry(radius, 6, 4);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `v10-3-underbody-joint-${bone.name}`;
+  mesh.frustumCulled = false;
+  mesh.userData.v10Underbody = true;
+  bone.add(mesh);
+  meshes.push(mesh);
+}
+
+function installArticulationUnderbody(visual: FighterVisual, meshes: THREE.Mesh[]): void {
+  const b = visual.rig.bones;
+  const material = new THREE.MeshBasicMaterial({ color: 0x0b0c15, toneMapped: false });
+
+  addUnderbodySegment(b.chest, b.leftShoulder, 0.038, 0.038, material, meshes);
+  addUnderbodySegment(b.chest, b.rightShoulder, 0.038, 0.038, material, meshes);
+  addUnderbodySegment(b.leftShoulder, b.leftUpperArm, 0.040, 0.038, material, meshes);
+  addUnderbodySegment(b.rightShoulder, b.rightUpperArm, 0.040, 0.038, material, meshes);
+  addUnderbodySegment(b.leftUpperArm, b.leftForearm, 0.038, 0.032, material, meshes);
+  addUnderbodySegment(b.rightUpperArm, b.rightForearm, 0.038, 0.032, material, meshes);
+  addUnderbodySegment(b.leftForearm, b.leftHand, 0.032, 0.026, material, meshes);
+  addUnderbodySegment(b.rightForearm, b.rightHand, 0.032, 0.026, material, meshes);
+
+  addUnderbodySegment(b.hips, b.leftThigh, 0.055, 0.052, material, meshes);
+  addUnderbodySegment(b.hips, b.rightThigh, 0.055, 0.052, material, meshes);
+  addUnderbodySegment(b.leftThigh, b.leftShin, 0.052, 0.043, material, meshes);
+  addUnderbodySegment(b.rightThigh, b.rightShin, 0.052, 0.043, material, meshes);
+  addUnderbodySegment(b.leftShin, b.leftFoot, 0.043, 0.034, material, meshes);
+  addUnderbodySegment(b.rightShin, b.rightFoot, 0.043, 0.034, material, meshes);
+
+  addUnderbodyJoint(b.leftShoulder, 0.043, material, meshes);
+  addUnderbodyJoint(b.rightShoulder, 0.043, material, meshes);
+  addUnderbodyJoint(b.leftUpperArm, 0.042, material, meshes);
+  addUnderbodyJoint(b.rightUpperArm, 0.042, material, meshes);
+  addUnderbodyJoint(b.leftForearm, 0.035, material, meshes);
+  addUnderbodyJoint(b.rightForearm, 0.035, material, meshes);
+  addUnderbodyJoint(b.leftHand, 0.027, material, meshes);
+  addUnderbodyJoint(b.rightHand, 0.027, material, meshes);
+  addUnderbodyJoint(b.leftThigh, 0.058, material, meshes);
+  addUnderbodyJoint(b.rightThigh, 0.058, material, meshes);
+  addUnderbodyJoint(b.leftShin, 0.047, material, meshes);
+  addUnderbodyJoint(b.rightShin, 0.047, material, meshes);
+  addUnderbodyJoint(b.leftFoot, 0.036, material, meshes);
+  addUnderbodyJoint(b.rightFoot, 0.036, material, meshes);
+}
+
+function installBoneParentedFragments(visual: FighterVisual): void {
   if (visual.root.userData.reconstructionAssetState !== "ready") return;
-  if (visual.bodyMesh.userData.v10FacetSkinning === "FACE_UNIFORM_REGIONS") return;
+  if (FRAGMENTS.has(visual)) return;
 
-  const source = visual.bodyMesh.geometry;
-  const geometry = source.index ? source.toNonIndexed() : source.clone();
-  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
-  const color = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
-  if (!color || position.count % 3 !== 0) return;
+  const source = visual.bodyMesh.geometry.index
+    ? visual.bodyMesh.geometry.toNonIndexed()
+    : visual.bodyMesh.geometry.clone();
+  const position = source.getAttribute("position") as THREE.BufferAttribute;
+  const color = source.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (!color || position.count % 3 !== 0) {
+    source.dispose();
+    return;
+  }
 
-  const skinIndices: number[] = [];
-  const skinWeights: number[] = [];
-  const staticIndices: number[] = [];
-  const staticWeights: number[] = [];
-  const quantizedColors: number[] = [];
+  const buckets = new Map<string, FragmentBucket>();
   const regionCounts: Partial<Record<V10SkinRegion, number>> = {};
 
   for (let base = 0; base < position.count; base += 3) {
@@ -189,113 +242,95 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
     b /= 3;
 
     const sourceSemantic = semanticFromRgb(r, g, b);
-    const region = classifyV10SkinRegion(x, y, z, sourceSemantic);
-    const semantic = resolvedSemantic(region, sourceSemantic, y, r, g, b);
-    const target = shadedFacetColor(PALETTE[semantic], (r + g + b) / 3);
+    const region = classifyV103FaceRegion(x, y, z, sourceSemantic);
+    const boneIndex = ownerBoneIndex(region, y, visual);
+    const key = bucketKey(region, boneIndex);
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = { boneIndex, region, positions: [], colors: [] };
+      buckets.set(key, bucket);
+    }
     regionCounts[region] = (regionCounts[region] ?? 0) + 1;
 
-    writeFaceInfluences(skinIndices, skinWeights, influencesForFace(region, y, visual));
+    const semantic = resolvedSemantic(region, sourceSemantic, y, r, g, b);
+    const target = shadedFacetColor(PALETTE[semantic], (r + g + b) / 3);
     for (let offset = 0; offset < 3; offset += 1) {
-      staticIndices.push(visual.rig.boneIndices.root, 0, 0, 0);
-      staticWeights.push(1, 0, 0, 0);
-      quantizedColors.push(target.r, target.g, target.b);
+      const vertex = base + offset;
+      bucket.positions.push(position.getX(vertex), position.getY(vertex), position.getZ(vertex));
+      bucket.colors.push(target.r, target.g, target.b);
     }
   }
 
-  const dynamicIndex = new THREE.Uint16BufferAttribute(skinIndices, 4);
-  const dynamicWeight = new THREE.Float32BufferAttribute(skinWeights, 4);
-  const staticIndex = new THREE.Uint16BufferAttribute(staticIndices, 4);
-  const staticWeight = new THREE.Float32BufferAttribute(staticWeights, 4);
-  geometry.setAttribute("skinIndex", dynamicIndex);
-  geometry.setAttribute("skinWeight", dynamicWeight);
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(quantizedColors, 3));
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  geometry.userData.v10FacetSkinning = "FACE_UNIFORM_REGIONS";
-  geometry.userData.v10RegionCounts = regionCounts;
+  const fragments: THREE.Mesh[] = [];
+  const skeleton = visual.rig.skeleton;
+  const bindMatrix = visual.bodyMesh.bindMatrix;
 
-  visual.bodyMesh.geometry = geometry;
-  visual.bodyMesh.normalizeSkinWeights();
-  source.dispose();
-  SKIN_MODES.set(visual, { dynamicIndex, dynamicWeight, staticIndex, staticWeight, current: "dynamic" });
-  visual.bodyMesh.userData.v10FacetSkinning = "FACE_UNIFORM_REGIONS";
-  visual.root.userData.skinningPresentation = "V10.2_FACE_UNIFORM_REGIONS";
-  visual.stats.vertexCount = position.count;
-  visual.stats.triangleCount = position.count / 3;
-  visual.stats.weightedVertexCount = position.count;
-}
+  for (const [key, bucket] of buckets) {
+    const bone = skeleton.bones[bucket.boneIndex];
+    const boneInverse = skeleton.boneInverses[bucket.boneIndex];
+    if (!bone || !boneInverse || bucket.positions.length === 0) continue;
 
-function installReferenceColorMaterial(visual: FighterVisual): void {
-  if (visual.root.userData.reconstructionAssetState !== "ready") return;
-  if (visual.bodyMesh.userData.v10ColorMaterial === "REFERENCE_VERTEX_COLOR") return;
-  if (!visual.bodyMesh.geometry.getAttribute("color")) return;
+    const toBoneLocal = boneInverse.clone().multiply(bindMatrix);
+    const transformed = new Float32Array(bucket.positions.length);
+    const point = new THREE.Vector3();
+    for (let i = 0; i < bucket.positions.length; i += 3) {
+      point.set(bucket.positions[i], bucket.positions[i + 1], bucket.positions[i + 2]).applyMatrix4(toBoneLocal);
+      transformed[i] = point.x;
+      transformed[i + 1] = point.y;
+      transformed[i + 2] = point.z;
+    }
 
-  const oldMaterial = visual.bodyMesh.material;
-  visual.bodyMesh.material = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    vertexColors: true,
-    toneMapped: false,
-  });
-  if (Array.isArray(oldMaterial)) oldMaterial.forEach((material) => material.dispose());
-  else oldMaterial.dispose();
-  visual.bodyMesh.userData.v10ColorMaterial = "REFERENCE_VERTEX_COLOR";
-  visual.root.userData.colorPipeline = "V10.2_SHADED_REFERENCE_VERTEX_COLOR";
-}
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(transformed, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(bucket.colors, 3));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    geometry.userData.v10FragmentRegion = bucket.region;
+    geometry.userData.v10FragmentBoneIndex = bucket.boneIndex;
 
-function neutralUpperBody(visual: FighterVisual): boolean {
-  const bones = visual.rig.bones;
-  const quaternions = [
-    bones.spineLower.quaternion,
-    bones.spineUpper.quaternion,
-    bones.chest.quaternion,
-    bones.leftUpperArm.quaternion,
-    bones.rightUpperArm.quaternion,
-    bones.leftForearm.quaternion,
-    bones.rightForearm.quaternion,
-  ];
-  return quaternions.every((quaternion) => {
-    const w = THREE.MathUtils.clamp(Math.abs(quaternion.w), 0, 1);
-    const angle = 2 * Math.acos(w);
-    return angle < 0.035;
-  });
-}
-
-function selectPresentationSkin(visual: FighterVisual): void {
-  const modes = SKIN_MODES.get(visual);
-  if (!modes) return;
-  const neutral = neutralUpperBody(visual);
-  const desired = neutral ? "static" : "dynamic";
-  if (modes.current !== desired) {
-    visual.bodyMesh.geometry.setAttribute("skinIndex", desired === "static" ? modes.staticIndex : modes.dynamicIndex);
-    visual.bodyMesh.geometry.setAttribute("skinWeight", desired === "static" ? modes.staticWeight : modes.dynamicWeight);
-    modes.current = desired;
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = `v10-3-fragment-${key.replace(/:/g, "-")}`;
+    mesh.frustumCulled = false;
+    mesh.userData.v10FragmentRegion = bucket.region;
+    mesh.userData.v10FragmentBoneIndex = bucket.boneIndex;
+    bone.add(mesh);
+    fragments.push(mesh);
   }
 
-  // A small neutral-only yaw prevents the side-on game camera from collapsing
-  // the turnaround into a paper-thin profile. Dynamic combat returns to exact
-  // rig alignment so hit animations and visual contacts stay trustworthy.
-  visual.bodyMesh.rotation.y = neutral ? 0.16 : 0;
-  visual.bodyMesh.userData.v10PresentationMode = neutral ? "COHERENT_NEUTRAL_SHELL" : "ARTICULATED_FACETS";
+  installArticulationUnderbody(visual, fragments);
+  source.dispose();
+  visual.bodyMesh.visible = false;
+  visual.bodyMesh.userData.v10PresentationMode = "BONE_PARENTED_FRAGMENT_SOURCE_HIDDEN";
+  visual.root.userData.skinningPresentation = "V10.3_BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY";
+  visual.root.userData.colorPipeline = "V10.3_ANATOMY_AWARE_REFERENCE_COLORS";
+  visual.root.userData.v10FragmentCount = fragments.length;
+  visual.root.userData.v10RegionCounts = regionCounts;
+  visual.root.userData.v10ArticulationAudit = "PIXEL_GATED_READY";
+  visual.root.userData.v10PresentationRelease = "V10.3";
+  visual.stats.meshCount = fragments.length;
+  visual.stats.materialCount = fragments.length;
+  visual.stats.vertexCount = position.count;
+  visual.stats.triangleCount = position.count / 3;
+  visual.stats.weightedVertexCount = 0;
+  FRAGMENTS.set(visual, fragments);
 }
 
-/**
- * V10.2 presentation polish. Neutral frames use the coherent reconstructed
- * shell exactly as authored, while combat frames switch to face-uniform
- * anatomical skinning. This keeps the first-read silhouette clean without
- * sacrificing visible articulation during attacks, guard, hit and knockdown.
- */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;
-  visual.root.userData.authoredNeutralStance = "V10.2_COHERENT_NEUTRAL_SHELL";
+  visual.root.userData.authoredNeutralStance = "V10.3_BONE_PARENTED_FRAGMENTS";
 
   const previousBeforeRender = visual.bodyMesh.onBeforeRender;
   visual.bodyMesh.onBeforeRender = function onBeforeRender(...args): void {
-    installFaceUniformSkinning(visual);
-    installReferenceColorMaterial(visual);
-    selectPresentationSkin(visual);
+    installBoneParentedFragments(visual);
     previousBeforeRender?.apply(this, args);
   };
-
   return visual;
 }

@@ -3,15 +3,13 @@ import type { FighterVisual } from "./visual";
 /**
  * Bind-safe stance marker for the reconstructed SERA mesh.
  *
- * A skinned asset must be bound against the exact same joint translations
- * used to calculate the skeleton inverses. V9.1 deliberately translated
- * forearm/hand/thigh joints to manufacture screen-space separation; doing that
- * to an imported continuous surface pulls whole chunks away from their bind
- * locations. V10.1 therefore leaves every bind translation untouched and lets
- * FighterAnimationController create motion with rotations/IK only.
+ * The V10.3 presentation converts source triangles into the bind-local space
+ * of their owning bones. Joint translations therefore stay exactly at the rig
+ * values used to calculate skeleton inverses; all visible movement comes from
+ * the existing rotation/IK animation path.
  */
 export function applyV10SafeStance(visual: FighterVisual): FighterVisual {
-  visual.root.userData.authoredNeutralStance = "V10.1_BIND_SAFE";
+  visual.root.userData.bindSafeStance = "V10.3_EXACT_BIND_TRANSLATIONS";
   visual.root.updateMatrixWorld(true);
   return visual;
 }

@@ -19,7 +19,7 @@ mkdir -p "$out"
 xvfb-run -a blender --background \
   --python-use-system-env \
   --python-exit-code 1 \
-  --python tools/blender/build-sera-quaternius-v2.py \
+  --python tools/blender/build-sera-conformal.py \
   -- --output-dir "$out" \
   --source-gltf ".external/quaternius/first/assets/3d/characters/player/Superhero_Female_FullBody.gltf"
 

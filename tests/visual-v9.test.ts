@@ -15,8 +15,8 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
-  assert.equal(visual.root.userData.authoredNeutralStance, "V10.3_BONE_PARENTED_FRAGMENTS");
-  assert.equal(visual.root.userData.bindSafeStance, "V10.3_EXACT_BIND_TRANSLATIONS");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.4_REFERENCE_MATCH");
+  assert.equal(visual.root.userData.bindSafeStance, "V10.4_EXACT_BIND_TRANSLATIONS");
   disposeFighterVisual(visual);
 });
 
@@ -32,9 +32,9 @@ test("V10 is asset-driven and bone-parented fragments remain one persistent reco
   assert.equal(source.includes("builder.tube"), false);
   assert.equal(polish.includes("THREE.Sprite"), false);
   assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY/);
+  assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_REFERENCE_HEAD/);
   assert.match(polish, /PIXEL_GATED_READY/);
-  assert.match(polish, /v10PresentationRelease = "V10\.3"/);
+  assert.match(polish, /v10PresentationRelease = "V10\.4"/);
   assert.match(polish, /boneInverse\.clone\(\)\.multiply\(bindMatrix\)/);
   assert.match(polish, /bone\.add\(mesh\)/);
   assert.match(polish, /installArticulationUnderbody/);

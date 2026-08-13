@@ -1,7 +1,6 @@
 import type { FighterDefinition } from "./types";
-import { createFemaleV9Visual } from "./visual-v9";
-import { polishV91Geometry } from "./visual-v9-polish";
 import { applyV9AuthoredStance } from "./visual-v9-stance";
+import { createFemaleV10Visual } from "./visual-v10";
 import {
   createFighterVisual as createLegacyFighterVisual,
   disposeFighterVisual,
@@ -14,11 +13,9 @@ import {
 } from "./visual";
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
 
-/** Runtime visual selector. SERA uses the authored V9.1 model; KAIRO stays on the legacy model for now. */
+/** Runtime visual selector. SERA uses the four-view reconstructed V10 GLB; KAIRO stays on the legacy model. */
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
-  if (definition.archetype === "SPEED") {
-    return applyV9AuthoredStance(polishV91Geometry(createFemaleV9Visual(definition, quality)));
-  }
+  if (definition.archetype === "SPEED") return applyV9AuthoredStance(createFemaleV10Visual(definition, quality));
   return createLegacyFighterVisual(definition, quality);
 }
 

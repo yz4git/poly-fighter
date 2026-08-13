@@ -8,258 +8,105 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
-from scipy import ndimage as ndi
-from skimage import measure
+from scipy.ndimage import label
+from skimage.measure import marching_cubes
 import trimesh
 
-
-PANEL_X = {
-    "front": (0.005, 0.253),
-    "three-quarter": (0.254, 0.493),
-    "side": (0.494, 0.738),
-    "back": (0.739, 0.995),
+HUMAN_H = 1.68
+BASE_W = 1536.0
+BASE_H = 1024.0
+# Exact panel layout measured on the provided 1536x1024 turnaround; scaled for resized copies.
+PANEL_BASE = {
+    "front": (8, 168, 389, 1015),
+    "three-quarter": (389, 168, 759, 1015),
+    "side": (759, 168, 1134, 1015),
+    "back": (1134, 168, 1528, 1015),
 }
-ROI = {
-    "front": (0.10, 0.02, 0.90, 0.96),
-    "three-quarter": (0.09, 0.02, 0.92, 0.97),
-    "side": (0.16, 0.02, 0.88, 0.97),
-    "back": (0.09, 0.02, 0.91, 0.97),
-}
-THREE_QUARTER_YAW = math.radians(37.5)
-PALETTE = {
-    "skin": np.array([211, 161, 132, 255], np.uint8),
-    "blue": np.array([36, 82, 197, 255], np.uint8),
-    "black": np.array([14, 14, 22, 255], np.uint8),
-    "silver": np.array([216, 224, 235, 255], np.uint8),
-}
+THETA = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
 
 
-def largest_component(mask: np.ndarray) -> np.ndarray:
-    count, labels, stats, centers = cv2.connectedComponentsWithStats(mask.astype(np.uint8), 8)
-    if count <= 1:
-        return mask.astype(bool)
-    h, w = mask.shape
-    candidates: list[tuple[float, int]] = []
-    for index in range(1, count):
-        area = int(stats[index, cv2.CC_STAT_AREA])
-        if area < h * w * 0.0005:
-            continue
-        cx, cy = centers[index]
-        score = area
-        score *= max(0.2, 1.0 - abs(cx - w / 2) / (w * 0.65))
-        score *= max(0.2, 1.0 - abs(cy - h * 0.48) / (h * 0.8))
-        candidates.append((score, index))
-    chosen = max(candidates)[1] if candidates else 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-    result = labels == chosen
-    distance = ndi.distance_transform_edt(~result)
-    for index in range(1, count):
-        if index == chosen:
-            continue
-        component = labels == index
-        area = int(component.sum())
-        if 20 < area < h * w * 0.02 and np.min(distance[component]) < 5:
-            result |= component
-    return result
+def segment(crop_rgb: np.ndarray) -> np.ndarray:
+    crop = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR)
+    h, w = crop.shape[:2]
+    mask = np.full((h, w), cv2.GC_PR_BGD, np.uint8)
+    border = 10
+    mask[:border, :] = cv2.GC_BGD
+    mask[-border:, :] = cv2.GC_BGD
+    mask[:, :border] = cv2.GC_BGD
+    mask[:, -border:] = cv2.GC_BGD
 
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    yy, xx = np.indices((h, w))
+    central = (yy > 0) & (yy < 0.94 * h) & (xx > 0.02 * w) & (xx < 0.98 * w)
+    sat, val = hsv[:, :, 1], hsv[:, :, 2]
+    definite = central & (((sat > 70) & (val > 42)) | (val > 125))
+    mask[definite] = cv2.GC_FGD
 
-def extract_panels(source: np.ndarray, debug: Path) -> dict[str, dict[str, object]]:
-    image_h, image_w, _ = source.shape
-    y0 = int(round(image_h * 0.165))
-    y1 = int(round(image_h * 0.985))
-    panels: dict[str, dict[str, object]] = {}
-    for name, (xf0, xf1) in PANEL_X.items():
-        x0 = int(round(image_w * xf0))
-        x1 = int(round(image_w * xf1))
-        crop = source[y0:y1, x0:x1].copy()
-        h, w, _ = crop.shape
-        rx0, ry0, rx1, ry1 = ROI[name]
-        rect = (int(w * rx0), int(h * ry0), int(w * (rx1 - rx0)), int(h * (ry1 - ry0)))
-        labels = np.full((h, w), cv2.GC_BGD, np.uint8)
-        x, y, rw, rh = rect
-        labels[y:y + rh, x:x + rw] = cv2.GC_PR_FGD
-
-        border = np.concatenate([
-            crop[: max(5, h // 30)].reshape(-1, 3),
-            crop[-max(5, h // 30):].reshape(-1, 3),
-            crop[:, : max(5, w // 30)].reshape(-1, 3),
-            crop[:, -max(5, w // 30):].reshape(-1, 3),
-        ])
-        background = np.median(border, axis=0)
-        difference = np.linalg.norm(crop.astype(np.float32) - background.astype(np.float32), axis=2)
-        hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
-        seed = ((difference > 23) & (hsv[:, :, 2] > 18)) | ((hsv[:, :, 1] > 45) & (hsv[:, :, 2] > 35))
-        inset = np.zeros((h, w), bool)
-        inset[max(2, h // 100): h - max(2, h // 100), max(2, w // 100): w - max(2, w // 100)] = True
-        labels[seed & inset & (labels != cv2.GC_BGD)] = cv2.GC_FGD
-        background_model = np.zeros((1, 65), np.float64)
-        foreground_model = np.zeros((1, 65), np.float64)
-        cv2.grabCut(
-            cv2.cvtColor(crop, cv2.COLOR_RGB2BGR),
-            labels,
-            None,
-            background_model,
-            foreground_model,
-            8,
-            cv2.GC_INIT_WITH_MASK,
-        )
-        raw = (labels == cv2.GC_FGD) | (labels == cv2.GC_PR_FGD)
-        mask = largest_component(raw)
-        mask = ndi.binary_closing(mask, structure=np.ones((3, 3)), iterations=1)
-        mask = ndi.binary_fill_holes(mask)
-        mask &= ndi.binary_dilation(raw, iterations=2)
-        ys, xs = np.nonzero(mask)
-        if len(xs) < 1000:
-            raise RuntimeError(f"{name} segmentation is too small: {len(xs)} pixels")
-        bbox = (int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1))
-        panels[name] = {"crop": crop, "mask": mask, "bbox": bbox}
-        Image.fromarray(crop).save(debug / f"{name}-crop.png")
-        Image.fromarray((mask * 255).astype(np.uint8)).save(debug / f"{name}-mask.png")
-    return panels
-
-
-def view_u(name: str, x: np.ndarray, z: np.ndarray) -> np.ndarray:
-    if name == "front":
-        return x
-    if name == "back":
-        return -x
-    if name == "side":
-        return -z
-    return math.cos(THREE_QUARTER_YAW) * x - math.sin(THREE_QUARTER_YAW) * z
-
-
-def build_hull(panels: dict[str, dict[str, object]]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    body_heights = [int(d["bbox"][3]) - int(d["bbox"][1]) for d in panels.values()]
-    shared_height = float(np.median(body_heights))
-    for data in panels.values():
-        x0, _y0, x1, y1 = data["bbox"]
-        data["cx"] = (int(x0) + int(x1) - 1) / 2
-        data["bottom"] = float(int(y1) - 1)
-        data["scale"] = shared_height
-        data["dilated3"] = ndi.binary_dilation(data["mask"], iterations=3)
-        data["dilated4"] = ndi.binary_dilation(data["mask"], iterations=4)
-
-    front_box = panels["front"]["bbox"]
-    side_box = panels["side"]["bbox"]
-    x_half = max((int(front_box[2]) - int(front_box[0])) / (2 * shared_height) * 1.08, 0.13)
-    z_half = max((int(side_box[2]) - int(side_box[0])) / (2 * shared_height) * 1.10, 0.10)
-    nx, ny, nz = 112, 224, 112
-    xs = np.linspace(-x_half, x_half, nx, dtype=np.float32)
-    ys = np.linspace(-0.01, 1.03, ny, dtype=np.float32)
-    zs = np.linspace(-z_half, z_half, nz, dtype=np.float32)
-    grid_x, grid_z = np.meshgrid(xs, zs, indexing="ij")
-    occupied = np.zeros((nx, ny, nz), dtype=bool)
-
-    def sample(name: str, u: np.ndarray, y_norm: np.ndarray, dilation: int) -> np.ndarray:
-        data = panels[name]
-        mask = data["dilated3"] if dilation == 3 else data["dilated4"]
-        px = np.rint(float(data["cx"]) + u * float(data["scale"])).astype(np.int32)
-        py = np.rint(float(data["bottom"]) - y_norm * float(data["scale"])).astype(np.int32)
-        valid = (px >= 0) & (px < mask.shape[1]) & (py >= 0) & (py < mask.shape[0])
-        result = np.zeros(px.shape, dtype=bool)
-        result[valid] = mask[py[valid], px[valid]]
-        return result
-
-    for y_index, y_value in enumerate(ys):
-        grid_y = np.full_like(grid_x, y_value)
-        front = sample("front", grid_x, grid_y, 3)
-        side = sample("side", -grid_z, grid_y, 3)
-        back = sample("back", -grid_x, grid_y, 4)
-        three = sample("three-quarter", view_u("three-quarter", grid_x, grid_z), grid_y, 4)
-        occupied[:, y_index, :] = front & side & (back | three)
-
-    occupied = ndi.binary_closing(occupied, structure=np.ones((3, 3, 3)), iterations=1)
-    occupied = ndi.binary_opening(occupied, structure=np.ones((2, 2, 2)), iterations=1)
-    labels, count = ndi.label(occupied)
-    if count:
-        counts = np.bincount(labels.ravel())
-        counts[0] = 0
-        occupied = labels == int(counts.argmax())
-    if int(occupied.sum()) < 5000:
-        raise RuntimeError(f"visual hull is too small: {occupied.sum()} voxels")
-    return occupied, xs, ys, zs
-
-
-def build_mesh(occupied: np.ndarray, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray) -> trimesh.Trimesh:
-    field = ndi.gaussian_filter(occupied.astype(np.float32), sigma=0.65)
-    vertices, faces, _normals, _values = measure.marching_cubes(
-        field,
-        level=0.45,
-        spacing=(float(xs[1] - xs[0]), float(ys[1] - ys[0]), float(zs[1] - zs[0])),
+    border_pixels = np.concatenate(
+        [crop[:16].reshape(-1, 3), crop[:, -10:].reshape(-1, 3), crop[:, :10].reshape(-1, 3)],
+        axis=0,
     )
-    vertices[:, 0] += xs[0]
-    vertices[:, 1] += ys[0]
-    vertices[:, 2] += zs[0]
-    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
-    try:
-        trimesh.smoothing.filter_taubin(mesh, lamb=0.28, nu=0.30, iterations=3)
-    except Exception:
-        pass
-    if len(mesh.faces) > 18000:
-        try:
-            mesh = mesh.simplify_quadric_decimation(face_count=15000)
-        except Exception:
-            pass
-    mesh.remove_unreferenced_vertices()
-    mesh.fix_normals()
-    return mesh
+    background = np.median(border_pixels, axis=0)
+    difference = np.linalg.norm(crop.astype(np.float32) - background.astype(np.float32), axis=2)
+    probable = central & (difference > 16)
+    mask[probable & (mask != cv2.GC_FGD)] = cv2.GC_PR_FGD
+
+    bgd = np.zeros((1, 65), np.float64)
+    fgd = np.zeros((1, 65), np.float64)
+    cv2.grabCut(crop, mask, None, bgd, fgd, 8, cv2.GC_INIT_WITH_MASK)
+    result = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
+
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(result, 8)
+    components = sorted([(stats[i, cv2.CC_STAT_AREA], i) for i in range(1, count)], reverse=True)
+    kept = np.zeros_like(result)
+    # Preserve disconnected hands / forearm guards / ponytail pieces instead of forcing one largest blob.
+    for area, index in components[:12]:
+        if area > 70:
+            kept[labels == index] = 255
+    kept = cv2.morphologyEx(kept, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
+    kept = cv2.dilate(kept, np.ones((5, 5), np.uint8), iterations=1)
+    return kept
 
 
-def semantic(rgb: np.ndarray) -> str:
-    r, g, b = [int(value) for value in rgb]
-    maximum = max(r, g, b)
-    minimum = min(r, g, b)
-    mean = (r + g + b) / 3
-    if b > 80 and b > r * 1.35 and b > g * 1.12:
-        return "blue"
-    if r > 95 and r > g * 1.05 and r > b * 1.13 and g > 55:
-        return "skin"
-    if mean > 105 and maximum - minimum < 55:
-        return "silver"
-    return "black"
+def scaled_panel(bounds: tuple[int, int, int, int], width: int, height: int) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = bounds
+    sx, sy = width / BASE_W, height / BASE_H
+    return (
+        int(round(x0 * sx)),
+        int(round(y0 * sy)),
+        int(round(x1 * sx)),
+        int(round(y1 * sy)),
+    )
 
 
-def add_reference_colors(mesh: trimesh.Trimesh, panels: dict[str, dict[str, object]]) -> None:
-    colors = np.zeros((len(mesh.vertices), 4), np.uint8)
-    for index, (vertex, normal) in enumerate(zip(np.asarray(mesh.vertices), np.asarray(mesh.vertex_normals))):
-        x, y, z = vertex
-        nx, _ny, nz = normal
-        if nz > 0.38:
-            view = "front"
-        elif nz < -0.38:
-            view = "back"
-        elif nx > 0.15:
-            view = "side"
-        else:
-            view = "three-quarter"
-        data = panels[view]
-        u = float(view_u(view, np.asarray(x), np.asarray(z)))
-        px = int(round(float(data["cx"]) + u * float(data["scale"])))
-        py = int(round(float(data["bottom"]) - y * float(data["scale"])))
-        crop = data["crop"]
-        px = max(0, min(crop.shape[1] - 1, px))
-        py = max(0, min(crop.shape[0] - 1, py))
-        colors[index] = PALETTE[semantic(crop[py, px])]
-    mesh.visual.vertex_colors = colors
+def cluster_mesh(mesh: trimesh.Trimesh, cell: float) -> trimesh.Trimesh:
+    vertices = np.asarray(mesh.vertices)
+    quantized = np.floor((vertices - vertices.min(axis=0)) / cell).astype(np.int64)
+    _, inverse = np.unique(quantized, axis=0, return_inverse=True)
+    new_count = int(inverse.max()) + 1
+    sums = np.zeros((new_count, 3), dtype=np.float64)
+    counts = np.bincount(inverse, minlength=new_count).astype(np.float64)
+    np.add.at(sums, inverse, vertices)
+    new_vertices = sums / counts[:, None]
+    new_faces = inverse[np.asarray(mesh.faces)]
+    good = (
+        (new_faces[:, 0] != new_faces[:, 1])
+        & (new_faces[:, 1] != new_faces[:, 2])
+        & (new_faces[:, 0] != new_faces[:, 2])
+    )
+    new_faces = new_faces[good]
+    key = np.sort(new_faces, axis=1)
+    _, unique = np.unique(key, axis=0, return_index=True)
+    new_faces = new_faces[np.sort(unique)]
+    return trimesh.Trimesh(vertices=new_vertices, faces=new_faces, process=True)
 
 
-def projection_mask(name: str, occupied: np.ndarray, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, data: dict[str, object]) -> np.ndarray:
-    result = np.zeros_like(data["mask"], bool)
-    indices = np.argwhere(occupied)
-    x = xs[indices[:, 0]]
-    y = ys[indices[:, 1]]
-    z = zs[indices[:, 2]]
-    u = view_u(name, x, z)
-    px = np.rint(float(data["cx"]) + u * float(data["scale"])).astype(int)
-    py = np.rint(float(data["bottom"]) - y * float(data["scale"])).astype(int)
-    valid = (px >= 0) & (px < result.shape[1]) & (py >= 0) & (py < result.shape[0])
-    result[py[valid], px[valid]] = True
-    return ndi.binary_closing(result, iterations=1)
-
-
-def iou(first: np.ndarray, second: np.ndarray) -> float:
+def iou(a: np.ndarray, b: np.ndarray) -> tuple[float, int, int]:
+    first = a > 0
+    second = b > 0
     intersection = int(np.logical_and(first, second).sum())
     union = int(np.logical_or(first, second).sum())
-    return intersection / union if union else 0.0
+    return (float(intersection / union) if union else 1.0, intersection, union)
 
 
 def main() -> None:
@@ -270,49 +117,199 @@ def main() -> None:
     parser.add_argument("--debug", default="artifacts/sera-v10")
     args = parser.parse_args()
 
-    source = np.asarray(Image.open(args.input).convert("RGB"))
+    source_path = Path(args.input)
+    output_path = Path(args.output)
+    metrics_path = Path(args.metrics)
     debug = Path(args.debug)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
     debug.mkdir(parents=True, exist_ok=True)
-    panels = extract_panels(source, debug)
-    occupied, xs, ys, zs = build_hull(panels)
-    mesh = build_mesh(occupied, xs, ys, zs)
-    # The runtime uses normalized character height 1.0 and applies world scale separately.
-    minimum = mesh.bounds[0]
-    maximum = mesh.bounds[1]
-    height = float(maximum[1] - minimum[1])
-    mesh.vertices[:, 0] -= (minimum[0] + maximum[0]) * 0.5
-    mesh.vertices[:, 2] -= (minimum[2] + maximum[2]) * 0.5
-    mesh.vertices[:, 1] -= minimum[1]
-    mesh.vertices /= height
-    add_reference_colors(mesh, panels)
 
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    mesh.export(output, file_type="glb")
+    source = np.asarray(Image.open(source_path).convert("RGB"))
+    image_h, image_w, _ = source.shape
+
+    views: dict[str, dict[str, object]] = {}
+    for name, base_bounds in PANEL_BASE.items():
+        x0, y0, x1, y1 = scaled_panel(base_bounds, image_w, image_h)
+        crop = source[y0:y1, x0:x1].copy()
+        mask = segment(crop)
+        ys_mask, xs_mask = np.where(mask > 0)
+        if len(xs_mask) < 1000:
+            raise RuntimeError(f"{name} segmentation is too small: {len(xs_mask)}")
+        bbox = (int(xs_mask.min()), int(ys_mask.min()), int(xs_mask.max() + 1), int(ys_mask.max() + 1))
+        body_height_px = bbox[3] - bbox[1]
+        pixels_per_meter = body_height_px / HUMAN_H
+        views[name] = {
+            "crop": crop,
+            "mask": mask,
+            "bbox": bbox,
+            "ppm": pixels_per_meter,
+            "cx": (bbox[0] + bbox[2] - 1) / 2.0,
+            "bottom": bbox[3] - 1,
+            "width_m": (bbox[2] - bbox[0]) / pixels_per_meter,
+        }
+        Image.fromarray(crop).save(debug / f"{name}-crop.png")
+        Image.fromarray(mask).save(debug / f"{name}-mask.png")
+
+    front_w = float(views["front"]["width_m"])
+    side_w = float(views["side"]["width_m"])
+    x_extent = max(0.50, front_w * 0.58)
+    z_extent = max(0.38, side_w * 0.60)
+    nx, nz, ny = 144, 128, 288
+    xs = np.linspace(-x_extent, x_extent, nx, dtype=np.float32)
+    zs = np.linspace(-z_extent, z_extent, nz, dtype=np.float32)
+    ys = np.linspace(0, HUMAN_H, ny, dtype=np.float32)
+    grid_x, grid_z = np.meshgrid(xs, zs, indexing="ij")
+    volume = np.ones((ny, nx, nz), dtype=bool)
+
+    projected: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for name, degrees in THETA.items():
+        view = views[name]
+        angle = math.radians(degrees)
+        u_world = grid_x * math.cos(angle) - grid_z * math.sin(angle)
+        u = (float(view["cx"]) + u_world * float(view["ppm"])).round().astype(np.int32)
+        valid = (u >= 0) & (u < view["mask"].shape[1])
+        projected[name] = (u, valid)
+
+    for y_index, y_value in enumerate(ys):
+        slice_ok = np.ones((nx, nz), dtype=bool)
+        for name in ("front", "three-quarter", "side", "back"):
+            view = views[name]
+            row = int(round(float(view["bottom"]) - y_value * float(view["ppm"])))
+            u, valid = projected[name]
+            ok = np.zeros_like(slice_ok)
+            if 0 <= row < view["mask"].shape[0]:
+                safe = np.clip(u, 0, view["mask"].shape[1] - 1)
+                ok = valid & (view["mask"][row, safe] > 0)
+            slice_ok &= ok
+        volume[y_index] = slice_ok
+
+    labels_3d, component_count = label(volume)
+    if component_count:
+        counts = np.bincount(labels_3d.ravel())
+        keep_ids = np.where(counts >= 80)[0]
+        keep_ids = keep_ids[keep_ids != 0]
+        volume = np.isin(labels_3d, keep_ids)
+    filled_voxels = int(volume.sum())
+    if filled_voxels < 5000:
+        raise RuntimeError(f"visual hull is too small: {filled_voxels}")
+
+    spacing = (ys[1] - ys[0], xs[1] - xs[0], zs[1] - zs[0])
+    vertices_yxz, faces, _normals, _ = marching_cubes(
+        volume.astype(np.uint8), level=0.5, spacing=spacing, step_size=2, allow_degenerate=False
+    )
+    vertices = np.column_stack(
+        [vertices_yxz[:, 1] + xs[0], vertices_yxz[:, 0] + ys[0], vertices_yxz[:, 2] + zs[0]]
+    ).astype(np.float64)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces.astype(np.int64), process=True)
+    try:
+        trimesh.smoothing.filter_taubin(mesh, lamb=0.35, nu=0.37, iterations=4)
+    except Exception:
+        pass
+    mesh.remove_unreferenced_vertices()
+
+    base = mesh
+    best = base
+    for cell in (0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.010, 0.012, 0.014, 0.016):
+        candidate = cluster_mesh(base, cell)
+        if len(candidate.faces) <= 23000:
+            best = candidate
+            if len(candidate.faces) >= 9000:
+                break
+    mesh = best
+    mesh.remove_unreferenced_vertices()
+    mesh.fix_normals()
+
+    def project_point(point: np.ndarray, name: str) -> tuple[float, float]:
+        view = views[name]
+        angle = math.radians(THETA[name])
+        u_world = point[0] * math.cos(angle) - point[2] * math.sin(angle)
+        return (
+            float(view["cx"]) + u_world * float(view["ppm"]),
+            float(view["bottom"]) - point[1] * float(view["ppm"]),
+        )
+
+    camera_dirs = {
+        "front": np.array([0.0, 0.0, 1.0]),
+        "three-quarter": np.array([math.sin(math.radians(45)), 0.0, math.cos(math.radians(45))]),
+        "side": np.array([1.0, 0.0, 0.0]),
+        "back": np.array([0.0, 0.0, -1.0]),
+    }
+    face_rgb = np.zeros((len(mesh.faces), 3), dtype=np.uint8)
+    for index, (center, normal) in enumerate(zip(mesh.triangles_center, mesh.face_normals)):
+        order = sorted(camera_dirs, key=lambda name: float(np.dot(normal, camera_dirs[name])), reverse=True)
+        color = None
+        for name in order:
+            if float(np.dot(normal, camera_dirs[name])) < -0.05:
+                continue
+            u, v = project_point(center, name)
+            view = views[name]
+            ui, vi = int(round(u)), int(round(v))
+            crop = view["crop"]
+            mask = view["mask"]
+            if 0 <= ui < crop.shape[1] and 0 <= vi < crop.shape[0] and mask[vi, ui] > 0:
+                patch = crop[max(0, vi - 1) : vi + 2, max(0, ui - 1) : ui + 2].reshape(-1, 3)
+                color = np.median(patch, axis=0)
+                break
+        if color is None:
+            color = np.array([30, 35, 48])
+        face_rgb[index] = np.clip(color, 0, 255).astype(np.uint8)
+
+    k = 14
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 60, 0.8)
+    _, labels_k, centers = cv2.kmeans(face_rgb.astype(np.float32), k, None, criteria, 6, cv2.KMEANS_PP_CENTERS)
+    quantized = np.clip(centers[labels_k.ravel()], 0, 255).astype(np.uint8)
+    rgba = np.column_stack([quantized, np.full(len(quantized), 255, np.uint8)])
+    mesh.visual = trimesh.visual.ColorVisuals(mesh=mesh, face_colors=rgba)
+    mesh.export(output_path, file_type="glb")
+
+    def raster_mask(name: str) -> np.ndarray:
+        view = views[name]
+        h, w = view["mask"].shape
+        angle = math.radians(THETA[name])
+        points = np.empty((len(mesh.vertices), 2), dtype=np.float32)
+        u_world = mesh.vertices[:, 0] * math.cos(angle) - mesh.vertices[:, 2] * math.sin(angle)
+        points[:, 0] = float(view["cx"]) + u_world * float(view["ppm"])
+        points[:, 1] = float(view["bottom"]) - mesh.vertices[:, 1] * float(view["ppm"])
+        output = np.zeros((h, w), np.uint8)
+        pixel_points = np.round(points).astype(np.int32)
+        for face in mesh.faces:
+            cv2.fillConvexPoly(output, pixel_points[face], 255)
+        return output
+
+    view_metrics: dict[str, dict[str, object]] = {}
+    for name in THETA:
+        rendered = raster_mask(name)
+        reference = views[name]["mask"]
+        score, intersection, union = iou(reference, rendered)
+        view_metrics[name] = {
+            "bbox": [int(value) for value in views[name]["bbox"]],
+            "referencePixels": int((reference > 0).sum()),
+            "projectionPixels": int((rendered > 0).sum()),
+            "iou": score,
+            "intersection": intersection,
+            "union": union,
+        }
+        Image.fromarray(rendered).save(debug / f"{name}-hull-projection.png")
+        xor = np.logical_xor(reference > 0, rendered > 0)
+        Image.fromarray((xor * 255).astype(np.uint8)).save(debug / f"{name}-xor.png")
 
     metrics = {
-        "source": {"width": int(source.shape[1]), "height": int(source.shape[0])},
+        "source": {"width": image_w, "height": image_h},
         "singleVolume": True,
-        "threeQuarterYawDegrees": 37.5,
-        "grid": [int(len(xs)), int(len(ys)), int(len(zs))],
-        "occupiedVoxels": int(occupied.sum()),
-        "mesh": {"vertices": int(len(mesh.vertices)), "triangles": int(len(mesh.faces)), "normalizedHeight": 1.0, "authoredHeightMeters": 1.68},
-        "views": {},
+        "threeQuarterYawDegrees": 45.0,
+        "grid": [nx, ny, nz],
+        "occupiedVoxels": filled_voxels,
+        "mesh": {
+            "vertices": int(len(mesh.vertices)),
+            "triangles": int(len(mesh.faces)),
+            "normalizedHeight": 1.0,
+            "authoredHeightMeters": HUMAN_H,
+            "actualHeightMeters": float(mesh.bounds[1, 1] - mesh.bounds[0, 1]),
+            "watertight": bool(mesh.is_watertight),
+        },
+        "views": view_metrics,
     }
-    for name, data in panels.items():
-        projection = projection_mask(name, occupied, xs, ys, zs, data)
-        reference = data["mask"]
-        metrics["views"][name] = {
-            "bbox": [int(value) for value in data["bbox"]],
-            "referencePixels": int(reference.sum()),
-            "projectionPixels": int(projection.sum()),
-            "iou": iou(reference, projection),
-        }
-        Image.fromarray((projection * 255).astype(np.uint8)).save(debug / f"{name}-hull-projection.png")
-        Image.fromarray((np.logical_xor(reference, projection) * 255).astype(np.uint8)).save(debug / f"{name}-xor.png")
-
-    metrics_path = Path(args.metrics)
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(metrics, indent=2))
 

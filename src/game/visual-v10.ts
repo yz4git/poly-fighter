@@ -1,11 +1,13 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual, FighterVisualQuality } from "./visual";
 import { createFemaleV9Visual } from "./visual-v9";
-import { SERA_V10_RECONSTRUCTION } from "./sera-v10-data";
 
-const SOURCE_HEIGHT_METERS = 1.68;
+export const SERA_V10_ASSET_URL = "/models/sera-v10.glb";
 type Influence = [number, number];
+
+let sourceGeometryPromise: Promise<THREE.BufferGeometry> | null = null;
 
 function normalizedInfluences(pairs: Influence[]): Influence[] {
   const filtered = pairs.filter(([, weight]) => weight > 0).sort((a, b) => b[1] - a[1]).slice(0, 4);
@@ -18,91 +20,77 @@ function smoothBlend(value: number, start: number, end: number): number {
   return t * t * (3 - 2 * t);
 }
 
-function decodeBase64(base64: string): Uint8Array {
-  if (typeof atob !== "function") throw new Error("SERA_V10_BASE64_UNAVAILABLE");
-  const raw = atob(base64);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
-  return bytes;
+function chooseReconstructionMesh(root: THREE.Object3D): THREE.Mesh {
+  let selected: THREE.Mesh | null = null;
+  let selectedVertices = -1;
+  root.updateMatrixWorld(true);
+  root.traverse((object) => {
+    const candidate = object as THREE.Mesh;
+    if (!candidate.isMesh || !candidate.geometry) return;
+    const count = candidate.geometry.getAttribute("position")?.count ?? 0;
+    if (count > selectedVertices) {
+      selected = candidate;
+      selectedVertices = count;
+    }
+  });
+  if (!selected) throw new Error("SERA_V10_GLB_HAS_NO_MESH");
+  return selected;
 }
 
-/** Decode the static output of the offline four-view visual-hull reconstruction. */
-export function decodeSeraV10Geometry(): THREE.BufferGeometry {
-  const meta = SERA_V10_RECONSTRUCTION;
-  const bytes = decodeBase64(meta.dataBase64);
-  const vertexBytes = meta.vertexCount * 3 * 2;
-  const faceIndexBytes = meta.faceCount * 3 * 2;
-  const expected = vertexBytes + faceIndexBytes + meta.faceCount * 3;
-  if (bytes.byteLength !== expected) throw new Error(`SERA_V10_DATA_SIZE ${bytes.byteLength} != ${expected}`);
+/**
+ * Convert the generated GLB into the normalized model space used by the proven
+ * V4/V9 rig. The reconstruction itself remains one persistent 3D surface for
+ * every camera direction; this step only removes exporter transforms and scales
+ * the authored 1.68 m turnaround to the runtime's normalized one-unit height.
+ */
+function normalizeReconstructionGeometry(source: THREE.Mesh): THREE.BufferGeometry {
+  const geometry = source.geometry.clone();
+  geometry.applyMatrix4(source.matrixWorld);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) throw new Error("SERA_V10_GLB_HAS_NO_BOUNDS");
+  const height = box.max.y - box.min.y;
+  if (!Number.isFinite(height) || height <= 1e-5) throw new Error("SERA_V10_GLB_INVALID_HEIGHT");
 
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const min = meta.boundsMin;
-  const max = meta.boundsMax;
-  const span = [max[0] - min[0], max[1] - min[1], max[2] - min[2]] as const;
-  const positions = new Float32Array(meta.faceCount * 9);
-  const colors = new Float32Array(meta.faceCount * 9);
-
-  const qpos = (vertex: number, axis: number): number => {
-    const q = view.getUint16((vertex * 3 + axis) * 2, true);
-    return (min[axis] + (q / 65535) * span[axis]) / SOURCE_HEIGHT_METERS;
-  };
-
-  const indexOffset = vertexBytes;
-  const colorOffset = vertexBytes + faceIndexBytes;
-  for (let face = 0; face < meta.faceCount; face += 1) {
-    const r = bytes[colorOffset + face * 3] / 255;
-    const g = bytes[colorOffset + face * 3 + 1] / 255;
-    const b = bytes[colorOffset + face * 3 + 2] / 255;
-    for (let corner = 0; corner < 3; corner += 1) {
-      const vertex = view.getUint16(indexOffset + (face * 3 + corner) * 2, true);
-      const out = face * 9 + corner * 3;
-      positions[out] = qpos(vertex, 0);
-      positions[out + 1] = qpos(vertex, 1);
-      positions[out + 2] = qpos(vertex, 2);
-      colors[out] = r;
-      colors[out + 1] = g;
-      colors[out + 2] = b;
-    }
+  const centerX = (box.min.x + box.max.x) * 0.5;
+  const centerZ = (box.min.z + box.max.z) * 0.5;
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    position.setXYZ(
+      vertex,
+      (position.getX(vertex) - centerX) / height,
+      (position.getY(vertex) - box.min.y) / height,
+      (position.getZ(vertex) - centerZ) / height,
+    );
   }
-
-  // Put the reconstructed feet on normalized Y=0 and center the authored X/Z
-  // coordinate system before skinning. Geometry remains the same persistent 3D
-  // surface for every camera angle.
-  let minY = Number.POSITIVE_INFINITY;
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minZ = Number.POSITIVE_INFINITY;
-  let maxZ = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < positions.length; i += 3) {
-    minX = Math.min(minX, positions[i]); maxX = Math.max(maxX, positions[i]);
-    minY = Math.min(minY, positions[i + 1]);
-    minZ = Math.min(minZ, positions[i + 2]); maxZ = Math.max(maxZ, positions[i + 2]);
-  }
-  const centerX = (minX + maxX) * 0.5;
-  const centerZ = (minZ + maxZ) * 0.5;
-  for (let i = 0; i < positions.length; i += 3) {
-    positions[i] -= centerX;
-    positions[i + 1] -= minY;
-    positions[i + 2] -= centerZ;
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  position.needsUpdate = true;
+  geometry.deleteAttribute("normal");
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   geometry.userData.visualVersion = "V10";
-  geometry.userData.reconstruction = "four-view-visual-hull";
-  geometry.userData.sourceHeightMeters = SOURCE_HEIGHT_METERS;
-  geometry.userData.referenceSilhouetteIoU = meta.silhouetteIoU;
+  geometry.userData.reconstruction = "four-view-visual-hull-glb";
+  geometry.userData.assetUrl = SERA_V10_ASSET_URL;
+  geometry.userData.authoredHeightMeters = 1.68;
   return geometry;
 }
 
+function loadSourceGeometry(): Promise<THREE.BufferGeometry> {
+  if (sourceGeometryPromise) return sourceGeometryPromise;
+  const loader = new GLTFLoader();
+  sourceGeometryPromise = loader.loadAsync(SERA_V10_ASSET_URL)
+    .then((gltf) => normalizeReconstructionGeometry(chooseReconstructionMesh(gltf.scene)))
+    .catch((error) => {
+      sourceGeometryPromise = null;
+      throw error;
+    });
+  return sourceGeometryPromise;
+}
+
 /**
- * Transfer the offline static mesh onto the proven V4 rig. This does not create
- * the body shape; it only assigns short-range joint weights to already-authored
- * reconstruction vertices.
+ * Transfer the reconstructed static surface onto the existing combat skeleton.
+ * These weights do not generate or alter the body shape; they only let the
+ * already reconstructed mesh follow the proven V4 fighter rig.
  */
 export function assignV10Skinning(geometry: THREE.BufferGeometry, boneIndices: Record<string, number>): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -176,24 +164,21 @@ export function assignV10Skinning(geometry: THREE.BufferGeometry, boneIndices: R
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
 }
 
-export function createFemaleV10Visual(
-  definition: FighterDefinition,
-  quality: FighterVisualQuality = "NORMAL",
-): FighterVisual {
-  const visual = createFemaleV9Visual(definition, quality);
-  const geometry = decodeSeraV10Geometry();
+function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+  if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+  else material.dispose();
+}
+
+function installReconstructedGeometry(visual: FighterVisual, source: THREE.BufferGeometry): void {
+  const geometry = source.clone();
   assignV10Skinning(geometry, visual.rig.boneIndices);
 
   const oldGeometry = visual.bodyMesh.geometry;
   const oldMaterial = visual.bodyMesh.material;
-  oldGeometry.dispose();
-  if (Array.isArray(oldMaterial)) oldMaterial.forEach((material) => material.dispose());
-  else oldMaterial.dispose();
-
   visual.bodyMesh.geometry = geometry;
   visual.bodyMesh.material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    vertexColors: true,
+    vertexColors: Boolean(geometry.getAttribute("color")),
     flatShading: true,
     roughness: 0.68,
     metalness: 0.015,
@@ -201,16 +186,48 @@ export function createFemaleV10Visual(
   visual.bodyMesh.bind(visual.rig.skeleton, visual.bodyMesh.bindMatrix);
   visual.bodyMesh.normalizeSkinWeights();
   visual.bodyMesh.name = "v10-sera-turnaround-reconstructed-skinned-mesh";
-  visual.bodyMesh.userData.reconstruction = "four-view-visual-hull";
-  visual.root.name = `fighter-v10-${definition.id}`;
-  visual.root.userData.visualPipeline = "V10_OFFLINE_TURNAROUND_RECONSTRUCTION";
-  visual.root.userData.visualVersion = "V10";
+  visual.bodyMesh.userData.reconstruction = "four-view-visual-hull-glb";
+  oldGeometry.dispose();
+  disposeMaterial(oldMaterial);
 
-  const vertexCount = geometry.getAttribute("position")?.count ?? 0;
-  visual.stats.vertexCount = vertexCount;
-  visual.stats.triangleCount = Math.floor(vertexCount / 3);
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const triangleCount = geometry.index ? Math.floor(geometry.index.count / 3) : Math.floor(position.count / 3);
+  visual.stats.vertexCount = position.count;
+  visual.stats.triangleCount = triangleCount;
   visual.stats.meshCount = 1;
   visual.stats.materialCount = 1;
-  visual.stats.weightedVertexCount = vertexCount;
+  visual.stats.weightedVertexCount = position.count;
+  visual.root.userData.reconstructionAssetState = "ready";
+}
+
+export function createFemaleV10Visual(
+  definition: FighterDefinition,
+  quality: FighterVisualQuality = "NORMAL",
+): FighterVisual {
+  // V9 is retained only as a proven skeleton/contact/foot-plant scaffold. Its
+  // visible body geometry is replaced by the generated V10 GLB in the browser.
+  const visual = createFemaleV9Visual(definition, quality);
+  visual.root.name = `fighter-v10-${definition.id}`;
+  visual.root.userData.visualPipeline = "V10_GLB_TURNAROUND_RECONSTRUCTION";
+  visual.root.userData.visualVersion = "V10";
+  visual.root.userData.reconstructionAsset = SERA_V10_ASSET_URL;
+  visual.root.userData.reconstructionAssetState = "pending";
+  visual.bodyMesh.userData.reconstruction = "v10-glb-pending";
+  visual.visualVersion = "V10" as unknown as FighterVisual["visualVersion"];
+  visual.stats.visualVersion = "V10" as unknown as FighterVisual["stats"]["visualVersion"];
+
+  // Node-based rule tests intentionally do not perform network I/O. In the
+  // browser the GLB is loaded once, cached as normalized source geometry, then
+  // cloned per fighter so disposal cannot invalidate another fighter instance.
+  if (typeof window !== "undefined" && typeof fetch === "function") {
+    visual.root.userData.reconstructionAssetState = "loading";
+    void loadSourceGeometry()
+      .then((source) => installReconstructedGeometry(visual, source))
+      .catch((error: unknown) => {
+        visual.root.userData.reconstructionAssetState = "failed";
+        console.error("[POLY FIGHTER] SERA V10 GLB load failed", error);
+      });
+  }
+
   return visual;
 }

@@ -16,6 +16,7 @@ permissions:
 jobs:
   reconstruct:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,7 +24,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
       - name: Install reconstruction dependencies
         run: |
           python -m pip install --upgrade pip
@@ -35,6 +35,23 @@ jobs:
             --output public/models/sera-v10.glb \
             --metrics public/models/sera-v10.metrics.json \
             --debug artifacts/sera-v10
+      - name: Validate generated files
+        run: |
+          test -s public/models/sera-v10.glb
+          test -s public/models/sera-v10.metrics.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('public/models/sera-v10.glb')
+          m = json.loads(Path('public/models/sera-v10.metrics.json').read_text())
+          assert p.stat().st_size > 10000, p.stat().st_size
+          assert m['singleVolume'] is True
+          assert m['mesh']['vertices'] > 500
+          assert m['mesh']['triangles'] > 500
+          for name in ('front', 'three-quarter', 'side', 'back'):
+              assert float(m['views'][name]['iou']) > 0.80, (name, m['views'][name]['iou'])
+          print('validated', p.stat().st_size, 'bytes')
+          PY
       - name: Upload reconstruction diagnostics
         uses: actions/upload-artifact@v4
         with:
@@ -45,12 +62,12 @@ jobs:
             artifacts/sera-v10
       - name: Commit generated asset to the reconstruction branch
         run: |
-          if git diff --quiet -- public/models/sera-v10.glb public/models/sera-v10.metrics.json; then
-            echo 'Generated asset is unchanged.'
-            exit 0
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/models/sera-v10.glb public/models/sera-v10.metrics.json
+          if git diff --cached --quiet; then
+            echo 'Generated asset is unchanged.'
+            exit 0
+          fi
           git commit -m 'Generate SERA V10 turnaround reconstruction [skip ci]'
           git push origin HEAD:chatgpt/visual-v10-offline-reconstruction

@@ -68,42 +68,24 @@ async function chooseFighter(sessionId, name, playerLabel) {
   `, [name, playerLabel]);
 }
 
-async function buttonCenter(sessionId, text) {
-  return execute(sessionId, `
-    const wanted = arguments[0];
-    const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === wanted);
-    if (!button) return null;
-    const rect = button.getBoundingClientRect();
-    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
-  `, [text]);
-}
-
-async function touchDown(sessionId, point, pointerId) {
+async function keyDown(sessionId, value) {
   await command(`/session/${sessionId}/actions`, "POST", {
     actions: [{
-      type: "pointer",
-      id: `audit-touch-${pointerId}`,
-      parameters: { pointerType: "touch" },
-      actions: [
-        { type: "pointerMove", duration: 0, origin: "viewport", x: point.x, y: point.y },
-        { type: "pointerDown", button: 0 },
-      ],
+      type: "key",
+      id: "audit-keyboard",
+      actions: [{ type: "keyDown", value }],
     }],
   });
 }
 
-async function touchUp(sessionId, point, pointerId) {
+async function keyUp(sessionId, value) {
   await command(`/session/${sessionId}/actions`, "POST", {
     actions: [{
-      type: "pointer",
-      id: `audit-touch-${pointerId}`,
-      parameters: { pointerType: "touch" },
-      actions: [
-        { type: "pointerMove", duration: 0, origin: "viewport", x: point.x, y: point.y },
-        { type: "pointerUp", button: 0 },
-      ],
+      type: "key",
+      id: "audit-keyboard",
+      actions: [{ type: "keyUp", value }],
     }],
-  }).catch(() => undefined);
+  });
   await command(`/session/${sessionId}/actions`, "DELETE").catch(() => undefined);
 }
 
@@ -155,7 +137,9 @@ try {
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
 
-  await delay(1800);
+  // Let INTRO finish so trusted keyboard actions exercise the real player
+  // controller rather than merely changing DOM button state.
+  await delay(2300);
   const state = await execute(sessionId, `
     return {
       canvasCount: document.querySelectorAll('canvas').length,
@@ -172,27 +156,25 @@ try {
   await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
   await capture(sessionId, output);
 
-  const guard = await buttonCenter(sessionId, "G");
-  const punch = await buttonCenter(sessionId, "P");
-  const kick = await buttonCenter(sessionId, "K");
-  if (!guard || !punch || !kick) throw new Error(`Combat buttons were not found: ${JSON.stringify({ guard, punch, kick })}`);
-
-  await touchDown(sessionId, guard, 91);
-  await delay(220);
+  // InputSystem maps L=guard, J=punch and K=kick. W3C WebDriver key actions
+  // generate trusted key events, so these frames cover the actual controller,
+  // animation/IK and renderer path used by gameplay.
+  await keyDown(sessionId, "l");
+  await delay(180);
   await capture(sessionId, siblingOutput(output, "guard"));
-  await touchUp(sessionId, guard, 91);
-  await delay(160);
+  await keyUp(sessionId, "l");
+  await delay(170);
 
-  await touchDown(sessionId, punch, 92);
-  await delay(58);
+  await keyDown(sessionId, "j");
+  await delay(52);
   await capture(sessionId, siblingOutput(output, "punch"));
-  await touchUp(sessionId, punch, 92);
-  await delay(360);
+  await keyUp(sessionId, "j");
+  await delay(380);
 
-  await touchDown(sessionId, kick, 93);
-  await delay(74);
+  await keyDown(sessionId, "k");
+  await delay(72);
   await capture(sessionId, siblingOutput(output, "kick"));
-  await touchUp(sessionId, kick, 93);
+  await keyUp(sessionId, "k");
 
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
   console.log(JSON.stringify({ output, state, selectedP1, selectedP2, frames: ["idle", "guard", "punch", "kick"] }));

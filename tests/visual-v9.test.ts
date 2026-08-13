@@ -45,7 +45,10 @@ test("V9 idle stance creates visible fore-aft separation instead of a profile st
 
   const leftSole = getSoleContactPoint(player.visual, "left");
   const rightSole = getSoleContactPoint(player.visual, "right");
-  assert.ok(Math.abs(leftSole.y) < 0.07 && Math.abs(rightSole.y) < 0.07, "V9 stance must remain grounded");
+  assert.ok(
+    Math.abs(leftSole.y) < 0.07 && Math.abs(rightSole.y) < 0.07,
+    `V9 stance must remain grounded: left=${leftSole.y.toFixed(4)} right=${rightSole.y.toFixed(4)}`,
+  );
   assert.ok(Math.abs(leftSole.x - rightSole.x) > 0.20, "front/back feet still overlap in the fight camera plane");
 
   const leftFist = getVisualContactPoint(player.visual, "LEFT_FIST");

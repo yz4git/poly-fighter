@@ -1,5 +1,11 @@
-const CACHE_NAME = "poly-fighter-v11";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/reference/female-turnaround.jpeg"];
+const CACHE_NAME = "poly-fighter-v12";
+const APP_SHELL = [
+  "/",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/reference/female-turnaround.jpeg",
+  "/models/sera-v10.glb",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

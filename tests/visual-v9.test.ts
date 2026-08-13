@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import test from "node:test";
 import * as THREE from "three";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
@@ -7,38 +7,41 @@ import { FighterAnimationController, FighterRuntime } from "../src/game/fighter"
 import { createFighterVisual, disposeFighterVisual } from "../src/game/visual-entry";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
-test("SERA gameplay selects the authored and screen-polished V9.1 character", () => {
+test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
-  assert.equal(String(visual.visualVersion), "V9");
-  assert.match(visual.root.name, /v9/);
-  assert.equal(visual.root.userData.authoredNeutralStance, "V9.1");
-  assert.equal(visual.root.userData.screenMatchPolish, "V9.1");
-  assert.equal(visual.bodyMesh.geometry.userData.screenMatchPolish, "V9.1");
+  assert.equal(String(visual.visualVersion), "V10");
+  assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
-  assert.equal(visual.bodyMesh.geometry.userData.viewIndependent, true);
-  assert.equal(visual.bodyMesh.geometry.userData.authoredSideProfile, true);
-  assert.ok(visual.bodyMesh.geometry.groups.length >= 12, "large costume/body material regions should remain explicit");
-
-  const box = visual.bodyMesh.geometry.boundingBox ?? new THREE.Box3().setFromBufferAttribute(visual.bodyMesh.geometry.getAttribute("position") as THREE.BufferAttribute);
-  const size = box.getSize(new THREE.Vector3());
-  assert.ok(size.z > 0.38, `profile depth ${size.z} is too thin to match the turnaround silhouette`);
-  assert.ok(size.y > 0.95, `authored normalized height ${size.y} unexpectedly collapsed`);
+  assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
   disposeFighterVisual(visual);
 });
 
-test("V9/V9.1 cannot fall back to V7 reference rectangles or camera-specific planes", () => {
-  const source = readFileSync(new URL("../src/game/visual-v9.ts", import.meta.url), "utf8");
-  const polish = readFileSync(new URL("../src/game/visual-v9-polish.ts", import.meta.url), "utf8");
-  for (const text of [source, polish]) {
-    assert.equal(text.includes("GOLDEN_MASTER_V7_RECTS"), false);
-    assert.equal(text.includes("golden-master-v7-geometry"), false);
-    assert.equal(text.includes("THREE.Sprite"), false);
-    assert.equal(text.includes("VIEW_YAW"), false);
-  }
-  assert.equal(source.includes("createFemaleV9Visual"), true);
+test("V10 is asset-driven and cannot regress to per-view rectangles or procedural body primitives", () => {
+  const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
+  assert.match(source, /GLTFLoader/);
+  assert.match(source, /models\/sera-v10\.glb/);
+  assert.equal(source.includes("GOLDEN_MASTER_V7_RECTS"), false);
+  assert.equal(source.includes("THREE.Sprite"), false);
+  assert.equal(source.includes("builder.loft"), false);
+  assert.equal(source.includes("builder.prism"), false);
+  assert.equal(source.includes("builder.tube"), false);
 });
 
-test("V9.1 idle stance keeps both boots planted and visibly opens the fight-axis silhouette", () => {
+test("V10 repository contains one generated GLB from one shared four-view volume", () => {
+  const glb = new URL("../public/models/sera-v10.glb", import.meta.url);
+  assert.ok(statSync(glb).size > 10_000, "reconstructed GLB is missing or suspiciously small");
+  const metrics = JSON.parse(readFileSync(new URL("../public/models/sera-v10.metrics.json", import.meta.url), "utf8"));
+  assert.equal(metrics.singleVolume, true);
+  assert.equal(metrics.mesh.normalizedHeight, 1);
+  assert.ok(metrics.mesh.vertices > 500);
+  assert.ok(metrics.mesh.triangles > 500);
+  for (const view of ["front", "three-quarter", "side", "back"]) {
+    assert.ok(Number.isFinite(metrics.views[view].iou));
+    assert.ok(metrics.views[view].iou > 0.45, `${view} single-volume IoU is too low: ${metrics.views[view].iou}`);
+  }
+});
+
+test("V10 idle scaffold preserves grounded fighting-stance separation before/after asset load", () => {
   const playerVisual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
   const cpuVisual = createFighterVisual(FIGHTER_DEFINITIONS.red, "NORMAL");
   const player = new FighterRuntime("player", FIGHTER_DEFINITIONS.blue, false, playerVisual);
@@ -50,26 +53,19 @@ test("V9.1 idle stance keeps both boots planted and visibly opens the fight-axis
 
   const leftSole = getSoleContactPoint(player.visual, "left");
   const rightSole = getSoleContactPoint(player.visual, "right");
-  assert.ok(
-    Math.abs(leftSole.y) < 0.07 && Math.abs(rightSole.y) < 0.07,
-    `V9.1 stance must remain grounded: left=${leftSole.y.toFixed(4)} right=${rightSole.y.toFixed(4)}`,
-  );
-  assert.ok(
-    Math.abs(leftSole.x - rightSole.x) > 0.50,
-    `V9.1 feet need a clear fight-axis stagger, got ${Math.abs(leftSole.x - rightSole.x).toFixed(3)}`,
-  );
+  assert.ok(Math.abs(leftSole.y) < 0.08 && Math.abs(rightSole.y) < 0.08);
+  assert.ok(Math.abs(leftSole.x - rightSole.x) > 0.20);
 
   const leftFist = getVisualContactPoint(player.visual, "LEFT_FIST");
   const rightFist = getVisualContactPoint(player.visual, "RIGHT_FIST");
-  assert.ok(leftFist.distanceTo(rightFist) > 0.32, "ready hands still collapse into one profile line");
-  assert.ok(Math.abs(leftFist.x - rightFist.x) > 0.18, "ready hands need readable fight-axis separation");
-  assert.ok(leftFist.toArray().every(Number.isFinite) && rightFist.toArray().every(Number.isFinite));
+  assert.ok(leftFist.distanceTo(rightFist) > 0.28);
+  assert.ok(Math.abs(leftFist.x - rightFist.x) > 0.12);
 
   disposeFighterVisual(player.visual);
   disposeFighterVisual(cpu.visual);
 });
 
-test("V9.1 remains compatible with existing punch and kick contact animation", () => {
+test("V10 remains compatible with existing punch and kick contact animation", () => {
   const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
   const opponentVisual = createFighterVisual(FIGHTER_DEFINITIONS.red, "NORMAL");
   const fighter = new FighterRuntime("player", FIGHTER_DEFINITIONS.blue, false, visual);

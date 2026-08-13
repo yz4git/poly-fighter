@@ -68,27 +68,6 @@ async function chooseFighter(sessionId, name, playerLabel) {
   `, [name, playerLabel]);
 }
 
-async function keyDown(sessionId, value) {
-  await command(`/session/${sessionId}/actions`, "POST", {
-    actions: [{
-      type: "key",
-      id: "audit-keyboard",
-      actions: [{ type: "keyDown", value }],
-    }],
-  });
-}
-
-async function keyUp(sessionId, value) {
-  await command(`/session/${sessionId}/actions`, "POST", {
-    actions: [{
-      type: "key",
-      id: "audit-keyboard",
-      actions: [{ type: "keyUp", value }],
-    }],
-  });
-  await command(`/session/${sessionId}/actions`, "DELETE").catch(() => undefined);
-}
-
 function siblingOutput(base, suffix) {
   return base.replace(/\.png$/i, `-${suffix}.png`);
 }
@@ -96,6 +75,78 @@ function siblingOutput(base, suffix) {
 async function capture(sessionId, path) {
   const screenshot = await command(`/session/${sessionId}/screenshot`);
   await writeFile(path, Buffer.from(screenshot, "base64"));
+}
+
+async function setRuntimePose(sessionId, pose) {
+  return execute(sessionId, `
+    const pose = arguments[0];
+    function findGame() {
+      const host = document.querySelector('main.poly-app');
+      if (!host) return null;
+      const key = Object.keys(host).find((entry) => entry.startsWith('__reactFiber$'));
+      let fiber = key ? host[key] : null;
+      const visited = new Set();
+      while (fiber && !visited.has(fiber)) {
+        visited.add(fiber);
+        let hook = fiber.memoizedState;
+        while (hook) {
+          const value = hook.memoizedState;
+          const current = value && typeof value === 'object' && 'current' in value ? value.current : null;
+          if (current && current.constructor?.name === 'PolyFightGame' && current.p1 && current.animation && current.renderer) return current;
+          hook = hook.next;
+        }
+        fiber = fiber.return;
+      }
+      return null;
+    }
+
+    const game = findGame();
+    if (!game) return { ok: false, reason: 'PolyFightGame ref not found' };
+    game.pause();
+    game.input.clear();
+    const fighter = game.p1;
+    const opponent = game.p2;
+    fighter.currentMove = null;
+    fighter.moveTick = 0;
+    fighter.hitTargets.clear();
+    fighter.grounded = true;
+    fighter.position.y = 0;
+    fighter.velocity.set(0, 0, 0);
+    fighter.state = 'IDLE';
+    opponent.currentMove = null;
+    opponent.moveTick = 0;
+    opponent.state = 'IDLE';
+    opponent.velocity.set(0, 0, 0);
+
+    if (pose === 'GUARD') {
+      fighter.state = 'GUARD';
+    } else if (pose === 'PUNCH') {
+      if (!fighter.beginMove('jab')) return { ok: false, reason: 'jab did not begin' };
+      fighter.moveTick = fighter.currentMove.startup + 1;
+    } else if (pose === 'KICK') {
+      if (!fighter.beginMove('kick')) return { ok: false, reason: 'kick did not begin' };
+      fighter.moveTick = fighter.currentMove.startup + 1;
+    }
+
+    const time = pose === 'IDLE' ? 4.0 : pose === 'GUARD' ? 4.2 : pose === 'PUNCH' ? 4.4 : 4.6;
+    game.animation.update(fighter, opponent, time);
+    game.animation.update(opponent, fighter, time + 0.22);
+    game.fightCamera.update(fighter, opponent, 1 / 60);
+    game.renderer.render(game.scene, game.camera);
+    const visual = fighter.visual;
+    return {
+      ok: true,
+      pose,
+      state: fighter.state,
+      move: fighter.currentMove?.id ?? null,
+      moveTick: fighter.moveTick,
+      visualVersion: visual.visualVersion,
+      assetState: visual.root.userData.reconstructionAssetState ?? null,
+      presentationMode: visual.bodyMesh.userData.v10PresentationMode ?? null,
+      skinningPresentation: visual.root.userData.skinningPresentation ?? null,
+      colorPipeline: visual.root.userData.colorPipeline ?? null,
+    };
+  `, [pose]);
 }
 
 let sessionId = null;
@@ -137,8 +188,10 @@ try {
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
 
-  // Let INTRO finish so trusted keyboard actions exercise the real player
-  // controller rather than merely changing DOM button state.
+  // Wait for React match construction and the async V10 GLB swap. The visual
+  // audit then freezes gameplay and drives FighterRuntime states directly,
+  // avoiding CPU timing or synthetic input ambiguity while still using the
+  // actual animation/IK, Three.js scene and WebGL renderer.
   await delay(2300);
   const state = await execute(sessionId, `
     return {
@@ -154,30 +207,20 @@ try {
   }
 
   await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
-  await capture(sessionId, output);
-
-  // InputSystem maps L=guard, J=punch and K=kick. W3C WebDriver key actions
-  // generate trusted key events, so these frames cover the actual controller,
-  // animation/IK and renderer path used by gameplay.
-  await keyDown(sessionId, "l");
-  await delay(180);
-  await capture(sessionId, siblingOutput(output, "guard"));
-  await keyUp(sessionId, "l");
-  await delay(170);
-
-  await keyDown(sessionId, "j");
-  await delay(52);
-  await capture(sessionId, siblingOutput(output, "punch"));
-  await keyUp(sessionId, "j");
-  await delay(380);
-
-  await keyDown(sessionId, "k");
-  await delay(72);
-  await capture(sessionId, siblingOutput(output, "kick"));
-  await keyUp(sessionId, "k");
+  const poses = ["IDLE", "GUARD", "PUNCH", "KICK"];
+  const poseStates = {};
+  for (const pose of poses) {
+    const result = await setRuntimePose(sessionId, pose);
+    if (!result?.ok) throw new Error(`Unable to set ${pose} visual audit pose: ${JSON.stringify(result)}`);
+    poseStates[pose] = result;
+    await delay(70);
+    const path = pose === "IDLE" ? output : siblingOutput(output, pose.toLowerCase());
+    await capture(sessionId, path);
+  }
 
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, frames: ["idle", "guard", "punch", "kick"] }));
+  await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(poseStates, null, 2));
+  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates }));
 } finally {
   if (sessionId) {
     await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

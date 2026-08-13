@@ -14,7 +14,10 @@ import {
 } from "./visual";
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
 
-/** Runtime visual selector. SERA uses the four-view reconstructed V10 GLB; KAIRO stays on the legacy model. */
+/**
+ * Runtime visual selector. SERA uses the shared four-view V10 GLB plus the
+ * V10.3 bind-correct anatomical fragment presentation; KAIRO stays legacy.
+ */
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
   if (definition.archetype === "SPEED") {
     return applyV10RuntimePolish(applyV10SafeStance(createFemaleV10Visual(definition, quality)));

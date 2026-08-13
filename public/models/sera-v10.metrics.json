@@ -1,0 +1,76 @@
+{
+  "source": {
+    "width": 1536,
+    "height": 1024
+  },
+  "singleVolume": true,
+  "threeQuarterYawDegrees": 45.0,
+  "grid": [
+    144,
+    288,
+    128
+  ],
+  "occupiedVoxels": 310096,
+  "mesh": {
+    "vertices": 9597,
+    "triangles": 19308,
+    "normalizedHeight": 1.0,
+    "authoredHeightMeters": 1.68,
+    "actualHeightMeters": 1.6689045660674457,
+    "watertight": false
+  },
+  "views": {
+    "front": {
+      "bbox": [
+        45,
+        16,
+        321,
+        781
+      ],
+      "referencePixels": 98094,
+      "projectionPixels": 87468,
+      "iou": 0.8650759349904014,
+      "intersection": 86069,
+      "union": 99493
+    },
+    "three-quarter": {
+      "bbox": [
+        54,
+        19,
+        292,
+        790
+      ],
+      "referencePixels": 98288,
+      "projectionPixels": 87867,
+      "iou": 0.8454027261462206,
+      "intersection": 85280,
+      "union": 100875
+    },
+    "side": {
+      "bbox": [
+        120,
+        19,
+        299,
+        790
+      ],
+      "referencePixels": 70834,
+      "projectionPixels": 65837,
+      "iou": 0.8868609611641103,
+      "intersection": 64238,
+      "union": 72433
+    },
+    "back": {
+      "bbox": [
+        54,
+        18,
+        326,
+        778
+      ],
+      "referencePixels": 98269,
+      "projectionPixels": 86423,
+      "iou": 0.8484172179465367,
+      "intersection": 84773,
+      "union": 99919
+    }
+  }
+}

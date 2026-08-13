@@ -126,6 +126,157 @@ function bucketKey(region: V10SkinRegion, boneIndex: number): string {
   return `${region}:${boneIndex}`;
 }
 
+function transformNormalizedGeometryToBoneLocal(
+  geometry: THREE.BufferGeometry,
+  visual: FighterVisual,
+  boneIndex: number,
+): THREE.BufferGeometry {
+  const boneInverse = visual.rig.skeleton.boneInverses[boneIndex];
+  if (!boneInverse) return geometry;
+  geometry.applyMatrix4(boneInverse.clone().multiply(visual.bodyMesh.bindMatrix));
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function addHeadMesh(
+  visual: FighterVisual,
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  name: string,
+  meshes: THREE.Mesh[],
+): THREE.Mesh {
+  const headIndex = visual.rig.boneIndices.head;
+  transformNormalizedGeometryToBoneLocal(geometry, visual, headIndex);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.frustumCulled = false;
+  mesh.userData.v10ReferenceHead = true;
+  visual.rig.bones.head.add(mesh);
+  meshes.push(mesh);
+  return mesh;
+}
+
+function createReferenceFaceGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(1, 2);
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < position.count; i += 1) {
+    const y0 = position.getY(i);
+    const lower = THREE.MathUtils.clamp((-y0 + 0.05) / 1.05, 0, 1);
+    const upper = THREE.MathUtils.clamp((y0 + 0.15) / 1.15, 0, 1);
+    const xScale = 0.067 * (1 - lower * 0.24 + upper * 0.04);
+    const y = 0.922 + y0 * 0.084;
+    const z = 0.016 + position.getZ(i) * 0.061 + lower * 0.006;
+    position.setXYZ(i, position.getX(i) * xScale, y, z);
+  }
+  position.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createTrianglePatch(points: Array<readonly [number, number, number]>): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addReferenceHead(visual: FighterVisual, meshes: THREE.Mesh[]): void {
+  const skinMaterial = new THREE.MeshBasicMaterial({ color: PALETTE.skin, toneMapped: false, side: THREE.DoubleSide });
+  const hairMaterial = new THREE.MeshBasicMaterial({ color: 0x14131a, toneMapped: false, side: THREE.DoubleSide });
+  const darkHairMaterial = new THREE.MeshBasicMaterial({ color: 0x090a0f, toneMapped: false, side: THREE.DoubleSide });
+  const blueMaterial = new THREE.MeshBasicMaterial({ color: 0x294fc7, toneMapped: false, side: THREE.DoubleSide });
+  const featureMaterial = new THREE.MeshBasicMaterial({ color: 0x161015, toneMapped: false, side: THREE.DoubleSide });
+  const lipMaterial = new THREE.MeshBasicMaterial({ color: 0x6c3635, toneMapped: false, side: THREE.DoubleSide });
+
+  addHeadMesh(visual, createReferenceFaceGeometry(), skinMaterial, "v10-4-reference-face", meshes);
+
+  const hairCap = new THREE.SphereGeometry(1, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.68);
+  hairCap.scale(0.074, 0.078, 0.068);
+  hairCap.translate(0, 0.962, 0.001);
+  addHeadMesh(visual, hairCap, hairMaterial, "v10-4-reference-hair-cap", meshes);
+
+  const nose = createTrianglePatch([
+    [-0.012, 0.927, 0.070],
+    [0.012, 0.927, 0.070],
+    [0.000, 0.905, 0.088],
+    [-0.012, 0.927, 0.070],
+    [0.000, 0.950, 0.066],
+    [0.000, 0.905, 0.088],
+    [0.012, 0.927, 0.070],
+    [0.000, 0.905, 0.088],
+    [0.000, 0.950, 0.066],
+  ]);
+  addHeadMesh(visual, nose, skinMaterial, "v10-4-reference-nose", meshes);
+
+  const leftEye = createTrianglePatch([
+    [-0.047, 0.940, 0.072], [-0.014, 0.940, 0.075], [-0.030, 0.928, 0.077],
+    [-0.047, 0.940, 0.072], [-0.029, 0.948, 0.075], [-0.014, 0.940, 0.075],
+  ]);
+  const rightEye = createTrianglePatch([
+    [0.014, 0.940, 0.075], [0.047, 0.940, 0.072], [0.030, 0.928, 0.077],
+    [0.014, 0.940, 0.075], [0.029, 0.948, 0.075], [0.047, 0.940, 0.072],
+  ]);
+  addHeadMesh(visual, leftEye, featureMaterial, "v10-4-reference-left-eye", meshes);
+  addHeadMesh(visual, rightEye, featureMaterial, "v10-4-reference-right-eye", meshes);
+
+  const brows = createTrianglePatch([
+    [-0.050, 0.958, 0.070], [-0.015, 0.954, 0.074], [-0.016, 0.960, 0.073],
+    [0.015, 0.954, 0.074], [0.050, 0.958, 0.070], [0.016, 0.960, 0.073],
+  ]);
+  addHeadMesh(visual, brows, featureMaterial, "v10-4-reference-brows", meshes);
+
+  const lips = createTrianglePatch([
+    [-0.018, 0.892, 0.072], [0.018, 0.892, 0.072], [0.000, 0.886, 0.078],
+    [-0.018, 0.892, 0.072], [0.000, 0.898, 0.077], [0.018, 0.892, 0.072],
+  ]);
+  addHeadMesh(visual, lips, lipMaterial, "v10-4-reference-lips", meshes);
+
+  const fringePatches = [
+    [[-0.061, 0.982, 0.050], [-0.015, 1.004, 0.053], [-0.030, 0.944, 0.078]],
+    [[-0.015, 1.004, 0.053], [0.028, 1.000, 0.054], [0.006, 0.943, 0.079]],
+    [[0.028, 1.000, 0.054], [0.061, 0.980, 0.050], [0.036, 0.947, 0.076]],
+  ] as const;
+  for (const [index, patch] of fringePatches.entries()) {
+    addHeadMesh(visual, createTrianglePatch([...patch]), darkHairMaterial, `v10-4-reference-fringe-${index}`, meshes);
+  }
+
+  const sideLocks = [
+    createTrianglePatch([[-0.062, 0.979, 0.032], [-0.067, 0.902, 0.055], [-0.045, 0.936, 0.074]]),
+    createTrianglePatch([[0.062, 0.979, 0.032], [0.067, 0.902, 0.055], [0.045, 0.936, 0.074]]),
+  ];
+  addHeadMesh(visual, sideLocks[0], darkHairMaterial, "v10-4-reference-left-lock", meshes);
+  addHeadMesh(visual, sideLocks[1], darkHairMaterial, "v10-4-reference-right-lock", meshes);
+
+  const tie = new THREE.CylinderGeometry(0.024, 0.024, 0.020, 8, 1, false);
+  tie.rotateX(Math.PI / 2);
+  tie.translate(0, 1.006, -0.058);
+  addHeadMesh(visual, tie, blueMaterial, "v10-4-reference-ponytail-tie", meshes);
+
+  const ponytailPoints = [
+    new THREE.Vector3(0, 1.008, -0.070),
+    new THREE.Vector3(0.008, 0.955, -0.126),
+    new THREE.Vector3(0.012, 0.875, -0.155),
+    new THREE.Vector3(0.008, 0.790, -0.165),
+    new THREE.Vector3(0.002, 0.715, -0.148),
+  ];
+  const radii = [0.045, 0.050, 0.045, 0.034];
+  for (let i = 0; i < ponytailPoints.length - 1; i += 1) {
+    const start = ponytailPoints[i];
+    const end = ponytailPoints[i + 1];
+    const direction = end.clone().sub(start);
+    const length = direction.length();
+    const geometry = new THREE.CylinderGeometry(radii[i] * 0.72, radii[i], length, 6, 1, false);
+    geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize()));
+    geometry.translate((start.x + end.x) * 0.5, (start.y + end.y) * 0.5, (start.z + end.z) * 0.5);
+    addHeadMesh(visual, geometry, i > 1 ? darkHairMaterial : hairMaterial, `v10-4-reference-ponytail-${i}`, meshes);
+  }
+
+  visual.root.userData.v10HeadReference = "V10.4_FRONT_3Q_SIDE_HAIR";
+}
+
 function addUnderbodySegment(
   parent: THREE.Bone,
   child: THREE.Bone,
@@ -243,6 +394,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
 
     const sourceSemantic = semanticFromRgb(r, g, b);
     const region = classifyV103FaceRegion(x, y, z, sourceSemantic);
+    if (region === "HEAD") continue;
     const boneIndex = ownerBoneIndex(region, y, visual);
     const key = bucketKey(region, boneIndex);
     let bucket = buckets.get(key);
@@ -296,7 +448,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = `v10-3-fragment-${key.replace(/:/g, "-")}`;
+    mesh.name = `v10-4-fragment-${key.replace(/:/g, "-")}`;
     mesh.frustumCulled = false;
     mesh.userData.v10FragmentRegion = bucket.region;
     mesh.userData.v10FragmentBoneIndex = bucket.boneIndex;
@@ -304,16 +456,17 @@ function installBoneParentedFragments(visual: FighterVisual): void {
     fragments.push(mesh);
   }
 
+  addReferenceHead(visual, fragments);
   installArticulationUnderbody(visual, fragments);
   source.dispose();
   visual.bodyMesh.visible = false;
   visual.bodyMesh.userData.v10PresentationMode = "BONE_PARENTED_FRAGMENT_SOURCE_HIDDEN";
-  visual.root.userData.skinningPresentation = "V10.3_BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY";
-  visual.root.userData.colorPipeline = "V10.3_ANATOMY_AWARE_REFERENCE_COLORS";
+  visual.root.userData.skinningPresentation = "V10.4_BONE_PARENTED_FRAGMENTS_WITH_REFERENCE_HEAD";
+  visual.root.userData.colorPipeline = "V10.4_ANATOMY_AWARE_REFERENCE_COLORS";
   visual.root.userData.v10FragmentCount = fragments.length;
   visual.root.userData.v10RegionCounts = regionCounts;
   visual.root.userData.v10ArticulationAudit = "PIXEL_GATED_READY";
-  visual.root.userData.v10PresentationRelease = "V10.3";
+  visual.root.userData.v10PresentationRelease = "V10.4";
   visual.stats.meshCount = fragments.length;
   visual.stats.materialCount = fragments.length;
   visual.stats.vertexCount = position.count;
@@ -325,7 +478,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;
-  visual.root.userData.authoredNeutralStance = "V10.3_BONE_PARENTED_FRAGMENTS";
+  visual.root.userData.authoredNeutralStance = "V10.4_REFERENCE_MATCH";
 
   const previousBeforeRender = visual.bodyMesh.onBeforeRender;
   visual.bodyMesh.onBeforeRender = function onBeforeRender(...args): void {

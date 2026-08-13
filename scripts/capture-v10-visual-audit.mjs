@@ -4,7 +4,7 @@ import process from "node:process";
 
 const driver = process.env.WEBDRIVER_BIN;
 const url = process.env.AUDIT_URL ?? "http://127.0.0.1:3000/";
-const output = process.env.AUDIT_OUTPUT ?? "artifacts/visual-audit/sera-v10-2-game.png";
+const output = process.env.AUDIT_OUTPUT ?? "artifacts/visual-audit/sera-v10-3-game.png";
 if (!driver) throw new Error("WEBDRIVER_BIN is required");
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -92,8 +92,6 @@ async function setRuntimePose(sessionId, pose) {
         while (hook) {
           const value = hook.memoizedState;
           const current = value && typeof value === 'object' && 'current' in value ? value.current : null;
-          // Production bundles minify class names, so identify the ref by its
-          // stable public runtime surface instead of constructor.name.
           if (current && current.p1 && current.p2 && current.animation && current.renderer && current.scene && current.camera) return current;
           hook = hook.next;
         }
@@ -102,12 +100,31 @@ async function setRuntimePose(sessionId, pose) {
       return null;
     }
 
+    function worldPoint(object) {
+      const point = object.position.clone();
+      object.getWorldPosition(point);
+      return { x: point.x, y: point.y, z: point.z };
+    }
+
+    function screenPoint(object, camera, width, height) {
+      const point = object.position.clone();
+      object.getWorldPosition(point);
+      point.project(camera);
+      return {
+        x: (point.x * 0.5 + 0.5) * width,
+        y: (-point.y * 0.5 + 0.5) * height,
+        z: point.z,
+      };
+    }
+
     const game = findGame();
     if (!game) return { ok: false, reason: 'PolyFightGame ref not found' };
     game.pause();
     game.input.clear();
     const fighter = game.p1;
     const opponent = game.p2;
+    const visual = fighter.visual;
+
     fighter.currentMove = null;
     fighter.moveTick = 0;
     fighter.hitTargets.clear();
@@ -123,19 +140,42 @@ async function setRuntimePose(sessionId, pose) {
     if (pose === 'GUARD') {
       fighter.state = 'GUARD';
     } else if (pose === 'PUNCH') {
-      if (!fighter.beginMove('jab')) return { ok: false, reason: 'jab did not begin' };
-      fighter.moveTick = fighter.currentMove.startup + 1;
+      if (!fighter.beginMove('straight')) return { ok: false, reason: 'straight did not begin' };
+      fighter.moveTick = fighter.currentMove.startup + Math.max(1, Math.floor(fighter.currentMove.active / 2));
     } else if (pose === 'KICK') {
-      if (!fighter.beginMove('kick')) return { ok: false, reason: 'kick did not begin' };
-      fighter.moveTick = fighter.currentMove.startup + 1;
+      if (!fighter.beginMove('dashKick')) return { ok: false, reason: 'dashKick did not begin' };
+      fighter.moveTick = fighter.currentMove.startup + Math.max(1, Math.floor(fighter.currentMove.active / 2));
     }
 
     const time = pose === 'IDLE' ? 4.0 : pose === 'GUARD' ? 4.2 : pose === 'PUNCH' ? 4.4 : 4.6;
     game.animation.update(fighter, opponent, time);
     game.animation.update(opponent, fighter, time + 0.22);
+
+    // Attack aura is intentionally hidden in the audit. It previously covered
+    // SERA with a large translucent volume and made genuinely different rig
+    // poses look identical in screenshots.
+    visual.aura.visible = false;
+    opponent.visual.aura.visible = false;
+
     game.fightCamera.update(fighter, opponent, 1 / 60);
     game.renderer.render(game.scene, game.camera);
-    const visual = fighter.visual;
+    visual.root.updateMatrixWorld(true);
+
+    const width = game.renderer.domElement.width;
+    const height = game.renderer.domElement.height;
+    const contacts = {
+      leftFist: worldPoint(visual.leftArm.end),
+      rightFist: worldPoint(visual.rightArm.end),
+      leftFoot: worldPoint(visual.leftLeg.end),
+      rightFoot: worldPoint(visual.rightLeg.end),
+    };
+    const screens = {
+      leftFist: screenPoint(visual.leftArm.end, game.camera, width, height),
+      rightFist: screenPoint(visual.rightArm.end, game.camera, width, height),
+      leftFoot: screenPoint(visual.leftLeg.end, game.camera, width, height),
+      rightFoot: screenPoint(visual.rightLeg.end, game.camera, width, height),
+    };
+
     return {
       ok: true,
       pose,
@@ -147,8 +187,33 @@ async function setRuntimePose(sessionId, pose) {
       presentationMode: visual.bodyMesh.userData.v10PresentationMode ?? null,
       skinningPresentation: visual.root.userData.skinningPresentation ?? null,
       colorPipeline: visual.root.userData.colorPipeline ?? null,
+      contacts,
+      screens,
     };
   `, [pose]);
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
+}
+
+function validatePoseSeparation(poseStates) {
+  const idle = poseStates.IDLE;
+  const guard = poseStates.GUARD;
+  const punch = poseStates.PUNCH;
+  const kick = poseStates.KICK;
+  const metrics = {
+    guardFistWorld: Math.max(distance(idle.contacts.leftFist, guard.contacts.leftFist), distance(idle.contacts.rightFist, guard.contacts.rightFist)),
+    punchFistWorld: distance(idle.contacts.rightFist, punch.contacts.rightFist),
+    kickFootWorld: distance(idle.contacts.rightFoot, kick.contacts.rightFoot),
+    guardFistScreen: Math.max(distance(idle.screens.leftFist, guard.screens.leftFist), distance(idle.screens.rightFist, guard.screens.rightFist)),
+    punchFistScreen: distance(idle.screens.rightFist, punch.screens.rightFist),
+    kickFootScreen: distance(idle.screens.rightFoot, kick.screens.rightFoot),
+  };
+  if (metrics.guardFistWorld < 0.18) throw new Error(`GUARD pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  if (metrics.punchFistWorld < 0.45) throw new Error(`PUNCH pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  if (metrics.kickFootWorld < 0.45) throw new Error(`KICK pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  return metrics;
 }
 
 let sessionId = null;
@@ -180,20 +245,14 @@ try {
   const start = await clickButton(sessionId, "START MATCH");
   if (!start?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(start)}`);
   await delay(350);
-
   const selectedP1 = await chooseFighter(sessionId, "SERA", "PLAYER 1 / SPEED");
   if (!selectedP1?.clicked) throw new Error(`PLAYER 1 SERA was not found: ${JSON.stringify(selectedP1)}`);
   const selectedP2 = await chooseFighter(sessionId, "KAIRO", "PLAYER 2 / POWER");
   if (!selectedP2?.clicked) throw new Error(`PLAYER 2 KAIRO was not found: ${JSON.stringify(selectedP2)}`);
   await delay(150);
-
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
 
-  // Wait for React match construction and the async V10 GLB swap. The visual
-  // audit then freezes gameplay and drives FighterRuntime states directly,
-  // avoiding CPU timing or synthetic input ambiguity while still using the
-  // actual animation/IK, Three.js scene and WebGL renderer.
   await delay(2300);
   const state = await execute(sessionId, `
     return {
@@ -220,12 +279,12 @@ try {
     await capture(sessionId, path);
   }
 
+  const poseSeparation = validatePoseSeparation(poseStates);
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
   await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(poseStates, null, 2));
-  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates }));
+  await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
+  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates, poseSeparation }));
 } finally {
-  if (sessionId) {
-    await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
-  }
+  if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");
 }

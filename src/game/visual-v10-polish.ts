@@ -3,10 +3,10 @@ import type { FighterVisual } from "./visual";
 import type { V10Semantic, V10SkinRegion } from "./visual-v10";
 
 const PALETTE: Record<Exclude<V10Semantic, "unknown">, THREE.Color> = {
-  skin: new THREE.Color(0xd3a184),
-  blue: new THREE.Color(0x2452c5),
-  black: new THREE.Color(0x0e0e16),
-  silver: new THREE.Color(0xb9c3d0),
+  skin: new THREE.Color(0xd7a38a),
+  blue: new THREE.Color(0x387ad3),
+  black: new THREE.Color(0x0d0e16),
+  silver: new THREE.Color(0x9fadc2),
 };
 
 const FRAGMENTS = new WeakMap<FighterVisual, THREE.Mesh[]>();
@@ -36,6 +36,12 @@ function resolvedSemantic(
   b: number,
 ): Exclude<V10Semantic, "unknown"> {
   if (region === "HEAD") return semantic === "silver" ? "skin" : semantic;
+  if (region.endsWith("_HAND")) return semantic === "black" ? "black" : "skin";
+  if (region.endsWith("_FOREARM")) return semantic === "silver" ? "silver" : "black";
+  if (region.endsWith("_UPPER_ARM")) {
+    if (semantic === "skin" && y > 0.735) return "skin";
+    return semantic === "silver" ? "black" : semantic === "blue" ? "black" : semantic;
+  }
   if (region === "HIPS") {
     if (semantic === "skin" || semantic === "silver") return b > r * 1.03 ? "blue" : "black";
     return semantic;
@@ -76,11 +82,6 @@ export function classifyV103FaceRegion(
   const ponytail = y > 0.665 && z < -0.080 && absX < 0.175;
   if (y >= 0.830 || ponytail) return "HEAD";
 
-  // Detect the lateral arm chain before the coarse lower-body height bands.
-  // Hands in the turnaround sit near thigh height, so classifying every face
-  // below y=.545 as a leg made hand polygons follow the thigh and disappear
-  // from punch/guard articulation. Material and lateral gates keep skirt faces
-  // on the hips while recovering true hand/forearm ownership.
   if (y >= 0.405 && y < 0.515 && absX > 0.100) {
     const handMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.165);
     if (handMaterial) return `${side}_HAND` as V10SkinRegion;
@@ -98,8 +99,6 @@ export function classifyV103FaceRegion(
     }
   }
 
-  // The legs overlap in several reference views, so a centre split is the
-  // most deterministic way to guarantee that either leg can articulate.
   if (y < 0.105) return `${side}_FOOT` as V10SkinRegion;
   if (y < 0.320) return `${side}_SHIN` as V10SkinRegion;
   if (y < 0.545) return `${side}_THIGH` as V10SkinRegion;
@@ -130,7 +129,7 @@ function ownerBoneIndex(region: V10SkinRegion, y: number, visual: FighterVisual)
 }
 
 function shadedFacetColor(base: THREE.Color, sourceValue: number): THREE.Color {
-  const factor = THREE.MathUtils.clamp(0.76 + sourceValue * 0.48, 0.76, 1.12);
+  const factor = THREE.MathUtils.clamp(0.72 + sourceValue * 0.46, 0.72, 1.08);
   return base.clone().multiplyScalar(factor);
 }
 
@@ -312,7 +311,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
   visual.bodyMesh.visible = false;
   visual.bodyMesh.userData.v10PresentationMode = "BONE_PARENTED_FRAGMENT_SOURCE_HIDDEN";
   visual.root.userData.skinningPresentation = "V10.3_BONE_PARENTED_FRAGMENTS_WITH_UNDERBODY";
-  visual.root.userData.colorPipeline = "V10.3_SHADED_REFERENCE_VERTEX_COLOR";
+  visual.root.userData.colorPipeline = "V10.3_ANATOMY_AWARE_REFERENCE_COLORS";
   visual.root.userData.v10FragmentCount = fragments.length;
   visual.root.userData.v10RegionCounts = regionCounts;
   visual.stats.meshCount = fragments.length;

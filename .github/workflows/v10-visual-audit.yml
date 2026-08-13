@@ -31,6 +31,10 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Run regression tests
+        run: npm test
+      - name: Run lint
+        run: npm run lint
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-server.log 2>&1 &

@@ -76,14 +76,19 @@ export function classifyV103FaceRegion(
   const ponytail = y > 0.665 && z < -0.080 && absX < 0.175;
   if (y >= 0.830 || ponytail) return "HEAD";
 
-  // The legs overlap in several reference views, so a centre split is the
-  // most deterministic way to guarantee that either leg can articulate.
-  if (y < 0.105) return `${side}_FOOT` as V10SkinRegion;
-  if (y < 0.320) return `${side}_SHIN` as V10SkinRegion;
-  if (y < 0.545) return `${side}_THIGH` as V10SkinRegion;
-
-  // Arm ownership is deliberately generous above the waist. The lower gates
-  // retain semantic checks so blue/black skirt panels stay on the hips.
+  // Detect the lateral arm chain before the coarse lower-body height bands.
+  // Hands in the turnaround sit near thigh height, so classifying every face
+  // below y=.545 as a leg made hand polygons follow the thigh and disappear
+  // from punch/guard articulation. Material and lateral gates keep skirt faces
+  // on the hips while recovering true hand/forearm ownership.
+  if (y >= 0.405 && y < 0.515 && absX > 0.100) {
+    const handMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.165);
+    if (handMaterial) return `${side}_HAND` as V10SkinRegion;
+  }
+  if (y >= 0.485 && y < 0.625 && absX > 0.092) {
+    const lowerArmMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.145);
+    if (lowerArmMaterial) return `${side}_FOREARM` as V10SkinRegion;
+  }
   if (y >= 0.625) {
     const threshold = y >= 0.720 ? 0.060 : 0.074;
     if (absX > threshold) {
@@ -92,14 +97,12 @@ export function classifyV103FaceRegion(
         : `${side}_FOREARM` as V10SkinRegion;
     }
   }
-  if (y >= 0.485 && y < 0.625 && absX > 0.092) {
-    const lowerArmMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.128);
-    if (lowerArmMaterial) return `${side}_FOREARM` as V10SkinRegion;
-  }
-  if (y >= 0.405 && y < 0.515 && absX > 0.100) {
-    const handMaterial = semantic === "skin" || semantic === "silver" || semantic === "black";
-    if (handMaterial) return `${side}_HAND` as V10SkinRegion;
-  }
+
+  // The legs overlap in several reference views, so a centre split is the
+  // most deterministic way to guarantee that either leg can articulate.
+  if (y < 0.105) return `${side}_FOOT` as V10SkinRegion;
+  if (y < 0.320) return `${side}_SHIN` as V10SkinRegion;
+  if (y < 0.545) return `${side}_THIGH` as V10SkinRegion;
 
   if (y < 0.690) return "HIPS";
   return "TORSO";

@@ -152,18 +152,16 @@ export function classifyV10SkinRegion(x: number, y: number, z: number, semantic:
     return `${side}_HAND` as V10SkinRegion;
   }
 
-  // Below the skirt hem the surface is unambiguously leg/boot geometry.
   if (y < 0.430) {
     if (y < 0.080) return `${side}_FOOT` as V10SkinRegion;
     if (y < 0.300) return `${side}_SHIN` as V10SkinRegion;
     return `${side}_THIGH` as V10SkinRegion;
   }
 
-  // In the skirt/thigh overlap band only skin and narrow dark leg columns may
-  // follow a thigh. Broad blue/black panels remain attached to the pelvis.
   if (y < 0.605) {
     const narrowLeg = absX > 0.018 && absX < 0.118;
-    if ((semantic === "skin" && absX < 0.135) || (narrowLeg && semantic === "black") || (y < 0.495 && narrowLeg && semantic === "blue")) {
+    const darkLeg = narrowLeg && semantic === "black" && (y < 0.545 || absX < 0.085);
+    if ((semantic === "skin" && absX < 0.135) || darkLeg || (y < 0.495 && narrowLeg && semantic === "blue")) {
       return `${side}_THIGH` as V10SkinRegion;
     }
     return "HIPS";
@@ -232,7 +230,6 @@ function influencesForRegion(region: V10SkinRegion, y: number, b: Record<string,
   }
 }
 
-/** Transfer the reconstructed surface onto the existing combat skeleton. */
 export function assignV10Skinning(geometry: THREE.BufferGeometry, boneIndices: Record<string, number>): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
   const color = (geometry.getAttribute("color") as THREE.BufferAttribute | undefined) ?? null;
@@ -304,8 +301,6 @@ export function createFemaleV10Visual(
   definition: FighterDefinition,
   quality: FighterVisualQuality = "NORMAL",
 ): FighterVisual {
-  // V9 remains only as the proven skeleton/contact/foot-plant scaffold. The
-  // visible surface is replaced by the generated V10 GLB in the browser.
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-v10-1-${definition.id}`;
   visual.root.userData.visualPipeline = "V10_GLB_TURNAROUND_RECONSTRUCTION";

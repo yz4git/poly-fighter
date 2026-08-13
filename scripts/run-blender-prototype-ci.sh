@@ -19,13 +19,16 @@ mkdir -p "$out"
 xvfb-run -a blender --background \
   --python-use-system-env \
   --python-exit-code 1 \
-  --python tools/blender/build-sera-prototype.py \
-  -- --output-dir "$out"
+  --python tools/blender/build-sera-quaternius.py \
+  -- --output-dir "$out" \
+  --source-gltf ".external/quaternius/first/assets/3d/characters/player/Superhero_Female_FullBody.gltf"
 
 test -s "$out/sera-blender-prototype.blend"
 test -s "$out/sera-blender-prototype.glb"
+test -s "$out/sera-blender-metrics.json"
 for view in front three-quarter side back; do
   test -s "$out/sera-blender-${view}.png"
   file "$out/sera-blender-${view}.png" | grep -q "PNG image data"
 done
 cat "$out/blender-version.txt"
+cat "$out/sera-blender-metrics.json"

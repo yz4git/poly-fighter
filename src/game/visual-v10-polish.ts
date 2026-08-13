@@ -313,6 +313,7 @@ function installBoneParentedFragments(visual: FighterVisual): void {
   visual.root.userData.v10FragmentCount = fragments.length;
   visual.root.userData.v10RegionCounts = regionCounts;
   visual.root.userData.v10ArticulationAudit = "PIXEL_GATED_READY";
+  visual.root.userData.v10PresentationRelease = "V10.3";
   visual.stats.meshCount = fragments.length;
   visual.stats.materialCount = fragments.length;
   visual.stats.vertexCount = position.count;

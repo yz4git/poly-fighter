@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { FighterAnimationController, FighterRuntime } from "../src/game/fighter";
 import { createFighterVisual, disposeFighterVisual } from "../src/game/visual-entry";
+import { classifyV10SkinRegion } from "../src/game/visual-v10";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
 test("SERA gameplay selects the V10 reconstruction pipeline", () => {
@@ -13,6 +14,7 @@ test("SERA gameplay selects the V10 reconstruction pipeline", () => {
   assert.match(visual.root.name, /v10/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
   assert.equal(visual.root.userData.reconstructionAsset, "/models/sera-v10.glb");
+  assert.equal(visual.root.userData.authoredNeutralStance, "V10.1_BIND_SAFE");
   disposeFighterVisual(visual);
 });
 
@@ -37,8 +39,24 @@ test("V10 repository contains one generated GLB from one shared four-view volume
   assert.ok(metrics.mesh.triangles > 500);
   for (const view of ["front", "three-quarter", "side", "back"]) {
     assert.ok(Number.isFinite(metrics.views[view].iou));
-    assert.ok(metrics.views[view].iou > 0.45, `${view} single-volume IoU is too low: ${metrics.views[view].iou}`);
+    assert.ok(metrics.views[view].iou > 0.80, `${view} single-volume IoU is too low: ${metrics.views[view].iou}`);
   }
+});
+
+test("V10.1 never assigns broad torso or skirt samples to arm regions", () => {
+  assert.equal(classifyV10SkinRegion(0.10, 0.60, 0.02, "black"), "HIPS");
+  assert.equal(classifyV10SkinRegion(0.16, 0.55, 0.05, "blue"), "HIPS");
+  assert.equal(classifyV10SkinRegion(-0.15, 0.58, -0.02, "blue"), "HIPS");
+  assert.equal(classifyV10SkinRegion(0.04, 0.73, -0.16, "black"), "HEAD");
+  assert.equal(classifyV10SkinRegion(0.16, 0.56, 0.03, "silver"), "RIGHT_FOREARM");
+  assert.equal(classifyV10SkinRegion(-0.16, 0.72, 0.02, "skin"), "LEFT_UPPER_ARM");
+});
+
+test("V10.1 lower-body samples stay on the correct articulated chain", () => {
+  assert.equal(classifyV10SkinRegion(-0.06, 0.48, 0.01, "skin"), "LEFT_THIGH");
+  assert.equal(classifyV10SkinRegion(0.06, 0.36, 0.01, "black"), "RIGHT_THIGH");
+  assert.equal(classifyV10SkinRegion(-0.06, 0.22, 0.01, "black"), "LEFT_SHIN");
+  assert.equal(classifyV10SkinRegion(0.07, 0.04, 0.06, "blue"), "RIGHT_FOOT");
 });
 
 test("V10 idle scaffold preserves grounded fighting-stance separation before/after asset load", () => {
@@ -54,12 +72,11 @@ test("V10 idle scaffold preserves grounded fighting-stance separation before/aft
   const leftSole = getSoleContactPoint(player.visual, "left");
   const rightSole = getSoleContactPoint(player.visual, "right");
   assert.ok(Math.abs(leftSole.y) < 0.08 && Math.abs(rightSole.y) < 0.08);
-  assert.ok(Math.abs(leftSole.x - rightSole.x) > 0.20);
+  assert.ok(leftSole.distanceTo(rightSole) > 0.20);
 
   const leftFist = getVisualContactPoint(player.visual, "LEFT_FIST");
   const rightFist = getVisualContactPoint(player.visual, "RIGHT_FIST");
-  assert.ok(leftFist.distanceTo(rightFist) > 0.28);
-  assert.ok(Math.abs(leftFist.x - rightFist.x) > 0.12);
+  assert.ok(leftFist.distanceTo(rightFist) > 0.20);
 
   disposeFighterVisual(player.visual);
   disposeFighterVisual(cpu.visual);

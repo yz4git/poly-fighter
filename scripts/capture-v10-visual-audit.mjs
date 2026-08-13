@@ -69,7 +69,8 @@ async function chooseFighter(sessionId, name, playerLabel) {
 }
 
 function siblingOutput(base, suffix) {
-  return base.replace(/-idle\.png$/i, `-${suffix}.png`).replace(/\.png$/i, `-${suffix}.png`);
+  if (/-idle\.png$/i.test(base)) return base.replace(/-idle\.png$/i, `-${suffix}.png`);
+  return base.replace(/\.png$/i, `-${suffix}.png`);
 }
 
 function webdriverElementId(element) {
@@ -304,6 +305,7 @@ function validatePoseSeparation(poseStates) {
 }
 
 let sessionId = null;
+let auditSucceeded = false;
 try {
   await waitForDriver();
   const session = await command("/session", "POST", {
@@ -377,7 +379,17 @@ try {
   await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(compactStates, null, 2));
   await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
   console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
+  auditSucceeded = true;
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
-  driverProcess.kill("SIGTERM");
+  try {
+    if (!driverProcess.killed) driverProcess.kill("SIGTERM");
+  } catch {
+    // ChromeDriver may already have exited after the session was deleted.
+  }
 }
+
+// ChromeDriver can report its own shutdown signal after the WebDriver session
+// has completed. The audit result is the files and validations above, so make
+// the process result explicit once the audit itself has succeeded.
+if (auditSucceeded) process.exit(0);

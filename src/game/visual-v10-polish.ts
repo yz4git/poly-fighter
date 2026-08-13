@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { FighterVisual } from "./visual";
-import { classifyV10SkinRegion, type V10Semantic, type V10SkinRegion } from "./visual-v10";
+import type { V10Semantic, V10SkinRegion } from "./visual-v10";
 
 type Influence = readonly [number, number];
 type SkinModes = {
@@ -39,10 +39,6 @@ function semanticFromRgb(r: number, g: number, b: number): Exclude<V10Semantic, 
   return "silver";
 }
 
-function valueBias(r: number, g: number, b: number): boolean {
-  return b > r * 1.03 || b > g * 1.08;
-}
-
 function resolvedSemantic(
   region: V10SkinRegion,
   semantic: Exclude<V10Semantic, "unknown">,
@@ -65,8 +61,61 @@ function resolvedSemantic(
     if (semantic === "skin" || semantic === "silver") return b > r * 1.02 ? "blue" : "black";
     return semantic;
   }
-  if (region.endsWith("_THIGH") && semantic === "silver") return valueBias(r, g, b) ? "blue" : "black";
+  if (region.endsWith("_THIGH") && semantic === "silver") return b > r * 1.03 ? "blue" : "black";
   return semantic;
+}
+
+/**
+ * V10.3 screen-facing anatomical partition.
+ *
+ * V10.2 proved that the combat rig/contact points move correctly, but most of
+ * the reconstructed surface remained classified as torso/hips. The result was
+ * four screenshots that looked like the same pose even though fist/foot
+ * contacts had moved by more than a metre. V10.3 deliberately gives larger,
+ * face-uniform chunks of the visual hull to the limb chains. Each triangle is
+ * rigidly owned by one limb bone, so attacks open visible gaps at joints
+ * instead of stretching giant polygons or leaving the shell frozen.
+ */
+export function classifyV103FaceRegion(
+  x: number,
+  y: number,
+  z: number,
+  semantic: Exclude<V10Semantic, "unknown">,
+): V10SkinRegion {
+  const side = x < 0 ? "LEFT" : "RIGHT";
+  const absX = Math.abs(x);
+
+  const ponytail = y > 0.665 && z < -0.080 && absX < 0.175;
+  if (y >= 0.830 || ponytail) return "HEAD";
+
+  // The lower visual hull contains two legs fused through some camera views.
+  // Split it down the model centre so either leg can visibly leave the ground.
+  if (y < 0.100) return `${side}_FOOT` as V10SkinRegion;
+  if (y < 0.315) return `${side}_SHIN` as V10SkinRegion;
+  if (y < 0.545) return `${side}_THIGH` as V10SkinRegion;
+
+  // Upper arms need a much more generous lateral gate than V10.2. At lower
+  // heights only skin/silver/extreme-black is accepted so the skirt does not
+  // get mistaken for a forearm.
+  if (y >= 0.625) {
+    const threshold = y >= 0.720 ? 0.070 : 0.082;
+    if (absX > threshold) {
+      return y >= 0.670
+        ? `${side}_UPPER_ARM` as V10SkinRegion
+        : `${side}_FOREARM` as V10SkinRegion;
+    }
+  }
+  if (y >= 0.485 && y < 0.625 && absX > 0.102) {
+    const lowerArmMaterial = semantic === "skin" || semantic === "silver" || (semantic === "black" && absX > 0.138);
+    if (lowerArmMaterial) return `${side}_FOREARM` as V10SkinRegion;
+  }
+  if (y >= 0.405 && y < 0.505 && absX > 0.112) {
+    const handMaterial = semantic === "skin" || semantic === "silver" || semantic === "black";
+    if (handMaterial) return `${side}_HAND` as V10SkinRegion;
+  }
+
+  if (y < 0.690) return "HIPS";
+  return "TORSO";
 }
 
 function influencesForFace(region: V10SkinRegion, y: number, visual: FighterVisual): Influence[] {
@@ -75,13 +124,13 @@ function influencesForFace(region: V10SkinRegion, y: number, visual: FighterVisu
     case "HEAD":
       return [[b.head, 1]];
     case "HIPS": {
-      const spine = smoothBlend(y, 0.575, 0.690) * 0.38;
+      const spine = smoothBlend(y, 0.585, 0.690) * 0.28;
       return normalizeInfluences([[b.hips, 1 - spine], [b.spineLower, spine]]);
     }
     case "TORSO": {
       if (y < 0.748) {
         const upper = smoothBlend(y, 0.690, 0.748);
-        return normalizeInfluences([[b.spineLower, 1 - upper * 0.78], [b.spineUpper, upper * 0.78]]);
+        return normalizeInfluences([[b.spineLower, 1 - upper * 0.72], [b.spineUpper, upper * 0.72]]);
       }
       if (y < 0.818) {
         const chest = smoothBlend(y, 0.748, 0.818);
@@ -92,43 +141,32 @@ function influencesForFace(region: V10SkinRegion, y: number, visual: FighterVisu
     case "LEFT_UPPER_ARM":
     case "RIGHT_UPPER_ARM": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const elbow = (1 - smoothBlend(y, 0.630, 0.690)) * 0.34;
-      return normalizeInfluences([[b[`${prefix}UpperArm`], 1 - elbow], [b[`${prefix}Forearm`], elbow]]);
+      return [[b[`${prefix}UpperArm`], 1]];
     }
     case "LEFT_FOREARM":
     case "RIGHT_FOREARM": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const hand = (1 - smoothBlend(y, 0.475, 0.535)) * 0.28;
-      const upper = smoothBlend(y, 0.610, 0.660) * 0.18;
-      return normalizeInfluences([
-        [b[`${prefix}Forearm`], 1 - hand - upper],
-        [b[`${prefix}Hand`], hand],
-        [b[`${prefix}UpperArm`], upper],
-      ]);
+      return [[b[`${prefix}Forearm`], 1]];
     }
     case "LEFT_HAND":
     case "RIGHT_HAND": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      return normalizeInfluences([[b[`${prefix}Hand`], 0.94], [b[`${prefix}Forearm`], 0.06]]);
+      return [[b[`${prefix}Hand`], 1]];
     }
     case "LEFT_THIGH":
     case "RIGHT_THIGH": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const hips = smoothBlend(y, 0.500, 0.590) * 0.22;
-      const shin = (1 - smoothBlend(y, 0.290, 0.340)) * 0.30;
-      return normalizeInfluences([[b[`${prefix}Thigh`], 1 - hips - shin], [b.hips, hips], [b[`${prefix}Shin`], shin]]);
+      return [[b[`${prefix}Thigh`], 1]];
     }
     case "LEFT_SHIN":
     case "RIGHT_SHIN": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      const thigh = smoothBlend(y, 0.265, 0.315) * 0.25;
-      const foot = (1 - smoothBlend(y, 0.070, 0.115)) * 0.24;
-      return normalizeInfluences([[b[`${prefix}Shin`], 1 - thigh - foot], [b[`${prefix}Thigh`], thigh], [b[`${prefix}Foot`], foot]]);
+      return [[b[`${prefix}Shin`], 1]];
     }
     case "LEFT_FOOT":
     case "RIGHT_FOOT": {
       const prefix = region.startsWith("LEFT") ? "left" : "right";
-      return normalizeInfluences([[b[`${prefix}Foot`], 0.94], [b[`${prefix}Shin`], 0.06]]);
+      return [[b[`${prefix}Foot`], 1]];
     }
   }
 }
@@ -150,7 +188,7 @@ function shadedFacetColor(base: THREE.Color, sourceValue: number): THREE.Color {
 
 function installFaceUniformSkinning(visual: FighterVisual): void {
   if (visual.root.userData.reconstructionAssetState !== "ready") return;
-  if (visual.bodyMesh.userData.v10FacetSkinning === "FACE_UNIFORM_REGIONS") return;
+  if (visual.bodyMesh.userData.v10FacetSkinning === "V10.3_RIGID_FACE_REGIONS") return;
 
   const source = visual.bodyMesh.geometry;
   const geometry = source.index ? source.toNonIndexed() : source.clone();
@@ -189,7 +227,7 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
     b /= 3;
 
     const sourceSemantic = semanticFromRgb(r, g, b);
-    const region = classifyV10SkinRegion(x, y, z, sourceSemantic);
+    const region = classifyV103FaceRegion(x, y, z, sourceSemantic);
     const semantic = resolvedSemantic(region, sourceSemantic, y, r, g, b);
     const target = shadedFacetColor(PALETTE[semantic], (r + g + b) / 3);
     regionCounts[region] = (regionCounts[region] ?? 0) + 1;
@@ -211,15 +249,15 @@ function installFaceUniformSkinning(visual: FighterVisual): void {
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(quantizedColors, 3));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.v10FacetSkinning = "FACE_UNIFORM_REGIONS";
+  geometry.userData.v10FacetSkinning = "V10.3_RIGID_FACE_REGIONS";
   geometry.userData.v10RegionCounts = regionCounts;
 
   visual.bodyMesh.geometry = geometry;
   visual.bodyMesh.normalizeSkinWeights();
   source.dispose();
   SKIN_MODES.set(visual, { dynamicIndex, dynamicWeight, staticIndex, staticWeight, current: "dynamic" });
-  visual.bodyMesh.userData.v10FacetSkinning = "FACE_UNIFORM_REGIONS";
-  visual.root.userData.skinningPresentation = "V10.2_FACE_UNIFORM_REGIONS";
+  visual.bodyMesh.userData.v10FacetSkinning = "V10.3_RIGID_FACE_REGIONS";
+  visual.root.userData.skinningPresentation = "V10.3_RIGID_ANATOMICAL_FACETS";
   visual.stats.vertexCount = position.count;
   visual.stats.triangleCount = position.count / 3;
   visual.stats.weightedVertexCount = position.count;
@@ -229,17 +267,12 @@ function installReferenceColorMaterial(visual: FighterVisual): void {
   if (visual.root.userData.reconstructionAssetState !== "ready") return;
   if (visual.bodyMesh.userData.v10ColorMaterial === "REFERENCE_VERTEX_COLOR") return;
   if (!visual.bodyMesh.geometry.getAttribute("color")) return;
-
   const oldMaterial = visual.bodyMesh.material;
-  visual.bodyMesh.material = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    vertexColors: true,
-    toneMapped: false,
-  });
+  visual.bodyMesh.material = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
   if (Array.isArray(oldMaterial)) oldMaterial.forEach((material) => material.dispose());
   else oldMaterial.dispose();
   visual.bodyMesh.userData.v10ColorMaterial = "REFERENCE_VERTEX_COLOR";
-  visual.root.userData.colorPipeline = "V10.2_SHADED_REFERENCE_VERTEX_COLOR";
+  visual.root.userData.colorPipeline = "V10.3_SHADED_REFERENCE_VERTEX_COLOR";
 }
 
 function neutralUpperBody(visual: FighterVisual): boolean {
@@ -255,8 +288,7 @@ function neutralUpperBody(visual: FighterVisual): boolean {
   ];
   return quaternions.every((quaternion) => {
     const w = THREE.MathUtils.clamp(Math.abs(quaternion.w), 0, 1);
-    const angle = 2 * Math.acos(w);
-    return angle < 0.035;
+    return 2 * Math.acos(w) < 0.035;
   });
 }
 
@@ -270,24 +302,14 @@ function selectPresentationSkin(visual: FighterVisual): void {
     visual.bodyMesh.geometry.setAttribute("skinWeight", desired === "static" ? modes.staticWeight : modes.dynamicWeight);
     modes.current = desired;
   }
-
-  // A small neutral-only yaw prevents the side-on game camera from collapsing
-  // the turnaround into a paper-thin profile. Dynamic combat returns to exact
-  // rig alignment so hit animations and visual contacts stay trustworthy.
   visual.bodyMesh.rotation.y = neutral ? 0.16 : 0;
   visual.bodyMesh.userData.v10PresentationMode = neutral ? "COHERENT_NEUTRAL_SHELL" : "ARTICULATED_FACETS";
 }
 
-/**
- * V10.2 presentation polish. Neutral frames use the coherent reconstructed
- * shell exactly as authored, while combat frames switch to face-uniform
- * anatomical skinning. This keeps the first-read silhouette clean without
- * sacrificing visible articulation during attacks, guard, hit and knockdown.
- */
 export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
   visual.footContacts.left.homeLocal.z = -0.100;
   visual.footContacts.right.homeLocal.z = 0.110;
-  visual.root.userData.authoredNeutralStance = "V10.2_COHERENT_NEUTRAL_SHELL";
+  visual.root.userData.authoredNeutralStance = "V10.3_COHERENT_NEUTRAL_SHELL";
 
   const previousBeforeRender = visual.bodyMesh.onBeforeRender;
   visual.bodyMesh.onBeforeRender = function onBeforeRender(...args): void {
@@ -296,6 +318,5 @@ export function applyV10RuntimePolish(visual: FighterVisual): FighterVisual {
     selectPresentationSkin(visual);
     previousBeforeRender?.apply(this, args);
   };
-
   return visual;
 }

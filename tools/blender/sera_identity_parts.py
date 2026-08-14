@@ -45,6 +45,15 @@ def apply(armature, mats):
         (0.004,fy(0.104),1.674),(0.066,fy(0.103),1.661),(0.086,fy(0.099),1.620),(0.020,fy(0.104),1.628),
         (0.004,fy(0.082),1.674),(0.066,fy(0.081),1.661),(0.086,fy(0.078),1.620),(0.020,fy(0.083),1.628)], faces, hair)
 
+    # Root wedges overlap the hairline and the swept locks. This removes the
+    # "strands glued onto a helmet" seam and gives the fringe a continuous mass.
+    add_wedge('SERA_FringeRootL', [
+        (-0.002,fy(0.108),1.666),(-0.036,fy(0.108),1.657),(-0.050,fy(0.108),1.625),(-0.012,fy(0.109),1.631),
+        (-0.002,fy(0.092),1.666),(-0.036,fy(0.092),1.657),(-0.050,fy(0.092),1.625),(-0.012,fy(0.093),1.631)], faces, hair)
+    add_wedge('SERA_FringeRootR', [
+        (0.002,fy(0.108),1.666),(0.042,fy(0.108),1.656),(0.056,fy(0.108),1.628),(0.012,fy(0.109),1.634),
+        (0.002,fy(0.092),1.666),(0.042,fy(0.092),1.656),(0.056,fy(0.092),1.628),(0.012,fy(0.093),1.634)], faces, hair)
+
     # Side masses overlap the cap edge, then taper toward the temples and nape.
     # This removes the disconnected helmet/flap look in side and 3/4 views.
     add_segment('SERA_SideHairL', (-0.086,fy(0.018),1.656), (-0.096,fy(0.054),1.555), 0.027,0.011,hair,(0.70,1.0),7)

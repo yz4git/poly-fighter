@@ -18,4 +18,8 @@ export const SERA_SKIN_PROFILE = {
     guardRigidForearm: 0.96,
     guardHand: 0.04,
   },
+  hand: {
+    hand: 0.97,
+    forearm: 0.03,
+  },
 } as const;

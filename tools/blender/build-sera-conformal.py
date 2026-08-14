@@ -39,15 +39,39 @@ def style_face(objects):
             poly.use_smooth = False
 
 
+def bake_runtime_colors(runtime):
+    """Collapse the Blender material palette into one vertex-color primitive."""
+    mesh = runtime.data
+    colors = mesh.color_attributes.get('SERA_RuntimeColor')
+    if colors is None:
+        colors = mesh.color_attributes.new(name='SERA_RuntimeColor', type='BYTE_COLOR', domain='CORNER')
+
+    for poly in mesh.polygons:
+        source_material = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
+        rgba = tuple(source_material.diffuse_color) if source_material else (1.0, 1.0, 1.0, 1.0)
+        for loop_index in poly.loop_indices:
+            colors.data[loop_index].color = rgba
+
+    try:
+        mesh.color_attributes.active_color = colors
+    except Exception:
+        pass
+
+    mesh.materials.clear()
+    mesh.materials.append(material('SERA_RuntimeWhite', 0xFFFFFF, 0.72))
+    for poly in mesh.polygons:
+        poly.material_index = 0
+    mesh.update()
+
+
 def export_runtime_mesh(output):
-    """Export only the visible SERA geometry as a compact static GLB.
+    """Export visible SERA geometry as a compact static GLB for browser reskinning.
 
     Runtime animation is supplied by POLY FIGHTER's canonical combat rig, so the
     Blender armature, finger hierarchy, audit ground and source helper meshes are
-    intentionally excluded. The evaluated body plus persistent SERA identity
-    pieces are joined into one material-preserving mesh before export. Normals,
-    UVs and source vertex colors are omitted because the browser recomputes flat
-    normals and bakes colors from the preserved material slots before reskinning.
+    excluded. The evaluated body plus persistent identity pieces are joined into
+    one mesh. Blender material colors are baked to COLOR_0 and all materials are
+    collapsed to one white slot, producing one primitive with no UVs or normals.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     sources = [
@@ -80,6 +104,7 @@ def export_runtime_mesh(output):
     runtime.name = 'SERA_RuntimeMesh'
     for group in list(runtime.vertex_groups):
         runtime.vertex_groups.remove(group)
+    bake_runtime_colors(runtime)
 
     path = os.path.join(output, 'sera-blender-runtime.glb')
     bpy.ops.export_scene.gltf(
@@ -94,7 +119,7 @@ def export_runtime_mesh(output):
         export_skins=False,
         export_normals=False,
         export_texcoords=False,
-        export_colors=False,
+        export_colors=True,
     )
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise RuntimeError('SERA runtime GLB export failed')
@@ -150,7 +175,7 @@ def main():
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. The prototype GLB keeps the Blender armature; sera-blender-runtime.glb is a compact static geometry export intended for POLY FIGHTER canonical-rig reskinning.\n')
+        handle.write('Free female base remains coherent and rigged. The prototype GLB keeps the Blender armature; sera-blender-runtime.glb is a compact vertex-colored static geometry export intended for POLY FIGHTER canonical-rig reskinning.\n')
     print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes)
 
 

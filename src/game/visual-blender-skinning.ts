@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { isSeraHeadLockedSemantic, semanticFromColorAttribute, type SeraRuntimeSemantic } from "./visual-blender-semantics";
+import { SERA_SKIN_PROFILE } from "./visual-blender-skinning-profile";
 
 export type SeraRuntimeRegion =
   | "HEAD"
@@ -48,7 +49,10 @@ export function normalizeSeraInfluences(pairs: readonly SeraInfluence[]): SeraIn
   const sorted = [...merged.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
   const total = sorted.reduce((sum, [, weight]) => sum + weight, 0);
   if (!(total > 0)) return [[0, 1]];
-  return sorted.map(([bone, weight]) => [bone, weight / total] as const);
+  const normalized = sorted.map(([bone, weight]) => [bone, weight / total] as const);
+  const normalizedTotal = normalized.reduce((sum, [, weight]) => sum + weight, 0);
+  if (!Number.isFinite(normalizedTotal) || Math.abs(normalizedTotal - 1) > 1e-5 || normalized.length > 4) return [[0, 1]];
+  return normalized;
 }
 
 function sideOf(x: number): "LEFT" | "RIGHT" {
@@ -57,6 +61,16 @@ function sideOf(x: number): "LEFT" | "RIGHT" {
 
 function limbRegion(side: "LEFT" | "RIGHT", part: "SHOULDER" | "UPPER_ARM" | "FOREARM" | "HAND" | "THIGH" | "SHIN" | "FOOT"): SeraRuntimeRegion {
   return `${side}_${part}` as SeraRuntimeRegion;
+}
+
+function classifyUnknownFallback(x: number, y: number): SeraRuntimeRegion {
+  const side = sideOf(x);
+  if (y >= SERA_SKIN_PROFILE.fallback.headCutoffY) return "HEAD";
+  if (y >= SERA_SKIN_PROFILE.fallback.hipsCutoffY) return "TORSO";
+  if (y >= SERA_SKIN_PROFILE.fallback.lowerBodyCutoffY) return "HIPS";
+  if (y < 0.100) return limbRegion(side, "FOOT");
+  if (y < 0.305) return limbRegion(side, "SHIN");
+  return limbRegion(side, "THIGH");
 }
 
 /** Classifier tuned to the normalized Blender SERA runtime asset (height 0..1). */
@@ -70,11 +84,9 @@ export function classifySeraRuntimeRegion(
   const absX = Math.abs(x);
   const absZ = Math.abs(z);
 
-  // Every authored hair primitive, including the ponytail all the way down to
-  // its low tip, is head-owned. This deliberately trades secondary pony motion
-  // for deformation stability until a dedicated hair rig exists.
   if (isSeraHeadLockedSemantic(semantic)) return "HEAD";
-  if (y >= 0.835) return "HEAD";
+  if (semantic === "unknown") return classifyUnknownFallback(x, y);
+  if (y >= SERA_SKIN_PROFILE.fallback.headCutoffY) return "HEAD";
 
   if ((semantic === "blue" || semantic === "blueHi") && y >= 0.795 && y < 0.855 && absX < 0.100 && absZ < 0.095) return "COLLAR";
   if (semantic === "silver" && y >= 0.455 && y < 0.700) return limbRegion(side, "FOREARM");
@@ -104,78 +116,91 @@ export function solveSeraRuntimeInfluences(
   region: SeraRuntimeRegion,
   y: number,
   boneIndices: Record<string, number>,
+  semantic: SeraRuntimeSemantic = "unknown",
 ): SeraInfluence[] {
   const side = region.startsWith("LEFT") ? "LEFT" : region.startsWith("RIGHT") ? "RIGHT" : null;
   switch (region) {
     case "HEAD": return normalizeSeraInfluences([[boneIndices.head, 1]]);
-    case "COLLAR": return normalizeSeraInfluences([[boneIndices.neck, 0.58], [boneIndices.chest, 0.42]]);
+    case "COLLAR": return normalizeSeraInfluences([[boneIndices.neck, SERA_SKIN_PROFILE.collar.neck], [boneIndices.chest, SERA_SKIN_PROFILE.collar.chest]]);
     case "TORSO": {
       const upper = smoothBlend(y, 0.690, 0.810);
-      const neck = smoothBlend(y, 0.795, 0.840) * 0.10;
-      return normalizeSeraInfluences([[boneIndices.spineLower, 1 - upper], [boneIndices.spineUpper, upper * 0.54], [boneIndices.chest, upper * 0.46 - neck], [boneIndices.neck, neck]]);
+      const neck = smoothBlend(y, 0.795, 0.840) * 0.08;
+      return normalizeSeraInfluences([[boneIndices.spineLower, 1 - upper], [boneIndices.spineUpper, upper * 0.56], [boneIndices.chest, upper * 0.44 - neck], [boneIndices.neck, neck]]);
     }
     case "HIPS": {
-      const spine = smoothBlend(y, 0.590, 0.675) * 0.46;
+      const p = SERA_SKIN_PROFILE.hips;
+      const spine = smoothBlend(y, p.spineStartY, p.spineEndY) * p.spineMax;
       return normalizeSeraInfluences([[boneIndices.hips, 1 - spine], [boneIndices.spineLower, spine]]);
     }
     case "FRONT_SKIRT": {
-      const thigh = (1 - smoothBlend(y, 0.430, 0.565)) * 0.16;
+      const p = SERA_SKIN_PROFILE.frontSkirt;
+      const thigh = (1 - smoothBlend(y, p.thighStartY, p.thighEndY)) * p.thighMax;
       return normalizeSeraInfluences([[boneIndices.hips, 1 - thigh], [boneIndices.leftThigh, thigh * 0.5], [boneIndices.rightThigh, thigh * 0.5]]);
     }
     case "LEFT_SKIRT":
     case "RIGHT_SKIRT": {
+      const p = SERA_SKIN_PROFILE.sideSkirt;
       const localSide = region.startsWith("LEFT") ? "LEFT" : "RIGHT";
-      const thigh = (1 - smoothBlend(y, 0.425, 0.575)) * 0.24;
+      const thigh = (1 - smoothBlend(y, p.thighStartY, p.thighEndY)) * p.thighMax;
       return normalizeSeraInfluences([[boneIndices.hips, 1 - thigh], [boneForSide(boneIndices, localSide, "Thigh"), thigh]]);
     }
     case "LEFT_SHOULDER":
     case "RIGHT_SHOULDER": {
+      const p = SERA_SKIN_PROFILE.shoulder;
       const arm = boneForSide(boneIndices, side!, "UpperArm");
-      const armWeight = 0.38 + (1 - smoothBlend(y, 0.700, 0.810)) * 0.12;
+      const armWeight = p.armBase + (1 - smoothBlend(y, p.blendStartY, p.blendEndY)) * p.armLowerBonus;
       return normalizeSeraInfluences([[boneIndices.chest, 1 - armWeight], [arm, armWeight]]);
     }
     case "LEFT_UPPER_ARM":
     case "RIGHT_UPPER_ARM": {
+      const p = SERA_SKIN_PROFILE.upperArm;
       const upper = boneForSide(boneIndices, side!, "UpperArm");
       const fore = boneForSide(boneIndices, side!, "Forearm");
-      const elbow = (1 - smoothBlend(y, 0.620, 0.690)) * 0.34;
+      const elbow = (1 - smoothBlend(y, p.elbowStartY, p.elbowEndY)) * p.elbowMax;
       return normalizeSeraInfluences([[upper, 1 - elbow], [fore, elbow]]);
     }
     case "LEFT_FOREARM":
     case "RIGHT_FOREARM": {
+      const p = SERA_SKIN_PROFILE.forearm;
       const fore = boneForSide(boneIndices, side!, "Forearm");
       const hand = boneForSide(boneIndices, side!, "Hand");
-      const handBlend = (1 - smoothBlend(y, 0.475, 0.530)) * 0.24;
+      if (semantic === "silver") return normalizeSeraInfluences([[fore, p.guardRigidForearm], [hand, p.guardHand]]);
+      const handBlend = (1 - smoothBlend(y, p.handStartY, p.handEndY)) * p.handMax;
       return normalizeSeraInfluences([[fore, 1 - handBlend], [hand, handBlend]]);
     }
     case "LEFT_HAND":
     case "RIGHT_HAND": {
+      const p = SERA_SKIN_PROFILE.hand;
       const hand = boneForSide(boneIndices, side!, "Hand");
       const fore = boneForSide(boneIndices, side!, "Forearm");
-      return normalizeSeraInfluences([[hand, 0.94], [fore, 0.06]]);
+      return normalizeSeraInfluences([[hand, p.hand], [fore, p.forearm]]);
     }
     case "LEFT_THIGH":
     case "RIGHT_THIGH": {
+      const p = SERA_SKIN_PROFILE.thigh;
       const thigh = boneForSide(boneIndices, side!, "Thigh");
       const shin = boneForSide(boneIndices, side!, "Shin");
-      const hipBlend = smoothBlend(y, 0.500, 0.590) * 0.22;
-      const kneeBlend = (1 - smoothBlend(y, 0.285, 0.340)) * 0.34;
+      const hipBlend = smoothBlend(y, p.hipStartY, p.hipEndY) * p.hipMax;
+      const kneeBlend = (1 - smoothBlend(y, p.kneeStartY, p.kneeEndY)) * p.kneeMax;
       return normalizeSeraInfluences([[thigh, 1 - hipBlend - kneeBlend], [boneIndices.hips, hipBlend], [shin, kneeBlend]]);
     }
     case "LEFT_SHIN":
     case "RIGHT_SHIN": {
+      const p = SERA_SKIN_PROFILE.shin;
       const shin = boneForSide(boneIndices, side!, "Shin");
       const thigh = boneForSide(boneIndices, side!, "Thigh");
       const foot = boneForSide(boneIndices, side!, "Foot");
-      const kneeBlend = smoothBlend(y, 0.270, 0.315) * 0.24;
-      const ankleBlend = (1 - smoothBlend(y, 0.075, 0.115)) * 0.24;
+      if (semantic === "blueHi") return normalizeSeraInfluences([[shin, p.guardRigidShin], [foot, p.guardFoot]]);
+      const kneeBlend = smoothBlend(y, p.kneeStartY, p.kneeEndY) * p.kneeMax;
+      const ankleBlend = (1 - smoothBlend(y, p.ankleStartY, p.ankleEndY)) * p.ankleMax;
       return normalizeSeraInfluences([[shin, 1 - kneeBlend - ankleBlend], [thigh, kneeBlend], [foot, ankleBlend]]);
     }
     case "LEFT_FOOT":
     case "RIGHT_FOOT": {
+      const p = SERA_SKIN_PROFILE.foot;
       const foot = boneForSide(boneIndices, side!, "Foot");
       const shin = boneForSide(boneIndices, side!, "Shin");
-      return normalizeSeraInfluences([[foot, 0.96], [shin, 0.04]]);
+      return normalizeSeraInfluences([[foot, p.foot], [shin, p.shin]]);
     }
   }
 }
@@ -191,13 +216,13 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const semantic = semanticFromColorAttribute(color, vertex);
     const region = classifySeraRuntimeRegion(position.getX(vertex), position.getY(vertex), position.getZ(vertex), semantic);
-    const influences = solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices);
+    const influences = solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices, semantic);
     diagnostics.semanticCounts[semantic] = (diagnostics.semanticCounts[semantic] ?? 0) + 1;
     diagnostics.regionCounts[region] = (diagnostics.regionCounts[region] ?? 0) + 1;
     if (isSeraHeadLockedSemantic(semantic)) diagnostics.headLockedVertices += 1;
     diagnostics.maxInfluenceCount = Math.max(diagnostics.maxInfluenceCount, influences.length);
     const sum = influences.reduce((total, [, weight]) => total + weight, 0);
-    if (!Number.isFinite(sum) || Math.abs(sum - 1) > 1e-4) diagnostics.invalidWeightVertices += 1;
+    if (!Number.isFinite(sum) || Math.abs(sum - 1) > 1e-4 || influences.length > 4) diagnostics.invalidWeightVertices += 1;
     for (let slot = 0; slot < 4; slot += 1) {
       indices.push(influences[slot]?.[0] ?? 0);
       weights.push(influences[slot]?.[1] ?? 0);
@@ -206,7 +231,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
 
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
-  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V1.1";
+  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V2";
   geometry.userData.skinningDiagnostics = diagnostics;
   return diagnostics;
 }

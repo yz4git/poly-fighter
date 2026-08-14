@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
+import { createFemaleBlenderRuntimeVisual } from "./visual-blender-runtime";
 import { applyV11ReferencePose } from "./visual-v11-pose";
-import { createFemaleV11Visual } from "./visual-v11";
 import { createFighterVisual as createLegacyFighterVisual, disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset } from "./visual";
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
 
@@ -40,7 +40,7 @@ function repairSeraWinding(visual: FighterVisual): void {
 
 export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
   if (definition.archetype === "SPEED") {
-    const visual = createFemaleV11Visual(definition, quality);
+    const visual = createFemaleBlenderRuntimeVisual(definition, quality);
     repairSeraWinding(visual);
     return applyV11ReferencePose(visual);
   }

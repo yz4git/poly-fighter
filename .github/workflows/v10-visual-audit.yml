@@ -59,25 +59,34 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Run regression tests and Blender prototype
+      - name: Run regression tests and optional Blender prototype
         run: npm test
-      - name: Stage generated Blender runtime asset for the real game audit
+      - name: Stage Blender runtime asset for the real game audit
         id: stage_runtime
         if: github.event_name == 'pull_request'
         run: |
           generated="artifacts/visual-audit/blender-sera/sera-blender-runtime.glb"
-          metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
-          test -s "$generated"
-          test -s "$metrics"
+          generated_metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
+          committed="public/models/sera-blender-runtime.glb"
+          committed_metrics="public/models/sera-blender-runtime.metrics.json"
           mkdir -p public/models
-          if ! cmp -s "$generated" public/models/sera-blender-runtime.glb || ! cmp -s "$metrics" public/models/sera-blender-runtime.metrics.json; then
-            cp "$generated" public/models/sera-blender-runtime.glb
-            cp "$metrics" public/models/sera-blender-runtime.metrics.json
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+
+          if [ -s "$generated" ] && [ -s "$generated_metrics" ]; then
+            if ! cmp -s "$generated" "$committed" || ! cmp -s "$generated_metrics" "$committed_metrics"; then
+              cp "$generated" "$committed"
+              cp "$generated_metrics" "$committed_metrics"
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            fi
+            echo "runtime_source=generated" >> "$GITHUB_OUTPUT"
           else
+            test -s "$committed"
+            test -s "$committed_metrics"
             echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "runtime_source=committed" >> "$GITHUB_OUTPUT"
           fi
-      - name: Rebuild with staged Blender runtime asset
+      - name: Rebuild with selected Blender runtime asset
         if: github.event_name == 'pull_request'
         run: npm run build
       - name: Run lint

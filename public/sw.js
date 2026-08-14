@@ -1,9 +1,11 @@
-const CACHE_NAME = "poly-fighter-v17";
+const CACHE_NAME = "poly-fighter-v18";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
   "/icon.svg",
   "/reference/female-turnaround.jpeg",
+  "/models/sera-blender-runtime.glb",
+  "/models/sera-blender-runtime.metrics.json",
   "/models/sera-v10.glb",
   "/models/sera-v10.metrics.json",
 ];

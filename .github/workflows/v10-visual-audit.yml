@@ -12,27 +12,67 @@ on:
       - src/game/visual-v10.ts
       - src/game/visual-v10-stance.ts
       - src/game/visual-v10-polish.ts
+      - src/game/visual-blender-runtime.ts
       - src/game/visual-entry.ts
+      - public/models/sera-blender-runtime.glb
+      - public/models/sera-blender-runtime.metrics.json
       - public/models/sera-v10.glb
       - public/sw.js
       - scripts/capture-v10-visual-audit.mjs
+      - scripts/run-blender-prototype-ci.sh
+      - tools/blender/**
       - tests/pwa-cache.test.mjs
+      - tests/visual-v9.test.ts
       - .github/workflows/v10-visual-audit.yml
+
+permissions:
+  contents: write
 
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Checkout Quaternius Universal Base Characters mirror
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          repository: aaroohhiiii/ggj
+          ref: 57c0855a6622d4654fe32e9208efb820051164e3
+          path: .external/quaternius
+          sparse-checkout: |
+            first/assets/3d/characters/player
+            first/assets/3d/characters/License_Standard.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Run regression tests
+      - name: Run regression tests and Blender prototype
         run: npm test
+      - name: Stage generated Blender runtime asset for the real game audit
+        id: stage_runtime
+        if: github.event_name == 'pull_request'
+        run: |
+          generated="artifacts/visual-audit/blender-sera/sera-blender-runtime.glb"
+          metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
+          test -s "$generated"
+          test -s "$metrics"
+          mkdir -p public/models
+          if ! cmp -s "$generated" public/models/sera-blender-runtime.glb || ! cmp -s "$metrics" public/models/sera-blender-runtime.metrics.json; then
+            cp "$generated" public/models/sera-blender-runtime.glb
+            cp "$metrics" public/models/sera-blender-runtime.metrics.json
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Rebuild with staged Blender runtime asset
+        if: github.event_name == 'pull_request'
+        run: npm run build
       - name: Run lint
         run: npm run lint
       - name: Start production preview
@@ -47,8 +87,10 @@ jobs:
           done
           cat /tmp/poly-fighter-server.log
           exit 1
-      - name: Verify V10 model is locally served
+      - name: Verify Blender runtime and V10 reference models are locally served
         run: |
+          curl --fail --silent http://127.0.0.1:3000/models/sera-blender-runtime.glb -o /tmp/sera-blender-runtime.glb
+          test -s /tmp/sera-blender-runtime.glb
           curl --fail --silent http://127.0.0.1:3000/models/sera-v10.glb -o /tmp/sera-v10.glb
           test -s /tmp/sera-v10.glb
       - name: Capture actual match frame with ChromeDriver
@@ -71,9 +113,17 @@ jobs:
             file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
           done
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver after npm build and production preview." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset staged into the production preview." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-webgl-visual-audit
           path: artifacts/visual-audit
           if-no-files-found: error
+      - name: Publish generated Blender runtime asset to the PR branch
+        if: github.event_name == 'pull_request' && steps.stage_runtime.outputs.publish == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json
+          git commit -m "Checkpoint: publish Blender SERA runtime asset"
+          git push origin HEAD:${{ github.head_ref }}

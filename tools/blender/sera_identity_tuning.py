@@ -5,15 +5,27 @@ from sera_blender_helpers import SERA_FRONT_Y
 def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
-        # The explicit front hairline wedges now cover the forehead transition,
-        # so the skull cap can stay centered and slightly taller rather than
-        # ballooning forward. This closes the crown while keeping a clean head
-        # silhouette in front, side and three-quarter views.
-        cap.location.y = 0.002 * SERA_FRONT_Y
-        cap.location.z = 1.600
-        cap.scale.x = 1.04
-        cap.scale.y = 1.05
-        cap.scale.z = 1.08
+        # Keep the crown fully covered without inflating into a spherical helmet.
+        # Slightly taller/deeper than wide matches SERA's high ponytail head shape.
+        cap.location.y = 0.004 * SERA_FRONT_Y
+        cap.location.z = 1.596
+        cap.scale.x = 1.02
+        cap.scale.y = 1.07
+        cap.scale.z = 1.10
+
+    # Blend the new hairline/fringe root wedges into one coherent forehead mass.
+    for name in ('SERA_HairlineL', 'SERA_HairlineR'):
+        obj = bpy.data.objects.get(name)
+        if obj:
+            obj.scale.x *= 1.02
+            obj.scale.y *= 1.04
+            obj.scale.z *= 1.02
+    for name in ('SERA_FringeRootL', 'SERA_FringeRootR'):
+        obj = bpy.data.objects.get(name)
+        if obj:
+            obj.scale.x *= 1.06
+            obj.scale.y *= 0.94
+            obj.scale.z *= 0.96
 
     # Keep the waist panels as short, thin graphic shapes around the upper thigh.
     # They should frame the hips without reading as knee-length armor.
@@ -52,9 +64,21 @@ def apply():
             obj.scale.y *= 0.84
             obj.scale.z *= 0.90
 
-    # Taper the ponytail mass without shortening the recognizable high-tail arc.
+    # Keep the side masses close to the skull so they read as layered hair, not
+    # separate armor-like flaps.
+    for name in ('SERA_SideHairL', 'SERA_SideHairR', 'SERA_NapeHairL', 'SERA_NapeHairR'):
+        obj = bpy.data.objects.get(name)
+        if obj:
+            obj.scale.x *= 0.92
+            obj.scale.y *= 0.90
+
+    # Taper the ponytail while preserving its high, broad root.
+    root = bpy.data.objects.get('SERA_PonyRoot')
+    if root:
+        root.scale.x *= 0.98
+        root.scale.y *= 0.96
     for name in ('SERA_Pony1', 'SERA_Pony2', 'SERA_Pony3'):
         obj = bpy.data.objects.get(name)
         if obj:
-            obj.scale.x *= 0.88
-            obj.scale.y *= 0.88
+            obj.scale.x *= 0.86
+            obj.scale.y *= 0.86

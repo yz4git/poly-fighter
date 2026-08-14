@@ -6,13 +6,13 @@ def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
         # Keep the coherent cap centered over the skull and bias it slightly
-        # toward the face side. The previous pass pushed it rearward and then
-        # compressed its depth, exposing a bald crown/forehead patch in front.
-        cap.location.y = 0.018 * SERA_FRONT_Y
-        cap.location.z += 0.026
-        cap.scale.x = 1.00
-        cap.scale.y = 0.96
-        cap.scale.z = 0.98
+        # toward the face side. The previous pass still left too much scalp
+        # exposed at the crown/forehead transition in the front audit view.
+        cap.location.y = 0.010 * SERA_FRONT_Y
+        cap.location.z = 1.598
+        cap.scale.x = 1.06
+        cap.scale.y = 1.08
+        cap.scale.z = 1.04
 
     # Keep the waist panels as short, thin graphic shapes around the upper thigh.
     # They should frame the hips without reading as knee-length armor.

@@ -3,6 +3,39 @@ from mathutils import Vector
 from sera_blender_helpers import material
 
 
+def _head_scale(p, z2):
+    """Return additional source-head shaping while preserving the imported rig.
+
+    The Quaternius head remains the coherent anatomical base.  These small,
+    continuous scale changes move the actual skinned source vertices toward the
+    SERA turnaround instead of relying on face cards or replacement geometry.
+    """
+    sx = 1.0
+    sy = 1.0
+    if z2 < 1.485 or abs(p.x) > 0.165:
+        return sx, sy
+
+    # Narrow the jaw, keep readable cheek width, then taper the crown slightly.
+    if z2 < 1.535:
+        sx = 0.87
+        sy = 0.94
+    elif z2 < 1.590:
+        sx = 0.93
+        sy = 0.96
+    elif z2 < 1.645:
+        sx = 0.97
+        sy = 0.97
+    else:
+        sx = 0.95
+        sy = 0.96
+
+    # Flatten only the forward lower-face volume a little.  The nose is kept as
+    # part of the source mesh; identity planes merely accent its low-poly read.
+    if p.y > 0.025 and z2 < 1.585:
+        sy *= 0.95
+    return sx, sy
+
+
 def apply(body):
     inv = body.matrix_world.inverted()
     for vertex in body.data.vertices:
@@ -22,7 +55,9 @@ def apply(body):
             sx, sy = 0.90, 0.86
         else:
             sx, sy = 0.93, 0.92
-        vertex.co = inv @ Vector((p.x * sx, p.y * sy, z2))
+
+        head_sx, head_sy = _head_scale(p, z2)
+        vertex.co = inv @ Vector((p.x * sx * head_sx, p.y * sy * head_sy, z2))
     body.data.update()
     bpy.context.view_layer.update()
 

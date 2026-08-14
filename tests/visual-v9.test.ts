@@ -9,15 +9,15 @@ import { classifyV10SkinRegion } from "../src/game/visual-v10";
 import { classifyV103FaceRegion } from "../src/game/visual-v10-polish";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
-test("SERA gameplay selects V11 V9.1 character on the V10-compatible canonical rig", () => {
+test("SERA gameplay selects the Blender conformal character on the canonical combat rig", () => {
   const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
   assert.equal(String(visual.visualVersion), "V11");
-  assert.match(visual.root.name, /v11/);
+  assert.match(visual.root.name, /blender-runtime/);
   assert.ok(visual.bodyMesh instanceof THREE.SkinnedMesh);
-  assert.equal(visual.root.userData.v11CharacterSource, "V9.1_AUTHORED_CONTINUOUS_MESH");
-  assert.equal(visual.root.userData.v11RigSource, "V10_CANONICAL_V4_RIG_AND_IK");
-  assert.equal(visual.root.userData.v10ReferenceAsset, "/models/sera-v10.glb");
-  assert.equal(visual.bodyMesh.userData.v11PresentationMode, "V9.1_CONTINUOUS_SKINNED_CHARACTER");
+  assert.equal(visual.root.userData.visualPipeline, "BLENDER_CONFORMAL_GLB_CANONICAL_RIG");
+  assert.equal(visual.root.userData.blenderRuntimeAsset, "/models/sera-blender-runtime.glb");
+  assert.equal(visual.root.userData.blenderRuntimeAssetState, "pending");
+  assert.equal(visual.bodyMesh.userData.reconstruction, "blender-runtime-glb-pending");
   disposeFighterVisual(visual);
 });
 

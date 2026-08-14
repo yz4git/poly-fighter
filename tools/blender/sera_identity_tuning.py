@@ -5,12 +5,14 @@ from sera_blender_helpers import SERA_FRONT_Y
 def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
-        # Keep the crown fully covered without inflating into a spherical helmet.
-        cap.location.y = 0.004 * SERA_FRONT_Y
-        cap.location.z = 1.596
-        cap.scale.x = 1.02
-        cap.scale.y = 1.07
-        cap.scale.z = 1.10
+        # The cap must cover crown/back hair without entering the facial plane.
+        # Front is -Y for the imported source, so bias the cap slightly rearward
+        # and reduce depth; explicit hairline wedges handle forehead coverage.
+        cap.location.y = -0.012 * SERA_FRONT_Y
+        cap.location.z = 1.598
+        cap.scale.x = 0.99
+        cap.scale.y = 0.90
+        cap.scale.z = 1.06
 
     for name in ('SERA_HairlineL', 'SERA_HairlineR'):
         obj = bpy.data.objects.get(name)
@@ -25,7 +27,6 @@ def apply():
             obj.scale.y *= 0.94
             obj.scale.z *= 0.96
 
-    # Keep the waist panels as short, thin graphic shapes around the upper thigh.
     for name in ('SERA_FrontSkirt', 'SERA_LeftSkirt', 'SERA_RightSkirt'):
         obj = bpy.data.objects.get(name)
         if not obj:
@@ -65,9 +66,6 @@ def apply():
             obj.scale.x *= 0.92
             obj.scale.y *= 0.90
 
-    # High ponytail: lift the blue tie and gathered root, keep the upper mass
-    # broad, then compress the lower segments progressively for the reference's
-    # large-but-tapered silhouette instead of a long vertical rod.
     tie = bpy.data.objects.get('SERA_HairTie')
     if tie:
         tie.location.z += 0.010

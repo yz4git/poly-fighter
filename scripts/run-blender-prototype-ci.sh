@@ -25,6 +25,7 @@ xvfb-run -a blender --background \
 
 test -s "$out/sera-blender-prototype.blend"
 test -s "$out/sera-blender-prototype.glb"
+test -s "$out/sera-blender-runtime.glb"
 test -s "$out/sera-blender-metrics.json"
 for view in front three-quarter side back; do
   test -s "$out/sera-blender-${view}.png"

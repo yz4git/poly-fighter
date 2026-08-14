@@ -13,16 +13,23 @@ on:
       - src/game/visual-v10-stance.ts
       - src/game/visual-v10-polish.ts
       - src/game/visual-blender-runtime.ts
+      - src/game/visual-blender-diagnostics.ts
+      - src/game/visual-blender-metadata.ts
+      - src/game/visual-blender-semantics.ts
+      - src/game/visual-blender-skinning.ts
+      - src/game/visual-blender-skinning-profile.ts
       - src/game/visual-entry.ts
       - public/models/sera-blender-runtime.glb
       - public/models/sera-blender-runtime.metrics.json
       - public/models/sera-v10.glb
       - public/sw.js
+      - scripts/blender-runtime-audit-helpers.mjs
       - scripts/capture-v10-visual-audit.mjs
       - scripts/run-blender-prototype-ci.sh
       - tools/blender/**
       - tests/pwa-cache.test.mjs
       - tests/visual-v9.test.ts
+      - tests/visual-blender-skinning.test.ts
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
@@ -52,25 +59,34 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Run regression tests and Blender prototype
+      - name: Run regression tests and optional Blender prototype
         run: npm test
-      - name: Stage generated Blender runtime asset for the real game audit
+      - name: Stage Blender runtime asset for the real game audit
         id: stage_runtime
         if: github.event_name == 'pull_request'
         run: |
           generated="artifacts/visual-audit/blender-sera/sera-blender-runtime.glb"
-          metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
-          test -s "$generated"
-          test -s "$metrics"
+          generated_metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
+          committed="public/models/sera-blender-runtime.glb"
+          committed_metrics="public/models/sera-blender-runtime.metrics.json"
           mkdir -p public/models
-          if ! cmp -s "$generated" public/models/sera-blender-runtime.glb || ! cmp -s "$metrics" public/models/sera-blender-runtime.metrics.json; then
-            cp "$generated" public/models/sera-blender-runtime.glb
-            cp "$metrics" public/models/sera-blender-runtime.metrics.json
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+
+          if [ -s "$generated" ] && [ -s "$generated_metrics" ]; then
+            if ! cmp -s "$generated" "$committed" || ! cmp -s "$generated_metrics" "$committed_metrics"; then
+              cp "$generated" "$committed"
+              cp "$generated_metrics" "$committed_metrics"
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            fi
+            echo "runtime_source=generated" >> "$GITHUB_OUTPUT"
           else
+            test -s "$committed"
+            test -s "$committed_metrics"
             echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "runtime_source=committed" >> "$GITHUB_OUTPUT"
           fi
-      - name: Rebuild with staged Blender runtime asset
+      - name: Rebuild with selected Blender runtime asset
         if: github.event_name == 'pull_request'
         run: npm run build
       - name: Run lint
@@ -112,8 +128,9 @@ jobs:
             test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
             file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
           done
+          test -s artifacts/visual-audit/blender-runtime-state.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset staged into the production preview." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset and dedicated SERA_BLENDER_SKIN_V2 weights." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-webgl-visual-audit

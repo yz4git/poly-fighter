@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import process from "node:process";
+import { assertBlenderRuntimeAuditState, waitForBlenderRuntime } from "./blender-runtime-audit-helpers.mjs";
 
 const driver = process.env.WEBDRIVER_BIN;
 const url = process.env.AUDIT_URL ?? "http://127.0.0.1:3000/";
@@ -214,8 +215,6 @@ async function setRuntimePose(sessionId, pose) {
     game.animation.update(fighter, opponent, time);
     game.animation.update(opponent, fighter, time + 0.22);
 
-    // Attack aura is intentionally hidden in the audit so pose comparison is
-    // based on the actual reconstructed fighter surface.
     visual.aura.visible = false;
     opponent.visual.aura.visible = false;
 
@@ -245,12 +244,11 @@ async function setRuntimePose(sessionId, pose) {
       move: fighter.currentMove?.id ?? null,
       moveTick: fighter.moveTick,
       visualVersion: visual.visualVersion,
-      assetState: visual.root.userData.reconstructionAssetState ?? null,
-      presentationMode: visual.bodyMesh.userData.v10PresentationMode ?? null,
-      skinningPresentation: visual.root.userData.skinningPresentation ?? null,
-      colorPipeline: visual.root.userData.colorPipeline ?? null,
-      fragmentCount: visual.root.userData.v10FragmentCount ?? null,
-      regionCounts: visual.root.userData.v10RegionCounts ?? null,
+      assetState: visual.root.userData.blenderRuntimeAssetState ?? null,
+      visualPipeline: visual.root.userData.visualPipeline ?? null,
+      skinningVersion: visual.root.userData.skinningVersion ?? null,
+      runtimeMetadata: visual.root.userData.blenderRuntimeMetadata ?? null,
+      reconstruction: visual.bodyMesh.userData.reconstruction ?? null,
       contacts,
       screens,
       signature: visualSignature(game.renderer, game.camera, visual),
@@ -342,7 +340,7 @@ try {
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
 
-  await delay(2300);
+  await delay(600);
   const state = await execute(sessionId, `
     return {
       canvasCount: document.querySelectorAll('canvas').length,
@@ -355,6 +353,9 @@ try {
   if (!state?.canvasCount || !state?.fighterHud || state?.titleVisible || state?.selectVisible) {
     throw new Error(`Match canvas/HUD was not ready: ${JSON.stringify(state)}`);
   }
+
+  const blenderRuntimeState = await waitForBlenderRuntime(execute, sessionId, delay);
+  assertBlenderRuntimeAuditState(blenderRuntimeState);
   const canvasState = await inspectWebglCanvas(sessionId);
 
   await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
@@ -376,9 +377,10 @@ try {
   ]));
   await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
   await writeFile("artifacts/visual-audit/canvas-state.json", JSON.stringify(canvasState, null, 2));
+  await writeFile("artifacts/visual-audit/blender-runtime-state.json", JSON.stringify(blenderRuntimeState, null, 2));
   await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(compactStates, null, 2));
   await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
-  console.log(JSON.stringify({ output, state, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
+  console.log(JSON.stringify({ output, state, blenderRuntimeState, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
   auditSucceeded = true;
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
@@ -389,7 +391,4 @@ try {
   }
 }
 
-// ChromeDriver can report its own shutdown signal after the WebDriver session
-// has completed. The audit result is the files and validations above, so make
-// the process result explicit once the audit itself has succeeded.
 if (auditSucceeded) process.exit(0);

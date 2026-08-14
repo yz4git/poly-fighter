@@ -3,7 +3,9 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual, FighterVisualQuality } from "./visual";
-import { assignV10Skinning } from "./visual-v10";
+import { auditSeraSkinAttributes } from "./visual-blender-diagnostics";
+import { createSeraRuntimeMetadata } from "./visual-blender-metadata";
+import { assignSeraBlenderSkinning } from "./visual-blender-skinning";
 import { createFemaleV9Visual } from "./visual-v9";
 
 export const SERA_BLENDER_RUNTIME_ASSET_URL = "/models/sera-blender-runtime.glb";
@@ -69,6 +71,7 @@ function collectRuntimePieces(root: THREE.Object3D): THREE.BufferGeometry[] {
 
 function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   const pieces = collectRuntimePieces(root);
+  const primitiveCount = pieces.length;
   const geometry = mergeGeometries(pieces, false);
   pieces.forEach((piece) => piece.dispose());
   if (!geometry) throw new Error("SERA_BLENDER_RUNTIME_GLB_MERGE_FAILED");
@@ -95,10 +98,10 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V2";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V4";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
-  geometry.userData.sourcePrimitiveCount = pieces.length;
+  geometry.userData.sourcePrimitiveCount = primitiveCount;
   return geometry;
 }
 
@@ -121,7 +124,9 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
 
 function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeometry): void {
   const geometry = source.clone();
-  assignV10Skinning(geometry, visual.rig.boneIndices);
+  const skinningDiagnostics = assignSeraBlenderSkinning(geometry, visual.rig.boneIndices);
+  const weightAudit = auditSeraSkinAttributes(geometry);
+  const runtimeMetadata = createSeraRuntimeMetadata(skinningDiagnostics, weightAudit);
 
   const oldGeometry = visual.bodyMesh.geometry;
   const oldMaterial = visual.bodyMesh.material;
@@ -147,8 +152,12 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.stats.materialCount = 1;
   visual.stats.weightedVertexCount = position.count;
   visual.root.userData.blenderRuntimeAssetState = "ready";
-  visual.root.userData.skinningVersion = "V10.1_SEMANTIC_REGIONS";
+  visual.root.userData.skinningVersion = runtimeMetadata.skinningVersion;
   visual.root.userData.blenderRuntimePrimitiveMerge = source.userData.sourcePrimitiveCount ?? null;
+  visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
+  visual.root.userData.blenderWeightAudit = weightAudit;
+  visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
+  visual.bodyMesh.userData.skinningVersion = runtimeMetadata.skinningVersion;
 }
 
 export function createFemaleBlenderRuntimeVisual(
@@ -158,7 +167,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V2";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V4";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

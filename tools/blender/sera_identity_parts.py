@@ -29,26 +29,26 @@ def apply(armature, mats):
         (0.165,0.020,0.940),(0.090,0.020,0.925),(0.105,0.010,0.675),(0.205,0.005,0.735),
         (0.165,-0.022,0.940),(0.090,-0.022,0.925),(0.105,-0.028,0.675),(0.205,-0.028,0.735)], faces, black)
 
-    # Preserve the coherent source head.  Two narrow tapered 3D locks expose the
-    # eyes and cheek silhouette instead of behaving like broad forehead plates.
+    # Preserve the coherent source head.  The tapered locks sit close to the
+    # forehead surface so they remain readable without floating in 3/4 views.
     add_ico('SERA_HairCap', (0,-0.014,1.580), (0.108,0.092,0.114), hair, 2)
-    add_segment('SERA_FringeL', (-0.056,0.092,1.642), (-0.018,0.104,1.585), 0.024,0.009, hair, (0.52,1.0), 6)
-    add_segment('SERA_FringeR', (0.056,0.092,1.642), (0.018,0.104,1.585), 0.024,0.009, hair, (0.52,1.0), 6)
-    add_segment('SERA_TempleLockL', (-0.078,0.066,1.625), (-0.073,0.078,1.555), 0.014,0.007, hair, (0.54,1.0), 6)
-    add_segment('SERA_TempleLockR', (0.078,0.066,1.625), (0.073,0.078,1.555), 0.014,0.007, hair, (0.54,1.0), 6)
+    add_segment('SERA_FringeL', (-0.056,0.084,1.642), (-0.018,0.091,1.585), 0.023,0.0085, hair, (0.50,1.0), 6)
+    add_segment('SERA_FringeR', (0.056,0.084,1.642), (0.018,0.091,1.585), 0.023,0.0085, hair, (0.50,1.0), 6)
+    add_segment('SERA_TempleLockL', (-0.078,0.058,1.625), (-0.073,0.066,1.555), 0.013,0.0065, hair, (0.52,1.0), 6)
+    add_segment('SERA_TempleLockR', (0.078,0.058,1.625), (0.073,0.066,1.555), 0.013,0.0065, hair, (0.52,1.0), 6)
     add_box('SERA_HairTie', (0,-0.095,1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
     add_segment('SERA_Pony1', (0,-0.102,1.675), (0.020,-0.166,1.510), 0.054,0.045,hair,(0.66,1),7)
     add_segment('SERA_Pony2', (0.020,-0.166,1.510), (0.034,-0.190,1.300), 0.045,0.029,hair,(0.64,1),7)
     add_segment('SERA_Pony3', (0.034,-0.190,1.300), (0.027,-0.164,1.125), 0.029,0.009,hair,(0.62,1),7)
 
-    # Minimal flat-shaded facial accents.  They sit close to the source head so
-    # the modified anatomical mesh remains the actual face silhouette.
-    add_box('SERA_BrowL', (-0.029,0.105,1.598), (0.026,0.005,0.0035), brow, rotation=(0.0,0.0,-0.11), bevel=0.0013)
-    add_box('SERA_BrowR', (0.029,0.105,1.598), (0.026,0.005,0.0035), brow, rotation=(0.0,0.0,0.11), bevel=0.0013)
-    add_box('SERA_EyeL', (-0.028,0.108,1.578), (0.022,0.005,0.0035), eye, rotation=(0.0,0.0,-0.04), bevel=0.0013)
-    add_box('SERA_EyeR', (0.028,0.108,1.578), (0.022,0.005,0.0035), eye, rotation=(0.0,0.0,0.04), bevel=0.0013)
-    add_box('SERA_NosePlane', (0.0,0.106,1.552), (0.0065,0.006,0.023), skin_shadow, bevel=0.0018)
-    add_box('SERA_Lip', (0.0,0.108,1.526), (0.021,0.005,0.0035), lip, bevel=0.0013)
+    # Minimal facial accents now sit nearly flush with the reshaped source head.
+    # This keeps the face readable front-on without detached cards at side/3/4.
+    add_box('SERA_BrowL', (-0.029,0.095,1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,-0.11), bevel=0.0012)
+    add_box('SERA_BrowR', (0.029,0.095,1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,0.11), bevel=0.0012)
+    add_box('SERA_EyeL', (-0.028,0.097,1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,-0.04), bevel=0.0012)
+    add_box('SERA_EyeR', (0.028,0.097,1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,0.04), bevel=0.0012)
+    add_box('SERA_NosePlane', (0.0,0.099,1.552), (0.006,0.004,0.022), skin_shadow, bevel=0.0016)
+    add_box('SERA_Lip', (0.0,0.100,1.526), (0.020,0.0035,0.0032), lip, bevel=0.0012)
 
     for side in ('l','r'):
         a,b = bone_points(armature, 'lowerarm_' + side)
@@ -56,7 +56,6 @@ def apply(armature, mats):
         a,b = bone_points(armature, 'calf_' + side)
         add_segment('SERA_Shin_' + side, a.lerp(b,0.28), a.lerp(b,0.86), 0.043,0.027,blue_hi,(0.64,1),7)
 
-        # Bone-anchored foot shell.  Using the imported foot bone avoids the
-        # detached ground-level blocks from the previous world-space attempt.
+        # Bone-anchored foot shell keeps the boot tied to the imported foot rig.
         a,b = bone_points(armature, 'foot_' + side)
         add_segment('SERA_BootFoot_' + side, a.lerp(b,0.05), b.lerp(a,0.03), 0.044,0.028,black,(1.02,0.62),7)

@@ -13,16 +13,23 @@ on:
       - src/game/visual-v10-stance.ts
       - src/game/visual-v10-polish.ts
       - src/game/visual-blender-runtime.ts
+      - src/game/visual-blender-diagnostics.ts
+      - src/game/visual-blender-metadata.ts
+      - src/game/visual-blender-semantics.ts
+      - src/game/visual-blender-skinning.ts
+      - src/game/visual-blender-skinning-profile.ts
       - src/game/visual-entry.ts
       - public/models/sera-blender-runtime.glb
       - public/models/sera-blender-runtime.metrics.json
       - public/models/sera-v10.glb
       - public/sw.js
+      - scripts/blender-runtime-audit-helpers.mjs
       - scripts/capture-v10-visual-audit.mjs
       - scripts/run-blender-prototype-ci.sh
       - tools/blender/**
       - tests/pwa-cache.test.mjs
       - tests/visual-v9.test.ts
+      - tests/visual-blender-skinning.test.ts
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
@@ -112,8 +119,9 @@ jobs:
             test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
             file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
           done
+          test -s artifacts/visual-audit/blender-runtime-state.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset staged into the production preview." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset and dedicated SERA_BLENDER_SKIN_V2 weights." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-webgl-visual-audit

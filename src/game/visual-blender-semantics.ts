@@ -35,6 +35,18 @@ export const SERA_RUNTIME_PALETTE: readonly PaletteEntry[] = [
   ["lip", rgb(0x8A4D55)],
 ] as const;
 
+export const SERA_HEAD_LOCKED_SEMANTICS: ReadonlySet<SeraRuntimeSemantic> = new Set([
+  "hair",
+  "eye",
+  "brow",
+  "lip",
+  "skinShadow",
+]);
+
+export function isSeraHeadLockedSemantic(semantic: SeraRuntimeSemantic): boolean {
+  return SERA_HEAD_LOCKED_SEMANTICS.has(semantic);
+}
+
 function distanceSquared(r: number, g: number, b: number, target: readonly [number, number, number]): number {
   return (r - target[0]) ** 2 + (g - target[1]) ** 2 + (b - target[2]) ** 2;
 }

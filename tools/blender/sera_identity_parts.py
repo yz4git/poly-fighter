@@ -29,18 +29,13 @@ def apply(armature, mats):
         (0.165,0.020,0.940),(0.090,0.020,0.925),(0.105,0.010,0.675),(0.205,0.005,0.735),
         (0.165,-0.022,0.940),(0.090,-0.022,0.925),(0.105,-0.028,0.675),(0.205,-0.028,0.735)], faces, black)
 
-    # Preserve the coherent source head but keep the fringe narrow enough for
-    # the angular face to read from front and 3/4 views.  The center gap forms
-    # SERA's recognizable split fringe instead of a pair of broad face cards.
+    # Preserve the coherent source head.  Two narrow tapered 3D locks expose the
+    # eyes and cheek silhouette instead of behaving like broad forehead plates.
     add_ico('SERA_HairCap', (0,-0.014,1.580), (0.108,0.092,0.114), hair, 2)
-    add_wedge('SERA_FringeL', [
-        (-0.080,0.096,1.650),(-0.010,0.099,1.646),(-0.016,0.103,1.602),(-0.049,0.104,1.570),
-        (-0.080,0.073,1.650),(-0.010,0.076,1.646),(-0.016,0.080,1.602),(-0.049,0.081,1.570)], faces, hair)
-    add_wedge('SERA_FringeR', [
-        (0.010,0.099,1.646),(0.080,0.096,1.650),(0.049,0.104,1.570),(0.016,0.103,1.602),
-        (0.010,0.076,1.646),(0.080,0.073,1.650),(0.049,0.081,1.570),(0.016,0.080,1.602)], faces, hair)
-    add_box('SERA_TempleLockL', (-0.081,0.070,1.568), (0.012,0.010,0.045), hair, rotation=(-0.08,0.02,-0.13), bevel=0.0025)
-    add_box('SERA_TempleLockR', (0.081,0.070,1.568), (0.012,0.010,0.045), hair, rotation=(-0.08,-0.02,0.13), bevel=0.0025)
+    add_segment('SERA_FringeL', (-0.056,0.092,1.642), (-0.018,0.104,1.585), 0.024,0.009, hair, (0.52,1.0), 6)
+    add_segment('SERA_FringeR', (0.056,0.092,1.642), (0.018,0.104,1.585), 0.024,0.009, hair, (0.52,1.0), 6)
+    add_segment('SERA_TempleLockL', (-0.078,0.066,1.625), (-0.073,0.078,1.555), 0.014,0.007, hair, (0.54,1.0), 6)
+    add_segment('SERA_TempleLockR', (0.078,0.066,1.625), (0.073,0.078,1.555), 0.014,0.007, hair, (0.54,1.0), 6)
     add_box('SERA_HairTie', (0,-0.095,1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
     add_segment('SERA_Pony1', (0,-0.102,1.675), (0.020,-0.166,1.510), 0.054,0.045,hair,(0.66,1),7)
     add_segment('SERA_Pony2', (0.020,-0.166,1.510), (0.034,-0.190,1.300), 0.045,0.029,hair,(0.64,1),7)
@@ -61,12 +56,7 @@ def apply(armature, mats):
         a,b = bone_points(armature, 'calf_' + side)
         add_segment('SERA_Shin_' + side, a.lerp(b,0.28), a.lerp(b,0.86), 0.043,0.027,blue_hi,(0.64,1),7)
 
-    # Slim heel boots: small persistent 3D volumes rather than flat overlays.
-    # The source foot remains inside each boot, preserving the rigged base and
-    # giving side/back views a coherent tapered profile.
-    for side in (-1, 1):
-        x = side * 0.090
-        add_wedge(f'SERA_Boot_{side}', [
-            (x-0.045,0.070,0.135),(x+0.045,0.070,0.135),(x+0.038,0.155,0.035),(x-0.038,0.155,0.035),
-            (x-0.042,-0.035,0.135),(x+0.042,-0.035,0.135),(x+0.032,0.030,0.030),(x-0.032,0.030,0.030)], faces, black)
-        add_box(f'SERA_Heel_{side}', (x,-0.020,0.038), (0.021,0.025,0.040), black, rotation=(0.05,0.0,0.0), bevel=0.003)
+        # Bone-anchored foot shell.  Using the imported foot bone avoids the
+        # detached ground-level blocks from the previous world-space attempt.
+        a,b = bone_points(armature, 'foot_' + side)
+        add_segment('SERA_BootFoot_' + side, a.lerp(b,0.05), b.lerp(a,0.03), 0.044,0.028,black,(1.02,0.62),7)

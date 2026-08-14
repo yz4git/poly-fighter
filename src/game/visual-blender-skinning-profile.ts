@@ -34,4 +34,12 @@ export const SERA_SKIN_PROFILE = {
     thighStartY: 0.410,
     thighEndY: 0.575,
   },
+  thigh: {
+    hipMax: 0.18,
+    hipStartY: 0.500,
+    hipEndY: 0.590,
+    kneeMax: 0.28,
+    kneeStartY: 0.285,
+    kneeEndY: 0.345,
+  },
 } as const;

@@ -52,4 +52,8 @@ export const SERA_SKIN_PROFILE = {
     guardRigidShin: 0.97,
     guardFoot: 0.03,
   },
+  foot: {
+    foot: 0.985,
+    shin: 0.015,
+  },
 } as const;

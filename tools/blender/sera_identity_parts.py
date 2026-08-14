@@ -62,10 +62,14 @@ def apply(armature, mats):
     add_segment('SERA_FringeSideR', (0.044,fy(0.098),1.652), (0.074,fy(0.104),1.592), 0.017,0.0052,hair,(0.46,1.0),6)
     add_segment('SERA_TempleLockL', (-0.078,fy(0.072),1.630), (-0.084,fy(0.078),1.552), 0.0115,0.0050,hair,(0.50,1.0),6)
     add_segment('SERA_TempleLockR', (0.078,fy(0.072),1.630), (0.084,fy(0.078),1.562), 0.0110,0.0048,hair,(0.50,1.0),6)
-    add_box('SERA_HairTie', (0,fy(-0.095),1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
-    add_segment('SERA_Pony1', (0,fy(-0.102),1.675), (0.020,fy(-0.166),1.510), 0.054,0.045,hair,(0.66,1),7)
-    add_segment('SERA_Pony2', (0.020,fy(-0.166),1.510), (0.034,fy(-0.190),1.300), 0.045,0.029,hair,(0.64,1),7)
-    add_segment('SERA_Pony3', (0.034,fy(-0.190),1.300), (0.027,fy(-0.164),1.125), 0.029,0.009,hair,(0.62,1),7)
+
+    # The high ponytail starts as a broad gathered root and then sweeps slightly
+    # sideways while tapering. This replaces the previous straight, rod-like tail.
+    add_box('SERA_HairTie', (0.004,fy(-0.098),1.672), (0.042,0.020,0.015), blue_hi, bevel=0.003)
+    add_segment('SERA_PonyRoot', (0.004,fy(-0.090),1.676), (0.020,fy(-0.122),1.648), 0.050,0.064,hair,(0.72,1.0),7)
+    add_segment('SERA_Pony1', (0.020,fy(-0.122),1.648), (0.050,fy(-0.166),1.535), 0.064,0.054,hair,(0.72,1.0),7)
+    add_segment('SERA_Pony2', (0.050,fy(-0.166),1.535), (0.074,fy(-0.184),1.360), 0.054,0.036,hair,(0.70,1.0),7)
+    add_segment('SERA_Pony3', (0.074,fy(-0.184),1.360), (0.050,fy(-0.166),1.205), 0.036,0.012,hair,(0.66,1.0),7)
 
     # Facial accents use the same forward convention as the fringe, preventing
     # a false face from being constructed on the back of the source head.

@@ -4,6 +4,11 @@ import os
 import bpy
 from mathutils import Vector
 
+# Quaternius Godot/UE characters import into Blender facing -Y.  Keep one
+# explicit convention for authored identity parts and audit cameras so front
+# and back cannot silently drift apart again.
+SERA_FRONT_Y = -1.0
+
 
 def rgba(value):
     return (((value >> 16) & 255) / 255.0, ((value >> 8) & 255) / 255.0, (value & 255) / 255.0, 1.0)
@@ -132,7 +137,7 @@ def setup_scene():
         light.data.size = size
         point_at(light, (0, 0, 0.95))
 
-    bpy.ops.object.camera_add(location=(0, 3.65, 1.02))
+    bpy.ops.object.camera_add(location=(0, 3.65 * SERA_FRONT_Y, 1.02))
     cam = bpy.context.object
     cam.name = 'AuditCamera'
     cam.data.lens = 58
@@ -147,10 +152,10 @@ def render_views(output_dir, cam=None):
         raise RuntimeError('AuditCamera missing')
     scene = bpy.context.scene
     views = {
-        'front': ((0.0, 3.65, 1.02), (0.0, 0.0, 0.88)),
-        'three-quarter': ((2.55, 2.85, 1.08), (0.0, 0.0, 0.88)),
+        'front': ((0.0, 3.65 * SERA_FRONT_Y, 1.02), (0.0, 0.0, 0.88)),
+        'three-quarter': ((2.55, 2.85 * SERA_FRONT_Y, 1.08), (0.0, 0.0, 0.88)),
         'side': ((3.70, 0.0, 1.02), (0.0, 0.0, 0.88)),
-        'back': ((0.0, -3.65, 1.02), (0.0, 0.0, 0.88)),
+        'back': ((0.0, -3.65 * SERA_FRONT_Y, 1.02), (0.0, 0.0, 0.88)),
     }
     for name, (loc, target) in views.items():
         cam.location = loc

@@ -6,33 +6,33 @@ from sera_blender_helpers import SERA_FRONT_Y, material
 def _head_scale(p, z2):
     """Return additional source-head shaping while preserving the imported rig.
 
-    The Quaternius head remains the coherent anatomical base.  These small,
-    continuous scale changes move the actual skinned source vertices toward the
-    SERA turnaround instead of relying on face cards or replacement geometry.
+    The Quaternius head remains the coherent anatomical base. These continuous
+    changes move the actual skinned source vertices toward SERA's angular face.
     """
     sx = 1.0
     sy = 1.0
     if z2 < 1.485 or abs(p.x) > 0.165:
         return sx, sy
 
-    # Narrow the jaw, keep readable cheek width, then taper the crown slightly.
+    # SERA has a visibly tapered chin, readable cheek plane, and a slightly
+    # fuller upper face beneath the fringe. Preserve continuity between bands.
     if z2 < 1.535:
-        sx = 0.87
-        sy = 0.94
+        sx = 0.83
+        sy = 0.93
     elif z2 < 1.590:
-        sx = 0.93
+        sx = 0.92
         sy = 0.96
     elif z2 < 1.645:
-        sx = 0.97
+        sx = 0.98
         sy = 0.97
     else:
-        sx = 0.95
-        sy = 0.96
+        sx = 0.96
+        sy = 0.97
 
-    # Flatten only the actual forward lower-face volume a little.  Forward is
-    # explicit because the imported Quaternius Godot/UE character faces -Y.
+    # Keep the lower face controlled without flattening away the source nose and
+    # lips. Forward is explicit because the imported character faces -Y.
     if p.y * SERA_FRONT_Y > 0.025 and z2 < 1.585:
-        sy *= 0.95
+        sy *= 0.97
     return sx, sy
 
 

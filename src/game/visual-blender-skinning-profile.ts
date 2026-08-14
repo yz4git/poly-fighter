@@ -42,4 +42,14 @@ export const SERA_SKIN_PROFILE = {
     kneeStartY: 0.285,
     kneeEndY: 0.345,
   },
+  shin: {
+    kneeMax: 0.18,
+    kneeStartY: 0.270,
+    kneeEndY: 0.315,
+    ankleMax: 0.18,
+    ankleStartY: 0.075,
+    ankleEndY: 0.120,
+    guardRigidShin: 0.97,
+    guardFoot: 0.03,
+  },
 } as const;

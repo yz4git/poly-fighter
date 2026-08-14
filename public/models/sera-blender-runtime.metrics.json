@@ -10,5 +10,7 @@
   "runtimeAssetBytes": 187536,
   "runtimeSwitched": true,
   "runtimePalette": "material primitives converted to vertex colors in browser",
+  "runtimeIntegration": "BLENDER_CONFORMAL_GLB_CANONICAL_RIG",
+  "gameplayRig": "POLY FIGHTER V10-compatible canonical rig and IK",
   "design": "coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette"
 }

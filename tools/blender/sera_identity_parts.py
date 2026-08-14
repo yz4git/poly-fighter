@@ -1,4 +1,4 @@
-from sera_blender_helpers import add_box, add_ico, add_segment, add_wedge, material
+from sera_blender_helpers import SERA_FRONT_Y, add_box, add_ico, add_segment, add_wedge, material
 
 
 def bone_points(armature, name):
@@ -6,6 +6,11 @@ def bone_points(armature, name):
     if bone is None:
         raise RuntimeError('missing source rig bone ' + name)
     return armature.matrix_world @ bone.head, armature.matrix_world @ bone.tail
+
+
+def fy(value):
+    """Map authored +front depth into the imported character's Blender axis."""
+    return value * SERA_FRONT_Y
 
 
 def apply(armature, mats):
@@ -17,38 +22,38 @@ def apply(armature, mats):
     lip = material('SERA_Lip', 0x8A4D55, 0.80)
     skin_shadow = material('SERA_SkinShadow', 0xB97967, 0.82)
 
-    add_box('SERA_Collar', (0, -0.004, 1.405), (0.122, 0.050, 0.047), blue_hi, bevel=0.007)
+    add_box('SERA_Collar', (0, fy(-0.004), 1.405), (0.122, 0.050, 0.047), blue_hi, bevel=0.007)
     faces = [(0,1,2,3),(4,7,6,5),(0,4,5,1),(3,2,6,7),(1,5,6,2),(0,3,7,4)]
     add_wedge('SERA_FrontSkirt', [
-        (-0.120,0.070,0.955),(0.095,0.070,0.955),(0.070,0.080,0.625),(-0.045,0.080,0.585),
-        (-0.120,0.030,0.955),(0.095,0.030,0.955),(0.070,0.035,0.625),(-0.045,0.035,0.585)], faces, blue_hi)
+        (-0.120,fy(0.070),0.955),(0.095,fy(0.070),0.955),(0.070,fy(0.080),0.625),(-0.045,fy(0.080),0.585),
+        (-0.120,fy(0.030),0.955),(0.095,fy(0.030),0.955),(0.070,fy(0.035),0.625),(-0.045,fy(0.035),0.585)], faces, blue_hi)
     add_wedge('SERA_LeftSkirt', [
-        (-0.165,0.025,0.940),(-0.085,0.025,0.925),(-0.105,0.015,0.635),(-0.205,0.010,0.700),
-        (-0.165,-0.020,0.940),(-0.085,-0.020,0.925),(-0.105,-0.025,0.635),(-0.205,-0.025,0.700)], faces, blue)
+        (-0.165,fy(0.025),0.940),(-0.085,fy(0.025),0.925),(-0.105,fy(0.015),0.635),(-0.205,fy(0.010),0.700),
+        (-0.165,fy(-0.020),0.940),(-0.085,fy(-0.020),0.925),(-0.105,fy(-0.025),0.635),(-0.205,fy(-0.025),0.700)], faces, blue)
     add_wedge('SERA_RightSkirt', [
-        (0.165,0.020,0.940),(0.090,0.020,0.925),(0.105,0.010,0.675),(0.205,0.005,0.735),
-        (0.165,-0.022,0.940),(0.090,-0.022,0.925),(0.105,-0.028,0.675),(0.205,-0.028,0.735)], faces, black)
+        (0.165,fy(0.020),0.940),(0.090,fy(0.020),0.925),(0.105,fy(0.010),0.675),(0.205,fy(0.005),0.735),
+        (0.165,fy(-0.022),0.940),(0.090,fy(-0.022),0.925),(0.105,fy(-0.028),0.675),(0.205,fy(-0.028),0.735)], faces, black)
 
-    # Preserve the coherent source head.  The tapered locks sit close to the
-    # forehead surface so they remain readable without floating in 3/4 views.
-    add_ico('SERA_HairCap', (0,-0.014,1.580), (0.108,0.092,0.114), hair, 2)
-    add_segment('SERA_FringeL', (-0.056,0.084,1.642), (-0.018,0.091,1.585), 0.023,0.0085, hair, (0.50,1.0), 6)
-    add_segment('SERA_FringeR', (0.056,0.084,1.642), (0.018,0.091,1.585), 0.023,0.0085, hair, (0.50,1.0), 6)
-    add_segment('SERA_TempleLockL', (-0.078,0.058,1.625), (-0.073,0.066,1.555), 0.013,0.0065, hair, (0.52,1.0), 6)
-    add_segment('SERA_TempleLockR', (0.078,0.058,1.625), (0.073,0.066,1.555), 0.013,0.0065, hair, (0.52,1.0), 6)
-    add_box('SERA_HairTie', (0,-0.095,1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
-    add_segment('SERA_Pony1', (0,-0.102,1.675), (0.020,-0.166,1.510), 0.054,0.045,hair,(0.66,1),7)
-    add_segment('SERA_Pony2', (0.020,-0.166,1.510), (0.034,-0.190,1.300), 0.045,0.029,hair,(0.64,1),7)
-    add_segment('SERA_Pony3', (0.034,-0.190,1.300), (0.027,-0.164,1.125), 0.029,0.009,hair,(0.62,1),7)
+    # Hair now follows the imported Quaternius forward convention explicitly:
+    # fringe/temple locks live on the face side, while tie and ponytail stay rear.
+    add_ico('SERA_HairCap', (0,fy(-0.014),1.580), (0.108,0.092,0.114), hair, 2)
+    add_segment('SERA_FringeL', (-0.056,fy(0.084),1.642), (-0.018,fy(0.091),1.585), 0.023,0.0085,hair,(0.50,1.0),6)
+    add_segment('SERA_FringeR', (0.056,fy(0.084),1.642), (0.018,fy(0.091),1.585), 0.023,0.0085,hair,(0.50,1.0),6)
+    add_segment('SERA_TempleLockL', (-0.078,fy(0.058),1.625), (-0.073,fy(0.066),1.555), 0.013,0.0065,hair,(0.52,1.0),6)
+    add_segment('SERA_TempleLockR', (0.078,fy(0.058),1.625), (0.073,fy(0.066),1.555), 0.013,0.0065,hair,(0.52,1.0),6)
+    add_box('SERA_HairTie', (0,fy(-0.095),1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
+    add_segment('SERA_Pony1', (0,fy(-0.102),1.675), (0.020,fy(-0.166),1.510), 0.054,0.045,hair,(0.66,1),7)
+    add_segment('SERA_Pony2', (0.020,fy(-0.166),1.510), (0.034,fy(-0.190),1.300), 0.045,0.029,hair,(0.64,1),7)
+    add_segment('SERA_Pony3', (0.034,fy(-0.190),1.300), (0.027,fy(-0.164),1.125), 0.029,0.009,hair,(0.62,1),7)
 
-    # Minimal facial accents now sit nearly flush with the reshaped source head.
-    # This keeps the face readable front-on without detached cards at side/3/4.
-    add_box('SERA_BrowL', (-0.029,0.095,1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,-0.11), bevel=0.0012)
-    add_box('SERA_BrowR', (0.029,0.095,1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,0.11), bevel=0.0012)
-    add_box('SERA_EyeL', (-0.028,0.097,1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,-0.04), bevel=0.0012)
-    add_box('SERA_EyeR', (0.028,0.097,1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,0.04), bevel=0.0012)
-    add_box('SERA_NosePlane', (0.0,0.099,1.552), (0.006,0.004,0.022), skin_shadow, bevel=0.0016)
-    add_box('SERA_Lip', (0.0,0.100,1.526), (0.020,0.0035,0.0032), lip, bevel=0.0012)
+    # Facial accents use the same forward convention as the fringe, preventing
+    # a false face from being constructed on the back of the source head.
+    add_box('SERA_BrowL', (-0.029,fy(0.095),1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,-0.11), bevel=0.0012)
+    add_box('SERA_BrowR', (0.029,fy(0.095),1.598), (0.025,0.0035,0.0032), brow, rotation=(0.0,0.0,0.11), bevel=0.0012)
+    add_box('SERA_EyeL', (-0.028,fy(0.097),1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,-0.04), bevel=0.0012)
+    add_box('SERA_EyeR', (0.028,fy(0.097),1.578), (0.021,0.0035,0.0032), eye, rotation=(0.0,0.0,0.04), bevel=0.0012)
+    add_box('SERA_NosePlane', (0.0,fy(0.099),1.552), (0.006,0.004,0.022), skin_shadow, bevel=0.0016)
+    add_box('SERA_Lip', (0.0,fy(0.100),1.526), (0.020,0.0035,0.0032), lip, bevel=0.0012)
 
     for side in ('l','r'):
         a,b = bone_points(armature, 'lowerarm_' + side)

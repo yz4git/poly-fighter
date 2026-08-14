@@ -24,4 +24,9 @@ export const SERA_SKIN_PROFILE = {
     spineStartY: 0.595,
     spineEndY: 0.675,
   },
+  frontSkirt: {
+    thighMax: 0.10,
+    thighStartY: 0.420,
+    thighEndY: 0.565,
+  },
 } as const;

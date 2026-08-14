@@ -1,10 +1,13 @@
 import bpy
+from sera_blender_helpers import SERA_FRONT_Y
 
 
 def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
-        cap.location.y -= 0.032
+        # Move the cap toward the back of the head independent of imported
+        # forward-axis sign.  Previously this hard-coded -Y and could invert it.
+        cap.location.y -= 0.032 * SERA_FRONT_Y
         cap.location.z += 0.018
         cap.scale.x = 0.92
         cap.scale.y = 0.64

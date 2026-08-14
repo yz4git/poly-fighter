@@ -9,5 +9,7 @@
   "runtimeAsset": "sera-blender-runtime.glb",
   "runtimeAssetBytes": 242796,
   "runtimeSwitched": true,
+  "runtimeIntegration": "BLENDER_CONFORMAL_GLB_CANONICAL_RIG",
+  "gameplayRig": "POLY FIGHTER V10-compatible canonical rig and IK",
   "design": "coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette"
 }

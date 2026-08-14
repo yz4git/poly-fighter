@@ -29,33 +29,44 @@ def apply(armature, mats):
         (0.165,0.020,0.940),(0.090,0.020,0.925),(0.105,0.010,0.675),(0.205,0.005,0.735),
         (0.165,-0.022,0.940),(0.090,-0.022,0.925),(0.105,-0.028,0.675),(0.205,-0.028,0.735)], faces, black)
 
-    # Keep the source head as the coherent anatomical base, then layer only the
-    # large SERA identity planes that the turnaround needs to read at game scale.
-    add_ico('SERA_HairCap', (0,-0.012,1.575), (0.112,0.098,0.118), hair, 2)
+    # Preserve the coherent source head but keep the fringe narrow enough for
+    # the angular face to read from front and 3/4 views.  The center gap forms
+    # SERA's recognizable split fringe instead of a pair of broad face cards.
+    add_ico('SERA_HairCap', (0,-0.014,1.580), (0.108,0.092,0.114), hair, 2)
     add_wedge('SERA_FringeL', [
-        (-0.094,0.100,1.655),(-0.008,0.101,1.650),(-0.018,0.105,1.588),(-0.060,0.105,1.565),
-        (-0.094,0.070,1.655),(-0.008,0.071,1.650),(-0.018,0.075,1.588),(-0.060,0.075,1.565)], faces, hair)
+        (-0.080,0.096,1.650),(-0.010,0.099,1.646),(-0.016,0.103,1.602),(-0.049,0.104,1.570),
+        (-0.080,0.073,1.650),(-0.010,0.076,1.646),(-0.016,0.080,1.602),(-0.049,0.081,1.570)], faces, hair)
     add_wedge('SERA_FringeR', [
-        (0.008,0.101,1.650),(0.094,0.100,1.655),(0.060,0.105,1.565),(0.018,0.105,1.588),
-        (0.008,0.071,1.650),(0.094,0.070,1.655),(0.060,0.075,1.565),(0.018,0.075,1.588)], faces, hair)
-    add_box('SERA_TempleLockL', (-0.088,0.078,1.570), (0.016,0.012,0.052), hair, rotation=(-0.08,0.02,-0.10), bevel=0.003)
-    add_box('SERA_TempleLockR', (0.088,0.078,1.570), (0.016,0.012,0.052), hair, rotation=(-0.08,-0.02,0.10), bevel=0.003)
-    add_box('SERA_HairTie', (0,-0.092,1.665), (0.055,0.020,0.015), blue_hi, bevel=0.003)
-    add_segment('SERA_Pony1', (0,-0.100,1.675), (0.025,-0.175,1.500), 0.064,0.052,hair,(0.70,1),7)
-    add_segment('SERA_Pony2', (0.025,-0.175,1.500), (0.040,-0.205,1.265), 0.052,0.032,hair,(0.68,1),7)
-    add_segment('SERA_Pony3', (0.040,-0.205,1.265), (0.030,-0.175,1.075), 0.032,0.010,hair,(0.66,1),7)
+        (0.010,0.099,1.646),(0.080,0.096,1.650),(0.049,0.104,1.570),(0.016,0.103,1.602),
+        (0.010,0.076,1.646),(0.080,0.073,1.650),(0.049,0.081,1.570),(0.016,0.080,1.602)], faces, hair)
+    add_box('SERA_TempleLockL', (-0.081,0.070,1.568), (0.012,0.010,0.045), hair, rotation=(-0.08,0.02,-0.13), bevel=0.0025)
+    add_box('SERA_TempleLockR', (0.081,0.070,1.568), (0.012,0.010,0.045), hair, rotation=(-0.08,-0.02,0.13), bevel=0.0025)
+    add_box('SERA_HairTie', (0,-0.095,1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
+    add_segment('SERA_Pony1', (0,-0.102,1.675), (0.020,-0.166,1.510), 0.054,0.045,hair,(0.66,1),7)
+    add_segment('SERA_Pony2', (0.020,-0.166,1.510), (0.034,-0.190,1.300), 0.045,0.029,hair,(0.64,1),7)
+    add_segment('SERA_Pony3', (0.034,-0.190,1.300), (0.027,-0.164,1.125), 0.029,0.009,hair,(0.62,1),7)
 
-    # Minimal flat-shaded facial planes. These are deliberately shallow so the
-    # underlying free head remains the silhouette source from every camera.
-    add_box('SERA_BrowL', (-0.032,0.108,1.600), (0.029,0.006,0.004), brow, rotation=(0.0,0.0,-0.10), bevel=0.0015)
-    add_box('SERA_BrowR', (0.032,0.108,1.600), (0.029,0.006,0.004), brow, rotation=(0.0,0.0,0.10), bevel=0.0015)
-    add_box('SERA_EyeL', (-0.031,0.111,1.579), (0.025,0.006,0.004), eye, rotation=(0.0,0.0,-0.035), bevel=0.0015)
-    add_box('SERA_EyeR', (0.031,0.111,1.579), (0.025,0.006,0.004), eye, rotation=(0.0,0.0,0.035), bevel=0.0015)
-    add_box('SERA_NosePlane', (0.0,0.109,1.553), (0.008,0.008,0.026), skin_shadow, bevel=0.002)
-    add_box('SERA_Lip', (0.0,0.111,1.526), (0.024,0.006,0.004), lip, bevel=0.0015)
+    # Minimal flat-shaded facial accents.  They sit close to the source head so
+    # the modified anatomical mesh remains the actual face silhouette.
+    add_box('SERA_BrowL', (-0.029,0.105,1.598), (0.026,0.005,0.0035), brow, rotation=(0.0,0.0,-0.11), bevel=0.0013)
+    add_box('SERA_BrowR', (0.029,0.105,1.598), (0.026,0.005,0.0035), brow, rotation=(0.0,0.0,0.11), bevel=0.0013)
+    add_box('SERA_EyeL', (-0.028,0.108,1.578), (0.022,0.005,0.0035), eye, rotation=(0.0,0.0,-0.04), bevel=0.0013)
+    add_box('SERA_EyeR', (0.028,0.108,1.578), (0.022,0.005,0.0035), eye, rotation=(0.0,0.0,0.04), bevel=0.0013)
+    add_box('SERA_NosePlane', (0.0,0.106,1.552), (0.0065,0.006,0.023), skin_shadow, bevel=0.0018)
+    add_box('SERA_Lip', (0.0,0.108,1.526), (0.021,0.005,0.0035), lip, bevel=0.0013)
 
     for side in ('l','r'):
         a,b = bone_points(armature, 'lowerarm_' + side)
-        add_segment('SERA_Guard_' + side, a.lerp(b,0.43), a.lerp(b,0.88), 0.046,0.030,silver,(0.68,1),6)
+        add_segment('SERA_Guard_' + side, a.lerp(b,0.47), a.lerp(b,0.84), 0.040,0.027,silver,(0.66,1),6)
         a,b = bone_points(armature, 'calf_' + side)
-        add_segment('SERA_Shin_' + side, a.lerp(b,0.20), a.lerp(b,0.90), 0.050,0.030,blue_hi,(0.69,1),7)
+        add_segment('SERA_Shin_' + side, a.lerp(b,0.28), a.lerp(b,0.86), 0.043,0.027,blue_hi,(0.64,1),7)
+
+    # Slim heel boots: small persistent 3D volumes rather than flat overlays.
+    # The source foot remains inside each boot, preserving the rigged base and
+    # giving side/back views a coherent tapered profile.
+    for side in (-1, 1):
+        x = side * 0.090
+        add_wedge(f'SERA_Boot_{side}', [
+            (x-0.045,0.070,0.135),(x+0.045,0.070,0.135),(x+0.038,0.155,0.035),(x-0.038,0.155,0.035),
+            (x-0.042,-0.035,0.135),(x+0.042,-0.035,0.135),(x+0.032,0.030,0.030),(x-0.032,0.030,0.030)], faces, black)
+        add_box(f'SERA_Heel_{side}', (x,-0.020,0.038), (0.021,0.025,0.040), black, rotation=(0.05,0.0,0.0), bevel=0.003)

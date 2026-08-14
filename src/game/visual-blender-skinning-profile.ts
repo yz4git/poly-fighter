@@ -11,4 +11,11 @@ export const SERA_SKIN_PROFILE = {
     elbowStartY: 0.615,
     elbowEndY: 0.690,
   },
+  forearm: {
+    handMax: 0.18,
+    handStartY: 0.475,
+    handEndY: 0.535,
+    guardRigidForearm: 0.96,
+    guardHand: 0.04,
+  },
 } as const;

@@ -148,10 +148,13 @@ def main():
         'runtimeAssetBytes':runtime_bytes,
         'runtimeSwitched':True,
         'runtimePalette':'material primitives converted to vertex colors in browser',
+        'runtimeIntegration':'BLENDER_CONFORMAL_GLB_CANONICAL_RIG',
+        'gameplayRig':'POLY FIGHTER V10-compatible canonical rig and IK',
         'design':'coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette'
     }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
+        handle.write('\n')
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
         handle.write('Free female base remains coherent and rigged. The compact material-palette sera-blender-runtime.glb is staged into POLY FIGHTER, merged to vertex colors, and reskinned to the canonical combat rig at runtime.\n')
     print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes)

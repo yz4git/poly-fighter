@@ -1,6 +1,6 @@
 import bpy
 from mathutils import Vector
-from sera_blender_helpers import material
+from sera_blender_helpers import SERA_FRONT_Y, material
 
 
 def _head_scale(p, z2):
@@ -29,9 +29,9 @@ def _head_scale(p, z2):
         sx = 0.95
         sy = 0.96
 
-    # Flatten only the forward lower-face volume a little.  The nose is kept as
-    # part of the source mesh; identity planes merely accent its low-poly read.
-    if p.y > 0.025 and z2 < 1.585:
+    # Flatten only the actual forward lower-face volume a little.  Forward is
+    # explicit because the imported Quaternius Godot/UE character faces -Y.
+    if p.y * SERA_FRONT_Y > 0.025 and z2 < 1.585:
         sy *= 0.95
     return sx, sy
 
@@ -79,6 +79,7 @@ def apply(body):
         center /= len(poly.vertices)
         x, y, z = center.x, center.y, center.z
         ax = abs(x)
+        forward_y = y * SERA_FRONT_Y
         slot = 0
         if z < 0.69:
             slot = 3
@@ -91,7 +92,7 @@ def apply(body):
                 slot = 3
             elif ax > 0.19:
                 slot = 0
-            elif y > 0.015 and ax < 0.075:
+            elif forward_y > 0.015 and ax < 0.075:
                 slot = 3
             elif ax > 0.115:
                 slot = 2

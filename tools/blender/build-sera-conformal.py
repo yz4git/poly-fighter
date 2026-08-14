@@ -169,13 +169,13 @@ def main():
         'armature':armature.name,
         'runtimeAsset':'sera-blender-runtime.glb',
         'runtimeAssetBytes':runtime_bytes,
-        'runtimeSwitched':False,
+        'runtimeSwitched':True,
         'design':'coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette'
     }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. The prototype GLB keeps the Blender armature; sera-blender-runtime.glb is a compact vertex-colored static geometry export intended for POLY FIGHTER canonical-rig reskinning.\n')
+        handle.write('Free female base remains coherent and rigged. The compact vertex-colored sera-blender-runtime.glb is now staged into POLY FIGHTER and reskinned to the canonical combat rig at runtime.\n')
     print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes)
 
 

@@ -44,8 +44,10 @@ def export_runtime_mesh(output):
 
     Runtime animation is supplied by POLY FIGHTER's canonical combat rig, so the
     Blender armature, finger hierarchy, audit ground and source helper meshes are
-    intentionally excluded.  The evaluated body plus persistent SERA identity
-    pieces are joined into one material-preserving mesh before export.
+    intentionally excluded. The evaluated body plus persistent SERA identity
+    pieces are joined into one material-preserving mesh before export. Normals,
+    UVs and source vertex colors are omitted because the browser recomputes flat
+    normals and bakes colors from the preserved material slots before reskinning.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     sources = [
@@ -90,6 +92,9 @@ def export_runtime_mesh(output):
         export_lights=False,
         export_animations=False,
         export_skins=False,
+        export_normals=False,
+        export_texcoords=False,
+        export_colors=False,
     )
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise RuntimeError('SERA runtime GLB export failed')

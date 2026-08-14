@@ -5,14 +5,14 @@ from sera_blender_helpers import SERA_FRONT_Y
 def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
-        # The cap must cover crown/back hair without entering the facial plane.
-        # Front is -Y for the imported source, so bias the cap slightly rearward
-        # and reduce depth; explicit hairline wedges handle forehead coverage.
-        cap.location.y = -0.012 * SERA_FRONT_Y
-        cap.location.z = 1.598
-        cap.scale.x = 0.99
-        cap.scale.y = 0.90
-        cap.scale.z = 1.06
+        # The ico sphere is only a crown/back-hair volume. Keep its front edge
+        # safely behind the source face; explicit hairline/fringe geometry covers
+        # the forehead. This prevents the cap from swallowing the face in front.
+        cap.location.y = -0.040 * SERA_FRONT_Y
+        cap.location.z = 1.602
+        cap.scale.x = 0.98
+        cap.scale.y = 0.78
+        cap.scale.z = 1.05
 
     for name in ('SERA_HairlineL', 'SERA_HairlineR'):
         obj = bpy.data.objects.get(name)

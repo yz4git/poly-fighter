@@ -25,7 +25,7 @@ function chooseRuntimeMesh(root: THREE.Object3D): THREE.Mesh {
     const candidate = object as THREE.Mesh;
     if (!candidate.isMesh || !candidate.geometry || candidate.name === "Ground") return;
     const count = candidate.geometry.getAttribute("position")?.count ?? 0;
-    const preferred = candidate.name === "SERA_RuntimeMesh" ? 1_000_000 : 0;
+    const preferred = candidate.name.startsWith("SERA_RuntimeMesh") ? 1_000_000 : 0;
     if (count + preferred > selectedVertices) {
       selected = candidate;
       selectedVertices = count + preferred;
@@ -42,27 +42,30 @@ function bakeMaterialColors(source: THREE.Mesh): THREE.BufferGeometry {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!position) throw new Error("SERA_BLENDER_RUNTIME_GLB_HAS_NO_POSITION");
 
-  const materials = Array.isArray(source.material) ? source.material : [source.material];
-  const colors = new Float32Array(position.count * 3);
-  const fallback = materialColor(materials[0]);
-  for (let vertex = 0; vertex < position.count; vertex += 1) {
-    colors[vertex * 3] = fallback.r;
-    colors[vertex * 3 + 1] = fallback.g;
-    colors[vertex * 3 + 2] = fallback.b;
-  }
-
-  for (const group of geometry.groups) {
-    const color = materialColor(materials[group.materialIndex ?? 0]);
-    const end = Math.min(position.count, group.start + group.count);
-    for (let vertex = Math.max(0, group.start); vertex < end; vertex += 1) {
-      colors[vertex * 3] = color.r;
-      colors[vertex * 3 + 1] = color.g;
-      colors[vertex * 3 + 2] = color.b;
+  const existing = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (!existing || existing.count !== position.count) {
+    const materials = Array.isArray(source.material) ? source.material : [source.material];
+    const colors = new Float32Array(position.count * 3);
+    const fallback = materialColor(materials[0]);
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      colors[vertex * 3] = fallback.r;
+      colors[vertex * 3 + 1] = fallback.g;
+      colors[vertex * 3 + 2] = fallback.b;
     }
+
+    for (const group of geometry.groups) {
+      const color = materialColor(materials[group.materialIndex ?? 0]);
+      const end = Math.min(position.count, group.start + group.count);
+      for (let vertex = Math.max(0, group.start); vertex < end; vertex += 1) {
+        colors[vertex * 3] = color.r;
+        colors[vertex * 3 + 1] = color.g;
+        colors[vertex * 3 + 2] = color.b;
+      }
+    }
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   }
 
   geometry.clearGroups();
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.deleteAttribute("skinIndex");
   geometry.deleteAttribute("skinWeight");
   geometry.deleteAttribute("uv");

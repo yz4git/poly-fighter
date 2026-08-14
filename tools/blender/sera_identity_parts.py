@@ -52,13 +52,16 @@ def apply(armature, mats):
     add_segment('SERA_NapeHairL', (-0.072,fy(-0.052),1.628), (-0.058,fy(-0.076),1.520), 0.023,0.010,hair,(0.74,1.0),7)
     add_segment('SERA_NapeHairR', (0.072,fy(-0.052),1.628), (0.058,fy(-0.076),1.520), 0.023,0.010,hair,(0.74,1.0),7)
 
-    # Layered tapered locks grow out of the hairline instead of floating above it.
-    add_segment('SERA_FringeL', (-0.010,fy(0.102),1.662), (-0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
-    add_segment('SERA_FringeR', (0.010,fy(0.102),1.662), (0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
-    add_segment('SERA_FringeSideL', (-0.038,fy(0.098),1.655), (-0.070,fy(0.104),1.584), 0.019,0.0060,hair,(0.48,1.0),6)
-    add_segment('SERA_FringeSideR', (0.038,fy(0.098),1.655), (0.070,fy(0.104),1.584), 0.019,0.0060,hair,(0.48,1.0),6)
-    add_segment('SERA_TempleLockL', (-0.078,fy(0.072),1.630), (-0.084,fy(0.078),1.558), 0.0115,0.0050,hair,(0.50,1.0),6)
-    add_segment('SERA_TempleLockR', (0.078,fy(0.072),1.630), (0.084,fy(0.078),1.558), 0.0115,0.0050,hair,(0.50,1.0),6)
+    # The fringe is intentionally asymmetric like a styled haircut, not a pair
+    # of mirrored rods. A short center wisp establishes the part; the left inner
+    # lock hangs slightly lower while the right side opens more of the eye area.
+    add_segment('SERA_FringeCenter', (-0.004,fy(0.105),1.659), (-0.015,fy(0.109),1.630), 0.012,0.0038,hair,(0.44,1.0),6)
+    add_segment('SERA_FringeL', (-0.010,fy(0.103),1.662), (-0.031,fy(0.108),1.604), 0.019,0.0058,hair,(0.44,1.0),6)
+    add_segment('SERA_FringeR', (0.012,fy(0.103),1.660), (0.043,fy(0.108),1.616), 0.018,0.0055,hair,(0.44,1.0),6)
+    add_segment('SERA_FringeSideL', (-0.036,fy(0.099),1.654), (-0.064,fy(0.105),1.580), 0.018,0.0055,hair,(0.46,1.0),6)
+    add_segment('SERA_FringeSideR', (0.044,fy(0.098),1.652), (0.074,fy(0.104),1.592), 0.017,0.0052,hair,(0.46,1.0),6)
+    add_segment('SERA_TempleLockL', (-0.078,fy(0.072),1.630), (-0.084,fy(0.078),1.552), 0.0115,0.0050,hair,(0.50,1.0),6)
+    add_segment('SERA_TempleLockR', (0.078,fy(0.072),1.630), (0.084,fy(0.078),1.562), 0.0110,0.0048,hair,(0.50,1.0),6)
     add_box('SERA_HairTie', (0,fy(-0.095),1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
     add_segment('SERA_Pony1', (0,fy(-0.102),1.675), (0.020,fy(-0.166),1.510), 0.054,0.045,hair,(0.66,1),7)
     add_segment('SERA_Pony2', (0.020,fy(-0.166),1.510), (0.034,fy(-0.190),1.300), 0.045,0.029,hair,(0.64,1),7)

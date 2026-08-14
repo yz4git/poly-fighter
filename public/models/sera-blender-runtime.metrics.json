@@ -7,7 +7,8 @@
   "bodyTriangles": 12812,
   "armature": "Armature",
   "runtimeAsset": "sera-blender-runtime.glb",
-  "runtimeAssetBytes": 242796,
+  "runtimeAssetBytes": 187536,
   "runtimeSwitched": true,
+  "runtimePalette": "material primitives converted to vertex colors in browser",
   "design": "coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette"
 }

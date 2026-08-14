@@ -69,12 +69,22 @@ def main():
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
-    metrics = {'prototype':'SERA_QUATERNIUS_CONFORMAL_V7','source':'Quaternius Superhero Female FullBody','sourceLicense':'CC0 1.0 Universal','heightMeters':1.68,'bodyVertices':len(body.data.vertices),'bodyTriangles':triangles,'armature':armature.name,'runtimeSwitched':False,'design':'coherent rigged body, conformal palette, tuned hair and skirt silhouette'}
+    metrics = {
+        'prototype':'SERA_QUATERNIUS_CONFORMAL_V8',
+        'source':'Quaternius Superhero Female FullBody',
+        'sourceLicense':'CC0 1.0 Universal',
+        'heightMeters':1.68,
+        'bodyVertices':len(body.data.vertices),
+        'bodyTriangles':triangles,
+        'armature':armature.name,
+        'runtimeSwitched':False,
+        'design':'coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette'
+    }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. Bind-pose turnaround is used while body, hair and costume silhouette are refined. Runtime unchanged.\n')
-    print('SERA_CONFORMAL_V7_OK', len(body.data.vertices), triangles)
+        handle.write('Free female base remains coherent and rigged. V8 directly shapes the source head while hair, boots and costume accents stay persistent 3D and rig-aligned. Runtime unchanged.\n')
+    print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles)
 
 
 if __name__ == '__main__':

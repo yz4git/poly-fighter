@@ -35,9 +35,17 @@ def apply(armature, mats):
         (0.165,fy(-0.022),0.940),(0.090,fy(-0.022),0.925),(0.105,fy(-0.028),0.675),(0.205,fy(-0.028),0.735)], faces, black)
 
     # Hair follows the imported Quaternius forward convention explicitly.
-    # A fuller skull cap closes the crown, while layered tapered locks create a
-    # narrow center part and sweep outward instead of forming two rigid face bars.
+    # The cap supplies the skull mass. Two shallow 3D hairline wedges bridge the
+    # cap to the forehead so no skin-colored crown patch can open between them.
     add_ico('SERA_HairCap', (0,fy(-0.006),1.586), (0.116,0.104,0.124), hair, 2)
+    add_wedge('SERA_HairlineL', [
+        (-0.004,fy(0.104),1.674),(-0.066,fy(0.103),1.661),(-0.086,fy(0.099),1.620),(-0.020,fy(0.104),1.628),
+        (-0.004,fy(0.082),1.674),(-0.066,fy(0.081),1.661),(-0.086,fy(0.078),1.620),(-0.020,fy(0.083),1.628)], faces, hair)
+    add_wedge('SERA_HairlineR', [
+        (0.004,fy(0.104),1.674),(0.066,fy(0.103),1.661),(0.086,fy(0.099),1.620),(0.020,fy(0.104),1.628),
+        (0.004,fy(0.082),1.674),(0.066,fy(0.081),1.661),(0.086,fy(0.078),1.620),(0.020,fy(0.083),1.628)], faces, hair)
+
+    # Layered tapered locks grow out of the hairline instead of floating above it.
     add_segment('SERA_FringeL', (-0.010,fy(0.102),1.662), (-0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
     add_segment('SERA_FringeR', (0.010,fy(0.102),1.662), (0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
     add_segment('SERA_FringeSideL', (-0.038,fy(0.098),1.655), (-0.070,fy(0.104),1.584), 0.019,0.0060,hair,(0.48,1.0),6)

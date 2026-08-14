@@ -63,7 +63,7 @@ jobs:
           test -s "$generated"
           test -s "$metrics"
           mkdir -p public/models
-          if [ ! -s public/models/sera-blender-runtime.glb ]; then
+          if ! cmp -s "$generated" public/models/sera-blender-runtime.glb || ! cmp -s "$metrics" public/models/sera-blender-runtime.metrics.json; then
             cp "$generated" public/models/sera-blender-runtime.glb
             cp "$metrics" public/models/sera-blender-runtime.metrics.json
             echo "publish=true" >> "$GITHUB_OUTPUT"

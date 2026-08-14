@@ -39,28 +39,37 @@ def style_face(objects):
             poly.use_smooth = False
 
 
-def bake_runtime_colors(runtime):
-    """Collapse the Blender material palette into one vertex-color primitive."""
-    mesh = runtime.data
+def bake_object_colors(obj):
+    """Bake each source object's own material assignments before joining meshes.
+
+    Blender's object join can remap material slots. Baking per object first keeps
+    skin, hair, blue, black and silver regions attached to the exact polygons
+    that authored them, so the game can both render and semantically reskin the
+    compact GLB correctly.
+    """
+    mesh = obj.data
     colors = mesh.color_attributes.get('SERA_RuntimeColor')
     if colors is None:
         colors = mesh.color_attributes.new(name='SERA_RuntimeColor', type='BYTE_COLOR', domain='CORNER')
-
     for poly in mesh.polygons:
         source_material = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
         rgba = tuple(source_material.diffuse_color) if source_material else (1.0, 1.0, 1.0, 1.0)
         for loop_index in poly.loop_indices:
             colors.data[loop_index].color = rgba
-
     try:
         mesh.color_attributes.active_color = colors
     except Exception:
         pass
+    mesh.update()
 
+
+def collapse_runtime_materials(runtime):
+    mesh = runtime.data
     mesh.materials.clear()
     mesh.materials.append(material('SERA_RuntimeWhite', 0xFFFFFF, 0.72))
     for poly in mesh.polygons:
         poly.material_index = 0
+        poly.use_smooth = False
     mesh.update()
 
 
@@ -70,8 +79,9 @@ def export_runtime_mesh(output):
     Runtime animation is supplied by POLY FIGHTER's canonical combat rig, so the
     Blender armature, finger hierarchy, audit ground and source helper meshes are
     excluded. The evaluated body plus persistent identity pieces are joined into
-    one mesh. Blender material colors are baked to COLOR_0 and all materials are
-    collapsed to one white slot, producing one primitive with no UVs or normals.
+    one mesh. Each source object's material colors are baked to COLOR_0 before
+    joining, then all materials collapse to one white slot. The result is one
+    primitive with POSITION + COLOR_0 and no UVs, normals, skin or animation.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     sources = [
@@ -93,6 +103,7 @@ def export_runtime_mesh(output):
                 mesh.materials.append(material_slot.material)
         for poly in mesh.polygons:
             poly.use_smooth = False
+        bake_object_colors(copy)
         copies.append(copy)
 
     bpy.ops.object.select_all(action='DESELECT')
@@ -104,7 +115,7 @@ def export_runtime_mesh(output):
     runtime.name = 'SERA_RuntimeMesh'
     for group in list(runtime.vertex_groups):
         runtime.vertex_groups.remove(group)
-    bake_runtime_colors(runtime)
+    collapse_runtime_materials(runtime)
 
     path = os.path.join(output, 'sera-blender-runtime.glb')
     bpy.ops.export_scene.gltf(

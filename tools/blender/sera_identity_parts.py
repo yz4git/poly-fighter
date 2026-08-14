@@ -35,13 +35,15 @@ def apply(armature, mats):
         (0.165,fy(-0.022),0.940),(0.090,fy(-0.022),0.925),(0.105,fy(-0.028),0.675),(0.205,fy(-0.028),0.735)], faces, black)
 
     # Hair follows the imported Quaternius forward convention explicitly.
-    # The cap is a coherent skull volume; two swept fringe locks start near the
-    # center part and open outward so they frame the face instead of crossing it.
-    add_ico('SERA_HairCap', (0,fy(-0.014),1.580), (0.108,0.092,0.114), hair, 2)
-    add_segment('SERA_FringeL', (-0.016,fy(0.090),1.653), (-0.054,fy(0.096),1.603), 0.019,0.0075,hair,(0.48,1.0),6)
-    add_segment('SERA_FringeR', (0.016,fy(0.090),1.653), (0.054,fy(0.096),1.603), 0.019,0.0075,hair,(0.48,1.0),6)
-    add_segment('SERA_TempleLockL', (-0.074,fy(0.066),1.630), (-0.081,fy(0.073),1.558), 0.012,0.0055,hair,(0.50,1.0),6)
-    add_segment('SERA_TempleLockR', (0.074,fy(0.066),1.630), (0.081,fy(0.073),1.558), 0.012,0.0055,hair,(0.50,1.0),6)
+    # A fuller skull cap closes the crown, while layered tapered locks create a
+    # narrow center part and sweep outward instead of forming two rigid face bars.
+    add_ico('SERA_HairCap', (0,fy(-0.006),1.586), (0.116,0.104,0.124), hair, 2)
+    add_segment('SERA_FringeL', (-0.010,fy(0.102),1.662), (-0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
+    add_segment('SERA_FringeR', (0.010,fy(0.102),1.662), (0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
+    add_segment('SERA_FringeSideL', (-0.038,fy(0.098),1.655), (-0.070,fy(0.104),1.584), 0.019,0.0060,hair,(0.48,1.0),6)
+    add_segment('SERA_FringeSideR', (0.038,fy(0.098),1.655), (0.070,fy(0.104),1.584), 0.019,0.0060,hair,(0.48,1.0),6)
+    add_segment('SERA_TempleLockL', (-0.078,fy(0.072),1.630), (-0.084,fy(0.078),1.558), 0.0115,0.0050,hair,(0.50,1.0),6)
+    add_segment('SERA_TempleLockR', (0.078,fy(0.072),1.630), (0.084,fy(0.078),1.558), 0.0115,0.0050,hair,(0.50,1.0),6)
     add_box('SERA_HairTie', (0,fy(-0.095),1.668), (0.048,0.018,0.014), blue_hi, bevel=0.003)
     add_segment('SERA_Pony1', (0,fy(-0.102),1.675), (0.020,fy(-0.166),1.510), 0.054,0.045,hair,(0.66,1),7)
     add_segment('SERA_Pony2', (0.020,fy(-0.166),1.510), (0.034,fy(-0.190),1.300), 0.045,0.029,hair,(0.64,1),7)

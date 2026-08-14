@@ -5,13 +5,14 @@ from sera_blender_helpers import SERA_FRONT_Y
 def apply():
     cap = bpy.data.objects.get('SERA_HairCap')
     if cap:
-        # Move the cap toward the back of the head independent of imported
-        # forward-axis sign.  Previously this hard-coded -Y and could invert it.
-        cap.location.y -= 0.032 * SERA_FRONT_Y
-        cap.location.z += 0.018
-        cap.scale.x = 0.92
-        cap.scale.y = 0.64
-        cap.scale.z = 0.82
+        # Keep the coherent cap centered over the skull and bias it slightly
+        # toward the face side. The previous pass pushed it rearward and then
+        # compressed its depth, exposing a bald crown/forehead patch in front.
+        cap.location.y = 0.018 * SERA_FRONT_Y
+        cap.location.z += 0.026
+        cap.scale.x = 1.00
+        cap.scale.y = 0.96
+        cap.scale.z = 0.98
 
     # Keep the waist panels as short, thin graphic shapes around the upper thigh.
     # They should frame the hips without reading as knee-length armor.

@@ -39,6 +39,65 @@ def style_face(objects):
             poly.use_smooth = False
 
 
+def export_runtime_mesh(output):
+    """Export only the visible SERA geometry as a compact static GLB.
+
+    Runtime animation is supplied by POLY FIGHTER's canonical combat rig, so the
+    Blender armature, finger hierarchy, audit ground and source helper meshes are
+    intentionally excluded.  The evaluated body plus persistent SERA identity
+    pieces are joined into one material-preserving mesh before export.
+    """
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    sources = [
+        obj for obj in bpy.context.scene.objects
+        if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))
+    ]
+    if not sources:
+        raise RuntimeError('no SERA runtime mesh sources found')
+
+    copies = []
+    for source in sources:
+        evaluated = source.evaluated_get(depsgraph)
+        mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=False, depsgraph=depsgraph)
+        copy = bpy.data.objects.new('Runtime_' + source.name, mesh)
+        copy.matrix_world = source.matrix_world.copy()
+        bpy.context.collection.objects.link(copy)
+        for material_slot in source.material_slots:
+            if material_slot.material and material_slot.material.name not in [m.name for m in mesh.materials if m]:
+                mesh.materials.append(material_slot.material)
+        for poly in mesh.polygons:
+            poly.use_smooth = False
+        copies.append(copy)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in copies:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = copies[0]
+    bpy.ops.object.join()
+    runtime = bpy.context.view_layer.objects.active
+    runtime.name = 'SERA_RuntimeMesh'
+    for group in list(runtime.vertex_groups):
+        runtime.vertex_groups.remove(group)
+
+    path = os.path.join(output, 'sera-blender-runtime.glb')
+    bpy.ops.export_scene.gltf(
+        filepath=path,
+        export_format='GLB',
+        use_selection=True,
+        export_apply=True,
+        export_yup=True,
+        export_cameras=False,
+        export_lights=False,
+        export_animations=False,
+        export_skins=False,
+    )
+    if not os.path.exists(path) or os.path.getsize(path) <= 0:
+        raise RuntimeError('SERA runtime GLB export failed')
+
+    bpy.data.objects.remove(runtime, do_unlink=True)
+    return os.path.getsize(path)
+
+
 def main():
     args = parse_args()
     output = os.path.abspath(args.output_dir)
@@ -66,6 +125,7 @@ def main():
 
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(output, 'sera-blender-prototype.blend'))
     bpy.ops.export_scene.gltf(filepath=os.path.join(output, 'sera-blender-prototype.glb'), export_format='GLB', export_apply=False, export_yup=True, export_cameras=False, export_lights=False)
+    runtime_bytes = export_runtime_mesh(output)
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
@@ -77,14 +137,16 @@ def main():
         'bodyVertices':len(body.data.vertices),
         'bodyTriangles':triangles,
         'armature':armature.name,
+        'runtimeAsset':'sera-blender-runtime.glb',
+        'runtimeAssetBytes':runtime_bytes,
         'runtimeSwitched':False,
         'design':'coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette'
     }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. V8 directly shapes the source head while hair, boots and costume accents stay persistent 3D and rig-aligned. Runtime unchanged.\n')
-    print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles)
+        handle.write('Free female base remains coherent and rigged. The prototype GLB keeps the Blender armature; sera-blender-runtime.glb is a compact static geometry export intended for POLY FIGHTER canonical-rig reskinning.\n')
+    print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes)
 
 
 if __name__ == '__main__':

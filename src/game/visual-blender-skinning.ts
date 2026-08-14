@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { semanticFromColorAttribute, type SeraRuntimeSemantic } from "./visual-blender-semantics";
+import { isSeraHeadLockedSemantic, semanticFromColorAttribute, type SeraRuntimeSemantic } from "./visual-blender-semantics";
 
 export type SeraRuntimeRegion =
   | "HEAD"
@@ -29,6 +29,7 @@ export type SeraInfluence = readonly [bone: number, weight: number];
 export interface SeraSkinningDiagnostics {
   regionCounts: Partial<Record<SeraRuntimeRegion, number>>;
   semanticCounts: Partial<Record<SeraRuntimeSemantic, number>>;
+  headLockedVertices: number;
   invalidWeightVertices: number;
   maxInfluenceCount: number;
 }
@@ -69,31 +70,19 @@ export function classifySeraRuntimeRegion(
   const absX = Math.abs(x);
   const absZ = Math.abs(z);
 
-  // Authored hair/face planes belong to the head even when a ponytail segment
-  // extends below the anatomical skull height.
-  if (semantic === "hair" || semantic === "eye" || semantic === "brow" || semantic === "lip" || semantic === "skinShadow") return "HEAD";
+  // Every authored hair primitive, including the ponytail all the way down to
+  // its low tip, is head-owned. This deliberately trades secondary pony motion
+  // for deformation stability until a dedicated hair rig exists.
+  if (isSeraHeadLockedSemantic(semantic)) return "HEAD";
   if (y >= 0.835) return "HEAD";
 
-  // The raised blue collar sits tightly around the neck and must not be picked
-  // up by shoulder heuristics.
   if ((semantic === "blue" || semantic === "blueHi") && y >= 0.795 && y < 0.855 && absX < 0.100 && absZ < 0.095) return "COLLAR";
-
-  // Silver geometry is authored only for the forearm guards in SERA V11.
   if (semantic === "silver" && y >= 0.455 && y < 0.700) return limbRegion(side, "FOREARM");
-
-  // Hands are low enough that a pure height classifier is reliable once skirt
-  // and torso semantics are excluded.
   if (y >= 0.405 && y < 0.515 && absX > 0.135 && (semantic === "skin" || semantic === "black")) return limbRegion(side, "HAND");
-
-  // Shoulder seam gets a dedicated region so chest and upper-arm rotation blend
-  // without pulling torso polygons across the body.
   if (y >= 0.680 && y < 0.825 && absX >= 0.105 && absX < 0.205 && semantic !== "black") return limbRegion(side, "SHOULDER");
-
   if (y >= 0.610 && y < 0.825 && absX >= 0.155 && (semantic === "skin" || semantic === "blue" || semantic === "blueHi" || semantic === "black")) return limbRegion(side, "UPPER_ARM");
   if (y >= 0.490 && y < 0.675 && absX >= 0.145 && (semantic === "skin" || semantic === "black" || semantic === "blue" || semantic === "blueHi")) return limbRegion(side, "FOREARM");
 
-  // Authored skirt panels occupy the waist-to-thigh gap and are deliberately
-  // separated from the body legs so they can remain hip-led.
   if (y >= 0.345 && y < 0.585 && (semantic === "blue" || semantic === "blueHi" || semantic === "black")) {
     if (semantic === "blueHi" && absX < 0.085) return "FRONT_SKIRT";
     if (absX >= 0.050 && absX < 0.180) return side === "LEFT" ? "LEFT_SKIRT" : "RIGHT_SKIRT";
@@ -102,7 +91,6 @@ export function classifySeraRuntimeRegion(
   if (y < 0.100) return limbRegion(side, "FOOT");
   if (y < 0.305) return limbRegion(side, "SHIN");
   if (y < 0.590 && absX < 0.145) return limbRegion(side, "THIGH");
-
   if (y < 0.660) return "HIPS";
   return "TORSO";
 }
@@ -198,7 +186,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
   const color = (geometry.getAttribute("color") as THREE.BufferAttribute | undefined) ?? null;
   const indices: number[] = [];
   const weights: number[] = [];
-  const diagnostics: SeraSkinningDiagnostics = { regionCounts: {}, semanticCounts: {}, invalidWeightVertices: 0, maxInfluenceCount: 0 };
+  const diagnostics: SeraSkinningDiagnostics = { regionCounts: {}, semanticCounts: {}, headLockedVertices: 0, invalidWeightVertices: 0, maxInfluenceCount: 0 };
 
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const semantic = semanticFromColorAttribute(color, vertex);
@@ -206,6 +194,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
     const influences = solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices);
     diagnostics.semanticCounts[semantic] = (diagnostics.semanticCounts[semantic] ?? 0) + 1;
     diagnostics.regionCounts[region] = (diagnostics.regionCounts[region] ?? 0) + 1;
+    if (isSeraHeadLockedSemantic(semantic)) diagnostics.headLockedVertices += 1;
     diagnostics.maxInfluenceCount = Math.max(diagnostics.maxInfluenceCount, influences.length);
     const sum = influences.reduce((total, [, weight]) => total + weight, 0);
     if (!Number.isFinite(sum) || Math.abs(sum - 1) > 1e-4) diagnostics.invalidWeightVertices += 1;
@@ -217,7 +206,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
 
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
-  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V1";
+  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V1.1";
   geometry.userData.skinningDiagnostics = diagnostics;
   return diagnostics;
 }

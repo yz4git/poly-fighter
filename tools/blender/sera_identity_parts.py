@@ -45,6 +45,13 @@ def apply(armature, mats):
         (0.004,fy(0.104),1.674),(0.066,fy(0.103),1.661),(0.086,fy(0.099),1.620),(0.020,fy(0.104),1.628),
         (0.004,fy(0.082),1.674),(0.066,fy(0.081),1.661),(0.086,fy(0.078),1.620),(0.020,fy(0.083),1.628)], faces, hair)
 
+    # Side masses overlap the cap edge, then taper toward the temples and nape.
+    # This removes the disconnected helmet/flap look in side and 3/4 views.
+    add_segment('SERA_SideHairL', (-0.086,fy(0.018),1.656), (-0.096,fy(0.054),1.555), 0.027,0.011,hair,(0.70,1.0),7)
+    add_segment('SERA_SideHairR', (0.086,fy(0.018),1.656), (0.096,fy(0.054),1.555), 0.027,0.011,hair,(0.70,1.0),7)
+    add_segment('SERA_NapeHairL', (-0.072,fy(-0.052),1.628), (-0.058,fy(-0.076),1.520), 0.023,0.010,hair,(0.74,1.0),7)
+    add_segment('SERA_NapeHairR', (0.072,fy(-0.052),1.628), (0.058,fy(-0.076),1.520), 0.023,0.010,hair,(0.74,1.0),7)
+
     # Layered tapered locks grow out of the hairline instead of floating above it.
     add_segment('SERA_FringeL', (-0.010,fy(0.102),1.662), (-0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)
     add_segment('SERA_FringeR', (0.010,fy(0.102),1.662), (0.034,fy(0.107),1.610), 0.021,0.0070,hair,(0.46,1.0),6)

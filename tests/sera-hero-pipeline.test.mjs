@@ -33,12 +33,40 @@ test('SERA Hero spec exposes the major silhouette targets', () => {
   assert.ok(spec.optimizer.maxScaleStep > 0 && spec.optimizer.maxScaleStep < 0.2);
 });
 
-test('SERA Hero feedback is a safe no-op baseline for AI visual critique', () => {
+test('SERA Hero feedback remains schema-safe across critique revisions', () => {
   assert.match(feedback.version, /^SERA_HERO_FEEDBACK_/);
-  assert.equal(feedback.revision, 0);
-  assert.deepEqual(feedback.targetMultipliers, {});
-  assert.deepEqual(feedback.styleMultipliers, {});
-  assert.deepEqual(feedback.objectAdjustments, {});
+  assert.ok(Number.isInteger(feedback.revision));
+  assert.ok(feedback.revision >= 0);
+  assert.equal(typeof feedback.targetMultipliers, 'object');
+  assert.equal(typeof feedback.styleMultipliers, 'object');
+  assert.equal(typeof feedback.objectAdjustments, 'object');
+
+  for (const [key, value] of Object.entries(feedback.targetMultipliers)) {
+    assert.ok(Object.hasOwn(spec.targets, key), `unknown target feedback key: ${key}`);
+    assert.equal(typeof value, 'number');
+    assert.ok(Number.isFinite(value) && value > 0, `${key} multiplier must be positive`);
+  }
+
+  for (const [key, value] of Object.entries(feedback.styleMultipliers)) {
+    assert.ok(Object.hasOwn(spec.style, key), `unknown style feedback key: ${key}`);
+    const values = Array.isArray(value) ? value : [value];
+    assert.ok(values.length > 0);
+    for (const multiplier of values) {
+      assert.equal(typeof multiplier, 'number');
+      assert.ok(Number.isFinite(multiplier) && multiplier > 0, `${key} multiplier must be positive`);
+    }
+  }
+
+  for (const [name, adjustment] of Object.entries(feedback.objectAdjustments)) {
+    assert.match(name, /^SERA_/);
+    assert.equal(typeof adjustment, 'object');
+    for (const key of ['scaleMultiplier', 'locationDelta', 'rotationDeltaRadians']) {
+      if (!(key in adjustment)) continue;
+      assert.ok(Array.isArray(adjustment[key]));
+      assert.equal(adjustment[key].length, 3);
+      assert.ok(adjustment[key].every(Number.isFinite));
+    }
+  }
 });
 
 test('SERA Hero pipeline is a closed-loop measured Blender pass with AI feedback handoff', () => {

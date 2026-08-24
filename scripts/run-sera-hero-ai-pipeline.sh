@@ -61,8 +61,15 @@ for view, data in meta['views'].items():
             if anchor.get('anchorMode') != 'faceLandmarks' or anchor.get('kind') != 'face':
                 raise SystemExit(f'{view} face generated crop is not landmark anchored')
         if kind == 'hair':
-            max_width=1.20 if view == 'side' else .88
-            if width > max_width or height > .32:
+            if view == 'side':
+                max_width, max_height = 1.20, .42
+            elif view == 'three-quarter':
+                max_width, max_height = .96, .40
+            elif view == 'back':
+                max_width, max_height = .36, .28
+            else:
+                max_width, max_height = .88, .36
+            if width > max_width or height > max_height or ref_box[1] < -.16 or ref_box[3] > .42:
                 raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
             if view != 'back':
                 anchor=entry.get('normalizedBox', {})

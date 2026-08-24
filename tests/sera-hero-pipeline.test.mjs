@@ -47,10 +47,10 @@ test('SERA Hero V4 spec defines a persistent 128D reference-driven search', () =
   assert.ok(Math.abs(Object.values(w).reduce((a,b)=>a+b,0)-1) < 1e-9);
 });
 
-test('V4 state is schema-safe and seeded from the validated V3 best', () => {
+test('V4 state is schema-safe and persists the validated search best', () => {
   assert.equal(state.version, 'SERA_HERO_PARAMETER_SEARCH_STATE_V1');
   assert.equal(state.schemaVersion, 'SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM');
-  assert.equal(state.generation, 0);
+  assert.ok(Number.isInteger(state.generation) && state.generation >= 0);
   assert.ok(Object.keys(state.parameters).length >= 20);
   assert.equal(cache.version, 'SERA_HERO_PARAMETER_SEARCH_CACHE_V1');
   assert.equal(typeof cache.entries, 'object');

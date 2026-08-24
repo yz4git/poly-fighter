@@ -9,15 +9,19 @@ for path in (BLENDER_DIR, HERE):
 
 import sera_hero_pipeline as legacy
 import sera_parameter_search as parameter_search
+import sera_reference_objective as reference_objective
 from sera_hero_metrics import measure_body, score
 from sera_hero_v4_deform import install as install_v4, V4_PARAMETER_COUNT, V4_SCHEMA_VERSION
 from sera_local_objective_search import install as install_local_objective_search, LOCAL_ACCEPTANCE_VERSION
-from sera_reference_objective import load_reference, render_and_score
+from sera_local_crop_anchor import install as install_local_crop_anchor
 
 install_v4(parameter_search)
 install_local_objective_search(parameter_search)
+install_local_crop_anchor(reference_objective)
 run_parameter_search = parameter_search.run_parameter_search
 write_search_outputs = parameter_search.write_search_outputs
+load_reference = reference_objective.load_reference
+render_and_score = reference_objective.render_and_score
 
 
 def parse_args():
@@ -166,7 +170,7 @@ def main():
         'runtimeAsset': 'sera-blender-runtime.glb',
         'runtimeAssetBytes': runtime_bytes,
         'renders': ['sera-blender-front.png', 'sera-blender-three-quarter.png', 'sera-blender-side.png', 'sera-blender-back.png', 'sera-hero-fight.png'],
-        'notes': 'V5 keeps the validated V4 128D deformation space but separates high-resolution face and hair Reference crops into independent objectives. Face candidates must improve face-local score; hair candidates must improve hair-local score; global score is a regression guard for those groups rather than a weighted combined target.',
+        'notes': 'V5 keeps the validated V4 128D deformation space but separates high-resolution face and hair Reference crops into independent objectives. Face/hair windows are anchored to projected facial landmarks instead of the full-body bbox. Face candidates must improve face-local score; hair candidates must improve hair-local score; global score is a regression guard for those groups rather than a weighted combined target.',
     }
     with open(os.path.join(output, 'sera-hero-report.json'), 'w', encoding='utf-8') as fp:
         json.dump(report, fp, indent=2)
@@ -174,6 +178,7 @@ def main():
     with open(os.path.join(output, 'README.txt'), 'w', encoding='utf-8') as fp:
         fp.write('SERA Hero Asset AI Pipeline V5 - Independent Local Reference Objectives\n')
         fp.write('Global Reference objective remains independent from 512x512 high-resolution face and hair crop objectives.\n')
+        fp.write('Face/hair local windows use projected facial landmarks, not the full-body bbox.\n')
         fp.write('Face group accepts by face-local improvement; hair group accepts by hair-local improvement; global/per-view silhouette are regression guards.\n')
 
     print('SERA_HERO_PIPELINE_V5_OK', 'GLOBAL', round(final['score'], 5), 'FACE_LOCAL', round(_local_score(final, 'face'), 5), 'HAIR_LOCAL', round(_local_score(final, 'hair'), 5), 'GEN', state['generation'], 'PARAMS', len(definitions), 'IMPROVED', state['improvedCandidates'])

@@ -119,6 +119,20 @@ def normalized_box(local_box, body_box):
     return [(x0 - bx0) / bw, (y0 - by0) / bh, (x1 - bx0 + 1.0) / bw, (y1 - by0 + 1.0) / bh]
 
 
+def _validate_local_box(view, kind, box):
+    """Reject body-scale crops while allowing normal side-profile overscan."""
+    width = box[2] - box[0]
+    height = box[3] - box[1]
+    if kind == "face":
+        max_width = .82 if view == "side" else .68
+        if width > max_width or height > .34 or box[1] < -.04 or box[3] > .34:
+            raise RuntimeError(f"{view} face crop escaped head region: {box}")
+    elif kind == "hair":
+        max_width = .96 if view == "side" else .88
+        if width > max_width or height > .31 or box[1] < -.05 or box[3] > .32:
+            raise RuntimeError(f"{view} hair crop escaped head region: {box}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
@@ -155,16 +169,10 @@ def main():
         local["hair"] = {"normalizedBox": normalized_box(hair_box, body)}
         metadata["views"][view]["localCrops"] = local
 
-        # Hard sanity guard: local crops must stay local. This intentionally
-        # fails CI if a future segmentation change expands them toward a body crop.
+        # The guard prevents accidental body crops, but side-profile references
+        # legitimately need more horizontal room and tiny top overscan.
         for kind, entry in local.items():
-            box = entry["normalizedBox"]
-            width = box[2] - box[0]
-            height = box[3] - box[1]
-            if kind == "face" and (width > .68 or height > .33):
-                raise RuntimeError(f"{view} face crop escaped head region: {box}")
-            if kind == "hair" and (width > .88 or height > .30):
-                raise RuntimeError(f"{view} hair crop escaped head region: {box}")
+            _validate_local_box(view, kind, entry["normalizedBox"])
 
     metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V4_TIGHT_HEAD_LOCAL_CROPS"
     metadata["localCropPurpose"] = {

@@ -1,0 +1,47 @@
+{
+  "version": "SERA_HERO_SPEC_V1",
+  "character": "SERA",
+  "heightMeters": 1.68,
+  "targets": {
+    "shoulderWidth": 0.39,
+    "waistWidth": 0.245,
+    "hipWidth": 0.335,
+    "headWidth": 0.185,
+    "headDepth": 0.205,
+    "headHeightRatio": 0.137,
+    "torsoDepth": 0.19
+  },
+  "weights": {
+    "shoulderWidth": 1.1,
+    "waistWidth": 1.0,
+    "hipWidth": 1.0,
+    "headWidth": 1.4,
+    "headDepth": 1.2,
+    "headHeightRatio": 1.3,
+    "torsoDepth": 0.8
+  },
+  "optimizer": {
+    "iterations": 8,
+    "gain": 0.52,
+    "maxScaleStep": 0.075,
+    "minImprovement": 0.0005
+  },
+  "style": {
+    "hairCapScale": [1.08, 1.04, 1.07],
+    "fringeScale": [1.04, 0.96, 1.03],
+    "ponytailScale": [1.05, 1.08, 1.16],
+    "skirtWidthScale": 0.9,
+    "skirtDepthScale": 0.86,
+    "forearmGuardScale": 0.9,
+    "shinGuardScale": 0.86,
+    "bootScale": 0.94,
+    "faceFeatureScale": 1.04
+  },
+  "audit": {
+    "renderWidth": 720,
+    "renderHeight": 1024,
+    "cameraLensMm": 62,
+    "includeFightCamera": true,
+    "scoreThreshold": 0.72
+  }
+}

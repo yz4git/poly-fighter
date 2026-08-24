@@ -1,11 +1,22 @@
 {
   "version": "SERA_HERO_FEEDBACK_V1",
-  "revision": 0,
+  "revision": 1,
   "targetMultipliers": {},
-  "styleMultipliers": {},
+  "styleMultipliers": {
+    "hairCapScale": [0.92, 0.96, 0.95],
+    "fringeScale": [0.88, 1.0, 0.92],
+    "ponytailScale": [0.90, 0.88, 1.08],
+    "skirtWidthScale": 0.82,
+    "skirtDepthScale": 0.88,
+    "forearmGuardScale": 0.82,
+    "shinGuardScale": 0.68,
+    "bootScale": 0.90,
+    "faceFeatureScale": 1.08
+  },
   "objectAdjustments": {},
   "notes": [
-    "This file is the handoff from AI visual critique to Blender.",
-    "Keep revision 0 as a no-op baseline. After inspecting CI render artifacts, update only measured or visually justified corrections."
+    "Revision 1 is based on the first successful Blender CI render audit after the repository became public.",
+    "Reduce the helmet-like hair mass and oversized armor/skirt blocks, keep the ponytail long but slimmer, and increase facial feature readability slightly.",
+    "The body-proportion score remains a separate metric; this revision intentionally changes only visible authored SERA identity pieces."
   ]
 }

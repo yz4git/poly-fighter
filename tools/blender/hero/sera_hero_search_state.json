@@ -1,20 +1,18 @@
 {
-  "components": {
-    "bodyLandmarks": 0.1385954769204382,
-    "faceLandmarks": 0.3317611349812941,
-    "faceSilhouette": 0.06172497943803677,
-    "hairSilhouette": 0.12206754744395226,
-    "silhouette": 0.41243639498665213
-  },
+  "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
+  "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V1_96D",
+  "parameterCount": 96,
+  "generation": 3,
+  "maxGenerations": 6,
+  "staleGenerations": 0,
   "continueSearch": true,
-  "generation": 2,
-  "groupNeed": {
-    "arms": 0.6733775771758419,
-    "costume": 0.6454702104680745,
-    "face": 0.7915694277476929,
-    "hair": 0.7923737783019401,
-    "legs": 0.6733775771758419,
-    "skeleton": 0.7152386272374931
+  "score": 0.29030906158285774,
+  "components": {
+    "silhouette": 0.41371732319063426,
+    "bodyLandmarks": 0.13985265025254381,
+    "faceLandmarks": 0.3317611349812941,
+    "faceSilhouette": 0.06253860394909376,
+    "hairSilhouette": 0.12211726349417984
   },
   "groupPriority": [
     "hair",
@@ -24,9 +22,17 @@
     "legs",
     "costume"
   ],
-  "improvedCandidates": 2,
-  "maxGenerations": 6,
-  "parameterCount": 96,
+  "groupNeed": {
+    "skeleton": 0.7107920181431442,
+    "arms": 0.6697158804332121,
+    "legs": 0.6697158804332121,
+    "costume": 0.6423317886265907,
+    "face": 0.7897886936789336,
+    "hair": 0.7908217982932376
+  },
+  "step": 0.4168879999999999,
+  "seedLoadedFromCache": false,
+  "improvedCandidates": 1,
   "parameters": {
     "hair_cap_height": 0.40958638798992,
     "hair_cap_vertical": 0.19901852598094763,
@@ -36,14 +42,11 @@
     "hair_side_depth": -0.3765042186965454,
     "hair_side_length": -0.49952293190143177,
     "leg_thigh_depth": 0.5084,
+    "sk_head_width": 0.2756865928684782,
+    "sk_jaw_width": -0.27157642333326637,
     "sk_pelvis_depth": 0.5255253171927405,
-    "sk_upper_torso_height": 0.42393042033316986,
+    "sk_pelvis_width": 0.24828283560337636,
+    "sk_upper_torso_height": 0.12351782676754858,
     "sk_waist_depth": 0.3430251142994852
-  },
-  "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V1_96D",
-  "score": 0.2893559722249592,
-  "seedLoadedFromCache": false,
-  "staleGenerations": 0,
-  "step": 0.5084,
-  "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1"
+  }
 }

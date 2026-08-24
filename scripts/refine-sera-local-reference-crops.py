@@ -49,7 +49,7 @@ def head_box(silhouette, body_box):
     return [int(cx - body_h * .075), by0, int(cx + body_h * .075), int(by0 + body_h * .20)]
 
 
-def local_boxes(silhouette, view):
+def local_boxes(silhouette, view, face_landmarks=None):
     body = prepare.bbox(silhouette)
     if body is None:
         return None, None, None
@@ -58,28 +58,46 @@ def local_boxes(silhouette, view):
     body_h = max(1, by1 - by0 + 1)
     hx0, hy0, hx1, hy1 = head_box(silhouette, body)
     head_w = max(1, hx1 - hx0 + 1)
-    cx = (hx0 + hx1) * .5
+    head_cx = (hx0 + hx1) * .5
 
-    # Mouth remains inside ~28% body height while shoulders stay out.
-    face_half = max(head_w * .50, body_h * .062)
-    face = clip_box([
-        cx - face_half,
-        by0 - body_h * .012,
-        cx + face_half,
-        by0 + body_h * .282,
-    ], image_w, image_h)
+    face = None
+    if view != "back":
+        usable = [p for p in (face_landmarks or {}).values() if p is not None]
+        if usable:
+            xs = [float(p[0]) for p in usable]
+            ys = [float(p[1]) for p in usable]
+            mouth = (face_landmarks or {}).get("mouth")
+            eyes = [p for key, p in (face_landmarks or {}).items() if key.startswith("eye") and p is not None]
+            center_x = float(np.median(xs))
+            span_x = max(xs) - min(xs)
+            face_half = max(span_x * .90, body_h * .050)
+            eye_top = min(float(p[1]) for p in eyes) if eyes else min(ys)
+            mouth_y = float(mouth[1]) if mouth is not None else max(ys)
+            face = clip_box([
+                center_x - face_half,
+                eye_top - body_h * .078,
+                center_x + face_half,
+                mouth_y + body_h * .052,
+            ], image_w, image_h)
+        else:
+            face_half = max(head_w * .42, body_h * .050)
+            face = clip_box([
+                head_cx - face_half,
+                by0 + body_h * .035,
+                head_cx + face_half,
+                by0 + body_h * .285,
+            ], image_w, image_h)
 
-    # This local objective deliberately scores head hair, fringe, side locks,
-    # rear cap and ponytail root only. Long tail/body-length hair remains part
-    # of the global semantic objective instead of being confused with clothing.
+    # Head hair/fringe/side/rear-cap/ponytail-root only. Keep the lower edge
+    # above the shoulder band in all views; long hair remains globally scored.
     hair_half = max(head_w * .72, body_h * .080)
     hair = clip_box([
-        cx - hair_half,
+        head_cx - hair_half,
         by0 - body_h * .016,
-        cx + hair_half,
-        by0 + body_h * .255,
+        head_cx + hair_half,
+        by0 + body_h * .218,
     ], image_w, image_h)
-    return body, (None if view == "back" else face), hair
+    return body, face, hair
 
 
 def clean_head_hair(hair, silhouette, body_box, hair_box):
@@ -95,7 +113,7 @@ def clean_head_hair(hair, silhouette, body_box, hair_box):
     labels, count = ndimage.label(candidate)
     bx0, by0, bx1, by1 = body_box
     body_h = max(1, by1 - by0 + 1)
-    seed_limit = int(by0 + body_h * .215)
+    seed_limit = int(by0 + body_h * .205)
     chosen = []
     for idx, obj_box in enumerate(ndimage.find_objects(labels), start=1):
         if obj_box is None:
@@ -124,15 +142,12 @@ def _validate_local_box(view, kind, box):
     width = box[2] - box[0]
     height = box[3] - box[1]
     if kind == "face":
-        max_width = .82 if view == "side" else .68
-        if width > max_width or height > .34 or box[1] < -.04 or box[3] > .34:
+        max_width = .64 if view == "side" else .48
+        if width > max_width or height > .34 or box[1] < -.02 or box[3] > .34:
             raise RuntimeError(f"{view} face crop escaped head region: {box}")
     elif kind == "hair":
-        # Side-view body silhouettes are much narrower than the head/hair
-        # profile itself, so body-width normalization can legitimately exceed
-        # 1.0. Vertical extent remains the strong locality guard.
         max_width = 1.20 if view == "side" else .88
-        if width > max_width or height > .31 or box[1] < -.05 or box[3] > .32:
+        if width > max_width or height > .27 or box[1] < -.05 or box[3] > .27:
             raise RuntimeError(f"{view} hair crop escaped head region: {box}")
 
 
@@ -151,10 +166,10 @@ def main():
     for index, view in enumerate(prepare.VIEW_NAMES):
         panel = image.crop((dividers[index], row0, dividers[index + 1], row1))
         silhouette, skin, hair = prepare.segment_panel(panel)
-        body, face_box, hair_box = local_boxes(silhouette, view)
+        native_face_landmarks = prepare.face_landmarks(silhouette, skin, hair, view)
+        body, face_box, hair_box = local_boxes(silhouette, view, native_face_landmarks)
         if body is None or hair_box is None:
             raise RuntimeError(f"could not derive local crop for {view}")
-        native_face_landmarks = prepare.face_landmarks(silhouette, skin, hair, view)
         local = {}
         if face_box is not None:
             face_canvas, face_transform = prepare._crop_canvas(skin, face_box)
@@ -172,15 +187,13 @@ def main():
         local["hair"] = {"normalizedBox": normalized_box(hair_box, body)}
         metadata["views"][view]["localCrops"] = local
 
-        # The guard prevents accidental body crops, but side-profile references
-        # legitimately need more horizontal room and tiny top overscan.
         for kind, entry in local.items():
             _validate_local_box(view, kind, entry["normalizedBox"])
 
-    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V4_TIGHT_HEAD_LOCAL_CROPS"
+    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V5_LANDMARK_FACE_HEAD_HAIR_CROPS"
     metadata["localCropPurpose"] = {
-        "face": "face silhouette and landmarks only",
-        "hair": "head hair/fringe/side/rear cap/ponytail-root silhouette; long hair remains global",
+        "face": "landmark-centered face skin silhouette and landmarks; shoulders excluded by narrow feature-derived box",
+        "hair": "head hair/fringe/side/rear cap/ponytail-root silhouette ending above shoulder band; long hair remains global",
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("SERA_LOCAL_REFERENCE_CROPS_REFINED", objective_dir)

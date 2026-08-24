@@ -119,7 +119,7 @@ def hair_limits(view):
     if view == "three-quarter":
         return .96, .40
     if view == "back":
-        return .36, .28
+        return .76, .28
     return .88, .36
 
 

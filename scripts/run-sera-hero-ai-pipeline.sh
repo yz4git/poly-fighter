@@ -26,6 +26,9 @@ mkdir -p "$OUTPUT_DIR" "$REFERENCE_OBJECTIVE_DIR"
 python3 scripts/prepare-sera-reference-objective.py \
   --source "$REFERENCE_IMAGE" \
   --out "$REFERENCE_OBJECTIVE_DIR"
+python3 scripts/refine-sera-local-reference-crops.py \
+  --source "$REFERENCE_IMAGE" \
+  --objective-dir "$REFERENCE_OBJECTIVE_DIR"
 
 test -s "$REFERENCE_OBJECTIVE_DIR/reference-objective.json"
 for view in front three-quarter side back; do
@@ -37,6 +40,22 @@ done
 for view in front three-quarter side; do
   test -s "$REFERENCE_OBJECTIVE_DIR/reference-${view}-face-local.png"
 done
+
+python3 - "$REFERENCE_OBJECTIVE_DIR/reference-objective.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as fp:
+    meta=json.load(fp)
+if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V4_TIGHT_HEAD_LOCAL_CROPS':
+    raise SystemExit('local Reference crop refinement did not run')
+for view, data in meta['views'].items():
+    for kind, entry in data.get('localCrops', {}).items():
+        box=entry['normalizedBox']; width=box[2]-box[0]; height=box[3]-box[1]
+        if kind == 'face' and (width > .68 or height > .33):
+            raise SystemExit(f'{view} face local crop too broad: {box}')
+        if kind == 'hair' and (width > .88 or height > .30):
+            raise SystemExit(f'{view} hair local crop too broad: {box}')
+print('SERA_LOCAL_CROP_SANITY_OK')
+PY
 
 export PYTHONPATH="tools/blender:tools/blender/hero:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
 

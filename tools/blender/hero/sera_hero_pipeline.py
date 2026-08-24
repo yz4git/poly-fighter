@@ -5,7 +5,6 @@ import os
 import sys
 
 import bpy
-from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BLENDER_DIR = os.path.dirname(HERE)
@@ -27,6 +26,7 @@ def parse_args():
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--source-gltf', required=True)
     parser.add_argument('--spec', default=os.path.join(HERE, 'sera_hero_spec.json'))
+    parser.add_argument('--feedback', default=os.path.join(HERE, 'sera_hero_feedback.json'))
     parser.add_argument('--iterations', type=int, default=None)
     return parser.parse_args(argv)
 
@@ -45,6 +45,40 @@ def load_spec(path):
     if result.get('character') != 'SERA' or 'targets' not in result:
         raise RuntimeError('invalid SERA Hero spec')
     return result
+
+
+def load_feedback(path):
+    if not path or not os.path.exists(path):
+        return {'version': 'SERA_HERO_FEEDBACK_NONE', 'revision': 0}
+    with open(path, 'r', encoding='utf-8') as fp:
+        feedback = json.load(fp)
+    if not str(feedback.get('version', '')).startswith('SERA_HERO_FEEDBACK_'):
+        raise RuntimeError('invalid SERA Hero feedback')
+    return feedback
+
+
+def _multiply_value(base, multiplier):
+    if isinstance(base, list):
+        if isinstance(multiplier, list):
+            if len(base) != len(multiplier):
+                raise RuntimeError('style feedback list length mismatch')
+            return [float(a) * float(b) for a, b in zip(base, multiplier)]
+        return [float(a) * float(multiplier) for a in base]
+    return float(base) * float(multiplier)
+
+
+def apply_feedback_to_spec(spec, feedback):
+    for key, multiplier in feedback.get('targetMultipliers', {}).items():
+        if key not in spec.get('targets', {}):
+            raise RuntimeError('unknown SERA Hero target feedback key: ' + key)
+        spec['targets'][key] = _multiply_value(spec['targets'][key], multiplier)
+
+    style = spec.setdefault('style', {})
+    for key, multiplier in feedback.get('styleMultipliers', {}).items():
+        if key not in style:
+            raise RuntimeError('unknown SERA Hero style feedback key: ' + key)
+        style[key] = _multiply_value(style[key], multiplier)
+    return spec
 
 
 def style_existing_face(objects, material_factory):
@@ -93,6 +127,39 @@ def apply_style_spec(spec):
     feature = float(style.get('faceFeatureScale', 1.0))
     for name in ('SERA_BrowL', 'SERA_BrowR', 'SERA_EyeL', 'SERA_EyeR', 'SERA_NosePlane', 'SERA_Lip'):
         multiply_scale(name, (feature, 1.0, feature))
+
+
+def apply_object_feedback(feedback):
+    applied = []
+    for name, adjustment in feedback.get('objectAdjustments', {}).items():
+        if not name.startswith('SERA_'):
+            raise RuntimeError('Hero feedback may only adjust SERA_ objects: ' + name)
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        scale = adjustment.get('scaleMultiplier')
+        if scale is not None:
+            if not isinstance(scale, list) or len(scale) != 3:
+                raise RuntimeError('scaleMultiplier must have 3 values for ' + name)
+            obj.scale.x *= float(scale[0])
+            obj.scale.y *= float(scale[1])
+            obj.scale.z *= float(scale[2])
+        location = adjustment.get('locationDelta')
+        if location is not None:
+            if not isinstance(location, list) or len(location) != 3:
+                raise RuntimeError('locationDelta must have 3 values for ' + name)
+            obj.location.x += float(location[0])
+            obj.location.y += float(location[1])
+            obj.location.z += float(location[2])
+        rotation = adjustment.get('rotationDeltaRadians')
+        if rotation is not None:
+            if not isinstance(rotation, list) or len(rotation) != 3:
+                raise RuntimeError('rotationDeltaRadians must have 3 values for ' + name)
+            obj.rotation_euler.x += float(rotation[0])
+            obj.rotation_euler.y += float(rotation[1])
+            obj.rotation_euler.z += float(rotation[2])
+        applied.append(name)
+    return applied
 
 
 def configure_audit_scene(spec):
@@ -168,6 +235,8 @@ def main():
     output = os.path.abspath(args.output_dir)
     os.makedirs(output, exist_ok=True)
     spec = load_spec(os.path.abspath(args.spec))
+    feedback = load_feedback(os.path.abspath(args.feedback) if args.feedback else None)
+    apply_feedback_to_spec(spec, feedback)
 
     source = load_module('build-sera-quaternius.py', 'sera_source_base')
     conformal = load_module('build-sera-conformal.py', 'sera_conformal_export')
@@ -192,6 +261,7 @@ def main():
     baseline_score, baseline_errors = score(baseline, spec)
     history = run_optimizer(body, spec, iterations=args.iterations)
     apply_style_spec(spec)
+    feedback_objects = apply_object_feedback(feedback)
     final_measurements = measure_body(body)
     final_score, final_errors = score(final_measurements, spec)
 
@@ -209,6 +279,9 @@ def main():
     report = {
         'pipeline': 'SERA_HERO_ASSET_AI_PIPELINE_V1',
         'specVersion': spec.get('version'),
+        'feedbackVersion': feedback.get('version'),
+        'feedbackRevision': int(feedback.get('revision', 0)),
+        'feedbackObjectsApplied': feedback_objects,
         'source': 'Quaternius Superhero Female FullBody',
         'sourceLicense': 'CC0 1.0 Universal',
         'baselineScore': baseline_score,
@@ -232,7 +305,7 @@ def main():
             'sera-blender-back.png',
             'sera-hero-fight.png',
         ],
-        'notes': 'Closed-loop parametric hero pass. The spec is intentionally external so future AI critique can rewrite targets without changing Blender code.'
+        'notes': 'Closed-loop parametric hero pass plus JSON AI-critique handoff. Update feedback after inspecting the render artifacts; Blender code does not need to change between critique iterations.'
     }
     with open(os.path.join(output, 'sera-hero-report.json'), 'w', encoding='utf-8') as fp:
         json.dump(report, fp, indent=2)
@@ -240,10 +313,16 @@ def main():
 
     with open(os.path.join(output, 'README.txt'), 'w', encoding='utf-8') as fp:
         fp.write('SERA Hero Asset AI Pipeline V1\n')
-        fp.write('Reference/spec -> Blender build -> measured closed-loop proportion correction -> 5-view audit -> GLB/runtime export.\n')
-        fp.write('Edit tools/blender/hero/sera_hero_spec.json to steer the next AI-generated hero pass.\n')
+        fp.write('Spec -> Blender build -> measured closed-loop correction -> 5-view audit -> AI feedback JSON -> next build.\n')
+        fp.write('Base targets live in sera_hero_spec.json. Per-review corrections live in sera_hero_feedback.json.\n')
 
-    print('SERA_HERO_PIPELINE_OK', 'BASE', round(baseline_score, 5), 'FINAL', round(final_score, 5), 'ITERS', len(history))
+    print(
+        'SERA_HERO_PIPELINE_OK',
+        'BASE', round(baseline_score, 5),
+        'FINAL', round(final_score, 5),
+        'ITERS', len(history),
+        'FEEDBACK_REV', feedback.get('revision', 0),
+    )
     if final_score < threshold:
         print('SERA_HERO_SCORE_GATE_WARNING', final_score, '<', threshold)
 

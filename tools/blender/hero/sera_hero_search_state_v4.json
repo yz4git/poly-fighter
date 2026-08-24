@@ -2,9 +2,9 @@
   "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
   "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM",
   "parameterCount": 128,
-  "generation": 3,
+  "generation": 4,
   "maxGenerations": 8,
-  "staleGenerations": 0,
+  "staleGenerations": 1,
   "continueSearch": true,
   "score": 0.31737016533575646,
   "components": {
@@ -16,16 +16,16 @@
   },
   "groupPriority": ["hair", "face", "skeleton", "arms", "legs", "costume"],
   "groupNeed": {
-    "skeleton": 0.6788302124745318,
-    "arms": 0.6447884115363249,
-    "legs": 0.6447884115363249,
-    "costume": 0.6220938775775204,
-    "face": 0.7777140574799544,
-    "hair": 0.7868983678348282
+    "skeleton": 0.6576417074616316,
+    "arms": 0.6299259483480506,
+    "legs": 0.6299259483480506,
+    "costume": 0.6114487756056634,
+    "face": 0.7746950355491922,
+    "hair": 0.7868064665777085
   },
-  "step": 0.36691199999999996,
+  "step": 0.30820607999999994,
   "seedLoadedFromCache": false,
-  "improvedCandidates": 3,
+  "improvedCandidates": 0,
   "parameters": {
     "arm_forearm_thickness_z": 0.2595634362257742,
     "arm_hand_width": 0.2419673761071514,

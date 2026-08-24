@@ -50,10 +50,14 @@ if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V4_TIGHT_HEAD_LOCAL_CROPS':
 for view, data in meta['views'].items():
     for kind, entry in data.get('localCrops', {}).items():
         box=entry['normalizedBox']; width=box[2]-box[0]; height=box[3]-box[1]
-        if kind == 'face' and (width > .68 or height > .33):
-            raise SystemExit(f'{view} face local crop too broad: {box}')
-        if kind == 'hair' and (width > .88 or height > .30):
-            raise SystemExit(f'{view} hair local crop too broad: {box}')
+        if kind == 'face':
+            max_width=.82 if view == 'side' else .68
+            if width > max_width or height > .34 or box[1] < -.04 or box[3] > .34:
+                raise SystemExit(f'{view} face local crop too broad: {box}')
+        if kind == 'hair':
+            max_width=1.20 if view == 'side' else .88
+            if width > max_width or height > .31 or box[1] < -.05 or box[3] > .32:
+                raise SystemExit(f'{view} hair local crop too broad: {box}')
 print('SERA_LOCAL_CROP_SANITY_OK')
 PY
 

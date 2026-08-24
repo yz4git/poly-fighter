@@ -1,5 +1,5 @@
 {
-  "version": "SERA_HERO_SPEC_V1",
+  "version": "SERA_HERO_SPEC_V2_REFERENCE_OBJECTIVE",
   "character": "SERA",
   "heightMeters": 1.68,
   "targets": {
@@ -25,6 +25,19 @@
     "gain": 0.52,
     "maxScaleStep": 0.075,
     "minImprovement": 0.0005
+  },
+  "referenceObjective": {
+    "scoreThreshold": 0.78,
+    "minImprovement": 0.0005,
+    "bodyLandmarkFalloffPx": 22.0,
+    "faceLandmarkFalloffPx": 14.0,
+    "weights": {
+      "silhouette": 0.50,
+      "bodyLandmarks": 0.18,
+      "faceLandmarks": 0.12,
+      "faceSilhouette": 0.10,
+      "hairSilhouette": 0.10
+    }
   },
   "style": {
     "hairCapScale": [1.08, 1.04, 1.07],

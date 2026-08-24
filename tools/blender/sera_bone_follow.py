@@ -19,7 +19,7 @@ def resolve_pose_bone(armature, candidates):
 def parent_to_bone_keep_world(obj, armature, candidates, required=True):
     """Bone-parent an authored overlay while preserving its current world transform.
 
-    Identity meshes are authored in world space from the imported source rig.  A
+    Identity meshes are authored in world space from the imported source rig. A
     plain object parent would still leave them behind when an IK/pose constraint
     moves a limb. Bone parenting gives Blender audits the same attachment
     semantics the runtime canonical reskin expects.
@@ -31,7 +31,8 @@ def parent_to_bone_keep_world(obj, armature, candidates, required=True):
     bone_name = resolve_pose_bone(armature, candidates)
     if bone_name is None:
         if required:
-            raise RuntimeError('missing source rig bone for SERA attachment: ' + ', '.join(candidates if not isinstance(candidates, str) else (candidates,)))
+            names = candidates if not isinstance(candidates, str) else (candidates,)
+            raise RuntimeError('missing source rig bone for SERA attachment: ' + ', '.join(names))
         return None
     world = obj.matrix_world.copy()
     obj.parent = armature
@@ -44,9 +45,12 @@ def parent_to_bone_keep_world(obj, armature, candidates, required=True):
 
 
 def attach_head_follow(objects, armature):
-    """Attach hair/face overlays to the head when the source rig exposes one."""
-    attached = 0
-    for obj in objects:
-        if parent_to_bone_keep_world(obj, armature, ('head', 'Head', 'head.x'), required=False):
-            attached += 1
-    return attached
+    """Deliberately keep face/hair overlays world-authored during V4 search.
+
+    Existing identity tuning is expressed in audit-world coordinates and runs
+    after identity creation. Parenting those objects before tuning would reinterpret
+    the old coordinates in head-bone local space. The game runtime already
+    reskins the merged Hero mesh to its canonical combat rig, so V4 limits direct
+    Blender bone-follow to limb equipment until head-local tuning is migrated.
+    """
+    return 0

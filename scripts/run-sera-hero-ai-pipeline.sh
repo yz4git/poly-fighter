@@ -45,8 +45,8 @@ python3 - "$REFERENCE_OBJECTIVE_DIR/reference-objective.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding='utf-8') as fp:
     meta=json.load(fp)
-if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V6_LANDMARK_ANCHORED_LOCAL_WINDOWS':
-    raise SystemExit('landmark-anchored local Reference crop refinement did not run')
+if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS':
+    raise SystemExit('geometry-anchored tight local Reference crop refinement did not run')
 for view, data in meta['views'].items():
     for kind, entry in data.get('localCrops', {}).items():
         ref_box=entry.get('referenceNormalizedBox')

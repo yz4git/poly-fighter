@@ -128,7 +128,10 @@ def _validate_local_box(view, kind, box):
         if width > max_width or height > .34 or box[1] < -.04 or box[3] > .34:
             raise RuntimeError(f"{view} face crop escaped head region: {box}")
     elif kind == "hair":
-        max_width = .96 if view == "side" else .88
+        # Side-view body silhouettes are much narrower than the head/hair
+        # profile itself, so body-width normalization can legitimately exceed
+        # 1.0. Vertical extent remains the strong locality guard.
+        max_width = 1.20 if view == "side" else .88
         if width > max_width or height > .31 or box[1] < -.05 or box[3] > .32:
             raise RuntimeError(f"{view} hair crop escaped head region: {box}")
 

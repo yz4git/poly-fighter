@@ -33,7 +33,7 @@ on:
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   capture:
@@ -62,7 +62,6 @@ jobs:
       - name: Run regression tests and optional Blender prototype
         run: npm test
       - name: Stage Blender runtime asset for the real game audit
-        id: stage_runtime
         if: github.event_name == 'pull_request'
         run: |
           generated="artifacts/visual-audit/blender-sera/sera-blender-runtime.glb"
@@ -72,19 +71,13 @@ jobs:
           mkdir -p public/models
 
           if [ -s "$generated" ] && [ -s "$generated_metrics" ]; then
-            if ! cmp -s "$generated" "$committed" || ! cmp -s "$generated_metrics" "$committed_metrics"; then
-              cp "$generated" "$committed"
-              cp "$generated_metrics" "$committed_metrics"
-              echo "publish=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "publish=false" >> "$GITHUB_OUTPUT"
-            fi
-            echo "runtime_source=generated" >> "$GITHUB_OUTPUT"
+            cp "$generated" "$committed"
+            cp "$generated_metrics" "$committed_metrics"
+            echo "Using generated Blender runtime for PR audit."
           else
             test -s "$committed"
             test -s "$committed_metrics"
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "runtime_source=committed" >> "$GITHUB_OUTPUT"
+            echo "Using committed Blender runtime for audit."
           fi
       - name: Rebuild with selected Blender runtime asset
         if: github.event_name == 'pull_request'
@@ -136,9 +129,42 @@ jobs:
           name: sera-v10-webgl-visual-audit
           path: artifacts/visual-audit
           if-no-files-found: error
-      - name: Publish generated Blender runtime asset to the PR branch
-        if: github.event_name == 'pull_request' && steps.stage_runtime.outputs.publish == 'true'
+      - name: Upload same-repository runtime candidate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: sera-runtime-candidate
+          path: |
+            public/models/sera-blender-runtime.glb
+            public/models/sera-blender-runtime.metrics.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-runtime:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: capture
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: sera-runtime-candidate
+          path: runtime-candidate
+      - name: Publish generated Blender runtime asset to same-repository PR branch
         run: |
+          test -s runtime-candidate/public/models/sera-blender-runtime.glb
+          test -s runtime-candidate/public/models/sera-blender-runtime.metrics.json
+          cp runtime-candidate/public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.glb
+          cp runtime-candidate/public/models/sera-blender-runtime.metrics.json public/models/sera-blender-runtime.metrics.json
+          if git diff --quiet -- public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json; then
+            echo "Generated runtime is unchanged."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json

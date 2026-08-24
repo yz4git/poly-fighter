@@ -2,17 +2,17 @@
   "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
   "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V1_96D",
   "parameterCount": 96,
-  "generation": 3,
+  "generation": 4,
   "maxGenerations": 6,
   "staleGenerations": 0,
   "continueSearch": true,
-  "score": 0.29030906158285774,
+  "score": 0.2911299464178032,
   "components": {
-    "silhouette": 0.41371732319063426,
-    "bodyLandmarks": 0.13985265025254381,
-    "faceLandmarks": 0.3317611349812941,
-    "faceSilhouette": 0.06253860394909376,
-    "hairSilhouette": 0.12211726349417984
+    "silhouette": 0.41576658387653836,
+    "bodyLandmarks": 0.13489240789668766,
+    "faceLandmarks": 0.3381253698330457,
+    "faceSilhouette": 0.06143583105370309,
+    "hairSilhouette": 0.12247393572794393
   },
   "groupPriority": [
     "hair",
@@ -23,22 +23,25 @@
     "costume"
   ],
   "groupNeed": {
-    "skeleton": 0.7107920181431442,
-    "arms": 0.6697158804332121,
-    "legs": 0.6697158804332121,
-    "costume": 0.6423317886265907,
-    "face": 0.7897886936789336,
-    "hair": 0.7908217982932376
+    "skeleton": 0.7095217796315065,
+    "arms": 0.6684420786907929,
+    "legs": 0.6684420786907929,
+    "costume": 0.6410556113969839,
+    "face": 0.7892700610932281,
+    "hair": 0.7904027185968838
   },
-  "step": 0.4168879999999999,
+  "step": 0.3418481599999999,
   "seedLoadedFromCache": false,
   "improvedCandidates": 1,
   "parameters": {
     "hair_cap_height": 0.40958638798992,
-    "hair_cap_vertical": 0.19901852598094763,
+    "hair_cap_vertical": 0.441961419327617,
+    "hair_fringe_forward": -0.285173332683245,
     "hair_fringe_length": -0.27320533329217556,
     "hair_nape_length": 0.40888480409828526,
     "hair_pony_depth": -0.4234609208647225,
+    "hair_pony_root_height": 0.2273662707824452,
+    "hair_pony_width": -0.1954001534297706,
     "hair_side_depth": -0.3765042186965454,
     "hair_side_length": -0.49952293190143177,
     "leg_thigh_depth": 0.5084,

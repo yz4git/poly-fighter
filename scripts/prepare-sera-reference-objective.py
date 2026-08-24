@@ -155,38 +155,88 @@ def bbox(mask: np.ndarray):
     return [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
 
 
-def _expand_box(box_, width, height, mx, my):
+def _clip_box(box_, width, height):
     x0, y0, x1, y1 = box_
-    bw, bh = max(1, x1 - x0 + 1), max(1, y1 - y0 + 1)
-    return [
-        max(0, int(math.floor(x0 - bw * mx))),
-        max(0, int(math.floor(y0 - bh * my))),
-        min(width - 1, int(math.ceil(x1 + bw * mx))),
-        min(height - 1, int(math.ceil(y1 + bh * my))),
-    ]
+    x0 = max(0, min(width - 1, int(x0)))
+    x1 = max(0, min(width - 1, int(x1)))
+    y0 = max(0, min(height - 1, int(y0)))
+    y1 = max(0, min(height - 1, int(y1)))
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+    return [x0, y0, x1, y1]
+
+
+def _head_box(silhouette: np.ndarray, body_box):
+    x0, y0, x1, y1 = body_box
+    body_h = max(1, y1 - y0 + 1)
+    head_band = np.zeros_like(silhouette, dtype=bool)
+    head_band[y0:min(silhouette.shape[0], int(y0 + body_h * .205) + 1), x0:x1 + 1] = True
+    head = bbox(silhouette & head_band)
+    if head is not None:
+        return head
+    cx = (x0 + x1) * .5
+    return [int(cx - body_h * .075), y0, int(cx + body_h * .075), int(y0 + body_h * .20)]
 
 
 def _local_boxes(silhouette: np.ndarray, skin: np.ndarray, hair: np.ndarray, view: str):
     body = bbox(silhouette)
     if body is None:
         return None, None
-    x0, y0, x1, y1 = body
-    h, w = silhouette.shape
-    body_h = max(1, y1 - y0 + 1)
-    head_limit = min(h, int(y0 + body_h * 0.35))
-    head_band = np.zeros_like(silhouette, dtype=bool)
-    head_band[y0:head_limit, x0:x1 + 1] = True
-    face_seed = skin & head_band
-    face_box = bbox(face_seed)
-    if face_box is None:
-        cx = (x0 + x1) * 0.5
-        face_box = [int(cx - body_h * .11), y0, int(cx + body_h * .11), int(y0 + body_h * .30)]
-    face_box = _expand_box(face_box, w, h, .35, .28)
-    hair_box = bbox(hair)
-    if hair_box is None:
-        hair_box = [x0, y0, x1, int(y0 + body_h * .45)]
-    hair_box = _expand_box(hair_box, w, h, .18, .15)
+    bx0, by0, bx1, by1 = body
+    image_h, image_w = silhouette.shape
+    body_h = max(1, by1 - by0 + 1)
+    head = _head_box(silhouette, body)
+    hx0, hy0, hx1, hy1 = head
+    head_w = max(1, hx1 - hx0 + 1)
+    head_cx = (hx0 + hx1) * .5
+
+    face_half = max(head_w * .62, body_h * .075)
+    face_box = _clip_box([
+        head_cx - face_half,
+        by0 - body_h * .018,
+        head_cx + face_half,
+        by0 + body_h * .305,
+    ], image_w, image_h)
+
+    hair_half = max(head_w * 1.15, body_h * .12)
+    hair_box = _clip_box([
+        head_cx - hair_half,
+        by0 - body_h * .025,
+        head_cx + hair_half,
+        by0 + body_h * .40,
+    ], image_w, image_h)
     return (None if view == "back" else face_box), hair_box
+
+
+def _local_hair_mask(hair: np.ndarray, silhouette: np.ndarray, body_box, hair_box):
+    """Keep head-connected dark components and reject dark costume/limb noise."""
+    bx0, by0, bx1, by1 = body_box
+    body_h = max(1, by1 - by0 + 1)
+    x0, y0, x1, y1 = hair_box
+    region = np.zeros_like(hair, dtype=bool)
+    region[y0:y1 + 1, x0:x1 + 1] = True
+    candidate = hair & silhouette & region
+    if not np.any(candidate):
+        return candidate
+
+    joined = ndimage.binary_dilation(candidate, structure=_disk(1), iterations=1)
+    labels, count = ndimage.label(joined)
+    if count == 0:
+        return candidate
+    seed = np.zeros_like(candidate, dtype=bool)
+    seed_y1 = min(candidate.shape[0], int(by0 + body_h * .22) + 1)
+    seed[by0:seed_y1, x0:x1 + 1] = True
+    chosen = []
+    for idx in range(1, count + 1):
+        component = labels == idx
+        if np.any(component & seed):
+            chosen.append(idx)
+    if not chosen:
+        return candidate
+    selected = np.isin(labels, np.asarray(chosen, dtype=np.int32))
+    return candidate & ndimage.binary_dilation(selected, structure=_disk(1), iterations=1)
 
 
 def _normalized_box(local_box, body_box):
@@ -317,13 +367,15 @@ def main():
         face_box, hair_box = _local_boxes(native_silhouette, native_skin, native_hair, view)
         local = {}
         if face_box is not None:
-            face_canvas, face_transform = _crop_canvas(native_skin, face_box)
+            face_local_source = native_skin.copy()
+            face_canvas, face_transform = _crop_canvas(face_local_source, face_box)
             save_mask(face_canvas, out / f"reference-{view}-face-local.png")
             local["face"] = {
                 "normalizedBox": _normalized_box(face_box, native_body_box),
                 "landmarks": {k: _point_to_crop(v, face_box, face_transform) for k, v in native_face_lm.items()},
             }
-        hair_canvas, _ = _crop_canvas(native_hair, hair_box)
+        local_hair = _local_hair_mask(native_hair, native_silhouette, native_body_box, hair_box)
+        hair_canvas, _ = _crop_canvas(local_hair, hair_box)
         save_mask(hair_canvas, out / f"reference-{view}-hair-local.png")
         local["hair"] = {"normalizedBox": _normalized_box(hair_box, native_body_box)}
         metadata["views"][view] = {

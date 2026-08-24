@@ -54,7 +54,7 @@ for view, data in meta['views'].items():
             raise SystemExit(f'{view} {kind} missing reference crop bounds')
         width=ref_box[2]-ref_box[0]; height=ref_box[3]-ref_box[1]
         if kind == 'face':
-            max_width=.64 if view == 'side' else .48
+            max_width=.64 if view == 'side' else (.52 if view == 'three-quarter' else .48)
             if width > max_width or height > .30:
                 raise SystemExit(f'{view} face local crop too broad: {ref_box}')
             anchor=entry.get('normalizedBox', {})

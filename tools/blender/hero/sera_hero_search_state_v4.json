@@ -6,6 +6,7 @@
   "maxGenerations": 8,
   "staleGenerations": 0,
   "continueSearch": true,
+  "resumeRequestedAt": "2026-08-25T01:35+09:00",
   "score": 0.3075494824507934,
   "components": {
     "silhouette": 0.4232951903400888,

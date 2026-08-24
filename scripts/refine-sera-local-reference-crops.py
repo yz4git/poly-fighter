@@ -112,6 +112,17 @@ def normalized_box(local_box, body_box):
     return [(x0 - bx0) / bw, (y0 - by0) / bh, (x1 - bx0 + 1.0) / bw, (y1 - by0 + 1.0) / bh]
 
 
+def hair_limits(view):
+    """View-aware locality guard for landmark windows, not a fit target."""
+    if view == "side":
+        return 1.20, .42
+    if view == "three-quarter":
+        return .96, .40
+    if view == "back":
+        return .36, .28
+    return .88, .36
+
+
 def validate_reference_box(view, kind, local_box, body_box):
     box = normalized_box(local_box, body_box)
     width = box[2] - box[0]
@@ -121,8 +132,10 @@ def validate_reference_box(view, kind, local_box, body_box):
         if width > max_width or height > .30:
             raise RuntimeError(f"{view} face crop escaped landmark region: {box}")
     elif kind == "hair":
-        max_width = 1.20 if view == "side" else .88
-        if width > max_width or height > .32:
+        max_width, max_height = hair_limits(view)
+        # Hair can legitimately extend above the body bbox. Keep a separate
+        # position guard so relaxing that overscan never permits a torso crop.
+        if width > max_width or height > max_height or box[1] < -.16 or box[3] > .42:
             raise RuntimeError(f"{view} hair crop escaped landmark region: {box}")
     return box
 

@@ -1,0 +1,11 @@
+{
+  "version": "SERA_HERO_FEEDBACK_V1",
+  "revision": 0,
+  "targetMultipliers": {},
+  "styleMultipliers": {},
+  "objectAdjustments": {},
+  "notes": [
+    "This file is the handoff from AI visual critique to Blender.",
+    "Keep revision 0 as a no-op baseline. After inspecting CI render artifacts, update only measured or visually justified corrections."
+  ]
+}

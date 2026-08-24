@@ -3,13 +3,13 @@ set -euo pipefail
 
 SOURCE_GLTF="${SERA_HERO_SOURCE_GLTF:-.external/quaternius/first/assets/3d/characters/player/Superhero_Female_FullBody.gltf}"
 OUTPUT_DIR="${SERA_HERO_OUTPUT_DIR:-artifacts/sera-hero-ai}"
-SPEC="${SERA_HERO_SPEC:-tools/blender/hero/sera_hero_spec.json}"
+SPEC="${SERA_HERO_SPEC:-tools/blender/hero/sera_hero_spec_v4.json}"
 FEEDBACK="${SERA_HERO_FEEDBACK:-tools/blender/hero/sera_hero_feedback.json}"
-SEARCH_STATE="${SERA_HERO_SEARCH_STATE:-tools/blender/hero/sera_hero_search_state.json}"
-SEARCH_CACHE="${SERA_HERO_SEARCH_CACHE:-tools/blender/hero/sera_hero_search_cache.json}"
+SEARCH_STATE="${SERA_HERO_SEARCH_STATE:-tools/blender/hero/sera_hero_search_state_v4.json}"
+SEARCH_CACHE="${SERA_HERO_SEARCH_CACHE:-tools/blender/hero/sera_hero_search_cache_v4.json}"
 REFERENCE_IMAGE="${SERA_HERO_REFERENCE_IMAGE:-public/reference/female-turnaround.jpeg}"
 REFERENCE_OBJECTIVE_DIR="$OUTPUT_DIR/reference-objective/input"
-CANDIDATE_BUDGET="${SERA_HERO_CANDIDATE_BUDGET:-8}"
+CANDIDATE_BUDGET="${SERA_HERO_CANDIDATE_BUDGET:-10}"
 
 if ! command -v blender >/dev/null 2>&1; then
   echo "Blender is required for the SERA Hero Asset AI Pipeline" >&2
@@ -39,7 +39,7 @@ export PYTHONPATH="tools/blender:tools/blender/hero:/usr/lib/python3/dist-packag
 blender --background \
   --python-use-system-env \
   --python-exit-code 1 \
-  --python tools/blender/hero/sera_hero_pipeline_v3.py \
+  --python tools/blender/hero/sera_hero_pipeline_v4.py \
   -- \
   --output-dir "$OUTPUT_DIR" \
   --source-gltf "$SOURCE_GLTF" \
@@ -82,15 +82,18 @@ print(
     'parameters=', state['parameterCount'],
     'active=', len(state['parameters']),
     'continue=', state['continueSearch'],
+    'boneFollow=', report.get('boneFollowAttachmentCount', 0),
 )
 print('SERA_HERO_COMPONENTS', report['referenceObjective']['components'])
 print('SERA_HERO_GROUP_PRIORITY', state['groupPriority'])
 if report['finalScore'] + 1e-9 < report['baselineScore']:
-    raise SystemExit('SERA Hero 96D reference-image optimizer regressed the measured score')
+    raise SystemExit('SERA Hero V4 reference-image optimizer regressed the measured score')
 if report['objectiveType'] != 'REFERENCE_IMAGE_SILHOUETTE_LANDMARK_FACE_HAIR_V1':
     raise SystemExit('SERA Hero is not using the reference-image objective')
-if report['parameterCount'] != 96 or state['parameterCount'] != 96:
-    raise SystemExit('SERA Hero parameter search must expose exactly 96 dimensions')
-if report['parameterSpaceVersion'] != 'SERA_HERO_PARAMETER_SPACE_V1_96D':
-    raise SystemExit('unexpected SERA Hero parameter-space version')
+if report['parameterCount'] != 128 or state['parameterCount'] != 128:
+    raise SystemExit('SERA Hero V4 parameter search must expose exactly 128 dimensions')
+if report['parameterSpaceVersion'] != 'SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM':
+    raise SystemExit('unexpected SERA Hero V4 parameter-space version')
+if report.get('boneFollowAttachmentCount', 0) < 6:
+    raise SystemExit('SERA Hero V4 must bone-follow both guards, shins and boots')
 PY

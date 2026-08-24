@@ -2,10 +2,10 @@
   "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
   "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM",
   "parameterCount": 128,
-  "generation": 7,
+  "generation": 8,
   "maxGenerations": 8,
-  "staleGenerations": 1,
-  "continueSearch": true,
+  "staleGenerations": 2,
+  "continueSearch": false,
   "score": 0.318518031459021,
   "components": {
     "silhouette": 0.4270473054539708,
@@ -30,7 +30,7 @@
     "face": 0.7734342764535442,
     "hair": 0.7862684409212702
   },
-  "step": 0.18267497644031996,
+  "step": 0.15344698020986877,
   "seedLoadedFromCache": false,
   "improvedCandidates": 0,
   "parameters": {

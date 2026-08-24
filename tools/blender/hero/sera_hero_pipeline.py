@@ -17,7 +17,8 @@ from sera_blender_helpers import clean_scene, point_at, render_views, save_versi
 from sera_conformal_body import apply as apply_body
 from sera_identity_parts import apply as apply_identity
 from sera_identity_tuning import apply as tune_identity
-from sera_hero_metrics import measure_body, run_optimizer, score
+from sera_hero_metrics import measure_body, optimize_iteration, score
+from sera_reference_objective import load_reference, render_and_score
 
 
 def parse_args():
@@ -27,6 +28,7 @@ def parse_args():
     parser.add_argument('--source-gltf', required=True)
     parser.add_argument('--spec', default=os.path.join(HERE, 'sera_hero_spec.json'))
     parser.add_argument('--feedback', default=os.path.join(HERE, 'sera_hero_feedback.json'))
+    parser.add_argument('--reference-objective-dir', required=True)
     parser.add_argument('--iterations', type=int, default=None)
     return parser.parse_args(argv)
 
@@ -42,7 +44,7 @@ def load_module(filename, name):
 def load_spec(path):
     with open(path, 'r', encoding='utf-8') as fp:
         result = json.load(fp)
-    if result.get('character') != 'SERA' or 'targets' not in result:
+    if result.get('character') != 'SERA' or 'targets' not in result or 'referenceObjective' not in result:
         raise RuntimeError('invalid SERA Hero spec')
     return result
 
@@ -72,7 +74,6 @@ def apply_feedback_to_spec(spec, feedback):
         if key not in spec.get('targets', {}):
             raise RuntimeError('unknown SERA Hero target feedback key: ' + key)
         spec['targets'][key] = _multiply_value(spec['targets'][key], multiplier)
-
     style = spec.setdefault('style', {})
     for key, multiplier in feedback.get('styleMultipliers', {}).items():
         if key not in style:
@@ -110,12 +111,10 @@ def apply_style_spec(spec):
         multiply_scale(name, style.get('fringeScale', [1.0, 1.0, 1.0]))
     for name in ('SERA_PonyRoot', 'SERA_Pony1', 'SERA_Pony2', 'SERA_Pony3'):
         multiply_scale(name, style.get('ponytailScale', [1.0, 1.0, 1.0]))
-
     skirt_x = float(style.get('skirtWidthScale', 1.0))
     skirt_y = float(style.get('skirtDepthScale', 1.0))
     for name in ('SERA_FrontSkirt', 'SERA_LeftSkirt', 'SERA_RightSkirt'):
         multiply_scale(name, (skirt_x, skirt_y, 1.0))
-
     guard = float(style.get('forearmGuardScale', 1.0))
     shin = float(style.get('shinGuardScale', 1.0))
     boot = float(style.get('bootScale', 1.0))
@@ -123,7 +122,6 @@ def apply_style_spec(spec):
         multiply_scale('SERA_Guard_' + suffix, (guard, guard, guard))
         multiply_scale('SERA_Shin_' + suffix, (shin, shin, shin))
         multiply_scale('SERA_BootFoot_' + suffix, (boot, boot, boot))
-
     feature = float(style.get('faceFeatureScale', 1.0))
     for name in ('SERA_BrowL', 'SERA_BrowR', 'SERA_EyeL', 'SERA_EyeR', 'SERA_NosePlane', 'SERA_Lip'):
         multiply_scale(name, (feature, 1.0, feature))
@@ -141,23 +139,17 @@ def apply_object_feedback(feedback):
         if scale is not None:
             if not isinstance(scale, list) or len(scale) != 3:
                 raise RuntimeError('scaleMultiplier must have 3 values for ' + name)
-            obj.scale.x *= float(scale[0])
-            obj.scale.y *= float(scale[1])
-            obj.scale.z *= float(scale[2])
+            obj.scale.x *= float(scale[0]); obj.scale.y *= float(scale[1]); obj.scale.z *= float(scale[2])
         location = adjustment.get('locationDelta')
         if location is not None:
             if not isinstance(location, list) or len(location) != 3:
                 raise RuntimeError('locationDelta must have 3 values for ' + name)
-            obj.location.x += float(location[0])
-            obj.location.y += float(location[1])
-            obj.location.z += float(location[2])
+            obj.location.x += float(location[0]); obj.location.y += float(location[1]); obj.location.z += float(location[2])
         rotation = adjustment.get('rotationDeltaRadians')
         if rotation is not None:
             if not isinstance(rotation, list) or len(rotation) != 3:
                 raise RuntimeError('rotationDeltaRadians must have 3 values for ' + name)
-            obj.rotation_euler.x += float(rotation[0])
-            obj.rotation_euler.y += float(rotation[1])
-            obj.rotation_euler.z += float(rotation[2])
+            obj.rotation_euler.x += float(rotation[0]); obj.rotation_euler.y += float(rotation[1]); obj.rotation_euler.z += float(rotation[2])
         applied.append(name)
     return applied
 
@@ -194,8 +186,7 @@ def select_hero_meshes():
     meshes = []
     for obj in bpy.context.scene.objects:
         if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_')):
-            obj.select_set(True)
-            meshes.append(obj)
+            obj.select_set(True); meshes.append(obj)
     if meshes:
         bpy.context.view_layer.objects.active = meshes[0]
     return meshes
@@ -206,16 +197,8 @@ def export_full_hero(output_dir):
     if not meshes:
         raise RuntimeError('no SERA Hero meshes found')
     path = os.path.join(output_dir, 'sera-hero.glb')
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        export_format='GLB',
-        use_selection=True,
-        export_apply=True,
-        export_yup=True,
-        export_cameras=False,
-        export_lights=False,
-        export_animations=False,
-    )
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True,
+                              export_yup=True, export_cameras=False, export_lights=False, export_animations=False)
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise RuntimeError('SERA Hero GLB export failed')
     return os.path.getsize(path)
@@ -224,10 +207,64 @@ def export_full_hero(output_dir):
 def count_scene_triangles():
     total = 0
     for obj in bpy.context.scene.objects:
-        if obj.type != 'MESH' or not (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_')):
-            continue
-        total += sum(max(1, len(poly.vertices) - 2) for poly in obj.data.polygons)
+        if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_')):
+            total += sum(max(1, len(poly.vertices) - 2) for poly in obj.data.polygons)
     return total
+
+
+def _body_snapshot(body):
+    return [vertex.co.copy() for vertex in body.data.vertices]
+
+
+def _body_restore(body, snapshot):
+    for vertex, coordinate in zip(body.data.vertices, snapshot):
+        vertex.co = coordinate
+    body.data.update(); bpy.context.view_layer.update()
+
+
+def _object_snapshot():
+    result = {}
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith('SERA_'):
+            result[obj.name] = (obj.location.copy(), obj.scale.copy(), obj.rotation_euler.copy())
+    return result
+
+
+def _object_restore(snapshot):
+    for name, (location, scale, rotation) in snapshot.items():
+        obj = bpy.data.objects.get(name)
+        if obj is not None:
+            obj.location = location; obj.scale = scale; obj.rotation_euler = rotation
+    bpy.context.view_layer.update()
+
+
+def run_reference_body_optimizer(body, spec, reference, output, iterations):
+    objective_dir = os.path.join(output, 'reference-objective')
+    current = render_and_score(reference, objective_dir, 'baseline', spec)
+    history = []
+    minimum = float(spec.get('referenceObjective', {}).get('minImprovement', 0.0005))
+    count = int(iterations if iterations is not None else spec.get('optimizer', {}).get('iterations', 8))
+    for index in range(max(0, count)):
+        snapshot = _body_snapshot(body)
+        before_measurements = measure_body(body)
+        optimize_iteration(body, spec)
+        candidate = render_and_score(reference, objective_dir, f'body-{index + 1:02d}', spec)
+        accepted = candidate['score'] > current['score'] + minimum
+        history.append({
+            'iteration': index + 1,
+            'objectiveBefore': current['score'],
+            'objectiveScore': candidate['score'],
+            'accepted': accepted,
+            'objective': candidate,
+            'proposalMeasurements': measure_body(body),
+            'beforeMeasurements': before_measurements,
+        })
+        if accepted:
+            current = candidate
+        else:
+            _body_restore(body, snapshot)
+            break
+    return current, history
 
 
 def main():
@@ -237,14 +274,13 @@ def main():
     spec = load_spec(os.path.abspath(args.spec))
     feedback = load_feedback(os.path.abspath(args.feedback) if args.feedback else None)
     apply_feedback_to_spec(spec, feedback)
+    reference = load_reference(os.path.abspath(args.reference_objective_dir))
 
     source = load_module('build-sera-quaternius.py', 'sera_source_base')
     conformal = load_module('build-sera-conformal.py', 'sera_conformal_export')
+    neutral_pose = load_module('sera_neutral_pose.py', 'sera_neutral_pose')
 
-    clean_scene()
-    setup_scene()
-    configure_audit_scene(spec)
-
+    clean_scene(); setup_scene(); configure_audit_scene(spec)
     objects = source.imported_objects(os.path.abspath(args.source_gltf))
     source.normalize_character(objects)
     body = bpy.data.objects.get('Superhero_Female')
@@ -256,15 +292,29 @@ def main():
     style_existing_face(objects, conformal.material)
     apply_identity(armature, mats)
     tune_identity()
+    # Reference scoring is explicitly pose-normalized. The old T-pose shoulder
+    # width can still be reported as a diagnostic, but it cannot drive acceptance.
+    neutral_pose.apply(armature)
 
-    baseline = measure_body(body)
-    baseline_score, baseline_errors = score(baseline, spec)
-    history = run_optimizer(body, spec, iterations=args.iterations)
+    baseline_measurements = measure_body(body)
+    legacy_baseline_score, baseline_errors = score(baseline_measurements, spec)
+    reference_best, history = run_reference_body_optimizer(body, spec, reference, output, args.iterations)
+
+    style_snapshot = _object_snapshot()
     apply_style_spec(spec)
     feedback_objects = apply_object_feedback(feedback)
-    final_measurements = measure_body(body)
-    final_score, final_errors = score(final_measurements, spec)
+    styled_objective = render_and_score(reference, os.path.join(output, 'reference-objective'), 'style-feedback', spec)
+    style_accepted = styled_objective['score'] >= reference_best['score']
+    if style_accepted:
+        reference_best = styled_objective
+    else:
+        _object_restore(style_snapshot)
 
+    final_objective = render_and_score(reference, os.path.join(output, 'reference-objective'), 'final', spec)
+    final_measurements = measure_body(body)
+    legacy_final_score, final_errors = score(final_measurements, spec)
+
+    configure_audit_scene(spec)
     render_views(output)
     if spec.get('audit', {}).get('includeFightCamera', True):
         render_fight_camera(output)
@@ -275,56 +325,58 @@ def main():
     runtime_bytes = conformal.export_runtime_mesh(output)
     save_version(output)
 
-    threshold = float(spec.get('audit', {}).get('scoreThreshold', 0.72))
+    threshold = float(spec.get('referenceObjective', {}).get('scoreThreshold', 0.78))
+    baseline_reference = history[0]['objectiveBefore'] if history else final_objective['score']
+    # The baseline semantic render is preserved in the objective directory. If
+    # no proposal was run, the final objective is also the baseline.
+    if history:
+        baseline_reference = history[0]['objectiveBefore']
     report = {
-        'pipeline': 'SERA_HERO_ASSET_AI_PIPELINE_V1',
+        'pipeline': 'SERA_HERO_ASSET_AI_PIPELINE_V2_REFERENCE_OBJECTIVE',
+        'objectiveType': 'REFERENCE_IMAGE_SILHOUETTE_LANDMARK_FACE_HAIR_V1',
         'specVersion': spec.get('version'),
         'feedbackVersion': feedback.get('version'),
         'feedbackRevision': int(feedback.get('revision', 0)),
         'feedbackObjectsApplied': feedback_objects,
+        'styleFeedbackAccepted': style_accepted,
         'source': 'Quaternius Superhero Female FullBody',
         'sourceLicense': 'CC0 1.0 Universal',
-        'baselineScore': baseline_score,
-        'finalScore': final_score,
+        'poseNormalizedForObjective': True,
+        'baselineScore': baseline_reference,
+        'finalScore': final_objective['score'],
         'scoreThreshold': threshold,
-        'passedScoreGate': final_score >= threshold,
-        'baselineMeasurements': baseline,
-        'finalMeasurements': final_measurements,
-        'baselineErrors': baseline_errors,
-        'finalErrors': final_errors,
+        'passedScoreGate': final_objective['score'] >= threshold,
+        'referenceObjective': final_objective,
+        'legacyBodyDiagnostic': {
+            'baselineScore': legacy_baseline_score,
+            'finalScore': legacy_final_score,
+            'baselineMeasurements': baseline_measurements,
+            'finalMeasurements': final_measurements,
+            'baselineErrors': baseline_errors,
+            'finalErrors': final_errors,
+            'note': 'Diagnostic/proposal guidance only. T-pose-derived dimensions never accept or reject a Hero candidate.'
+        },
         'optimizerHistory': history,
         'triangles': count_scene_triangles(),
         'heroAsset': 'sera-hero.glb',
         'heroAssetBytes': hero_bytes,
         'runtimeAsset': 'sera-blender-runtime.glb',
         'runtimeAssetBytes': runtime_bytes,
-        'renders': [
-            'sera-blender-front.png',
-            'sera-blender-three-quarter.png',
-            'sera-blender-side.png',
-            'sera-blender-back.png',
-            'sera-hero-fight.png',
-        ],
-        'notes': 'Closed-loop parametric hero pass plus JSON AI-critique handoff. Update feedback after inspecting the render artifacts; Blender code does not need to change between critique iterations.'
+        'renders': ['sera-blender-front.png', 'sera-blender-three-quarter.png', 'sera-blender-side.png', 'sera-blender-back.png', 'sera-hero-fight.png'],
+        'notes': 'The acceptance objective is now the real turnaround imagery: four-view silhouette IoU, body landmarks, face landmarks, face silhouette and hair silhouette. Body dimensions only generate candidate deformations.'
     }
     with open(os.path.join(output, 'sera-hero-report.json'), 'w', encoding='utf-8') as fp:
-        json.dump(report, fp, indent=2)
-        fp.write('\n')
-
+        json.dump(report, fp, indent=2); fp.write('\n')
     with open(os.path.join(output, 'README.txt'), 'w', encoding='utf-8') as fp:
-        fp.write('SERA Hero Asset AI Pipeline V1\n')
-        fp.write('Spec -> Blender build -> measured closed-loop correction -> 5-view audit -> AI feedback JSON -> next build.\n')
-        fp.write('Base targets live in sera_hero_spec.json. Per-review corrections live in sera_hero_feedback.json.\n')
+        fp.write('SERA Hero Asset AI Pipeline V2 - Reference Image Objective\n')
+        fp.write('Reference JPEG -> canonical masks/landmarks -> Blender semantic renders -> image-driven accept/reject -> Hero GLB.\n')
+        fp.write('T-pose body measurements are diagnostics/proposal guidance only and never the quality gate.\n')
 
-    print(
-        'SERA_HERO_PIPELINE_OK',
-        'BASE', round(baseline_score, 5),
-        'FINAL', round(final_score, 5),
-        'ITERS', len(history),
-        'FEEDBACK_REV', feedback.get('revision', 0),
-    )
-    if final_score < threshold:
-        print('SERA_HERO_SCORE_GATE_WARNING', final_score, '<', threshold)
+    print('SERA_HERO_PIPELINE_OK', 'BASE', round(baseline_reference, 5), 'FINAL', round(final_objective['score'], 5),
+          'ITERS', len(history), 'FEEDBACK_REV', feedback.get('revision', 0))
+    print('SERA_REFERENCE_COMPONENTS', json.dumps(final_objective['components'], sort_keys=True))
+    if final_objective['score'] < threshold:
+        print('SERA_HERO_SCORE_GATE_WARNING', final_objective['score'], '<', threshold)
 
 
 if __name__ == '__main__':

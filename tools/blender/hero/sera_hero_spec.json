@@ -1,5 +1,5 @@
 {
-  "version": "SERA_HERO_SPEC_V2_REFERENCE_OBJECTIVE",
+  "version": "SERA_HERO_SPEC_V3_96D_PARAMETER_SEARCH",
   "character": "SERA",
   "heightMeters": 1.68,
   "targets": {
@@ -25,6 +25,27 @@
     "gain": 0.52,
     "maxScaleStep": 0.075,
     "minImprovement": 0.0005
+  },
+  "parameterSearch": {
+    "enabled": true,
+    "parameterCount": 96,
+    "candidateBudget": 8,
+    "maxGenerations": 6,
+    "maxStaleGenerations": 2,
+    "initialStep": 0.62,
+    "minStep": 0.12,
+    "stepDecay": 0.82,
+    "minImprovement": 0.00035,
+    "maxViewSilhouetteRegression": 0.025,
+    "cacheEntries": 256,
+    "groups": {
+      "skeleton": 20,
+      "face": 20,
+      "hair": 20,
+      "arms": 12,
+      "legs": 12,
+      "costume": 12
+    }
   },
   "referenceObjective": {
     "scoreThreshold": 0.78,

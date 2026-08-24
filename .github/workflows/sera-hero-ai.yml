@@ -10,6 +10,8 @@ on:
       - tools/blender/sera_*.py
       - tools/blender/build-sera-*.py
       - scripts/run-sera-hero-ai-pipeline.sh
+      - scripts/prepare-sera-reference-objective.py
+      - public/reference/female-turnaround.jpeg
       - tests/sera-hero-pipeline.test.mjs
       - .github/workflows/sera-hero-ai.yml
       - package.json
@@ -45,11 +47,15 @@ jobs:
       - name: Validate pipeline contract
         run: node --test tests/sera-hero-pipeline.test.mjs
 
-      - name: Install headless Blender
+      - name: Install headless Blender and reference-image tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+          sudo apt-get install -y blender python3-numpy python3-pil python3-scipy libegl1 libgl1-mesa-dri xvfb
           blender --version | head -n 2
+          python3 - <<'PY'
+          import PIL, scipy, numpy
+          print('reference-objective-python-ok', PIL.__version__, scipy.__version__, numpy.__version__)
+          PY
 
       - name: Build and optimize SERA Hero Asset
         run: xvfb-run -a bash scripts/run-sera-hero-ai-pipeline.sh
@@ -74,6 +80,7 @@ jobs:
             artifacts/sera-hero-ai/sera-blender-side.png
             artifacts/sera-hero-ai/sera-blender-back.png
             artifacts/sera-hero-ai/sera-hero-fight.png
+            artifacts/sera-hero-ai/reference-objective/**
             artifacts/sera-hero-ai/README.txt
           if-no-files-found: error
           retention-days: 14

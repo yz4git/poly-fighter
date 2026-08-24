@@ -157,10 +157,12 @@ jobs:
           path: runtime-candidate
       - name: Publish generated Blender runtime asset to same-repository PR branch
         run: |
-          test -s runtime-candidate/public/models/sera-blender-runtime.glb
-          test -s runtime-candidate/public/models/sera-blender-runtime.metrics.json
-          cp runtime-candidate/public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.glb
-          cp runtime-candidate/public/models/sera-blender-runtime.metrics.json public/models/sera-blender-runtime.metrics.json
+          runtime_glb="$(find runtime-candidate -type f -name 'sera-blender-runtime.glb' -print -quit)"
+          runtime_metrics="$(find runtime-candidate -type f -name 'sera-blender-runtime.metrics.json' -print -quit)"
+          test -n "$runtime_glb" && test -s "$runtime_glb"
+          test -n "$runtime_metrics" && test -s "$runtime_metrics"
+          cp "$runtime_glb" public/models/sera-blender-runtime.glb
+          cp "$runtime_metrics" public/models/sera-blender-runtime.metrics.json
           if git diff --quiet -- public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json; then
             echo "Generated runtime is unchanged."
             exit 0

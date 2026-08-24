@@ -10,11 +10,13 @@ const pipelinePath = new URL('../tools/blender/hero/sera_hero_pipeline_v5.py', i
 const metricsPath = new URL('../tools/blender/hero/sera_hero_metrics.py', import.meta.url);
 const parameterSearchPath = new URL('../tools/blender/hero/sera_parameter_search.py', import.meta.url);
 const localSearchPath = new URL('../tools/blender/hero/sera_local_objective_search.py', import.meta.url);
+const localAnchorPath = new URL('../tools/blender/hero/sera_local_crop_anchor.py', import.meta.url);
 const deformPath = new URL('../tools/blender/hero/sera_hero_v4_deform.py', import.meta.url);
 const objectivePath = new URL('../tools/blender/hero/sera_reference_objective.py', import.meta.url);
 const boneFollowPath = new URL('../tools/blender/sera_bone_follow.py', import.meta.url);
 const identityPath = new URL('../tools/blender/sera_identity_parts.py', import.meta.url);
 const preparePath = new URL('../scripts/prepare-sera-reference-objective.py', import.meta.url);
+const refinePath = new URL('../scripts/refine-sera-local-reference-crops.py', import.meta.url);
 const runnerPath = new URL('../scripts/run-sera-hero-ai-pipeline.sh', import.meta.url);
 
 const spec = JSON.parse(readFileSync(specPath, 'utf8'));
@@ -25,11 +27,13 @@ const pipeline = readFileSync(pipelinePath, 'utf8');
 const metrics = readFileSync(metricsPath, 'utf8');
 const parameterSearch = readFileSync(parameterSearchPath, 'utf8');
 const localSearch = readFileSync(localSearchPath, 'utf8');
+const localAnchor = readFileSync(localAnchorPath, 'utf8');
 const deform = readFileSync(deformPath, 'utf8');
 const objective = readFileSync(objectivePath, 'utf8');
 const boneFollow = readFileSync(boneFollowPath, 'utf8');
 const identity = readFileSync(identityPath, 'utf8');
 const prepare = readFileSync(preparePath, 'utf8');
+const refine = readFileSync(refinePath, 'utf8');
 const runner = readFileSync(runnerPath, 'utf8');
 
 test('SERA Hero V5 keeps the validated 128D space and enables independent local objectives', () => {
@@ -84,6 +88,18 @@ test('reference preparation creates native-resolution-derived high-resolution fa
   assert.match(prepare, /reference-\{view\}-face-local/);
   assert.match(prepare, /reference-\{view\}-hair-local/);
   assert.match(prepare, /SERA_REFERENCE_OBJECTIVE_V3_HIGH_RES_LOCAL_CROPS/);
+});
+
+test('V7 local windows are tight and generated anchors follow visible face geometry', () => {
+  assert.match(localAnchor, /_world_geometry_centroid/);
+  assert.match(localAnchor, /matrix\s*@\s*vertex\.co/);
+  assert.match(localAnchor, /_project_face_landmarks_raw\s*=\s*project_face_landmarks_raw/);
+  assert.match(localAnchor, /mouth_y \+ feature_h \* \.12/);
+  assert.match(localAnchor, /mouth_y \+ feature_h \* \.18/);
+  assert.match(refine, /SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS/);
+  assert.match(refine, /mouth_y \+ feature_h \* \.12/);
+  assert.match(refine, /mouth_y \+ feature_h \* \.18/);
+  assert.match(runner, /SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS/);
 });
 
 test('Blender objective keeps global score separate from independent local face/hair objectives', () => {

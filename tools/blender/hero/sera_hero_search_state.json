@@ -1,7 +1,44 @@
 {
-  "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
+  "components": {
+    "bodyLandmarks": 0.13127085586978587,
+    "faceLandmarks": 0.3195308585671348,
+    "faceSilhouette": 0.06915241533200923,
+    "hairSilhouette": 0.12074694973403115,
+    "silhouette": 0.4103445229474604
+  },
+  "continueSearch": true,
+  "generation": 1,
+  "groupNeed": {
+    "arms": 0.6759918033849409,
+    "costume": 0.6481166090344562,
+    "face": 0.792929994984452,
+    "hair": 0.7924068298947711,
+    "legs": 0.6759918033849409,
+    "skeleton": 0.7178045949106681
+  },
+  "groupPriority": [
+    "face",
+    "hair",
+    "skeleton",
+    "arms",
+    "legs",
+    "costume"
+  ],
+  "improvedCandidates": 2,
+  "maxGenerations": 6,
+  "parameterCount": 96,
+  "parameters": {
+    "hair_nape_length": 0.40888480409828526,
+    "hair_pony_depth": -0.4234609208647225,
+    "hair_side_length": -0.49952293190143177,
+    "sk_pelvis_depth": 0.5255253171927405,
+    "sk_upper_torso_height": 0.42393042033316986,
+    "sk_waist_depth": 0.3430251142994852
+  },
   "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V1_96D",
-  "generation": 0,
+  "score": 0.28613465506495195,
+  "seedLoadedFromCache": false,
   "staleGenerations": 0,
-  "parameters": {}
+  "step": 0.62,
+  "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1"
 }

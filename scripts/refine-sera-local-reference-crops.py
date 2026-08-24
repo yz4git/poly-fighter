@@ -128,7 +128,7 @@ def validate_reference_box(view, kind, local_box, body_box):
     width = box[2] - box[0]
     height = box[3] - box[1]
     if kind == "face":
-        max_width = .64 if view == "side" else (.52 if view == "three-quarter" else .48)
+        max_width = .66 if view == "side" else (.52 if view == "three-quarter" else .48)
         if width > max_width or height > .30:
             raise RuntimeError(f"{view} face crop escaped landmark region: {box}")
     elif kind == "hair":

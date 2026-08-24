@@ -1,13 +1,15 @@
 """Landmark-anchored local crop mapping for SERA Hero V5.
 
 Global evaluation stays body-aligned. Face/hair local evaluation deliberately
-uses the projected eye/nose/mouth landmarks as its own coordinate system so a
+uses the projected eye/nose/mouth geometry as its own coordinate system so a
 body-proportion mismatch cannot drag shoulders or torso into the local crop.
 """
 from __future__ import annotations
 
 import numpy as np
 import bpy
+from mathutils import Vector
+from bpy_extras.object_utils import world_to_camera_view
 
 
 def _clip(box, shape):
@@ -22,6 +24,32 @@ def _clip(box, shape):
     if y1 < y0:
         y0, y1 = y1, y0
     return (x0, y0, x1, y1)
+
+
+def _world_geometry_centroid(obj):
+    """Return the visible mesh centroid instead of the often-offset object origin."""
+    if obj is not None and obj.type == 'MESH' and len(obj.data.vertices):
+        total = Vector((0.0, 0.0, 0.0))
+        matrix = obj.matrix_world
+        for vertex in obj.data.vertices:
+            total += matrix @ vertex.co
+        return total / len(obj.data.vertices)
+    return None if obj is None else obj.matrix_world.translation.copy()
+
+
+def _geometry_face_landmarks(reference_objective, scene, cam, width, height):
+    result = {}
+    for key, name in reference_objective.FACE_OBJECTS.items():
+        obj = bpy.data.objects.get(name)
+        co = _world_geometry_centroid(obj)
+        if co is None:
+            continue
+        ndc = world_to_camera_view(scene, cam, co)
+        result[key] = [
+            float(ndc.x * (width - 1)),
+            float((1.0 - ndc.y) * (height - 1)),
+        ]
+    return result
 
 
 def landmark_window(landmarks, shape, kind):
@@ -49,7 +77,7 @@ def landmark_window(landmarks, shape, kind):
             center_x - half,
             eye_top - feature_h * .82,
             center_x + half,
-            mouth_y + feature_h * .34,
+            mouth_y + feature_h * .12,
         ]
     elif kind == 'hair':
         half = max(eye_span * 2.15, feature_h * 1.32)
@@ -57,7 +85,7 @@ def landmark_window(landmarks, shape, kind):
             center_x - half,
             eye_top - feature_h * 1.92,
             center_x + half,
-            mouth_y + feature_h * .42,
+            mouth_y + feature_h * .18,
         ]
     else:
         raise ValueError('unknown SERA local crop kind ' + str(kind))
@@ -68,6 +96,16 @@ def install(reference_objective):
     if getattr(reference_objective, '_sera_landmark_crop_installed', False):
         return reference_objective
     base_map = reference_objective._map_normalized_box
+
+    # The previous implementation projected object origins. Several authored
+    # facial meshes keep origins away from their visible geometry after bone
+    # parenting/tuning, which can push 3/4 and side crops onto the torso. Make
+    # the geometry itself authoritative for both global face landmarks and the
+    # independent local crop anchor.
+    def project_face_landmarks_raw(scene, cam, width, height):
+        return _geometry_face_landmarks(reference_objective, scene, cam, width, height)
+
+    reference_objective._project_face_landmarks_raw = project_face_landmarks_raw
 
     def map_local_box(spec, generated_body_box, shape):
         if isinstance(spec, dict) and spec.get('anchorMode') == 'faceLandmarks':

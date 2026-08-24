@@ -1,0 +1,22 @@
+{
+  "version": "SERA_HERO_FEEDBACK_V1",
+  "revision": 1,
+  "targetMultipliers": {},
+  "styleMultipliers": {
+    "hairCapScale": [0.94, 0.96, 0.96],
+    "fringeScale": [0.96, 0.94, 1.02],
+    "ponytailScale": [0.94, 0.94, 1.06],
+    "skirtWidthScale": 0.92,
+    "skirtDepthScale": 0.90,
+    "forearmGuardScale": 0.92,
+    "shinGuardScale": 0.88,
+    "bootScale": 0.94,
+    "faceFeatureScale": 1.08
+  },
+  "objectAdjustments": {},
+  "notes": [
+    "Revision 1 was derived from the first real Blender Hero audit.",
+    "From Pipeline V2 onward these corrections are accepted only when the reference-image objective improves; visual feedback can no longer override a worse silhouette/landmark/face/hair score.",
+    "Body target multipliers are proposal guidance only. They are not the quality gate."
+  ]
+}

@@ -40,25 +40,28 @@ def style_face(objects):
 
 
 def export_runtime_mesh(output):
-    """Export visible SERA geometry with its small flat-color material palette.
+    """Export canonical SERA geometry without baking audit/IK pose deformation.
 
-    The game supplies the combat rig, so skins, animations, UVs and normals are
-    omitted. Material slots are intentionally retained: GLTFLoader can recover
-    skin/hair/blue/black/silver regions from those primitives and then merge them
-    into one vertex-colored canonical-rig mesh in the browser.
+    The Hero reference objective deliberately poses the source armature to match
+    the turnaround. The game, however, supplies its own canonical combat rig.
+    Therefore the source body is copied from its edited mesh datablock (rest
+    geometry), not from the evaluated armature result. Procedural SERA overlays
+    are copied as evaluated static meshes because they do not carry the source
+    armature modifier.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    sources = [
-        obj for obj in bpy.context.scene.objects
-        if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))
-    ]
+    sources = [obj for obj in bpy.context.scene.objects
+               if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))]
     if not sources:
         raise RuntimeError('no SERA runtime mesh sources found')
 
     copies = []
     for source in sources:
-        evaluated = source.evaluated_get(depsgraph)
-        mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=False, depsgraph=depsgraph)
+        if source.name == 'Superhero_Female':
+            mesh = source.data.copy()
+        else:
+            evaluated = source.evaluated_get(depsgraph)
+            mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=False, depsgraph=depsgraph)
         copy = bpy.data.objects.new('Runtime_' + source.name, mesh)
         copy.matrix_world = source.matrix_world.copy()
         bpy.context.collection.objects.link(copy)

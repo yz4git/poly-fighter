@@ -1,0 +1,86 @@
+name: SERA Hero Asset AI Pipeline
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/blender/hero/**
+      - tools/blender/sera_*.py
+      - tools/blender/build-sera-*.py
+      - scripts/run-sera-hero-ai-pipeline.sh
+      - scripts/prepare-sera-reference-objective.py
+      - public/reference/female-turnaround.jpeg
+      - tests/sera-hero-pipeline.test.mjs
+      - .github/workflows/sera-hero-ai.yml
+      - package.json
+
+permissions:
+  contents: read
+
+jobs:
+  build-hero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout CC0 Quaternius source mirror
+        uses: actions/checkout@v4
+        with:
+          repository: aaroohhiiii/ggj
+          ref: 57c0855a6622d4654fe32e9208efb820051164e3
+          path: .external/quaternius
+          sparse-checkout: |
+            first/assets/3d/characters/player
+            first/assets/3d/characters/License_Standard.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate pipeline contract
+        run: node --test tests/sera-hero-pipeline.test.mjs
+
+      - name: Install headless Blender and reference-image tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy python3-pil python3-scipy libegl1 libgl1-mesa-dri xvfb
+          blender --version | head -n 2
+          python3 - <<'PY'
+          import PIL, scipy, numpy
+          print('reference-objective-python-ok', PIL.__version__, scipy.__version__, numpy.__version__)
+          PY
+
+      - name: Build and optimize SERA Hero Asset
+        run: xvfb-run -a bash scripts/run-sera-hero-ai-pipeline.sh
+
+      - name: Print Hero quality report
+        run: |
+          cat artifacts/sera-hero-ai/sera-hero-report.json
+          cat artifacts/sera-hero-ai/blender-version.txt
+
+      - name: Upload Hero Asset build and audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: sera-hero-ai
+          path: |
+            artifacts/sera-hero-ai/sera-hero.blend
+            artifacts/sera-hero-ai/sera-hero.glb
+            artifacts/sera-hero-ai/sera-blender-runtime.glb
+            artifacts/sera-hero-ai/sera-hero-report.json
+            artifacts/sera-hero-ai/blender-version.txt
+            artifacts/sera-hero-ai/sera-blender-front.png
+            artifacts/sera-hero-ai/sera-blender-three-quarter.png
+            artifacts/sera-hero-ai/sera-blender-side.png
+            artifacts/sera-hero-ai/sera-blender-back.png
+            artifacts/sera-hero-ai/sera-hero-fight.png
+            artifacts/sera-hero-ai/reference-objective/**
+            artifacts/sera-hero-ai/README.txt
+          if-no-files-found: error
+          retention-days: 14

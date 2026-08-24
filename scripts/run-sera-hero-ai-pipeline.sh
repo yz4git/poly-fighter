@@ -66,7 +66,7 @@ for view, data in meta['views'].items():
             elif view == 'three-quarter':
                 max_width, max_height = .96, .40
             elif view == 'back':
-                max_width, max_height = .36, .28
+                max_width, max_height = .76, .28
             else:
                 max_width, max_height = .88, .36
             if width > max_width or height > max_height or ref_box[1] < -.16 or ref_box[3] > .42:

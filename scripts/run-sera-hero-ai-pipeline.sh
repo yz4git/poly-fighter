@@ -45,19 +45,29 @@ python3 - "$REFERENCE_OBJECTIVE_DIR/reference-objective.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding='utf-8') as fp:
     meta=json.load(fp)
-if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V5_LANDMARK_FACE_HEAD_HAIR_CROPS':
-    raise SystemExit('landmark-centered local Reference crop refinement did not run')
+if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V6_LANDMARK_ANCHORED_LOCAL_WINDOWS':
+    raise SystemExit('landmark-anchored local Reference crop refinement did not run')
 for view, data in meta['views'].items():
     for kind, entry in data.get('localCrops', {}).items():
-        box=entry['normalizedBox']; width=box[2]-box[0]; height=box[3]-box[1]
+        ref_box=entry.get('referenceNormalizedBox')
+        if not isinstance(ref_box, list) or len(ref_box) != 4:
+            raise SystemExit(f'{view} {kind} missing reference crop bounds')
+        width=ref_box[2]-ref_box[0]; height=ref_box[3]-ref_box[1]
         if kind == 'face':
             max_width=.64 if view == 'side' else .48
-            if width > max_width or height > .34 or box[1] < -.02 or box[3] > .34:
-                raise SystemExit(f'{view} face local crop too broad: {box}')
+            if width > max_width or height > .30:
+                raise SystemExit(f'{view} face local crop too broad: {ref_box}')
+            anchor=entry.get('normalizedBox', {})
+            if anchor.get('anchorMode') != 'faceLandmarks' or anchor.get('kind') != 'face':
+                raise SystemExit(f'{view} face generated crop is not landmark anchored')
         if kind == 'hair':
             max_width=1.20 if view == 'side' else .88
-            if width > max_width or height > .27 or box[1] < -.05 or box[3] > .27:
-                raise SystemExit(f'{view} hair local crop too broad: {box}')
+            if width > max_width or height > .32:
+                raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
+            if view != 'back':
+                anchor=entry.get('normalizedBox', {})
+                if anchor.get('anchorMode') != 'faceLandmarks' or anchor.get('kind') != 'hair':
+                    raise SystemExit(f'{view} hair generated crop is not landmark anchored')
 print('SERA_LOCAL_CROP_SANITY_OK')
 PY
 

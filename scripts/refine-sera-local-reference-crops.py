@@ -63,7 +63,7 @@ def landmark_window(landmarks, shape, kind):
             center_x - half,
             eye_top - feature_h * .82,
             center_x + half,
-            mouth_y + feature_h * .34,
+            mouth_y + feature_h * .12,
         ]
     elif kind == "hair":
         half = max(eye_span * 2.15, feature_h * 1.32)
@@ -71,7 +71,7 @@ def landmark_window(landmarks, shape, kind):
             center_x - half,
             eye_top - feature_h * 1.92,
             center_x + half,
-            mouth_y + feature_h * .42,
+            mouth_y + feature_h * .18,
         ]
     else:
         raise ValueError("unknown local crop kind " + str(kind))
@@ -89,8 +89,6 @@ def clean_head_hair(hair, silhouette, hair_box):
     labels, count = ndimage.label(candidate)
     if count == 0:
         return candidate
-    # Components touching the upper 72% of the local window belong to head hair.
-    # This rejects isolated collar/shoulder fragments at the lower edge.
     seed_bottom = y0 + int((y1 - y0 + 1) * .72)
     chosen = []
     for idx, obj_box in enumerate(ndimage.find_objects(labels), start=1):
@@ -113,7 +111,6 @@ def normalized_box(local_box, body_box):
 
 
 def hair_limits(view):
-    """View-aware locality guard for landmark windows, not a fit target."""
     if view == "side":
         return 1.20, .42
     if view == "three-quarter":
@@ -133,8 +130,6 @@ def validate_reference_box(view, kind, local_box, body_box):
             raise RuntimeError(f"{view} face crop escaped landmark region: {box}")
     elif kind == "hair":
         max_width, max_height = hair_limits(view)
-        # Hair can legitimately extend above the body bbox. Keep a separate
-        # position guard so relaxing that overscan never permits a torso crop.
         if width > max_width or height > max_height or box[1] < -.16 or box[3] > .42:
             raise RuntimeError(f"{view} hair crop escaped landmark region: {box}")
     return box
@@ -176,9 +171,6 @@ def main():
                 },
             }
 
-        # Back view has no facial landmarks. Its local hair objective remains
-        # head-region based; front/3q/side use the same landmark anchor as the
-        # generated render.
         if view == "back":
             bx0, by0, bx1, by1 = body
             bh = max(1, by1 - by0 + 1)
@@ -199,10 +191,10 @@ def main():
         }
         metadata["views"][view]["localCrops"] = local
 
-    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V6_LANDMARK_ANCHORED_LOCAL_WINDOWS"
+    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS"
     metadata["localCropPurpose"] = {
-        "face": "eye/nose/mouth-anchored face skin silhouette and landmarks; independent of full-body bbox",
-        "hair": "face-landmark-anchored head-hair window for front/3q/side; long hair remains globally scored",
+        "face": "tight eye/nose/mouth-anchored face skin window ending just below the mouth; shoulders excluded",
+        "hair": "tight face-landmark head-hair window; long hair remains globally scored",
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("SERA_LOCAL_REFERENCE_CROPS_REFINED", objective_dir)

@@ -38,3 +38,18 @@ npm run lint
 
 The source is organized under `src/game/` so combat rules remain independent
 from the renderer and the playable Site shell stays in `app/`.
+
+## Public source and asset notices
+
+This repository is publicly visible source, but the original POLY FIGHTER code,
+character designs, artwork, and project-specific assets are **not automatically
+open-source or public-domain material**. See [`LICENSE`](LICENSE) for the project
+rights notice.
+
+The current Blender-authored SERA pipeline uses the Quaternius Universal Base
+Characters Kit as a source body/rig. That upstream material is CC0 1.0 Universal.
+See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for details.
+
+Project reference artwork under `public/reference/` has explicit provenance notes
+in [`public/reference/README.md`](public/reference/README.md). New reference assets
+should not be committed without documenting their origin and reuse terms.

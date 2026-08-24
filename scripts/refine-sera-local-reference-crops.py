@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Rewrite V5 local Reference crops using tight native-resolution head regions.
+"""Build V5 local Reference crops in a face-landmark coordinate system.
 
-The broad global masks intentionally keep the existing segmentation behavior.
-This pass only refines the independent local objectives so black costume pixels
-cannot masquerade as hair and shoulders cannot dominate the face crop.
+The global objective keeps its body-aligned masks. The independent face/hair
+objectives use eye/nose/mouth landmarks as their own anchor so neither shoulder
+width nor torso proportions can determine the local crop.
 """
 from __future__ import annotations
 
@@ -37,99 +37,74 @@ def clip_box(box, width, height):
     return [x0, y0, x1, y1]
 
 
-def head_box(silhouette, body_box):
-    bx0, by0, bx1, by1 = body_box
-    body_h = max(1, by1 - by0 + 1)
-    band = np.zeros_like(silhouette, dtype=bool)
-    band[by0:min(silhouette.shape[0], int(by0 + body_h * .205) + 1), bx0:bx1 + 1] = True
-    found = prepare.bbox(silhouette & band)
-    if found is not None:
-        return found
-    cx = (bx0 + bx1) * .5
-    return [int(cx - body_h * .075), by0, int(cx + body_h * .075), int(by0 + body_h * .20)]
+def landmark_window(landmarks, shape, kind):
+    height, width = shape
+    usable = [p for p in landmarks.values() if p is not None]
+    if not usable:
+        return None
+    eyes = [p for key, p in landmarks.items() if key.startswith("eye") and p is not None]
+    mouth = landmarks.get("mouth")
+    nose = landmarks.get("nose")
+    xs = [float(p[0]) for p in usable]
+    center_x = float(np.median(xs))
+    eye_top = min(float(p[1]) for p in eyes) if eyes else min(float(p[1]) for p in usable)
+    mouth_y = float(mouth[1]) if mouth is not None else max(float(p[1]) for p in usable)
+    feature_h = max(6.0, mouth_y - eye_top)
+    if len(eyes) >= 2:
+        eye_span = abs(float(eyes[-1][0]) - float(eyes[0][0]))
+    else:
+        eye_span = feature_h * .62
+    if nose is not None:
+        center_x = (center_x * 2.0 + float(nose[0])) / 3.0
+
+    if kind == "face":
+        half = max(eye_span * 1.25, feature_h * .72)
+        box = [
+            center_x - half,
+            eye_top - feature_h * .82,
+            center_x + half,
+            mouth_y + feature_h * .34,
+        ]
+    elif kind == "hair":
+        half = max(eye_span * 2.15, feature_h * 1.32)
+        box = [
+            center_x - half,
+            eye_top - feature_h * 1.92,
+            center_x + half,
+            mouth_y + feature_h * .42,
+        ]
+    else:
+        raise ValueError("unknown local crop kind " + str(kind))
+    return clip_box(box, width, height)
 
 
-def local_boxes(silhouette, view, face_landmarks=None):
-    body = prepare.bbox(silhouette)
-    if body is None:
-        return None, None, None
-    bx0, by0, bx1, by1 = body
-    image_h, image_w = silhouette.shape
-    body_h = max(1, by1 - by0 + 1)
-    hx0, hy0, hx1, hy1 = head_box(silhouette, body)
-    head_w = max(1, hx1 - hx0 + 1)
-    head_cx = (hx0 + hx1) * .5
-
-    face = None
-    if view != "back":
-        usable = [p for p in (face_landmarks or {}).values() if p is not None]
-        if usable:
-            xs = [float(p[0]) for p in usable]
-            ys = [float(p[1]) for p in usable]
-            mouth = (face_landmarks or {}).get("mouth")
-            eyes = [p for key, p in (face_landmarks or {}).items() if key.startswith("eye") and p is not None]
-            center_x = float(np.median(xs))
-            span_x = max(xs) - min(xs)
-            face_half = max(span_x * .90, body_h * .050)
-            eye_top = min(float(p[1]) for p in eyes) if eyes else min(ys)
-            mouth_y = float(mouth[1]) if mouth is not None else max(ys)
-            face = clip_box([
-                center_x - face_half,
-                eye_top - body_h * .078,
-                center_x + face_half,
-                mouth_y + body_h * .052,
-            ], image_w, image_h)
-        else:
-            face_half = max(head_w * .42, body_h * .050)
-            face = clip_box([
-                head_cx - face_half,
-                by0 + body_h * .035,
-                head_cx + face_half,
-                by0 + body_h * .285,
-            ], image_w, image_h)
-
-    # Head hair/fringe/side/rear-cap/ponytail-root only. Keep the lower edge
-    # above the shoulder band in all views; long hair remains globally scored.
-    hair_half = max(head_w * .72, body_h * .080)
-    hair = clip_box([
-        head_cx - hair_half,
-        by0 - body_h * .016,
-        head_cx + hair_half,
-        by0 + body_h * .218,
-    ], image_w, image_h)
-    return body, face, hair
-
-
-def clean_head_hair(hair, silhouette, body_box, hair_box):
+def clean_head_hair(hair, silhouette, hair_box):
+    """Keep only dark components that enter the landmark-anchored head window."""
     x0, y0, x1, y1 = hair_box
     candidate = np.zeros_like(hair, dtype=bool)
     candidate[y0:y1 + 1, x0:x1 + 1] = True
     candidate &= hair & silhouette
     if not np.any(candidate):
         return candidate
-
-    # Do not dilate components together: a one-pixel bridge at the neck is
-    # exactly how black costume used to leak into the hair objective.
     labels, count = ndimage.label(candidate)
-    bx0, by0, bx1, by1 = body_box
-    body_h = max(1, by1 - by0 + 1)
-    seed_limit = int(by0 + body_h * .205)
+    if count == 0:
+        return candidate
+    # Components touching the upper 72% of the local window belong to head hair.
+    # This rejects isolated collar/shoulder fragments at the lower edge.
+    seed_bottom = y0 + int((y1 - y0 + 1) * .72)
     chosen = []
     for idx, obj_box in enumerate(ndimage.find_objects(labels), start=1):
         if obj_box is None:
             continue
-        component = labels[obj_box] == idx
-        area = int(np.count_nonzero(component))
+        area = int(np.count_nonzero(labels[obj_box] == idx))
         top = obj_box[0].start
-        if area >= 4 and top <= seed_limit:
+        if area >= 4 and top <= seed_bottom:
             chosen.append(idx)
-    if not chosen:
-        return candidate
-    return candidate & np.isin(labels, np.asarray(chosen, dtype=np.int32))
+    return candidate if not chosen else candidate & np.isin(labels, np.asarray(chosen, dtype=np.int32))
 
 
 def normalized_box(local_box, body_box):
-    if local_box is None:
+    if local_box is None or body_box is None:
         return None
     bx0, by0, bx1, by1 = body_box
     bw, bh = max(1.0, bx1 - bx0 + 1.0), max(1.0, by1 - by0 + 1.0)
@@ -137,18 +112,19 @@ def normalized_box(local_box, body_box):
     return [(x0 - bx0) / bw, (y0 - by0) / bh, (x1 - bx0 + 1.0) / bw, (y1 - by0 + 1.0) / bh]
 
 
-def _validate_local_box(view, kind, box):
-    """Reject body-scale crops while allowing normal side-profile overscan."""
+def validate_reference_box(view, kind, local_box, body_box):
+    box = normalized_box(local_box, body_box)
     width = box[2] - box[0]
     height = box[3] - box[1]
     if kind == "face":
         max_width = .64 if view == "side" else .48
-        if width > max_width or height > .34 or box[1] < -.02 or box[3] > .34:
-            raise RuntimeError(f"{view} face crop escaped head region: {box}")
+        if width > max_width or height > .30:
+            raise RuntimeError(f"{view} face crop escaped landmark region: {box}")
     elif kind == "hair":
         max_width = 1.20 if view == "side" else .88
-        if width > max_width or height > .27 or box[1] < -.05 or box[3] > .27:
-            raise RuntimeError(f"{view} hair crop escaped head region: {box}")
+        if width > max_width or height > .32:
+            raise RuntimeError(f"{view} hair crop escaped landmark region: {box}")
+    return box
 
 
 def main():
@@ -166,34 +142,54 @@ def main():
     for index, view in enumerate(prepare.VIEW_NAMES):
         panel = image.crop((dividers[index], row0, dividers[index + 1], row1))
         silhouette, skin, hair = prepare.segment_panel(panel)
-        native_face_landmarks = prepare.face_landmarks(silhouette, skin, hair, view)
-        body, face_box, hair_box = local_boxes(silhouette, view, native_face_landmarks)
-        if body is None or hair_box is None:
-            raise RuntimeError(f"could not derive local crop for {view}")
+        body = prepare.bbox(silhouette)
+        if body is None:
+            raise RuntimeError(f"could not derive body bbox for {view}")
+        landmarks = prepare.face_landmarks(silhouette, skin, hair, view)
         local = {}
-        if face_box is not None:
+
+        if view != "back":
+            face_box = landmark_window(landmarks, silhouette.shape, "face")
+            if face_box is None:
+                raise RuntimeError(f"could not derive landmark face crop for {view}")
             face_canvas, face_transform = prepare._crop_canvas(skin, face_box)
             prepare.save_mask(face_canvas, objective_dir / f"reference-{view}-face-local.png")
             local["face"] = {
-                "normalizedBox": normalized_box(face_box, body),
+                "normalizedBox": {"anchorMode": "faceLandmarks", "kind": "face"},
+                "referenceNormalizedBox": validate_reference_box(view, "face", face_box, body),
                 "landmarks": {
                     key: prepare._point_to_crop(value, face_box, face_transform)
-                    for key, value in native_face_landmarks.items()
+                    for key, value in landmarks.items()
                 },
             }
-        head_hair = clean_head_hair(hair, silhouette, body, hair_box)
+
+        # Back view has no facial landmarks. Its local hair objective remains
+        # head-region based; front/3q/side use the same landmark anchor as the
+        # generated render.
+        if view == "back":
+            bx0, by0, bx1, by1 = body
+            bh = max(1, by1 - by0 + 1)
+            cx = (bx0 + bx1) * .5
+            hair_box = clip_box([cx - bh*.13, by0, cx + bh*.13, by0 + bh*.24], silhouette.shape[1], silhouette.shape[0])
+            generated_anchor = {"anchorMode": "bodyHeadFallback", "kind": "hair"}
+        else:
+            hair_box = landmark_window(landmarks, silhouette.shape, "hair")
+            generated_anchor = {"anchorMode": "faceLandmarks", "kind": "hair"}
+        if hair_box is None:
+            raise RuntimeError(f"could not derive landmark hair crop for {view}")
+        head_hair = clean_head_hair(hair, silhouette, hair_box)
         hair_canvas, _ = prepare._crop_canvas(head_hair, hair_box)
         prepare.save_mask(hair_canvas, objective_dir / f"reference-{view}-hair-local.png")
-        local["hair"] = {"normalizedBox": normalized_box(hair_box, body)}
+        local["hair"] = {
+            "normalizedBox": generated_anchor if view != "back" else normalized_box(hair_box, body),
+            "referenceNormalizedBox": validate_reference_box(view, "hair", hair_box, body),
+        }
         metadata["views"][view]["localCrops"] = local
 
-        for kind, entry in local.items():
-            _validate_local_box(view, kind, entry["normalizedBox"])
-
-    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V5_LANDMARK_FACE_HEAD_HAIR_CROPS"
+    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V6_LANDMARK_ANCHORED_LOCAL_WINDOWS"
     metadata["localCropPurpose"] = {
-        "face": "landmark-centered face skin silhouette and landmarks; shoulders excluded by narrow feature-derived box",
-        "hair": "head hair/fringe/side/rear cap/ponytail-root silhouette ending above shoulder band; long hair remains global",
+        "face": "eye/nose/mouth-anchored face skin silhouette and landmarks; independent of full-body bbox",
+        "hair": "face-landmark-anchored head-hair window for front/3q/side; long hair remains globally scored",
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("SERA_LOCAL_REFERENCE_CROPS_REFINED", objective_dir)

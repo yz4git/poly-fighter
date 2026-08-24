@@ -1,0 +1,60 @@
+{
+  "version": "SERA_HERO_PARAMETER_SEARCH_STATE_V1",
+  "schemaVersion": "SERA_HERO_PARAMETER_SPACE_V1_96D",
+  "parameterCount": 96,
+  "generation": 6,
+  "maxGenerations": 6,
+  "staleGenerations": 0,
+  "continueSearch": false,
+  "score": 0.2948692803879471,
+  "components": {
+    "silhouette": 0.4165292837009849,
+    "bodyLandmarks": 0.14514907239740166,
+    "faceLandmarks": 0.3381253698330457,
+    "faceSilhouette": 0.0733141419264655,
+    "hairSilhouette": 0.1257134693331024
+  },
+  "groupPriority": [
+    "hair",
+    "face",
+    "skeleton",
+    "arms",
+    "legs",
+    "costume"
+  ],
+  "groupNeed": {
+    "skeleton": 0.7081838089916455,
+    "arms": 0.6665629692764724,
+    "legs": 0.6665629692764724,
+    "costume": 0.6388157427996904,
+    "face": 0.7810616345196937,
+    "hair": 0.7866786428993966
+  },
+  "step": 0.22985870278399992,
+  "seedLoadedFromCache": false,
+  "improvedCandidates": 2,
+  "parameters": {
+    "costume_skirt_width": 0.28031549119999993,
+    "hair_cap_depth": -0.17612397226455562,
+    "hair_cap_depth_shift": 0.07351561677483637,
+    "hair_cap_height": 0.5259014138377219,
+    "hair_cap_vertical": 0.32970688879371446,
+    "hair_fringe_forward": -0.285173332683245,
+    "hair_fringe_length": -0.3770928421000235,
+    "hair_fringe_width": -0.14199276891612925,
+    "hair_nape_length": 0.5812508892049281,
+    "hair_pony_depth": -0.4234609208647225,
+    "hair_pony_length": -0.19062014449607897,
+    "hair_pony_root_height": 0.2273662707824452,
+    "hair_pony_width": -0.1954001534297706,
+    "hair_side_depth": -0.6061739344634193,
+    "hair_side_length": -0.6832511284983622,
+    "leg_thigh_depth": 0.5084,
+    "sk_head_width": 0.2756865928684782,
+    "sk_jaw_width": -0.27157642333326637,
+    "sk_pelvis_depth": 0.5255253171927405,
+    "sk_pelvis_width": 0.24828283560337636,
+    "sk_upper_torso_height": 0.12351782676754858,
+    "sk_waist_depth": 0.3430251142994852
+  }
+}

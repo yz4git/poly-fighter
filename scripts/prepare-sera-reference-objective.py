@@ -24,7 +24,9 @@ def _pick_peak(score: np.ndarray, lo: int, hi: int) -> int:
     lo, hi = max(0, int(lo)), min(score.shape[0], int(hi))
     if hi <= lo:
         raise ValueError("invalid divider search interval")
-    return int(np.argmax(score[lo:hi])) + lo
+    peak = int(np.argmax(score[lo:hi])) + lo
+    neighborhood = score[max(lo, peak - 2):min(hi, peak + 3)]
+    return int(max(lo, peak - 2 + int(np.argmax(neighborhood))))
 
 
 def detect_grid(image: Image.Image) -> dict:
@@ -33,6 +35,10 @@ def detect_grid(image: Image.Image) -> dict:
     h, w = gray.shape
     xs = _line_score(gray, int(h * 0.112), int(h * 0.992), 1)
     ys = _line_score(gray, 0, w, 0)
+    y_top = _pick_peak(ys, int(h * 0.09), int(h * 0.16))
+    y_bottom = _pick_peak(ys, int(h * 0.96), int(h * 0.995))
+    if y_bottom <= y_top + 100:
+        raise ValueError(f"invalid reference panel rows: {y_top}, {y_bottom}")
     return {
         "sourceWidth": w,
         "sourceHeight": h,
@@ -43,8 +49,8 @@ def detect_grid(image: Image.Image) -> dict:
             _pick_peak(xs, int(w * 0.70), int(w * 0.78)),
             _pick_peak(xs, int(w * 0.94), w),
         ],
-        "yTop": _pick_peak(ys, int(h * 0.09), int(h * 0.16)),
-        "yBottom": _pick_peak(ys, int(h * 0.96), int(h * 0.995)),
+        "yTop": y_top,
+        "yBottom": y_bottom,
     }
 
 
@@ -53,7 +59,7 @@ def _disk(radius: int) -> np.ndarray:
     return xx * xx + yy * yy <= radius * radius
 
 
-def _component_selection(candidate: np.ndarray) -> np.ndarray:
+def _component_selection(candidate: np.ndarray, core: np.ndarray) -> np.ndarray:
     h, w = candidate.shape
     closed = ndimage.binary_closing(candidate, structure=_disk(3), iterations=1)
     closed = ndimage.binary_dilation(closed, structure=_disk(1), iterations=1)
@@ -70,9 +76,11 @@ def _component_selection(candidate: np.ndarray) -> np.ndarray:
             continue
         y0, y1 = box[0].start, box[0].stop
         x0, x1 = box[1].start, box[1].stop
+        cy = (y0 + y1) * 0.5 / h
         cx = (x0 + x1) * 0.5 / w
         height = (y1 - y0) / h
-        scored.append((math.log1p(area) + height * 28.0 - abs(cx - 0.5) * 7.0, idx))
+        value = math.log1p(area) + height * 28.0 - abs(cx - 0.5) * 7.0 - max(0.0, 0.12 - cy) * 50.0
+        scored.append((value, idx))
     if not scored:
         return np.zeros_like(candidate, dtype=bool)
     scored.sort(reverse=True)
@@ -82,22 +90,37 @@ def _component_selection(candidate: np.ndarray) -> np.ndarray:
     my0, my1 = box[0].start, box[0].stop
     mx0, mx1 = box[1].start, box[1].stop
     chosen = []
-    for score, idx in scored:
+    for value, idx in scored:
         b = objects[idx - 1]
         if b is None:
             continue
         y0, y1 = b[0].start, b[0].stop
         x0, x1 = b[1].start, b[1].stop
         near = not (x1 < mx0 - 22 or x0 > mx1 + 22 or y1 < my0 - 22 or y0 > my1 + 22)
-        if idx == main or near and score > scored[-1][0] - 2.5:
+        if idx == main or near and value > scored[-1][0] - 2.5:
             chosen.append(idx)
     result = np.isin(labels, np.asarray(chosen, dtype=np.int32))
+    result |= ndimage.binary_dilation(core, structure=_disk(5), iterations=1) & result
     result = ndimage.binary_closing(result, structure=_disk(2), iterations=1)
     result = ndimage.binary_fill_holes(result)
+
     result[: max(1, int(h * 0.076))] = False
     result[int(h * 0.985):] = False
     result[:, : max(1, int(w * 0.095))] = False
     result[:, int(w * 0.905):] = False
+
+    for row in range(min(150, h)):
+        if int(result[row].sum()) > int(w * 0.45):
+            result[max(0, row - 2):min(h, row + 3)] = False
+
+    clean_labels, _ = ndimage.label(result)
+    for clean_index, clean_box in enumerate(ndimage.find_objects(clean_labels), start=1):
+        if clean_box is None:
+            continue
+        cy0, cy1 = clean_box[0].start, clean_box[0].stop
+        area = int(np.count_nonzero(clean_labels[clean_box] == clean_index))
+        if cy1 < int(h * 0.13) and area < 1200:
+            result[clean_labels == clean_index] = False
     return result
 
 
@@ -109,7 +132,8 @@ def segment_panel(crop: Image.Image):
     blue = (b > 48) & (b - r > 17) & (b - g > 4)
     skin = (r > 55) & (r - g > 11) & (g - b > 3)
     silver = (arr.min(axis=2) > 70) & (chroma < 48)
-    core = blue | skin | silver | ((chroma > 20) & (gray > 48))
+    colored = chroma > 20
+    core = blue | skin | silver | (colored & (gray > 48))
     distance = ndimage.distance_transform_edt(~core)
     hair_raw = (gray < 44) & (distance < 35)
     candidate = core | ((gray < 34) & (distance < 28))
@@ -117,7 +141,7 @@ def segment_panel(crop: Image.Image):
     candidate[int(candidate.shape[0] * 0.985):] = False
     candidate[:, : max(1, int(candidate.shape[1] * 0.018))] = False
     candidate[:, int(candidate.shape[1] * 0.982):] = False
-    mask = _component_selection(candidate)
+    mask = _component_selection(candidate, core)
     return mask, mask & skin, mask & hair_raw
 
 
@@ -152,11 +176,9 @@ def body_landmarks(mask: np.ndarray):
                 rows.append((ext[1] - ext[0], y, ext))
         if not rows:
             return None
-        width, y, ext = (max(rows) if mode == "max" else min(rows))
+        _, y, ext = max(rows) if mode == "max" else min(rows)
         return {"left": [ext[0], float(y)], "right": [ext[1], float(y)]}
-    top_x = np.flatnonzero(mask[y0:min(y1 + 1, y0 + 4)])
-    head_top = [float((x0 + x1) * 0.5), float(y0)]
-    lm = {"headTop": head_top}
+    result = {"headTop": [float((x0 + x1) * 0.5), float(y0)]}
     for name, lo, hi, mode in (
         ("shoulder", .18, .33, "max"),
         ("waist", .42, .56, "min"),
@@ -164,18 +186,17 @@ def body_landmarks(mask: np.ndarray):
     ):
         pair = best(lo, hi, mode)
         if pair:
-            lm[name + "L"] = pair["left"]
-            lm[name + "R"] = pair["right"]
-    lower = mask[int(y0 + h * .90):y1 + 1]
-    ys, xs = np.nonzero(lower)
+            result[name + "L"] = pair["left"]
+            result[name + "R"] = pair["right"]
+    lower_y = int(y0 + h * .90)
+    ys, xs = np.nonzero(mask[lower_y:y1 + 1])
     if len(xs):
         center = (x0 + x1) * .5
-        for side, predicate in (("footL", xs < center), ("footR", xs >= center)):
-            selected = np.where(predicate)[0]
+        for key, condition in (("footL", xs < center), ("footR", xs >= center)):
+            selected = np.where(condition)[0]
             if len(selected):
-                sx, sy = xs[selected], ys[selected] + int(y0 + h * .90)
-                lm[side] = [float(np.mean(sx)), float(np.max(sy))]
-    return lm
+                result[key] = [float(np.mean(xs[selected])), float(np.max(ys[selected]) + lower_y)]
+    return result
 
 
 def face_landmarks(mask: np.ndarray, skin: np.ndarray, hair: np.ndarray, view: str):
@@ -184,7 +205,6 @@ def face_landmarks(mask: np.ndarray, skin: np.ndarray, hair: np.ndarray, view: s
         return {}
     x0, y0, x1, y1 = box
     h = max(1, y1 - y0)
-    fy1 = int(y0 + h * .30)
     center = (x0 + x1) * .5
     dark = mask & ~skin
     def mean_points(region, fallback):
@@ -220,7 +240,7 @@ def main():
     image = Image.open(args.source).convert("RGB")
     grid = detect_grid(image)
     x, y0, y1 = grid["xDividers"], grid["yTop"], grid["yBottom"]
-    metadata = {"version": "SERA_REFERENCE_OBJECTIVE_V1", "canonicalSize": [256, 512], "views": {}}
+    metadata = {"version": "SERA_REFERENCE_OBJECTIVE_V2_CLEAN_MASKS", "canonicalSize": [256, 512], "views": {}}
     for i, view in enumerate(VIEW_NAMES):
         crop = image.crop((x[i], y0, x[i+1], y1))
         silhouette, skin, hair = (resize_mask(v) for v in segment_panel(crop))

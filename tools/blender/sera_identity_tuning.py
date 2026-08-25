@@ -28,14 +28,14 @@ def _hand_group_side(name):
 
 
 def _compact_source_hands():
-    """Pre-form the source T-pose hands into compact readable fist masses.
+    """Pre-form the T-pose fingers into one broad compact fighting fist mass.
 
-    V15 already compresses the evaluated hand again after converting the source
-    arms into the runtime arms-down bind. The source fingers, however, arrive
-    spread along the T-pose arm axis and still leave claw-like silhouettes after
-    that single runtime pass. This first stage preserves the wrist/proximal palm,
-    shortens only the distal finger span, and keeps most transverse mass so the
-    second runtime pass produces a broad knuckle block instead of thin spikes.
+    The previous V16 pass was intentionally conservative and barely changed the
+    real WebGL silhouette. V17 keeps the wrist/proximal palm intact but shortens
+    and clusters the distal finger vertices much more strongly before the later
+    runtime hand compaction. The two-stage fold is still topology-preserving and
+    leaves enough transverse width for a readable knuckle block instead of a
+    needle-like claw.
     """
     body = bpy.data.objects.get('Superhero_Female')
     if not body or body.type != 'MESH':
@@ -68,7 +68,7 @@ def _compact_source_hands():
         proximal = [
             (vertex, weight)
             for vertex, weight in selected
-            if (abs(vertex.co.x) - root_abs) / span <= 0.45
+            if (abs(vertex.co.x) - root_abs) / span <= 0.50
         ] or selected
         total_weight = sum(weight for _, weight in proximal)
         center_y = sum(vertex.co.y * weight for vertex, weight in proximal) / max(1e-6, total_weight)
@@ -77,12 +77,13 @@ def _compact_source_hands():
         sign = -1.0 if sum(vertex.co.x for vertex, _ in selected) < 0.0 else 1.0
         for vertex, ownership in selected:
             t = max(0.0, min(1.0, (abs(vertex.co.x) - root_abs) / span))
-            # Leave the wrist and proximal palm almost untouched, then compact
-            # progressively toward the fingertips. Ownership softens boundaries.
-            distal = max(0.0, (t - 0.18) / 0.82)
-            distal = distal * distal * ownership
-            length_retain = 1.0 - 0.34 * distal
-            radial_retain = 1.0 - 0.10 * distal
+            # Protect the wrist and palm root, then rapidly fold the distal half
+            # inward. Cubic falloff keeps the boundary smooth while producing a
+            # visibly shorter finger envelope at the actual gameplay scale.
+            distal = max(0.0, (t - 0.14) / 0.86)
+            distal = distal * distal * (0.55 + 0.45 * distal) * ownership
+            length_retain = 1.0 - 0.58 * distal
+            radial_retain = 1.0 - 0.42 * distal
             distance = abs(vertex.co.x) - root_abs
             vertex.co.x = sign * (root_abs + distance * length_retain)
             vertex.co.y = center_y + (vertex.co.y - center_y) * radial_retain
@@ -91,12 +92,12 @@ def _compact_source_hands():
 
     if changed_sides:
         body.data.update()
-        body['seraSourceHandPose'] = 'PRECOMPACT_KNUCKLE_MASS_V16'
+        body['seraSourceHandPose'] = 'PRECOMPACT_KNUCKLE_MASS_V17'
         body['seraSourceHandPoseSides'] = ','.join(sorted(changed_sides))
 
 
 def apply():
-    # Model Quality Reconstruction Pass V2 + V16 fist pre-form
+    # Model Quality Reconstruction Pass V2 + V17 fist pre-form
     # Geometry now carries the main silhouette. Tuning is intentionally modest:
     # it should polish the authored forms, not squash them into corrective cards.
     cap = bpy.data.objects.get('SERA_HairCap')

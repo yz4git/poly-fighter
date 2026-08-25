@@ -1,0 +1,110 @@
+{
+  "version": "SERA_HERO_SPEC_V5_INDEPENDENT_LOCAL_REFERENCE",
+  "character": "SERA",
+  "heightMeters": 1.68,
+  "targets": {
+    "shoulderWidth": 0.39,
+    "waistWidth": 0.245,
+    "hipWidth": 0.335,
+    "headWidth": 0.185,
+    "headDepth": 0.205,
+    "headHeightRatio": 0.137,
+    "torsoDepth": 0.19
+  },
+  "weights": {
+    "shoulderWidth": 1.1,
+    "waistWidth": 1.0,
+    "hipWidth": 1.0,
+    "headWidth": 1.4,
+    "headDepth": 1.2,
+    "headHeightRatio": 1.3,
+    "torsoDepth": 0.8
+  },
+  "optimizer": {
+    "iterations": 8,
+    "gain": 0.52,
+    "maxScaleStep": 0.075,
+    "minImprovement": 0.0005
+  },
+  "parameterSearch": {
+    "enabled": true,
+    "parameterCount": 128,
+    "candidateBudget": 10,
+    "maxGenerations": 4,
+    "maxStaleGenerations": 2,
+    "initialStep": 0.18,
+    "minStep": 0.06,
+    "stepDecay": 0.82,
+    "minImprovement": 0.00030,
+    "maxViewSilhouetteRegression": 0.022,
+    "cacheEntries": 384,
+    "groups": {
+      "skeleton": 20,
+      "face": 36,
+      "hair": 36,
+      "arms": 12,
+      "legs": 12,
+      "costume": 12
+    }
+  },
+  "referenceObjective": {
+    "scoreThreshold": 0.78,
+    "minImprovement": 0.0005,
+    "bodyLandmarkFalloffPx": 22.0,
+    "faceLandmarkFalloffPx": 14.0,
+    "weights": {
+      "silhouette": 0.50,
+      "bodyLandmarks": 0.18,
+      "faceLandmarks": 0.12,
+      "faceSilhouette": 0.10,
+      "hairSilhouette": 0.10
+    }
+  },
+  "localReferenceObjective": {
+    "enabled": true,
+    "version": "REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2",
+    "cropSize": [512, 512],
+    "renderScale": 3,
+    "faceLandmarkFalloffPx": 44.0,
+    "faceViewWeights": {
+      "front": 0.35,
+      "three-quarter": 0.45,
+      "side": 0.20
+    },
+    "hairViewWeights": {
+      "front": 0.25,
+      "three-quarter": 0.30,
+      "side": 0.20,
+      "back": 0.25
+    },
+    "faceWeights": {
+      "silhouette": 0.65,
+      "landmarks": 0.35
+    },
+    "acceptance": {
+      "localMinImprovement": 0.0010,
+      "globalRegressionTolerance": 0.0030,
+      "crossLocalRegressionTolerance": 0.0120,
+      "nonLocalFaceRegressionTolerance": 0.0080,
+      "nonLocalHairRegressionTolerance": 0.0080
+    }
+  },
+  "style": {
+    "hairCapScale": [1.08, 1.04, 1.07],
+    "fringeScale": [1.04, 0.96, 1.03],
+    "ponytailScale": [1.05, 1.08, 1.16],
+    "skirtWidthScale": 0.9,
+    "skirtDepthScale": 0.86,
+    "forearmGuardScale": 0.9,
+    "shinGuardScale": 0.86,
+    "bootScale": 0.94,
+    "faceFeatureScale": 1.04
+  },
+  "audit": {
+    "renderWidth": 720,
+    "renderHeight": 1024,
+    "cameraLensMm": 62,
+    "includeFightCamera": true,
+    "scoreThreshold": 0.72
+  }
+}

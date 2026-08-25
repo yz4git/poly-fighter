@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare canonical SERA reference masks and landmarks from the turnaround JPEG."""
+"""Prepare global and high-resolution local SERA reference objectives."""
 from __future__ import annotations
 
 import argparse
@@ -13,6 +13,7 @@ from scipy import ndimage
 
 VIEW_NAMES = ("front", "three-quarter", "side", "back")
 CANONICAL_SIZE = (256, 512)
+LOCAL_CROP_SIZE = (512, 512)
 
 
 def _line_score(gray: np.ndarray, start: int, end: int, axis: int) -> np.ndarray:
@@ -68,14 +69,14 @@ def _component_selection(candidate: np.ndarray, core: np.ndarray) -> np.ndarray:
         return np.zeros_like(candidate, dtype=bool)
     objects = ndimage.find_objects(labels)
     scored = []
-    for idx, box in enumerate(objects, start=1):
-        if box is None:
+    for idx, box_ in enumerate(objects, start=1):
+        if box_ is None:
             continue
-        area = int(np.count_nonzero(labels[box] == idx))
+        area = int(np.count_nonzero(labels[box_] == idx))
         if area < 20:
             continue
-        y0, y1 = box[0].start, box[0].stop
-        x0, x1 = box[1].start, box[1].stop
+        y0, y1 = box_[0].start, box_[0].stop
+        x0, x1 = box_[1].start, box_[1].stop
         cy = (y0 + y1) * 0.5 / h
         cx = (x0 + x1) * 0.5 / w
         height = (y1 - y0) / h
@@ -85,10 +86,10 @@ def _component_selection(candidate: np.ndarray, core: np.ndarray) -> np.ndarray:
         return np.zeros_like(candidate, dtype=bool)
     scored.sort(reverse=True)
     main = scored[0][1]
-    box = objects[main - 1]
-    assert box is not None
-    my0, my1 = box[0].start, box[0].stop
-    mx0, mx1 = box[1].start, box[1].stop
+    box_ = objects[main - 1]
+    assert box_ is not None
+    my0, my1 = box_[0].start, box_[0].stop
+    mx0, mx1 = box_[1].start, box_[1].stop
     chosen = []
     for value, idx in scored:
         b = objects[idx - 1]
@@ -103,16 +104,13 @@ def _component_selection(candidate: np.ndarray, core: np.ndarray) -> np.ndarray:
     result |= ndimage.binary_dilation(core, structure=_disk(5), iterations=1) & result
     result = ndimage.binary_closing(result, structure=_disk(2), iterations=1)
     result = ndimage.binary_fill_holes(result)
-
     result[: max(1, int(h * 0.076))] = False
     result[int(h * 0.985):] = False
     result[:, : max(1, int(w * 0.095))] = False
     result[:, int(w * 0.905):] = False
-
     for row in range(min(150, h)):
         if int(result[row].sum()) > int(w * 0.45):
             result[max(0, row - 2):min(h, row + 3)] = False
-
     clean_labels, _ = ndimage.label(result)
     for clean_index, clean_box in enumerate(ndimage.find_objects(clean_labels), start=1):
         if clean_box is None:
@@ -157,16 +155,132 @@ def bbox(mask: np.ndarray):
     return [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
 
 
+def _clip_box(box_, width, height):
+    x0, y0, x1, y1 = box_
+    x0 = max(0, min(width - 1, int(x0)))
+    x1 = max(0, min(width - 1, int(x1)))
+    y0 = max(0, min(height - 1, int(y0)))
+    y1 = max(0, min(height - 1, int(y1)))
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+    return [x0, y0, x1, y1]
+
+
+def _head_box(silhouette: np.ndarray, body_box):
+    x0, y0, x1, y1 = body_box
+    body_h = max(1, y1 - y0 + 1)
+    head_band = np.zeros_like(silhouette, dtype=bool)
+    head_band[y0:min(silhouette.shape[0], int(y0 + body_h * .205) + 1), x0:x1 + 1] = True
+    head = bbox(silhouette & head_band)
+    if head is not None:
+        return head
+    cx = (x0 + x1) * .5
+    return [int(cx - body_h * .075), y0, int(cx + body_h * .075), int(y0 + body_h * .20)]
+
+
+def _local_boxes(silhouette: np.ndarray, skin: np.ndarray, hair: np.ndarray, view: str):
+    body = bbox(silhouette)
+    if body is None:
+        return None, None
+    bx0, by0, bx1, by1 = body
+    image_h, image_w = silhouette.shape
+    body_h = max(1, by1 - by0 + 1)
+    head = _head_box(silhouette, body)
+    hx0, hy0, hx1, hy1 = head
+    head_w = max(1, hx1 - hx0 + 1)
+    head_cx = (hx0 + hx1) * .5
+
+    face_half = max(head_w * .62, body_h * .075)
+    face_box = _clip_box([
+        head_cx - face_half,
+        by0 - body_h * .018,
+        head_cx + face_half,
+        by0 + body_h * .305,
+    ], image_w, image_h)
+
+    hair_half = max(head_w * 1.15, body_h * .12)
+    hair_box = _clip_box([
+        head_cx - hair_half,
+        by0 - body_h * .025,
+        head_cx + hair_half,
+        by0 + body_h * .40,
+    ], image_w, image_h)
+    return (None if view == "back" else face_box), hair_box
+
+
+def _local_hair_mask(hair: np.ndarray, silhouette: np.ndarray, body_box, hair_box):
+    """Keep head-connected dark components and reject dark costume/limb noise."""
+    bx0, by0, bx1, by1 = body_box
+    body_h = max(1, by1 - by0 + 1)
+    x0, y0, x1, y1 = hair_box
+    region = np.zeros_like(hair, dtype=bool)
+    region[y0:y1 + 1, x0:x1 + 1] = True
+    candidate = hair & silhouette & region
+    if not np.any(candidate):
+        return candidate
+
+    joined = ndimage.binary_dilation(candidate, structure=_disk(1), iterations=1)
+    labels, count = ndimage.label(joined)
+    if count == 0:
+        return candidate
+    seed = np.zeros_like(candidate, dtype=bool)
+    seed_y1 = min(candidate.shape[0], int(by0 + body_h * .22) + 1)
+    seed[by0:seed_y1, x0:x1 + 1] = True
+    chosen = []
+    for idx in range(1, count + 1):
+        component = labels == idx
+        if np.any(component & seed):
+            chosen.append(idx)
+    if not chosen:
+        return candidate
+    selected = np.isin(labels, np.asarray(chosen, dtype=np.int32))
+    return candidate & ndimage.binary_dilation(selected, structure=_disk(1), iterations=1)
+
+
+def _normalized_box(local_box, body_box):
+    if local_box is None or body_box is None:
+        return None
+    bx0, by0, bx1, by1 = body_box
+    bw, bh = max(1.0, bx1 - bx0 + 1.0), max(1.0, by1 - by0 + 1.0)
+    x0, y0, x1, y1 = local_box
+    return [(x0 - bx0) / bw, (y0 - by0) / bh, (x1 - bx0 + 1.0) / bw, (y1 - by0 + 1.0) / bh]
+
+
+def _crop_canvas(mask: np.ndarray, box_, size=LOCAL_CROP_SIZE):
+    target_w, target_h = size
+    x0, y0, x1, y1 = box_
+    crop = mask[y0:y1 + 1, x0:x1 + 1]
+    h, w = crop.shape
+    scale = min(target_w / max(1, w), target_h / max(1, h))
+    rw, rh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
+    resized = Image.fromarray(crop.astype(np.uint8) * 255, "L").resize((rw, rh), Image.Resampling.NEAREST)
+    canvas = Image.new("L", (target_w, target_h), 0)
+    ox, oy = (target_w - rw) // 2, (target_h - rh) // 2
+    canvas.paste(resized, (ox, oy))
+    return np.asarray(canvas) > 127, {"scale": scale, "offset": [ox, oy], "sourceSize": [w, h]}
+
+
+def _point_to_crop(point, box_, transform):
+    if point is None or box_ is None:
+        return None
+    x0, y0, _, _ = box_
+    scale = float(transform["scale"])
+    ox, oy = transform["offset"]
+    return [ox + (point[0] - x0) * scale, oy + (point[1] - y0) * scale]
+
+
 def _row_extent(mask: np.ndarray, y: int):
     xs = np.flatnonzero(mask[max(0, min(mask.shape[0] - 1, y))])
     return None if not len(xs) else (float(xs.min()), float(xs.max()))
 
 
 def body_landmarks(mask: np.ndarray):
-    box = bbox(mask)
-    if box is None:
+    box_ = bbox(mask)
+    if box_ is None:
         return {}
-    x0, y0, x1, y1 = box
+    x0, y0, x1, y1 = box_
     h = max(1, y1 - y0)
     def best(lo, hi, mode):
         rows = []
@@ -179,11 +293,7 @@ def body_landmarks(mask: np.ndarray):
         _, y, ext = max(rows) if mode == "max" else min(rows)
         return {"left": [ext[0], float(y)], "right": [ext[1], float(y)]}
     result = {"headTop": [float((x0 + x1) * 0.5), float(y0)]}
-    for name, lo, hi, mode in (
-        ("shoulder", .18, .33, "max"),
-        ("waist", .42, .56, "min"),
-        ("hip", .54, .69, "max"),
-    ):
+    for name, lo, hi, mode in (("shoulder", .18, .33, "max"), ("waist", .42, .56, "min"), ("hip", .54, .69, "max")):
         pair = best(lo, hi, mode)
         if pair:
             result[name + "L"] = pair["left"]
@@ -200,18 +310,17 @@ def body_landmarks(mask: np.ndarray):
 
 
 def face_landmarks(mask: np.ndarray, skin: np.ndarray, hair: np.ndarray, view: str):
-    box = bbox(mask)
-    if box is None or view == "back":
+    box_ = bbox(mask)
+    if box_ is None or view == "back":
         return {}
-    x0, y0, x1, y1 = box
+    x0, y0, x1, y1 = box_
     h = max(1, y1 - y0)
     center = (x0 + x1) * .5
     dark = mask & ~skin
     def mean_points(region, fallback):
         ys, xs = np.nonzero(region)
         return fallback if not len(xs) else [float(xs.mean()), float(ys.mean())]
-    eye_band = np.zeros_like(mask)
-    eye_band[int(y0 + h*.08):int(y0 + h*.18)+1, x0:x1+1] = True
+    eye_band = np.zeros_like(mask); eye_band[int(y0 + h*.08):int(y0 + h*.18)+1, x0:x1+1] = True
     eyes = dark & eye_band & ~hair
     left = eyes.copy(); left[:, int(center):] = False
     right = eyes.copy(); right[:, :int(center)] = False
@@ -240,20 +349,43 @@ def main():
     image = Image.open(args.source).convert("RGB")
     grid = detect_grid(image)
     x, y0, y1 = grid["xDividers"], grid["yTop"], grid["yBottom"]
-    metadata = {"version": "SERA_REFERENCE_OBJECTIVE_V2_CLEAN_MASKS", "canonicalSize": [256, 512], "views": {}}
+    metadata = {
+        "version": "SERA_REFERENCE_OBJECTIVE_V3_HIGH_RES_LOCAL_CROPS",
+        "canonicalSize": list(CANONICAL_SIZE),
+        "localCropSize": list(LOCAL_CROP_SIZE),
+        "views": {},
+    }
     for i, view in enumerate(VIEW_NAMES):
         crop = image.crop((x[i], y0, x[i+1], y1))
-        silhouette, skin, hair = (resize_mask(v) for v in segment_panel(crop))
+        native_silhouette, native_skin, native_hair = segment_panel(crop)
+        silhouette, skin, hair = (resize_mask(v) for v in (native_silhouette, native_skin, native_hair))
         save_mask(silhouette, out / f"reference-{view}-silhouette.png")
         save_mask(skin, out / f"reference-{view}-skin.png")
         save_mask(hair, out / f"reference-{view}-hair.png")
+        native_body_box = bbox(native_silhouette)
+        native_face_lm = face_landmarks(native_silhouette, native_skin, native_hair, view)
+        face_box, hair_box = _local_boxes(native_silhouette, native_skin, native_hair, view)
+        local = {}
+        if face_box is not None:
+            face_local_source = native_skin.copy()
+            face_canvas, face_transform = _crop_canvas(face_local_source, face_box)
+            save_mask(face_canvas, out / f"reference-{view}-face-local.png")
+            local["face"] = {
+                "normalizedBox": _normalized_box(face_box, native_body_box),
+                "landmarks": {k: _point_to_crop(v, face_box, face_transform) for k, v in native_face_lm.items()},
+            }
+        local_hair = _local_hair_mask(native_hair, native_silhouette, native_body_box, hair_box)
+        hair_canvas, _ = _crop_canvas(local_hair, hair_box)
+        save_mask(hair_canvas, out / f"reference-{view}-hair-local.png")
+        local["hair"] = {"normalizedBox": _normalized_box(hair_box, native_body_box)}
         metadata["views"][view] = {
             "bbox": bbox(silhouette),
             "bodyLandmarks": body_landmarks(silhouette),
             "faceLandmarks": face_landmarks(silhouette, skin, hair, view),
+            "localCrops": local,
         }
     (out / "reference-objective.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    print("SERA_REFERENCE_OBJECTIVE_OK", out)
+    print("SERA_REFERENCE_OBJECTIVE_V3_LOCAL_CROPS_OK", out)
 
 if __name__ == "__main__":
     main()

@@ -21,6 +21,22 @@ test("SERA gameplay selects the Blender conformal character on the canonical com
   disposeFighterVisual(visual);
 });
 
+test("V16 reference pose is idempotent when a static Model View frame is rendered repeatedly", () => {
+  const visual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");
+  const anchor = visual.root.getObjectByName("v11-reference-pose-anchor");
+  assert.ok(anchor);
+  const applyReferencePose = anchor.onBeforeRender as unknown as () => void;
+  const before = visual.hips.position.y;
+  applyReferencePose();
+  const afterFirstFrame = visual.hips.position.y;
+  applyReferencePose();
+  const afterSecondFrame = visual.hips.position.y;
+  assert.notEqual(afterFirstFrame, before, "first presentation pose application should still adjust the hips");
+  assert.equal(afterSecondFrame, afterFirstFrame, "unchanged static frames must not keep sinking the hips");
+  assert.equal(visual.root.userData.v11PoseStabilityGuard, "SKIP_UNCHANGED_BONE_STATE_V1");
+  disposeFighterVisual(visual);
+});
+
 test("V16 presentation stance activates for the Blender runtime ready-state contract", () => {
   const stance = readFileSync(new URL("../src/game/visual-v10-stance.ts", import.meta.url), "utf8");
   assert.match(stance, /blenderRuntimeAssetState/);

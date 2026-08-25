@@ -1,5 +1,5 @@
 {
-  "prototype": "SERA_QUATERNIUS_CONFORMAL_V8",
+  "prototype": "SERA_QUATERNIUS_CONFORMAL_V12_PART_AWARE_RUNTIME",
   "source": "Quaternius Superhero Female FullBody",
   "sourceLicense": "CC0 1.0 Universal",
   "heightMeters": 1.68,
@@ -7,10 +7,12 @@
   "bodyTriangles": 12812,
   "armature": "Armature",
   "runtimeAsset": "sera-blender-runtime.glb",
-  "runtimeAssetBytes": 187536,
+  "runtimeAssetBytes": 211172,
+  "runtimePartCount": 47,
   "runtimeSwitched": true,
   "runtimePalette": "material primitives converted to vertex colors in browser",
-  "runtimeIntegration": "BLENDER_CONFORMAL_GLB_CANONICAL_RIG",
+  "runtimeIntegration": "BLENDER_CONFORMAL_GLB_CANONICAL_RIG_PART_AWARE",
+  "runtimePartIdentity": "Runtime_* mesh names retained for rigid authored-part skinning",
   "gameplayRig": "POLY FIGHTER V10-compatible canonical rig and IK",
-  "design": "coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette"
+  "design": "coherent rigged source body with direct head shaping, named authored equipment, narrow 3D fringe and canonical runtime reskinning"
 }

@@ -60,6 +60,10 @@ export function assertBlenderRuntimeAuditState(state) {
   if (!(state.metadata.rigidAuthoredVertices > 0) || !state.metadata.authoredPartCounts) {
     throw new Error(`SERA authored-part attachments were not preserved: ${JSON.stringify(state)}`);
   }
+  const sourceRigArmRegionCodes = [8, 9, 10, 11, 12, 13, 14, 15];
+  if (!sourceRigArmRegionCodes.every((code) => Number(state.metadata.authoredPartCounts[code] ?? 0) > 0)) {
+    throw new Error(`SERA source-rig arm regions were not preserved: ${JSON.stringify(state)}`);
+  }
   if (!(state.authoredPieces > 0)) {
     throw new Error(`SERA runtime GLB did not expose authored pieces: ${JSON.stringify(state)}`);
   }

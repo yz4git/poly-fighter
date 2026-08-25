@@ -45,8 +45,8 @@ python3 - "$REFERENCE_OBJECTIVE_DIR/reference-objective.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding='utf-8') as fp:
     meta=json.load(fp)
-if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS':
-    raise SystemExit('geometry-anchored tight local Reference crop refinement did not run')
+if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V8_SEMANTIC_MASK_LOCAL_WINDOWS':
+    raise SystemExit('symmetric semantic-mask local Reference crop refinement did not run')
 for view, data in meta['views'].items():
     for kind, entry in data.get('localCrops', {}).items():
         ref_box=entry.get('referenceNormalizedBox')
@@ -58,8 +58,8 @@ for view, data in meta['views'].items():
             if width > max_width or height > .30:
                 raise SystemExit(f'{view} face local crop too broad: {ref_box}')
             anchor=entry.get('normalizedBox', {})
-            if anchor.get('anchorMode') != 'faceLandmarks' or anchor.get('kind') != 'face':
-                raise SystemExit(f'{view} face generated crop is not landmark anchored')
+            if anchor.get('anchorMode') != 'semanticMaskLandmarks' or anchor.get('kind') != 'face':
+                raise SystemExit(f'{view} face generated crop is not semantic-mask anchored')
         if kind == 'hair':
             if view == 'side':
                 max_width, max_height = 1.20, .42
@@ -73,8 +73,8 @@ for view, data in meta['views'].items():
                 raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
             if view != 'back':
                 anchor=entry.get('normalizedBox', {})
-                if anchor.get('anchorMode') != 'faceLandmarks' or anchor.get('kind') != 'hair':
-                    raise SystemExit(f'{view} hair generated crop is not landmark anchored')
+                if anchor.get('anchorMode') != 'semanticMaskLandmarks' or anchor.get('kind') != 'hair':
+                    raise SystemExit(f'{view} hair generated crop is not semantic-mask anchored')
 print('SERA_LOCAL_CROP_SANITY_OK')
 PY
 
@@ -141,6 +141,8 @@ if report['objectiveType'] != 'REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2':
     raise SystemExit('SERA Hero V5 is not using independent local Reference objectives')
 if report['referenceObjective'].get('objectiveVersion') != 'REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2':
     raise SystemExit('SERA Hero V5 local objective version missing from render result')
+if report['referenceObjective'].get('localAnchorMode') != 'semanticMaskLandmarks':
+    raise SystemExit('SERA Hero local objective did not use symmetric semantic-mask landmarks')
 if report['parameterCount'] != 128 or state['parameterCount'] != 128:
     raise SystemExit('SERA Hero V5 parameter search must retain exactly 128 dimensions')
 if report['parameterSpaceVersion'] != 'SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM':

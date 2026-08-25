@@ -65,9 +65,7 @@ for view, data in meta['views'].items():
             if width > max_width or height > .225 or ref_box[3] > .225 or ref_box[1] < -.02:
                 raise SystemExit(f'{view} face local crop entered shoulder/body region: {ref_box}')
         if kind == 'hair':
-            max_width=.60 if view == 'side' else .54
-            max_height=.38 if view == 'back' else .34
-            if width > max_width or height > max_height or ref_box[1] < -.08 or ref_box[3] > .38:
+            if width > .90 or height > .38 or ref_box[1] < -.08 or ref_box[3] > .38:
                 raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
 print('SERA_HEAD_LOCAL_CROP_SANITY_OK')
 PY

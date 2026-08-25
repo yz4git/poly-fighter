@@ -6,6 +6,7 @@ const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 const panel = readFileSync(new URL('../src/components/model-viewer-panel.tsx', import.meta.url), 'utf8');
 const viewer = readFileSync(new URL('../src/game/model-viewer.ts', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/game/visual-entry.ts', import.meta.url), 'utf8');
+const referencePose = readFileSync(new URL('../src/game/visual-v11-pose.ts', import.meta.url), 'utf8');
 
 test('title screen exposes a dedicated Model View screen', () => {
   assert.match(page, /"MODEL_VIEW"/);
@@ -34,4 +35,12 @@ test('Model View is touch-first and disposes WebGL resources', () => {
   assert.match(panel, /RESET VIEW/);
   assert.match(panel, /DRAG TO ORBIT/);
   assert.match(panel, /PINCH TO ZOOM/);
+});
+
+test('SERA reference pose does not accumulate on unchanged Model View frames', () => {
+  assert.match(referencePose, /lastAppliedPoseState/);
+  assert.match(referencePose, /poseMatchesLastAppliedState/);
+  assert.match(referencePose, /if \(poseMatchesLastAppliedState\(\)\) return;/);
+  assert.match(referencePose, /captureAppliedPoseState\(\)/);
+  assert.match(referencePose, /SKIP_UNCHANGED_BONE_STATE_V1/);
 });

@@ -70,7 +70,7 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   return SERA_AUTHORED_PART.HEURISTIC;
 }
 
-/** Canonical V9 segment centers used by the production IK rig at bind time. */
+/** Historical V9 segment centers retained for diagnostics/regression comparison. */
 export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly [number, number, number] | null {
   switch (part) {
     case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION: return [-0.134, 0.738, 0.010];
@@ -86,12 +86,10 @@ export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly 
 }
 
 /**
- * How strongly each authored arm piece should be pulled toward the old V9 bind
- * centroid. The Blender runtime is already an anatomically continuous arms-down
- * body. Moving every split arm region 100% to an independently-authored V9
- * centroid created visible gaps at shoulder/elbow/wrist. Retaining most source
- * placement keeps the original shared boundaries overlapping while still giving
- * the production IK pivots a modest bind-frame correction.
+ * The current Blender runtime already freezes a coherent arms-down anatomical
+ * bind. Any per-region translation breaks the shared source boundaries. Keep
+ * the V9 target table above only as diagnostics; V18 intentionally retains the
+ * Blender source placement for every organic arm/equipment region.
  */
 export function seraArmBindRetargetStrength(part: SeraAuthoredPartCode): number {
   switch (part) {
@@ -101,24 +99,18 @@ export function seraArmBindRetargetStrength(part: SeraAuthoredPartCode): number 
     case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION:
     case SERA_AUTHORED_PART.LEFT_HAND_REGION:
     case SERA_AUTHORED_PART.RIGHT_HAND_REGION:
-      return 0.30;
     case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD:
     case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD:
-      return 0.35;
+      return 0;
     default:
       return 0;
   }
 }
 
 /**
- * Apply a continuity-preserving bind correction to Blender arm regions.
- *
- * The old V7 runtime translated each split arm piece all the way to a separate
- * V9 centroid. On the current Quaternius runtime that moved upper-arm centers
- * about 0.045 normalized height outward while the shoulder region stayed put;
- * hand centers were also moved about 0.08 downward. That was large enough to
- * visibly detach the anatomy before animation even started. V17 only applies a
- * fraction of that correction, preserving source overlap across split borders.
+ * Preserve Blender-authored arm continuity. The centroid audit remains here so
+ * future runtime sources can opt into a correction without reintroducing the
+ * V7/V17 shoulder, elbow and wrist gaps.
  */
 function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
@@ -164,7 +156,7 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
     );
   }
   position.needsUpdate = true;
-  geometry.userData.armBindRetarget = "SOURCE_CONTINUITY_30_V17";
+  geometry.userData.armBindRetarget = "BLENDER_SOURCE_NATIVE_V18";
   geometry.userData.armBindRetargetOffsets = Object.fromEntries(
     [...offsets.entries()].map(([code, offset]) => [String(code), offset.toArray()]),
   );
@@ -289,7 +281,7 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V8_CONTINUITY_RETARGET";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V9_SOURCE_NATIVE";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
@@ -364,7 +356,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V8_CONTINUITY_RETARGET";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V9_SOURCE_NATIVE";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

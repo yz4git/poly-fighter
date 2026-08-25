@@ -184,6 +184,7 @@ export function solveSeraRuntimeInfluences(
   y: number,
   boneIndices: Record<string, number>,
   semantic: SeraRuntimeSemantic = "unknown",
+  x = 0,
 ): SeraInfluence[] {
   const side = region.startsWith("LEFT") ? "LEFT" : region.startsWith("RIGHT") ? "RIGHT" : null;
   switch (region) {
@@ -215,7 +216,8 @@ export function solveSeraRuntimeInfluences(
     case "RIGHT_SHOULDER": {
       const p = SERA_SKIN_PROFILE.shoulder;
       const arm = boneForSide(boneIndices, side!, "UpperArm");
-      const armWeight = p.armBase + (1 - smoothBlend(y, p.blendStartY, p.blendEndY)) * p.armLowerBonus;
+      const radial = smoothBlend(Math.abs(x), p.radialStartX, p.radialEndX);
+      const armWeight = THREE.MathUtils.lerp(p.armBase, p.armOuterMax, radial);
       return normalizeSeraInfluences([[boneIndices.chest, 1 - armWeight], [arm, armWeight]]);
     }
     case "LEFT_UPPER_ARM":
@@ -308,7 +310,13 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
       semantic,
     );
     const region = authoredRegion(part) ?? heuristicRegion;
-    const influences = forced ?? solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices, semantic);
+    const influences = forced ?? solveSeraRuntimeInfluences(
+      region,
+      position.getY(vertex),
+      boneIndices,
+      semantic,
+      position.getX(vertex),
+    );
 
     diagnostics.semanticCounts[semantic] = (diagnostics.semanticCounts[semantic] ?? 0) + 1;
     diagnostics.regionCounts[region] = (diagnostics.regionCounts[region] ?? 0) + 1;
@@ -329,7 +337,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
   geometry.deleteAttribute("seraPart");
-  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V3_PART_AWARE";
+  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V4_SOURCE_SEAMS";
   geometry.userData.skinningDiagnostics = diagnostics;
   return diagnostics;
 }

@@ -5,7 +5,11 @@ import type { FighterDefinition } from "./types";
 import type { FighterVisual, FighterVisualQuality } from "./visual";
 import { auditSeraSkinAttributes } from "./visual-blender-diagnostics";
 import { createSeraRuntimeMetadata } from "./visual-blender-metadata";
-import { assignSeraBlenderSkinning } from "./visual-blender-skinning";
+import {
+  assignSeraBlenderSkinning,
+  SERA_AUTHORED_PART,
+  type SeraAuthoredPartCode,
+} from "./visual-blender-skinning";
 import { createFemaleV9Visual } from "./visual-v9";
 
 export const SERA_BLENDER_RUNTIME_ASSET_URL = "/models/sera-blender-runtime.glb";
@@ -18,6 +22,30 @@ function materialColor(material: THREE.Material | undefined): THREE.Color {
     if (value?.isColor) return value.clone();
   }
   return new THREE.Color(0xffffff);
+}
+
+function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
+  const name = rawName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
+  if (name === "SERA_Guard_l") return SERA_AUTHORED_PART.LEFT_FOREARM_GUARD;
+  if (name === "SERA_Guard_r") return SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD;
+  if (name === "SERA_Shin_l") return SERA_AUTHORED_PART.LEFT_SHIN_GUARD;
+  if (name === "SERA_Shin_r") return SERA_AUTHORED_PART.RIGHT_SHIN_GUARD;
+  if (name === "SERA_BootFoot_l") return SERA_AUTHORED_PART.LEFT_BOOT;
+  if (name === "SERA_BootFoot_r") return SERA_AUTHORED_PART.RIGHT_BOOT;
+  if (
+    name.startsWith("SERA_Hair")
+    || name.startsWith("SERA_Fringe")
+    || name.startsWith("SERA_SideHair")
+    || name.startsWith("SERA_NapeHair")
+    || name.startsWith("SERA_BackHair")
+    || name.startsWith("SERA_Pony")
+    || name.startsWith("SERA_TempleLock")
+    || name.startsWith("SERA_Brow")
+    || name.startsWith("SERA_Eye")
+    || name === "SERA_NosePlane"
+    || name === "SERA_Lip"
+  ) return SERA_AUTHORED_PART.HEAD;
+  return SERA_AUTHORED_PART.HEURISTIC;
 }
 
 function bakeMaterialColors(source: THREE.Mesh): THREE.BufferGeometry {
@@ -46,13 +74,20 @@ function bakeMaterialColors(source: THREE.Mesh): THREE.BufferGeometry {
     }
   }
 
+  const partCode = authoredPartFromName(source.name);
+  const authoredParts = new Float32Array(position.count);
+  if (partCode !== SERA_AUTHORED_PART.HEURISTIC) authoredParts.fill(partCode);
+
   geometry.clearGroups();
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("seraPart", new THREE.BufferAttribute(authoredParts, 1));
   geometry.deleteAttribute("skinIndex");
   geometry.deleteAttribute("skinWeight");
   geometry.deleteAttribute("uv");
   geometry.deleteAttribute("uv1");
   geometry.deleteAttribute("tangent");
+  geometry.userData.seraRuntimeSourceName = source.name;
+  geometry.userData.seraAuthoredPart = partCode;
   if (geometry !== transformed) transformed.dispose();
   return geometry;
 }
@@ -72,6 +107,9 @@ function collectRuntimePieces(root: THREE.Object3D): THREE.BufferGeometry[] {
 function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   const pieces = collectRuntimePieces(root);
   const primitiveCount = pieces.length;
+  const authoredPieceCount = pieces.filter(
+    (piece) => Number(piece.userData.seraAuthoredPart ?? 0) !== SERA_AUTHORED_PART.HEURISTIC,
+  ).length;
   const geometry = mergeGeometries(pieces, false);
   pieces.forEach((piece) => piece.dispose());
   if (!geometry) throw new Error("SERA_BLENDER_RUNTIME_GLB_MERGE_FAILED");
@@ -98,10 +136,11 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V4";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V5_PART_AWARE";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
+  geometry.userData.authoredPieceCount = authoredPieceCount;
   return geometry;
 }
 
@@ -141,7 +180,7 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.bodyMesh.bind(visual.rig.skeleton, visual.bodyMesh.bindMatrix);
   visual.bodyMesh.normalizeSkinWeights();
   visual.bodyMesh.name = "sera-blender-runtime-skinned-mesh";
-  visual.bodyMesh.userData.reconstruction = "blender-conformal-runtime-glb";
+  visual.bodyMesh.userData.reconstruction = "blender-conformal-runtime-glb-part-aware";
   oldGeometry.dispose();
   disposeMaterial(oldMaterial);
 
@@ -154,6 +193,7 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.root.userData.blenderRuntimeAssetState = "ready";
   visual.root.userData.skinningVersion = runtimeMetadata.skinningVersion;
   visual.root.userData.blenderRuntimePrimitiveMerge = source.userData.sourcePrimitiveCount ?? null;
+  visual.root.userData.blenderRuntimeAuthoredPieces = source.userData.authoredPieceCount ?? null;
   visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
   visual.root.userData.blenderWeightAudit = weightAudit;
   visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
@@ -167,7 +207,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V4";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V5_PART_AWARE";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

@@ -40,18 +40,23 @@ def style_face(objects):
 
 
 def export_runtime_mesh(output):
-    """Export canonical SERA geometry without baking audit/IK pose deformation.
+    """Export canonical SERA geometry while retaining authored part identities.
 
     The Hero reference objective deliberately poses the source armature to match
-    the turnaround. The game, however, supplies its own canonical combat rig.
-    Therefore the source body is copied from its edited mesh datablock (rest
-    geometry), not from the evaluated armature result. Procedural SERA overlays
-    are copied as evaluated static meshes because they do not carry the source
-    armature modifier.
+    the turnaround. The game supplies its own canonical combat rig, so the body
+    is copied from its edited rest mesh datablock and procedural overlays are
+    copied as evaluated static geometry.
+
+    V12 deliberately does *not* join Runtime_* objects before GLB export. Object
+    names such as Runtime_SERA_Guard_l survive into Three.js, allowing the game
+    to rigid-skin authored guards, shin shells, boots and head pieces to their
+    intended canonical bones instead of guessing from color/position alone.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    sources = [obj for obj in bpy.context.scene.objects
-               if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))]
+    sources = [
+        obj for obj in bpy.context.scene.objects
+        if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))
+    ]
     if not sources:
         raise RuntimeError('no SERA runtime mesh sources found')
 
@@ -61,30 +66,31 @@ def export_runtime_mesh(output):
             mesh = source.data.copy()
         else:
             evaluated = source.evaluated_get(depsgraph)
-            mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=False, depsgraph=depsgraph)
+            mesh = bpy.data.meshes.new_from_object(
+                evaluated,
+                preserve_all_data_layers=False,
+                depsgraph=depsgraph,
+            )
         copy = bpy.data.objects.new('Runtime_' + source.name, mesh)
         copy.matrix_world = source.matrix_world.copy()
+        copy['seraRuntimeSourcePart'] = source.name
+        bone_follow = source.get('seraBoneFollow')
+        if bone_follow:
+            copy['seraRuntimeBoneFollow'] = str(bone_follow)
         bpy.context.collection.objects.link(copy)
         for material_slot in source.material_slots:
             if material_slot.material and material_slot.material.name not in [m.name for m in mesh.materials if m]:
                 mesh.materials.append(material_slot.material)
         for poly in mesh.polygons:
             poly.use_smooth = False
+        for group in list(copy.vertex_groups):
+            copy.vertex_groups.remove(group)
         copies.append(copy)
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in copies:
         obj.select_set(True)
     bpy.context.view_layer.objects.active = copies[0]
-    bpy.ops.object.join()
-    runtime = bpy.context.view_layer.objects.active
-    runtime.name = 'SERA_RuntimeMesh'
-    for group in list(runtime.vertex_groups):
-        runtime.vertex_groups.remove(group)
-    try:
-        bpy.ops.object.material_slot_remove_unused()
-    except Exception:
-        pass
 
     path = os.path.join(output, 'sera-blender-runtime.glb')
     bpy.ops.export_scene.gltf(
@@ -100,11 +106,16 @@ def export_runtime_mesh(output):
         export_normals=False,
         export_texcoords=False,
         export_colors=False,
+        export_extras=True,
     )
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise RuntimeError('SERA runtime GLB export failed')
 
-    bpy.data.objects.remove(runtime, do_unlink=True)
+    for obj in copies:
+        mesh = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
     return os.path.getsize(path)
 
 
@@ -134,33 +145,46 @@ def main():
     tune_identity()
 
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(output, 'sera-blender-prototype.blend'))
-    bpy.ops.export_scene.gltf(filepath=os.path.join(output, 'sera-blender-prototype.glb'), export_format='GLB', export_apply=False, export_yup=True, export_cameras=False, export_lights=False)
+    bpy.ops.export_scene.gltf(
+        filepath=os.path.join(output, 'sera-blender-prototype.glb'),
+        export_format='GLB',
+        export_apply=False,
+        export_yup=True,
+        export_cameras=False,
+        export_lights=False,
+    )
     runtime_bytes = export_runtime_mesh(output)
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
     metrics = {
-        'prototype':'SERA_QUATERNIUS_CONFORMAL_V8',
-        'source':'Quaternius Superhero Female FullBody',
-        'sourceLicense':'CC0 1.0 Universal',
-        'heightMeters':1.68,
-        'bodyVertices':len(body.data.vertices),
-        'bodyTriangles':triangles,
-        'armature':armature.name,
-        'runtimeAsset':'sera-blender-runtime.glb',
-        'runtimeAssetBytes':runtime_bytes,
-        'runtimeSwitched':True,
-        'runtimePalette':'material primitives converted to vertex colors in browser',
-        'runtimeIntegration':'BLENDER_CONFORMAL_GLB_CANONICAL_RIG',
-        'gameplayRig':'POLY FIGHTER V10-compatible canonical rig and IK',
-        'design':'coherent rigged source body with direct head shaping, narrow 3D fringe, bone-anchored boot shell, tightened costume silhouette'
+        'prototype': 'SERA_QUATERNIUS_CONFORMAL_V12_PART_AWARE_RUNTIME',
+        'source': 'Quaternius Superhero Female FullBody',
+        'sourceLicense': 'CC0 1.0 Universal',
+        'heightMeters': 1.68,
+        'bodyVertices': len(body.data.vertices),
+        'bodyTriangles': triangles,
+        'armature': armature.name,
+        'runtimeAsset': 'sera-blender-runtime.glb',
+        'runtimeAssetBytes': runtime_bytes,
+        'runtimeSwitched': True,
+        'runtimePalette': 'material primitives converted to vertex colors in browser',
+        'runtimeIntegration': 'BLENDER_CONFORMAL_GLB_CANONICAL_RIG_PART_AWARE',
+        'runtimePartIdentity': 'Runtime_* mesh names retained for rigid authored-part skinning',
+        'gameplayRig': 'POLY FIGHTER V10-compatible canonical rig and IK',
+        'design': 'coherent rigged source body with direct head shaping, named authored equipment, narrow 3D fringe and canonical runtime reskinning',
     }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
         handle.write('\n')
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
-        handle.write('Free female base remains coherent and rigged. The compact material-palette sera-blender-runtime.glb is staged into POLY FIGHTER, merged to vertex colors, and reskinned to the canonical combat rig at runtime.\n')
-    print('SERA_CONFORMAL_V8_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes)
+        handle.write(
+            'Free female base remains coherent and rigged. The compact material-palette '
+            'sera-blender-runtime.glb retains Runtime_* part identities so authored guards, '
+            'shin shells, boots and head pieces can be rigidly assigned to canonical combat '
+            'bones before the remaining body vertices use heuristic skinning.\n'
+        )
+    print('SERA_CONFORMAL_V12_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes, 'PARTS', len(copies) if False else len(sources))
 
 
 if __name__ == '__main__':

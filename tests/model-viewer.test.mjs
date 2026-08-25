@@ -7,6 +7,7 @@ const panel = readFileSync(new URL('../src/components/model-viewer-panel.tsx', i
 const viewer = readFileSync(new URL('../src/game/model-viewer.ts', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/game/visual-entry.ts', import.meta.url), 'utf8');
 const referencePose = readFileSync(new URL('../src/game/visual-v11-pose.ts', import.meta.url), 'utf8');
+const audit = readFileSync(new URL('../scripts/capture-model-view-audit.mjs', import.meta.url), 'utf8');
 
 test('title screen exposes a dedicated Model View screen', () => {
   assert.match(page, /"MODEL_VIEW"/);
@@ -43,4 +44,22 @@ test('SERA reference pose does not accumulate on unchanged Model View frames', (
   assert.match(referencePose, /if \(poseMatchesLastAppliedState\(\)\) return;/);
   assert.match(referencePose, /captureAppliedPoseState\(\)/);
   assert.match(referencePose, /SKIP_UNCHANGED_BONE_STATE_V1/);
+});
+
+test('Model View grounds the visible soles instead of the invisible pose anchor', () => {
+  assert.match(viewer, /getSoleContactPoint/);
+  assert.match(viewer, /syncFloorToSoles/);
+  assert.match(viewer, /grounding\.minimumY - 0\.006/);
+  assert.match(viewer, /floorToLowestSoleGap/);
+});
+
+test('SERA model-quality audit captures deterministic four-direction Model View renders', () => {
+  assert.match(viewer, /SERA_MODEL_QUALITY_V1/);
+  assert.match(viewer, /__polyFighterSetAuditView/);
+  assert.match(viewer, /__polyFighterGetAuditState/);
+  for (const view of ['front', 'three-quarter', 'side', 'back']) {
+    assert.ok(audit.includes(`model-view-sera-${view}.png`), `missing ${view} audit render`);
+  }
+  assert.match(audit, /floorToLowestSoleGap/);
+  assert.match(audit, /SERA MODEL VIEW grounding drift/);
 });

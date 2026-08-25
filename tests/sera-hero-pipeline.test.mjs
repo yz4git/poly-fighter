@@ -160,9 +160,12 @@ test('V15 runtime export compacts both hand regions without touching Hero refere
   assert.match(conformal, /return runtime_bytes/);
   const splitIndex = conformal.indexOf('def split_evaluated_body');
   const compactCallIndex = conformal.indexOf('compact_runtime_hand_mesh(mesh)', splitIndex);
-  const authoredSaveIndex = conformal.indexOf("bpy.ops.wm.save_as_mainfile", splitIndex);
   assert.ok(compactCallIndex > splitIndex, 'fist deformation belongs to runtime split/export');
-  assert.ok(compactCallIndex < authoredSaveIndex || authoredSaveIndex === -1, 'runtime fist deformation must not mutate the authored Hero scene before reference save');
+  const mainIndex = conformal.indexOf('def main():');
+  const authoredSaveIndex = conformal.indexOf("bpy.ops.wm.save_as_mainfile", mainIndex);
+  const runtimeExportIndex = conformal.indexOf('runtime_bytes = export_runtime_mesh(output)', mainIndex);
+  assert.ok(mainIndex >= 0 && authoredSaveIndex > mainIndex && runtimeExportIndex > authoredSaveIndex,
+    'authored Hero scene must be saved before runtime-only fist deformation executes');
 });
 
 test('V5 pipeline reports independent objectives and keeps T-pose dimensions diagnostic-only', () => {

@@ -21,6 +21,13 @@ test("SERA gameplay selects the Blender conformal character on the canonical com
   disposeFighterVisual(visual);
 });
 
+test("V16 presentation stance activates for the Blender runtime ready-state contract", () => {
+  const stance = readFileSync(new URL("../src/game/visual-v10-stance.ts", import.meta.url), "utf8");
+  assert.match(stance, /blenderRuntimeAssetState/);
+  assert.match(stance, /reconstructionAssetState/);
+  assert.match(stance, /V16_COMPACT_CHIN_GUARD_A_B/);
+});
+
 test("V10 reconstruction pipeline remains available as reference data", () => {
   const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
   const polish = readFileSync(new URL("../src/game/visual-v10-polish.ts", import.meta.url), "utf8");

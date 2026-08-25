@@ -65,8 +65,8 @@ function applyIdleReference(visual: FighterVisual): void {
   b.spineUpper.rotation.y -= 0.075;
   b.chest.rotation.y += 0.060;
   b.head.rotation.y -= 0.030;
-  solveReferenceArm(visual, -1, new THREE.Vector3(-0.135, 0.830, 0.135), new THREE.Vector3(-0.245, 0.750, 0.045));
-  solveReferenceArm(visual, 1, new THREE.Vector3(0.170, 0.590, 0.100), new THREE.Vector3(0.255, 0.655, 0.030));
+  solveReferenceArm(visual, -1, new THREE.Vector3(-0.105, 0.715, 0.150), new THREE.Vector3(-0.185, 0.665, 0.050));
+  solveReferenceArm(visual, 1, new THREE.Vector3(0.115, 0.665, 0.125), new THREE.Vector3(0.190, 0.620, 0.045));
 }
 
 function applyGuardReference(visual: FighterVisual): void {
@@ -75,8 +75,8 @@ function applyGuardReference(visual: FighterVisual): void {
   b.spineUpper.rotation.y -= 0.060;
   b.chest.rotation.y += 0.045;
   b.head.rotation.x -= 0.020;
-  solveReferenceArm(visual, -1, new THREE.Vector3(-0.120, 0.805, 0.135), new THREE.Vector3(-0.230, 0.745, 0.050));
-  solveReferenceArm(visual, 1, new THREE.Vector3(0.105, 0.775, 0.180), new THREE.Vector3(0.220, 0.710, 0.065));
+  solveReferenceArm(visual, -1, new THREE.Vector3(-0.100, 0.735, 0.155), new THREE.Vector3(-0.190, 0.675, 0.055));
+  solveReferenceArm(visual, 1, new THREE.Vector3(0.100, 0.715, 0.165), new THREE.Vector3(0.190, 0.655, 0.055));
 }
 
 function applyPunchReference(visual: FighterVisual): void {
@@ -91,8 +91,8 @@ function applyPunchReference(visual: FighterVisual): void {
   solveReferenceArm(
     visual,
     supportSide,
-    new THREE.Vector3(supportSide * 0.110, 0.775, 0.130),
-    new THREE.Vector3(supportSide * 0.225, 0.710, 0.045),
+    new THREE.Vector3(supportSide * 0.095, 0.715, 0.145),
+    new THREE.Vector3(supportSide * 0.185, 0.655, 0.050),
   );
 }
 
@@ -104,12 +104,13 @@ function applyKickReference(visual: FighterVisual): void {
   b.spineLower.rotation.x -= 0.055;
   b.spineUpper.rotation.x -= 0.035;
   b.chest.rotation.y += kickSide * -0.060;
-  solveReferenceArm(visual, -1, new THREE.Vector3(-0.105, 0.790, 0.130), new THREE.Vector3(-0.220, 0.720, 0.040));
-  solveReferenceArm(visual, 1, new THREE.Vector3(0.125, 0.735, 0.090), new THREE.Vector3(0.230, 0.670, 0.020));
+  solveReferenceArm(visual, -1, new THREE.Vector3(-0.095, 0.725, 0.145), new THREE.Vector3(-0.185, 0.665, 0.050));
+  solveReferenceArm(visual, 1, new THREE.Vector3(0.105, 0.690, 0.125), new THREE.Vector3(0.190, 0.635, 0.045));
 }
 
 function applyReferencePresentationPose(visual: FighterVisual): void {
-  if (visual.root.userData.reconstructionAssetState !== "ready") return;
+  const assetState = visual.root.userData.blenderRuntimeAssetState ?? visual.root.userData.reconstructionAssetState;
+  if (assetState !== "ready") return;
   visual.root.updateMatrixWorld(true);
   const pose = classifyReferencePose(visual);
   if (pose === "IDLE") applyIdleReference(visual);
@@ -228,7 +229,7 @@ function installReferencePoseAnchor(visual: FighterVisual): void {
 /** V10.4 reference styling without re-solving planted legs. */
 export function applyV10SafeStance(visual: FighterVisual): FighterVisual {
   visual.root.userData.bindSafeStance = "V10.4_EXACT_BIND_TRANSLATIONS";
-  visual.root.userData.v10CombatPoseReference = "IDLE_GUARD_PUNCH_KICK_SIGNATURE_A_B";
+  visual.root.userData.v10CombatPoseReference = "V16_COMPACT_CHIN_GUARD_A_B";
   visual.root.userData.v10ReferencePoseController = "RIG_ENDPOINT_UPPER_BODY_ONLY";
   installReferenceCostume(visual);
   installReferencePoseAnchor(visual);

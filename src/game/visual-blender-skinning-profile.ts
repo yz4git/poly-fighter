@@ -1,24 +1,34 @@
 export const SERA_SKIN_PROFILE = {
   collar: { neck: 0.52, chest: 0.48 },
   shoulder: {
-    armBase: 0.34,
-    armLowerBonus: 0.12,
-    blendStartY: 0.700,
-    blendEndY: 0.810,
+    // The Blender source shoulder and upper-arm regions share real geometric
+    // boundaries. Match those duplicated seam vertices by driving the outer
+    // shoulder almost entirely with the upper-arm bone while keeping the inner
+    // clavicle attached to the chest.
+    armBase: 0.16,
+    armOuterMax: 0.98,
+    radialStartX: 0.025,
+    radialEndX: 0.085,
   },
   upperArm: {
-    elbowMax: 0.28,
-    elbowStartY: 0.615,
-    elbowEndY: 0.690,
+    // Source upper-arm/forearm regions overlap around y ~= .666-.686. Make the
+    // bottom of the upper-arm region follow the forearm so both copies of the
+    // elbow seam transform together.
+    elbowMax: 0.96,
+    elbowStartY: 0.690,
+    elbowEndY: 0.720,
   },
   forearm: {
-    handMax: 0.18,
-    handStartY: 0.475,
-    handEndY: 0.535,
+    // Source forearm/hand regions overlap around y ~= .537-.553. The old .475
+    // thresholds gave the forearm side almost zero hand influence and opened a
+    // visible wrist gap. Blend aggressively through the real source seam.
+    handMax: 0.92,
+    handStartY: 0.540,
+    handEndY: 0.585,
     guardRigidForearm: 0.96,
     guardHand: 0.04,
   },
-  hand: { hand: 0.97, forearm: 0.03 },
+  hand: { hand: 0.85, forearm: 0.15 },
   hips: {
     spineMax: 0.34,
     spineStartY: 0.595,

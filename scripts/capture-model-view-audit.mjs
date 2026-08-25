@@ -52,31 +52,68 @@ async function clickButton(sessionId, text) {
   `, [text]);
 }
 
+async function readModelViewState(sessionId, fighter) {
+  return execute(sessionId, `
+    const fighter = arguments[0];
+    const panel = document.querySelector('section[aria-label="Model View"]');
+    const canvas = panel?.querySelector('canvas');
+    const gl = canvas ? (canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) : null;
+    const text = panel?.textContent ?? '';
+    const runtimeRequests = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('/models/sera-blender-runtime.glb'));
+    const auditState = typeof canvas?.__polyFighterGetAuditState === 'function' ? canvas.__polyFighterGetAuditState() : null;
+    return {
+      panel: Boolean(panel),
+      canvas: Boolean(canvas),
+      webgl: Boolean(gl),
+      width: canvas?.width ?? 0,
+      height: canvas?.height ?? 0,
+      fighterVisible: text.includes(fighter),
+      fallback: text.includes('MODEL VIEW FALLBACK'),
+      seraRuntimeRequested: runtimeRequests.length > 0,
+      auditHook: canvas?.dataset?.modelAuditHook ?? null,
+      auditState,
+      bodyText: text.slice(0, 700),
+    };
+  `, [fighter]);
+}
+
 async function waitForModelView(sessionId, fighter) {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const state = await execute(sessionId, `
-      const fighter = arguments[0];
-      const panel = document.querySelector('section[aria-label="Model View"]');
-      const canvas = panel?.querySelector('canvas');
-      const gl = canvas ? (canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) : null;
-      const text = panel?.textContent ?? '';
-      const runtimeRequests = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('/models/sera-blender-runtime.glb'));
-      return {
-        panel: Boolean(panel),
-        canvas: Boolean(canvas),
-        webgl: Boolean(gl),
-        width: canvas?.width ?? 0,
-        height: canvas?.height ?? 0,
-        fighterVisible: text.includes(fighter),
-        fallback: text.includes('MODEL VIEW FALLBACK'),
-        seraRuntimeRequested: runtimeRequests.length > 0,
-        bodyText: text.slice(0, 700),
-      };
-    `, [fighter]);
-    if (state?.panel && state?.canvas && state?.webgl && state?.width > 2 && state?.height > 2 && state?.fighterVisible && !state?.fallback) return state;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const state = await readModelViewState(sessionId, fighter);
+    const runtimeReady = fighter !== "SERA" || state?.auditState?.runtimeState === "ready";
+    if (
+      state?.panel
+      && state?.canvas
+      && state?.webgl
+      && state?.width > 2
+      && state?.height > 2
+      && state?.fighterVisible
+      && !state?.fallback
+      && state?.auditHook === "SERA_MODEL_QUALITY_V1"
+      && runtimeReady
+    ) return state;
     await delay(100);
   }
   throw new Error(`MODEL VIEW did not become ready for ${fighter}`);
+}
+
+async function setAuditView(sessionId, view) {
+  const result = await execute(sessionId, `
+    const view = arguments[0];
+    const canvas = document.querySelector('section[aria-label="Model View"] canvas');
+    if (!canvas || typeof canvas.__polyFighterSetAuditView !== 'function') return { applied: false, view, state: null };
+    const applied = canvas.__polyFighterSetAuditView(view);
+    const state = typeof canvas.__polyFighterGetAuditState === 'function' ? canvas.__polyFighterGetAuditState() : null;
+    return { applied, view, state };
+  `, [view]);
+  if (!result?.applied) throw new Error(`MODEL VIEW audit angle hook failed for ${view}: ${JSON.stringify(result)}`);
+  await delay(220);
+  const stable = await execute(sessionId, `
+    const canvas = document.querySelector('section[aria-label="Model View"] canvas');
+    return typeof canvas?.__polyFighterGetAuditState === 'function' ? canvas.__polyFighterGetAuditState() : null;
+  `);
+  if (!stable) throw new Error(`MODEL VIEW audit state missing for ${view}`);
+  return stable;
 }
 
 async function screenshot(sessionId, path) {
@@ -116,14 +153,25 @@ try {
 
   await mkdir(outputDir, { recursive: true });
   const sera = await waitForModelView(sessionId, "SERA");
-  await delay(700);
-  const seraAfterLoad = await waitForModelView(sessionId, "SERA");
-  await screenshot(sessionId, `${outputDir}/model-view-sera.png`);
+  const seraViews = {};
+  for (const view of ["front", "three-quarter", "side", "back"]) {
+    seraViews[view] = await setAuditView(sessionId, view);
+    await screenshot(sessionId, `${outputDir}/model-view-sera-${view}.png`);
+    if (view === "three-quarter") await screenshot(sessionId, `${outputDir}/model-view-sera.png`);
+  }
+  const seraAfterLoad = await readModelViewState(sessionId, "SERA");
+
+  for (const [view, state] of Object.entries(seraViews)) {
+    if (state.runtimeState !== "ready") throw new Error(`SERA runtime not ready in ${view}: ${JSON.stringify(state)}`);
+    if (Math.abs((state.floorToLowestSoleGap ?? 99) - 0.006) > 0.0035) {
+      throw new Error(`SERA MODEL VIEW grounding drift in ${view}: ${JSON.stringify(state)}`);
+    }
+  }
 
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);
   const kairo = await waitForModelView(sessionId, "KAIRO");
-  await delay(250);
+  const kairoAudit = await setAuditView(sessionId, "three-quarter");
   await screenshot(sessionId, `${outputDir}/model-view-kairo.png`);
 
   const reset = await clickButton(sessionId, "RESET VIEW");
@@ -134,9 +182,10 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, kairo, titleState }, null, 2));
+  const output = { sera, seraAfterLoad, seraViews, kairo, kairoAudit, titleState };
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify(output, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, kairo, titleState }));
+  console.log(JSON.stringify(output));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

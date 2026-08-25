@@ -337,7 +337,10 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
   geometry.deleteAttribute("seraPart");
-  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V4_SOURCE_SEAMS";
+  // Keep the long-standing public skinning contract stable for metadata/tests;
+  // the seam profile records the new continuity behavior independently.
+  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V3_PART_AWARE";
+  geometry.userData.skinningSeamProfile = "SOURCE_SEAMS_V1";
   geometry.userData.skinningDiagnostics = diagnostics;
   return diagnostics;
 }

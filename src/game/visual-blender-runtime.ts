@@ -24,14 +24,23 @@ function materialColor(material: THREE.Material | undefined): THREE.Color {
   return new THREE.Color(0xffffff);
 }
 
-function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
+/**
+ * Map Blender-authored source names to canonical gameplay-rig part identities.
+ *
+ * The imported Quaternius source uses the opposite X-side convention from the
+ * canonical POLY FIGHTER rig: Blender `_r` pieces are on normalized x < 0,
+ * which is canonical LEFT, while `_l` pieces are on x > 0 (canonical RIGHT).
+ * The old coordinate heuristic handled this implicitly; the explicit part-ID
+ * path must preserve the same conversion or rigid pieces cross the body.
+ */
+export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   const name = rawName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
-  if (name === "SERA_Guard_l") return SERA_AUTHORED_PART.LEFT_FOREARM_GUARD;
-  if (name === "SERA_Guard_r") return SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD;
-  if (name === "SERA_Shin_l") return SERA_AUTHORED_PART.LEFT_SHIN_GUARD;
-  if (name === "SERA_Shin_r") return SERA_AUTHORED_PART.RIGHT_SHIN_GUARD;
-  if (name === "SERA_BootFoot_l") return SERA_AUTHORED_PART.LEFT_BOOT;
-  if (name === "SERA_BootFoot_r") return SERA_AUTHORED_PART.RIGHT_BOOT;
+  if (name === "SERA_Guard_r") return SERA_AUTHORED_PART.LEFT_FOREARM_GUARD;
+  if (name === "SERA_Guard_l") return SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD;
+  if (name === "SERA_Shin_r") return SERA_AUTHORED_PART.LEFT_SHIN_GUARD;
+  if (name === "SERA_Shin_l") return SERA_AUTHORED_PART.RIGHT_SHIN_GUARD;
+  if (name === "SERA_BootFoot_r") return SERA_AUTHORED_PART.LEFT_BOOT;
+  if (name === "SERA_BootFoot_l") return SERA_AUTHORED_PART.RIGHT_BOOT;
   if (
     name.startsWith("SERA_Hair")
     || name.startsWith("SERA_Fringe")
@@ -107,9 +116,6 @@ function collectRuntimePieces(root: THREE.Object3D): THREE.BufferGeometry[] {
 function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   const pieces = collectRuntimePieces(root);
   const primitiveCount = pieces.length;
-  const authoredPieceCount = pieces.filter(
-    (piece) => Number(piece.userData.seraAuthoredPart ?? 0) !== SERA_AUTHORED_PART.HEURISTIC,
-  ).length;
   const geometry = mergeGeometries(pieces, false);
   pieces.forEach((piece) => piece.dispose());
   if (!geometry) throw new Error("SERA_BLENDER_RUNTIME_GLB_MERGE_FAILED");
@@ -140,7 +146,7 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
-  geometry.userData.authoredPieceCount = authoredPieceCount;
+  geometry.userData.authoredPieceCount = pieces.length;
   return geometry;
 }
 

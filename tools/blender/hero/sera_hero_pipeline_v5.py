@@ -9,7 +9,7 @@ for path in (BLENDER_DIR, HERE):
 
 import sera_hero_pipeline as legacy
 import sera_parameter_search as parameter_search
-import sera_reference_objective_v8 as reference_objective
+import sera_reference_objective_v9 as reference_objective
 from sera_hero_metrics import measure_body, score
 from sera_hero_v4_deform import install as install_v4, V4_PARAMETER_COUNT, V4_SCHEMA_VERSION
 from sera_local_objective_search import install as install_local_objective_search, LOCAL_ACCEPTANCE_VERSION
@@ -168,15 +168,15 @@ def main():
         'runtimeAsset': 'sera-blender-runtime.glb',
         'runtimeAssetBytes': runtime_bytes,
         'renders': ['sera-blender-front.png', 'sera-blender-three-quarter.png', 'sera-blender-side.png', 'sera-blender-back.png', 'sera-hero-fight.png'],
-        'notes': 'V8 keeps the validated V4 128D deformation space and the independent face/hair acceptance rules. Local Reference and Generated windows now use the same 2D semantic-mask landmark detector, eliminating 3D object-origin and camera-projection drift from local crop selection.',
+        'notes': 'V9 keeps the validated V4 128D deformation space and independent face/hair acceptance rules. Reference and Generated local crops now share the top-hair-anchored head semantic detector; face skin is clipped above the shoulder band before scoring.',
     }
     with open(os.path.join(output, 'sera-hero-report.json'), 'w', encoding='utf-8') as fp:
         json.dump(report, fp, indent=2)
         fp.write('\n')
     with open(os.path.join(output, 'README.txt'), 'w', encoding='utf-8') as fp:
-        fp.write('SERA Hero Asset AI Pipeline V8 - Symmetric Semantic-Mask Local Reference Objectives\n')
+        fp.write('SERA Hero Asset AI Pipeline V9 - Head-Local Semantic Reference Objectives\n')
         fp.write('Global Reference objective remains independent from 512x512 high-resolution face and hair crop objectives.\n')
-        fp.write('Face/hair local windows use the same 2D semantic-mask landmark detector for Reference and Generated.\n')
+        fp.write('Reference and Generated share the top-hair-anchored head semantic detector; shoulder/chest skin is excluded before face crop scoring.\n')
         fp.write('Face group accepts by face-local improvement; hair group accepts by hair-local improvement; global/per-view silhouette are regression guards.\n')
 
     print('SERA_HERO_PIPELINE_V5_OK', 'GLOBAL', round(final['score'], 5), 'FACE_LOCAL', round(_local_score(final, 'face'), 5), 'HAIR_LOCAL', round(_local_score(final, 'hair'), 5), 'GEN', state['generation'], 'PARAMS', len(definitions), 'IMPROVED', state['improvedCandidates'])

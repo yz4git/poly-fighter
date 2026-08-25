@@ -109,7 +109,8 @@ function applyKickReference(visual: FighterVisual): void {
 }
 
 function applyReferencePresentationPose(visual: FighterVisual): void {
-  if (visual.root.userData.reconstructionAssetState !== "ready") return;
+  const assetState = visual.root.userData.blenderRuntimeAssetState ?? visual.root.userData.reconstructionAssetState;
+  if (assetState !== "ready") return;
   visual.root.updateMatrixWorld(true);
   const pose = classifyReferencePose(visual);
   if (pose === "IDLE") applyIdleReference(visual);

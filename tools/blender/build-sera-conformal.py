@@ -39,6 +39,13 @@ def style_face(objects):
             poly.use_smooth = False
 
 
+def runtime_source_count():
+    return sum(
+        1 for obj in bpy.context.scene.objects
+        if obj.type == 'MESH' and (obj.name == 'Superhero_Female' or obj.name.startswith('SERA_'))
+    )
+
+
 def export_runtime_mesh(output):
     """Export canonical SERA geometry while retaining authored part identities.
 
@@ -51,6 +58,9 @@ def export_runtime_mesh(output):
     names such as Runtime_SERA_Guard_l survive into Three.js, allowing the game
     to rigid-skin authored guards, shin shells, boots and head pieces to their
     intended canonical bones instead of guessing from color/position alone.
+
+    Keep the historical return contract: callers receive only the runtime byte
+    size. Hero Pipeline V5 imports this function directly.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     sources = [
@@ -87,7 +97,6 @@ def export_runtime_mesh(output):
             copy.vertex_groups.remove(group)
         copies.append(copy)
 
-    runtime_part_count = len(copies)
     bpy.ops.object.select_all(action='DESELECT')
     for obj in copies:
         obj.select_set(True)
@@ -118,7 +127,7 @@ def export_runtime_mesh(output):
         bpy.data.objects.remove(obj, do_unlink=True)
         if mesh.users == 0:
             bpy.data.meshes.remove(mesh)
-    return runtime_bytes, runtime_part_count
+    return runtime_bytes
 
 
 def main():
@@ -146,6 +155,7 @@ def main():
     apply_identity(armature, mats)
     tune_identity()
 
+    runtime_part_count = runtime_source_count()
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(output, 'sera-blender-prototype.blend'))
     bpy.ops.export_scene.gltf(
         filepath=os.path.join(output, 'sera-blender-prototype.glb'),
@@ -155,7 +165,7 @@ def main():
         export_cameras=False,
         export_lights=False,
     )
-    runtime_bytes, runtime_part_count = export_runtime_mesh(output)
+    runtime_bytes = export_runtime_mesh(output)
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)

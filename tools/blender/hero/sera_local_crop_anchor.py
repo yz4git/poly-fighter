@@ -1,34 +1,28 @@
-"""Landmark-anchored local crop mapping for SERA Hero V5.
+"""Head-local semantic crop mapping for SERA Hero V5.
 
-Global evaluation stays body-aligned. Face/hair local evaluation deliberately
-uses the projected eye/nose/mouth geometry as its own coordinate system so a
-body-proportion mismatch cannot drag shoulders or torso into the local crop.
+Global evaluation remains body-aligned.  The independent face/hair objectives
+load the just-rendered semantic frame and run the same 2D head detector used by
+Reference preparation.  The top central hair component establishes the head;
+face skin is then capped to that head region, so shoulders/chest cannot enter
+the local face objective.
 """
 from __future__ import annotations
 
-import numpy as np
+import os
+
 import bpy
+import numpy as np
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
 
+from sera_head_semantic import HEAD_SEMANTIC_VERSION, detect_head_semantics
 
-def _clip(box, shape):
-    h, w = int(shape[0]), int(shape[1])
-    x0, y0, x1, y1 = box
-    x0 = max(0, min(w - 1, int(round(x0))))
-    x1 = max(0, min(w - 1, int(round(x1))))
-    y0 = max(0, min(h - 1, int(round(y0))))
-    y1 = max(0, min(h - 1, int(round(y1))))
-    if x1 < x0:
-        x0, x1 = x1, x0
-    if y1 < y0:
-        y0, y1 = y1, y0
-    return (x0, y0, x1, y1)
+LOCAL_ANCHOR_MODE = "headSemanticV1"
 
 
 def _world_geometry_centroid(obj):
-    """Return the visible mesh centroid instead of the often-offset object origin."""
-    if obj is not None and obj.type == 'MESH' and len(obj.data.vertices):
+    """Return visible mesh centroid for the legacy/global face landmark path."""
+    if obj is not None and obj.type == "MESH" and len(obj.data.vertices):
         total = Vector((0.0, 0.0, 0.0))
         matrix = obj.matrix_world
         for vertex in obj.data.vertices:
@@ -52,72 +46,89 @@ def _geometry_face_landmarks(reference_objective, scene, cam, width, height):
     return result
 
 
-def landmark_window(landmarks, shape, kind):
-    usable = [p for p in landmarks.values() if p is not None]
-    if not usable:
-        return None
-    eyes = [p for key, p in landmarks.items() if key.startswith('eye') and p is not None]
-    mouth = landmarks.get('mouth')
-    nose = landmarks.get('nose')
-    xs = [float(p[0]) for p in usable]
-    center_x = float(np.median(xs))
-    eye_top = min(float(p[1]) for p in eyes) if eyes else min(float(p[1]) for p in usable)
-    mouth_y = float(mouth[1]) if mouth is not None else max(float(p[1]) for p in usable)
-    feature_h = max(6.0, mouth_y - eye_top)
-    if len(eyes) >= 2:
-        eye_span = abs(float(eyes[-1][0]) - float(eyes[0][0]))
-    else:
-        eye_span = feature_h * .62
-    if nose is not None:
-        center_x = (center_x * 2.0 + float(nose[0])) / 3.0
+def _semantic_masks(reference_objective):
+    scene = bpy.context.scene
+    path = os.path.abspath(scene.render.filepath)
+    rgba = reference_objective._load_image(path)
+    alpha = rgba[..., 3]
+    silhouette = alpha > .20
+    red, green, blue = rgba[..., 0], rgba[..., 1], rgba[..., 2]
+    hair = silhouette & (green > red * 1.35) & (green > blue * 1.35)
+    skin = silhouette & (red > .45) & (green > .45) & (blue > .45) & (
+        (np.maximum.reduce([red, green, blue]) - np.minimum.reduce([red, green, blue])) < .22
+    )
+    return silhouette, skin, hair
 
-    if kind == 'face':
-        half = max(eye_span * 1.25, feature_h * .72)
-        box = [
-            center_x - half,
-            eye_top - feature_h * .82,
-            center_x + half,
-            mouth_y + feature_h * .12,
-        ]
-    elif kind == 'hair':
-        half = max(eye_span * 2.15, feature_h * 1.32)
-        box = [
-            center_x - half,
-            eye_top - feature_h * 1.92,
-            center_x + half,
-            mouth_y + feature_h * .18,
-        ]
-    else:
-        raise ValueError('unknown SERA local crop kind ' + str(kind))
-    return _clip(box, shape)
+
+def _head_from_current_render(reference_objective, view):
+    silhouette, skin, hair = _semantic_masks(reference_objective)
+    result = detect_head_semantics(silhouette, skin, hair, view)
+    if result is None:
+        raise RuntimeError(f"SERA head semantic detector found no body for {view}")
+    return result
 
 
 def install(reference_objective):
-    if getattr(reference_objective, '_sera_landmark_crop_installed', False):
+    if getattr(reference_objective, "_sera_head_semantic_crop_installed", False):
         return reference_objective
-    base_map = reference_objective._map_normalized_box
 
-    # The previous implementation projected object origins. Several authored
-    # facial meshes keep origins away from their visible geometry after bone
-    # parenting/tuning, which can push 3/4 and side crops onto the torso. Make
-    # the geometry itself authoritative for both global face landmarks and the
-    # independent local crop anchor.
+    base_project_raw = reference_objective._project_face_landmarks_raw
+    base_map = reference_objective._map_normalized_box
+    base_render_and_score = reference_objective.render_and_score
+    current_view = {"name": "front"}
+
+    # Keep the existing geometry-centroid path for the low-resolution global
+    # objective.  High-resolution local landmark calls use the same head-local
+    # semantic detector as Reference preparation.
     def project_face_landmarks_raw(scene, cam, width, height):
-        return _geometry_face_landmarks(reference_objective, scene, cam, width, height)
+        if int(width) == int(scene.render.resolution_x) and int(height) == int(scene.render.resolution_y):
+            head = _head_from_current_render(reference_objective, current_view["name"])
+            return head["landmarks"]
+        try:
+            return _geometry_face_landmarks(reference_objective, scene, cam, width, height)
+        except Exception:
+            return base_project_raw(scene, cam, width, height)
 
     reference_objective._project_face_landmarks_raw = project_face_landmarks_raw
 
     def map_local_box(spec, generated_body_box, shape):
-        if isinstance(spec, dict) and spec.get('anchorMode') == 'faceLandmarks':
-            scene = bpy.context.scene
-            cam = bpy.data.objects.get('AuditCamera')
-            if cam is None:
-                return None
-            height, width = int(shape[0]), int(shape[1])
-            landmarks = reference_objective._project_face_landmarks_raw(scene, cam, width, height)
-            return landmark_window(landmarks, shape, spec.get('kind', 'face'))
+        if isinstance(spec, dict) and spec.get("anchorMode") in {
+            LOCAL_ANCHOR_MODE,
+            "semanticMaskLandmarks",
+            "faceLandmarks",
+        }:
+            head = _head_from_current_render(reference_objective, current_view["name"])
+            kind = spec.get("kind", "face")
+            if kind == "face":
+                return tuple(head["faceBox"])
+            if kind == "hair":
+                return tuple(head["hairBox"])
+            raise ValueError("unknown SERA head-local crop kind " + str(kind))
         return base_map(spec, generated_body_box, shape)
 
     reference_objective._map_normalized_box = map_local_box
-    reference_objective._sera_landmark_crop_installed = True
+
+    # render_and_score owns the view loop, so expose the active view to the
+    # patched mapping functions without editing the stable objective engine.
+    # We infer it from the output path immediately before each map/landmark call.
+    original_load_image = reference_objective._load_image
+
+    def tracking_load_image(path):
+        name = os.path.basename(str(path))
+        for view in reference_objective.VIEW_NAMES:
+            if f"-{view}.png" in name:
+                current_view["name"] = view
+                break
+        return original_load_image(path)
+
+    reference_objective._load_image = tracking_load_image
+
+    def render_and_score(reference, output_dir, tag, spec):
+        result = base_render_and_score(reference, output_dir, tag, spec)
+        result["localAnchorMode"] = LOCAL_ANCHOR_MODE
+        result["headSemanticVersion"] = HEAD_SEMANTIC_VERSION
+        return result
+
+    reference_objective.render_and_score = render_and_score
+    reference_objective._sera_head_semantic_crop_installed = True
     return reference_objective

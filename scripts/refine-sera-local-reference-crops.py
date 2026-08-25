@@ -48,13 +48,15 @@ def validate_reference_box(view, kind, local_box, body_box):
     height = box[3] - box[1]
     # Shoulder rejection is a vertical invariant. Horizontal size is only a
     # gross runaway guard because the full-body bbox width varies strongly with
-    # pose. Face pixels are already clipped to the head-local skin mask, so
-    # widening the empty horizontal crop cannot re-introduce shoulder/chest skin.
+    # pose, especially in side view. Face pixels are already clipped to the
+    # head-local skin mask, so horizontal empty space cannot re-introduce
+    # shoulder/chest skin. Keep strict vertical bounds and only reject absurd
+    # horizontal windows that indicate a detector failure.
     if kind == "face":
-        if width > .70 or height > .225 or box[3] > .225 or box[1] < -.02:
+        if width > 1.25 or height > .225 or box[3] > .225 or box[1] < -.02:
             raise RuntimeError(f"{view} face crop escaped head-local region: {box}")
     elif kind == "hair":
-        if width > .90 or height > .38 or box[1] < -.08 or box[3] > .38:
+        if width > 1.75 or height > .38 or box[1] < -.08 or box[3] > .38:
             raise RuntimeError(f"{view} hair crop escaped head-local region: {box}")
     return box
 

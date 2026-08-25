@@ -17,8 +17,86 @@ def _move_depth(obj, amount):
         obj.location.y += amount * SERA_FRONT_Y
 
 
+def _hand_group_side(name):
+    lower = name.lower()
+    for side in ('l', 'r'):
+        if lower == 'hand_' + side:
+            return side
+        if lower.endswith('_' + side) and lower.startswith(('thumb_', 'index_', 'middle_', 'ring_', 'pinky_')):
+            return side
+    return None
+
+
+def _compact_source_hands():
+    """Pre-form the source T-pose hands into compact readable fist masses.
+
+    V15 already compresses the evaluated hand again after converting the source
+    arms into the runtime arms-down bind. The source fingers, however, arrive
+    spread along the T-pose arm axis and still leave claw-like silhouettes after
+    that single runtime pass. This first stage preserves the wrist/proximal palm,
+    shortens only the distal finger span, and keeps most transverse mass so the
+    second runtime pass produces a broad knuckle block instead of thin spikes.
+    """
+    body = bpy.data.objects.get('Superhero_Female')
+    if not body or body.type != 'MESH':
+        return
+
+    groups_by_side = {'l': set(), 'r': set()}
+    for group in body.vertex_groups:
+        side = _hand_group_side(group.name)
+        if side:
+            groups_by_side[side].add(group.index)
+
+    changed_sides = []
+    for side, group_indices in groups_by_side.items():
+        if not group_indices:
+            continue
+        selected = []
+        for vertex in body.data.vertices:
+            weight = sum(membership.weight for membership in vertex.groups if membership.group in group_indices)
+            if weight >= 0.15:
+                selected.append((vertex, min(1.0, weight)))
+        if len(selected) < 8:
+            continue
+
+        root_abs = min(abs(vertex.co.x) for vertex, _ in selected)
+        tip_abs = max(abs(vertex.co.x) for vertex, _ in selected)
+        span = tip_abs - root_abs
+        if span <= 1e-6:
+            continue
+
+        proximal = [
+            (vertex, weight)
+            for vertex, weight in selected
+            if (abs(vertex.co.x) - root_abs) / span <= 0.45
+        ] or selected
+        total_weight = sum(weight for _, weight in proximal)
+        center_y = sum(vertex.co.y * weight for vertex, weight in proximal) / max(1e-6, total_weight)
+        center_z = sum(vertex.co.z * weight for vertex, weight in proximal) / max(1e-6, total_weight)
+
+        sign = -1.0 if sum(vertex.co.x for vertex, _ in selected) < 0.0 else 1.0
+        for vertex, ownership in selected:
+            t = max(0.0, min(1.0, (abs(vertex.co.x) - root_abs) / span))
+            # Leave the wrist and proximal palm almost untouched, then compact
+            # progressively toward the fingertips. Ownership softens boundaries.
+            distal = max(0.0, (t - 0.18) / 0.82)
+            distal = distal * distal * ownership
+            length_retain = 1.0 - 0.34 * distal
+            radial_retain = 1.0 - 0.10 * distal
+            distance = abs(vertex.co.x) - root_abs
+            vertex.co.x = sign * (root_abs + distance * length_retain)
+            vertex.co.y = center_y + (vertex.co.y - center_y) * radial_retain
+            vertex.co.z = center_z + (vertex.co.z - center_z) * radial_retain
+        changed_sides.append(side)
+
+    if changed_sides:
+        body.data.update()
+        body['seraSourceHandPose'] = 'PRECOMPACT_KNUCKLE_MASS_V16'
+        body['seraSourceHandPoseSides'] = ','.join(sorted(changed_sides))
+
+
 def apply():
-    # Model Quality Reconstruction Pass V2
+    # Model Quality Reconstruction Pass V2 + V16 fist pre-form
     # Geometry now carries the main silhouette. Tuning is intentionally modest:
     # it should polish the authored forms, not squash them into corrective cards.
     cap = bpy.data.objects.get('SERA_HairCap')
@@ -97,3 +175,5 @@ def apply():
 
     for name in ('SERA_BootFoot_l', 'SERA_BootFoot_r'):
         _scale(name, 0.96, 0.98, 0.98)
+
+    _compact_source_hands()

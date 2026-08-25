@@ -66,6 +66,80 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   return SERA_AUTHORED_PART.HEURISTIC;
 }
 
+/** Canonical V9 segment centers used by the production IK rig at bind time. */
+export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly [number, number, number] | null {
+  switch (part) {
+    case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION: return [-0.134, 0.738, 0.010];
+    case SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION: return [0.134, 0.738, 0.010];
+    case SERA_AUTHORED_PART.LEFT_FOREARM_REGION: return [-0.147, 0.562, 0.015];
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION: return [0.147, 0.562, 0.015];
+    case SERA_AUTHORED_PART.LEFT_HAND_REGION: return [-0.155, 0.438, 0.030];
+    case SERA_AUTHORED_PART.RIGHT_HAND_REGION: return [0.155, 0.438, 0.030];
+    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD: return [-0.151, 0.548, 0.036];
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD: return [0.151, 0.548, 0.036];
+    default: return null;
+  }
+}
+
+/**
+ * Retarget arm segment rest centers into the existing production IK bind frame.
+ *
+ * V14 already freezes the source in an arms-down pose and preserves exact source
+ * arm ownership, but Quaternius' arm axis sits several centimetres inward and
+ * the hand/forearm masses sit higher than the V9 canonical rig. Skinning those
+ * pieces around V9 pivots without this bind correction turns the small rest
+ * offset into large detached chunks during guard/attack rotations.
+ *
+ * Translation is computed from each actual merged part centroid, not from a
+ * source-version-specific hardcoded delta. This keeps source facet shape intact
+ * while matching the existing shoulder/elbow/wrist chain used by gameplay IK.
+ */
+function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  const part = geometry.getAttribute("seraPart") as THREE.BufferAttribute | undefined;
+  if (!position || !part || position.count !== part.count) return;
+
+  const sums = new Map<number, { x: number; y: number; z: number; count: number }>();
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const code = Math.round(part.getX(vertex)) as SeraAuthoredPartCode;
+    if (!targetSeraArmBindCentroid(code)) continue;
+    const entry = sums.get(code) ?? { x: 0, y: 0, z: 0, count: 0 };
+    entry.x += position.getX(vertex);
+    entry.y += position.getY(vertex);
+    entry.z += position.getZ(vertex);
+    entry.count += 1;
+    sums.set(code, entry);
+  }
+
+  const offsets = new Map<number, THREE.Vector3>();
+  for (const [code, sum] of sums) {
+    if (sum.count <= 0) continue;
+    const target = targetSeraArmBindCentroid(code as SeraAuthoredPartCode);
+    if (!target) continue;
+    const current = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
+    const offset = new THREE.Vector3(target[0], target[1], target[2]).sub(current);
+    if (offset.length() > 0.12) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
+    offsets.set(code, offset);
+  }
+
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const code = Math.round(part.getX(vertex));
+    const offset = offsets.get(code);
+    if (!offset) continue;
+    position.setXYZ(
+      vertex,
+      position.getX(vertex) + offset.x,
+      position.getY(vertex) + offset.y,
+      position.getZ(vertex) + offset.z,
+    );
+  }
+  position.needsUpdate = true;
+  geometry.userData.armBindRetarget = "V9_SEGMENT_CENTROIDS_V1";
+  geometry.userData.armBindRetargetOffsets = Object.fromEntries(
+    [...offsets.entries()].map(([code, offset]) => [String(code), offset.toArray()]),
+  );
+}
+
 /**
  * Align manually-authored rigid panels with the canonical runtime classifier.
  *
@@ -75,10 +149,6 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
  * normalized to 0..1 those panel centers land too low: the collar becomes torso
  * and the skirt panels become shin/thigh samples. The latter then receive split
  * limb weights and shear into the large floating rectangles seen in MATCH.
- *
- * Keep this correction small and name-scoped. Body, face, hair and bone-follow
- * limb equipment are untouched. The generated V13 GLB separately fixes the
- * T-pose/canonical arm bind mismatch before this browser normalization step.
  */
 function alignAuthoredPanelRestPose(sourceName: string, geometry: THREE.BufferGeometry): void {
   const name = sourceName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
@@ -187,11 +257,12 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
     );
   }
   position.needsUpdate = true;
+  retargetSeraArmBindCentroids(geometry);
   geometry.deleteAttribute("normal");
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V6_CANONICAL_BIND";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
@@ -251,6 +322,8 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.root.userData.blenderRuntimePrimitiveMerge = source.userData.sourcePrimitiveCount ?? null;
   visual.root.userData.blenderRuntimeAuthoredPieces = source.userData.authoredPieceCount ?? null;
   visual.root.userData.blenderRuntimeBindPose = source.userData.runtimeBindPose ?? null;
+  visual.root.userData.blenderRuntimeBindRetarget = source.userData.armBindRetarget ?? null;
+  visual.root.userData.blenderRuntimeBindRetargetOffsets = source.userData.armBindRetargetOffsets ?? null;
   visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
   visual.root.userData.blenderWeightAudit = weightAudit;
   visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
@@ -264,7 +337,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V6_CANONICAL_BIND";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

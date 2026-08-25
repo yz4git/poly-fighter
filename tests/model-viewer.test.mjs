@@ -57,9 +57,9 @@ test('SERA model-quality audit captures deterministic four-direction Model View 
   assert.match(viewer, /SERA_MODEL_QUALITY_V1/);
   assert.match(viewer, /__polyFighterSetAuditView/);
   assert.match(viewer, /__polyFighterGetAuditState/);
-  for (const view of ['front', 'three-quarter', 'side', 'back']) {
-    assert.ok(audit.includes(`model-view-sera-${view}.png`), `missing ${view} audit render`);
-  }
+  assert.match(audit, /\["front", "three-quarter", "side", "back"\]/);
+  assert.match(audit, /model-view-sera-\$\{view\}\.png/);
+  assert.match(audit, /model-view-sera\.png/);
   assert.match(audit, /floorToLowestSoleGap/);
   assert.match(audit, /SERA MODEL VIEW grounding drift/);
 });

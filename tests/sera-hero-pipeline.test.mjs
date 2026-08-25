@@ -10,9 +10,9 @@ const pipelinePath = new URL('../tools/blender/hero/sera_hero_pipeline_v5.py', i
 const metricsPath = new URL('../tools/blender/hero/sera_hero_metrics.py', import.meta.url);
 const parameterSearchPath = new URL('../tools/blender/hero/sera_parameter_search.py', import.meta.url);
 const localSearchPath = new URL('../tools/blender/hero/sera_local_objective_search.py', import.meta.url);
-const localAnchorPath = new URL('../tools/blender/hero/sera_local_crop_anchor.py', import.meta.url);
 const deformPath = new URL('../tools/blender/hero/sera_hero_v4_deform.py', import.meta.url);
 const objectivePath = new URL('../tools/blender/hero/sera_reference_objective.py', import.meta.url);
+const objectiveV8Path = new URL('../tools/blender/hero/sera_reference_objective_v8.py', import.meta.url);
 const boneFollowPath = new URL('../tools/blender/sera_bone_follow.py', import.meta.url);
 const identityPath = new URL('../tools/blender/sera_identity_parts.py', import.meta.url);
 const preparePath = new URL('../scripts/prepare-sera-reference-objective.py', import.meta.url);
@@ -27,9 +27,9 @@ const pipeline = readFileSync(pipelinePath, 'utf8');
 const metrics = readFileSync(metricsPath, 'utf8');
 const parameterSearch = readFileSync(parameterSearchPath, 'utf8');
 const localSearch = readFileSync(localSearchPath, 'utf8');
-const localAnchor = readFileSync(localAnchorPath, 'utf8');
 const deform = readFileSync(deformPath, 'utf8');
 const objective = readFileSync(objectivePath, 'utf8');
+const objectiveV8 = readFileSync(objectiveV8Path, 'utf8');
 const boneFollow = readFileSync(boneFollowPath, 'utf8');
 const identity = readFileSync(identityPath, 'utf8');
 const prepare = readFileSync(preparePath, 'utf8');
@@ -90,16 +90,22 @@ test('reference preparation creates native-resolution-derived high-resolution fa
   assert.match(prepare, /SERA_REFERENCE_OBJECTIVE_V3_HIGH_RES_LOCAL_CROPS/);
 });
 
-test('V7 local windows are tight and generated anchors follow visible face geometry', () => {
-  assert.match(localAnchor, /_world_geometry_centroid/);
-  assert.match(localAnchor, /matrix\s*@\s*vertex\.co/);
-  assert.match(localAnchor, /_project_face_landmarks_raw\s*=\s*project_face_landmarks_raw/);
-  assert.match(localAnchor, /mouth_y \+ feature_h \* \.12/);
-  assert.match(localAnchor, /mouth_y \+ feature_h \* \.18/);
-  assert.match(refine, /SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS/);
+test('V8 Reference and Generated local windows use the same 2D semantic landmark system', () => {
+  assert.match(refine, /SERA_REFERENCE_OBJECTIVE_V8_SEMANTIC_MASK_LOCAL_WINDOWS/);
+  assert.match(refine, /anchorMode": "semanticMaskLandmarks"/);
   assert.match(refine, /mouth_y \+ feature_h \* \.12/);
   assert.match(refine, /mouth_y \+ feature_h \* \.18/);
-  assert.match(runner, /SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS/);
+  assert.match(objectiveV8, /face_landmarks_from_masks/);
+  assert.match(objectiveV8, /semanticMaskLandmarks/);
+  assert.match(objectiveV8, /generated_landmarks_hi = face_landmarks_from_masks/);
+  assert.match(objectiveV8, /generated_silhouette_hi, generated_skin_hi, generated_hair_hi/);
+  assert.match(objectiveV8, /generated_local_lm/);
+  assert.ok(!objectiveV8.includes('world_to_camera_view'), 'local V8 must not use 3D camera projection');
+  assert.match(pipeline, /import sera_reference_objective_v8 as reference_objective/);
+  assert.ok(!pipeline.includes('install_local_crop_anchor'), 'V8 pipeline must not monkey-patch local boxes from 3D objects');
+  assert.match(runner, /SERA_REFERENCE_OBJECTIVE_V8_SEMANTIC_MASK_LOCAL_WINDOWS/);
+  assert.match(runner, /localAnchorMode/);
+  assert.match(runner, /semanticMaskLandmarks/);
 });
 
 test('Blender objective keeps global score separate from independent local face/hair objectives', () => {
@@ -107,14 +113,13 @@ test('Blender objective keeps global score separate from independent local face/
   assert.match(objective, /localObjectives/);
   assert.match(objective, /globalObjective/);
   assert.match(objective, /REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2/);
-  assert.match(objective, /local-\{tag\}-\{view\}-face/);
-  assert.match(objective, /local-\{tag\}-\{view\}-hair/);
-  assert.match(objective, /faceViewWeights/);
-  assert.match(objective, /hairViewWeights/);
-  assert.match(objective, /faceLandmarkFalloffPx/);
-  assert.match(objective, /film_transparent = True/);
-  assert.match(objective, /return \{/);
-  assert.ok(!/global_score\s*\+\s*face_score/.test(objective), 'local scores must not be added into global score');
+  assert.match(objectiveV8, /local-\{tag\}-\{view\}-face/);
+  assert.match(objectiveV8, /local-\{tag\}-\{view\}-hair/);
+  assert.match(objectiveV8, /faceViewWeights/);
+  assert.match(objectiveV8, /hairViewWeights/);
+  assert.match(objectiveV8, /faceLandmarkFalloffPx/);
+  assert.match(objectiveV8, /film_transparent = True/);
+  assert.ok(!/global_score\s*\+\s*face_score/.test(objectiveV8), 'local scores must not be added into global score');
 });
 
 test('face and hair groups use their own local objective as the primary acceptance gate', () => {

@@ -77,7 +77,7 @@ test("unknown colors use conservative axial fallback instead of arm assignment",
   assert.equal(classifySeraRuntimeRegion(0.18, 0.42, 0.00, "unknown"), "RIGHT_THIGH");
 });
 
-test("Blender source l/r suffixes are converted to canonical rig sides", () => {
+test("Blender source names are converted to explicit canonical authored parts", () => {
   // Imported Quaternius/Blender X is mirrored relative to the canonical rig:
   // source `_r` sits at normalized x<0 and therefore belongs to canonical LEFT.
   assert.equal(authoredPartFromName("Runtime_SERA_Guard_r"), SERA_AUTHORED_PART.LEFT_FOREARM_GUARD);
@@ -94,8 +94,11 @@ test("Blender source l/r suffixes are converted to canonical rig sides", () => {
   assert.equal(authoredPartFromName("Runtime_SERA_Body_Forearm_l"), SERA_AUTHORED_PART.RIGHT_FOREARM_REGION);
   assert.equal(authoredPartFromName("Runtime_SERA_Body_Hand_r"), SERA_AUTHORED_PART.LEFT_HAND_REGION);
   assert.equal(authoredPartFromName("Runtime_SERA_Body_Hand_l"), SERA_AUTHORED_PART.RIGHT_HAND_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Collar"), SERA_AUTHORED_PART.COLLAR_PANEL);
+  assert.equal(authoredPartFromName("Runtime_SERA_FrontSkirt"), SERA_AUTHORED_PART.FRONT_SKIRT_PANEL);
+  assert.equal(authoredPartFromName("Runtime_SERA_LeftSkirt"), SERA_AUTHORED_PART.LEFT_SKIRT_PANEL);
+  assert.equal(authoredPartFromName("Runtime_SERA_RightSkirt"), SERA_AUTHORED_PART.RIGHT_SKIRT_PANEL);
   assert.equal(authoredPartFromName("Runtime_SERA_FringeInnerL"), SERA_AUTHORED_PART.HEAD);
-  assert.equal(authoredPartFromName("Runtime_SERA_Collar"), SERA_AUTHORED_PART.HEURISTIC);
   assert.equal(authoredPartFromName("Runtime_SERA_Body_Base"), SERA_AUTHORED_PART.HEURISTIC);
 });
 
@@ -125,6 +128,8 @@ test("authored runtime parts are rigidly attached to their intended canonical bo
   assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.HEURISTIC, BONES), null);
   assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.LEFT_FOREARM_REGION, BONES), null);
   assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.RIGHT_HAND_REGION, BONES), null);
+  assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.COLLAR_PANEL, BONES), null);
+  assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.FRONT_SKIRT_PANEL, BONES), null);
 });
 
 test("source-rig arm region IDs override ambiguous coordinate heuristics without rigidifying body", () => {
@@ -158,6 +163,42 @@ test("source-rig arm region IDs override ambiguous coordinate heuristics without
   assert.equal(indices.getX(1), BONES.rightForearm);
   assert.equal(indices.getX(2), BONES.leftHand);
   assert.equal(indices.getX(3), BONES.rightHand);
+  assert.equal(diagnostics.rigidAuthoredVertices, 0);
+  assert.equal(diagnostics.invalidWeightVertices, 0);
+});
+
+test("authored collar and skirt IDs override bad coordinates without rigidifying panels", () => {
+  const geometry = new THREE.BufferGeometry();
+  // Every sample is deliberately placed in the lower-body fallback range. The
+  // authored IDs, not coordinates or palette, must decide the panel region.
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+    0.00, 0.20, 0.00,
+    0.00, 0.20, 0.00,
+    -0.20, 0.20, 0.00,
+    0.20, 0.20, 0.00,
+  ], 3));
+  const blueHi = rgb(0x387AD3);
+  const blue = rgb(0x2059C1);
+  const black = rgb(0x0D0E16);
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute([
+    ...blueHi, ...blueHi, ...blue, ...black,
+  ], 3));
+  geometry.setAttribute("seraPart", new THREE.Float32BufferAttribute([
+    SERA_AUTHORED_PART.COLLAR_PANEL,
+    SERA_AUTHORED_PART.FRONT_SKIRT_PANEL,
+    SERA_AUTHORED_PART.LEFT_SKIRT_PANEL,
+    SERA_AUTHORED_PART.RIGHT_SKIRT_PANEL,
+  ], 1));
+
+  const diagnostics = assignSeraBlenderSkinning(geometry, BONES);
+  assert.equal(diagnostics.regionCounts.COLLAR, 1);
+  assert.equal(diagnostics.regionCounts.FRONT_SKIRT, 1);
+  assert.equal(diagnostics.regionCounts.LEFT_SKIRT, 1);
+  assert.equal(diagnostics.regionCounts.RIGHT_SKIRT, 1);
+  assert.equal(diagnostics.authoredPartCounts[SERA_AUTHORED_PART.COLLAR_PANEL], 1);
+  assert.equal(diagnostics.authoredPartCounts[SERA_AUTHORED_PART.FRONT_SKIRT_PANEL], 1);
+  assert.equal(diagnostics.authoredPartCounts[SERA_AUTHORED_PART.LEFT_SKIRT_PANEL], 1);
+  assert.equal(diagnostics.authoredPartCounts[SERA_AUTHORED_PART.RIGHT_SKIRT_PANEL], 1);
   assert.equal(diagnostics.rigidAuthoredVertices, 0);
   assert.equal(diagnostics.invalidWeightVertices, 0);
 });

@@ -64,6 +64,14 @@ export function assertBlenderRuntimeAuditState(state) {
   if (!sourceRigArmRegionCodes.every((code) => Number(state.metadata.authoredPartCounts[code] ?? 0) > 0)) {
     throw new Error(`SERA source-rig arm regions were not preserved: ${JSON.stringify(state)}`);
   }
+  const authoredPanelCodes = [16, 17, 18, 19];
+  if (!authoredPanelCodes.every((code) => Number(state.metadata.authoredPartCounts[code] ?? 0) > 0)) {
+    throw new Error(`SERA collar/skirt authored regions were not preserved: ${JSON.stringify(state)}`);
+  }
+  const panelRegions = ["COLLAR", "FRONT_SKIRT", "LEFT_SKIRT", "RIGHT_SKIRT"];
+  if (!panelRegions.every((region) => Number(state.metadata.regionCounts?.[region] ?? 0) > 0)) {
+    throw new Error(`SERA authored panel regions were not skinned: ${JSON.stringify(state)}`);
+  }
   if (!(state.authoredPieces > 0)) {
     throw new Error(`SERA runtime GLB did not expose authored pieces: ${JSON.stringify(state)}`);
   }

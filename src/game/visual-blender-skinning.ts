@@ -42,6 +42,10 @@ export const SERA_AUTHORED_PART = {
   RIGHT_FOREARM_REGION: 13,
   LEFT_HAND_REGION: 14,
   RIGHT_HAND_REGION: 15,
+  COLLAR_PANEL: 16,
+  FRONT_SKIRT_PANEL: 17,
+  LEFT_SKIRT_PANEL: 18,
+  RIGHT_SKIRT_PANEL: 19,
 } as const;
 
 export type SeraAuthoredPartCode = typeof SERA_AUTHORED_PART[keyof typeof SERA_AUTHORED_PART];
@@ -151,6 +155,10 @@ function authoredRegion(part: SeraAuthoredPartCode): SeraRuntimeRegion | null {
     case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION: return "RIGHT_FOREARM";
     case SERA_AUTHORED_PART.LEFT_HAND_REGION: return "LEFT_HAND";
     case SERA_AUTHORED_PART.RIGHT_HAND_REGION: return "RIGHT_HAND";
+    case SERA_AUTHORED_PART.COLLAR_PANEL: return "COLLAR";
+    case SERA_AUTHORED_PART.FRONT_SKIRT_PANEL: return "FRONT_SKIRT";
+    case SERA_AUTHORED_PART.LEFT_SKIRT_PANEL: return "LEFT_SKIRT";
+    case SERA_AUTHORED_PART.RIGHT_SKIRT_PANEL: return "RIGHT_SKIRT";
     default: return null;
   }
 }

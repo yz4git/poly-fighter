@@ -30,9 +30,9 @@ function materialColor(material: THREE.Material | undefined): THREE.Color {
  * The imported Quaternius source uses the opposite X-side convention from the
  * canonical POLY FIGHTER rig: Blender `_r` pieces are on normalized x < 0,
  * which is canonical LEFT, while `_l` pieces are on x > 0 (canonical RIGHT).
- * The explicit IDs cover both rigid authored equipment and V14 source-rig arm
- * regions. Region IDs select the correct smooth skinning profile without making
- * the organic body rigid; equipment IDs still force one-bone attachment.
+ * The explicit IDs cover rigid equipment, source-rig arm regions, the collar,
+ * skirt panels and authored head pieces. Region IDs select the intended smooth
+ * skinning profile without making organic cloth/body regions rigid.
  */
 export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   const name = rawName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
@@ -50,6 +50,10 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   if (name === "SERA_Body_Forearm_l") return SERA_AUTHORED_PART.RIGHT_FOREARM_REGION;
   if (name === "SERA_Body_Hand_r") return SERA_AUTHORED_PART.LEFT_HAND_REGION;
   if (name === "SERA_Body_Hand_l") return SERA_AUTHORED_PART.RIGHT_HAND_REGION;
+  if (name === "SERA_Collar") return SERA_AUTHORED_PART.COLLAR_PANEL;
+  if (name === "SERA_FrontSkirt") return SERA_AUTHORED_PART.FRONT_SKIRT_PANEL;
+  if (name === "SERA_LeftSkirt") return SERA_AUTHORED_PART.LEFT_SKIRT_PANEL;
+  if (name === "SERA_RightSkirt") return SERA_AUTHORED_PART.RIGHT_SKIRT_PANEL;
   if (
     name.startsWith("SERA_Hair")
     || name.startsWith("SERA_Fringe")
@@ -141,14 +145,11 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
 }
 
 /**
- * Align manually-authored rigid panels with the canonical runtime classifier.
- *
- * The Quaternius body is normalized with an object transform, while the collar
- * and skirt overlays are authored directly in Blender world coordinates. Their
- * visual placement is correct in the Blender audit, but after the compact GLB is
- * normalized to 0..1 those panel centers land too low: the collar becomes torso
- * and the skirt panels become shin/thigh samples. The latter then receive split
- * limb weights and shear into the large floating rectangles seen in MATCH.
+ * Align manually-authored panels into the canonical bind frame before they use
+ * their explicit collar/skirt region IDs. The Blender overlays are authored in
+ * world-space around the normalized source body, so retaining this small bind
+ * correction keeps their visual placement matching the reference asset while
+ * the explicit IDs remove any dependency on position/color classification.
  */
 function alignAuthoredPanelRestPose(sourceName: string, geometry: THREE.BufferGeometry): void {
   const name = sourceName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");

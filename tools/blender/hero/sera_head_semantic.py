@@ -20,10 +20,13 @@ HEAD_SEMANTIC_VERSION = "SERA_HEAD_SEMANTIC_V1_TOP_HAIR_FACE_SKIN"
 # chin band are rejected before scoring.
 FACE_SIGNAL_BOTTOM = 0.82
 HAIR_SIGNAL_BOTTOM = {
-    "front": 1.02,
-    "three-quarter": 1.06,
-    "side": 1.10,
-    "back": 1.12,
+    # Local hair intentionally stops around the jaw. Long ponytail/nape shape
+    # remains part of the global silhouette objective; keeping it here lets
+    # dark shoulder/costume pixels pollute the Reference hair target.
+    "front": 0.90,
+    "three-quarter": 0.92,
+    "side": 0.94,
+    "back": 0.96,
 }
 
 
@@ -358,6 +361,13 @@ def detect_head_semantics(silhouette, skin, hair, view):
         local_hair = head_hair_seed & hair_region
     else:
         local_hair = hair_candidate
+
+    # Facial features are dark in the illustrated Reference and can be tagged
+    # by the coarse hair threshold. Remove pixels touching confirmed face skin
+    # so eyes/brows do not become a false hair target. The same erosion runs on
+    # Generated semantics, preserving symmetry.
+    if np.any(face_skin):
+        local_hair &= ~_near_mask(face_skin, 2)
 
     landmarks = {}
     if view != "back":

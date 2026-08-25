@@ -87,6 +87,7 @@ def export_runtime_mesh(output):
             copy.vertex_groups.remove(group)
         copies.append(copy)
 
+    runtime_part_count = len(copies)
     bpy.ops.object.select_all(action='DESELECT')
     for obj in copies:
         obj.select_set(True)
@@ -111,12 +112,13 @@ def export_runtime_mesh(output):
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise RuntimeError('SERA runtime GLB export failed')
 
+    runtime_bytes = os.path.getsize(path)
     for obj in copies:
         mesh = obj.data
         bpy.data.objects.remove(obj, do_unlink=True)
         if mesh.users == 0:
             bpy.data.meshes.remove(mesh)
-    return os.path.getsize(path)
+    return runtime_bytes, runtime_part_count
 
 
 def main():
@@ -153,7 +155,7 @@ def main():
         export_cameras=False,
         export_lights=False,
     )
-    runtime_bytes = export_runtime_mesh(output)
+    runtime_bytes, runtime_part_count = export_runtime_mesh(output)
     render_views(output)
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
@@ -167,6 +169,7 @@ def main():
         'armature': armature.name,
         'runtimeAsset': 'sera-blender-runtime.glb',
         'runtimeAssetBytes': runtime_bytes,
+        'runtimePartCount': runtime_part_count,
         'runtimeSwitched': True,
         'runtimePalette': 'material primitives converted to vertex colors in browser',
         'runtimeIntegration': 'BLENDER_CONFORMAL_GLB_CANONICAL_RIG_PART_AWARE',
@@ -184,7 +187,15 @@ def main():
             'shin shells, boots and head pieces can be rigidly assigned to canonical combat '
             'bones before the remaining body vertices use heuristic skinning.\n'
         )
-    print('SERA_CONFORMAL_V12_OK', len(body.data.vertices), triangles, 'RUNTIME_BYTES', runtime_bytes, 'PARTS', len(copies) if False else len(sources))
+    print(
+        'SERA_CONFORMAL_V12_OK',
+        len(body.data.vertices),
+        triangles,
+        'RUNTIME_BYTES',
+        runtime_bytes,
+        'PARTS',
+        runtime_part_count,
+    )
 
 
 if __name__ == '__main__':

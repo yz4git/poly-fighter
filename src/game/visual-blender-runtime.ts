@@ -57,12 +57,52 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   return SERA_AUTHORED_PART.HEURISTIC;
 }
 
+/**
+ * Align manually-authored rigid panels with the canonical runtime classifier.
+ *
+ * The Quaternius body is normalized with an object transform, while the collar
+ * and skirt overlays are authored directly in Blender world coordinates. Their
+ * visual placement is correct in the Blender audit, but after the compact GLB is
+ * normalized to 0..1 those panel centers land too low: the collar becomes torso
+ * and the skirt panels become shin/thigh samples. The latter then receive split
+ * limb weights and shear into the large floating rectangles seen in MATCH.
+ *
+ * Keep this correction small and name-scoped. Body, face, hair and bone-follow
+ * limb equipment are untouched. The generated V13 GLB separately fixes the
+ * T-pose/canonical arm bind mismatch before this browser normalization step.
+ */
+function alignAuthoredPanelRestPose(sourceName: string, geometry: THREE.BufferGeometry): void {
+  const name = sourceName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
+  let offsetY = 0;
+  let verticalScale = 1;
+  if (name === "SERA_Collar") {
+    offsetY = 0.10;
+  } else if (name === "SERA_FrontSkirt" || name === "SERA_LeftSkirt" || name === "SERA_RightSkirt") {
+    offsetY = 0.24;
+    verticalScale = 0.82;
+  } else {
+    return;
+  }
+
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!position || position.count === 0) return;
+  let centerY = 0;
+  for (let vertex = 0; vertex < position.count; vertex += 1) centerY += position.getY(vertex);
+  centerY /= position.count;
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const y = centerY + (position.getY(vertex) - centerY) * verticalScale + offsetY;
+    position.setY(vertex, y);
+  }
+  position.needsUpdate = true;
+}
+
 function bakeMaterialColors(source: THREE.Mesh): THREE.BufferGeometry {
   const transformed = source.geometry.clone();
   transformed.applyMatrix4(source.matrixWorld);
   const geometry = transformed.index ? transformed.toNonIndexed() : transformed;
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!position) throw new Error("SERA_BLENDER_RUNTIME_GLB_HAS_NO_POSITION");
+  alignAuthoredPanelRestPose(source.name, geometry);
 
   const materials = Array.isArray(source.material) ? source.material : [source.material];
   const colors = new Float32Array(position.count * 3);
@@ -142,11 +182,12 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V5_PART_AWARE";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V6_CANONICAL_BIND";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
-  geometry.userData.authoredPieceCount = pieces.length;
+  geometry.userData.authoredPieceCount = primitiveCount;
+  geometry.userData.runtimeBindPose = "CANONICAL_ARMS_DOWN_V1";
   return geometry;
 }
 
@@ -200,6 +241,7 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.root.userData.skinningVersion = runtimeMetadata.skinningVersion;
   visual.root.userData.blenderRuntimePrimitiveMerge = source.userData.sourcePrimitiveCount ?? null;
   visual.root.userData.blenderRuntimeAuthoredPieces = source.userData.authoredPieceCount ?? null;
+  visual.root.userData.blenderRuntimeBindPose = source.userData.runtimeBindPose ?? null;
   visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
   visual.root.userData.blenderWeightAudit = weightAudit;
   visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
@@ -213,7 +255,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V5_PART_AWARE";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V6_CANONICAL_BIND";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

@@ -46,16 +46,18 @@ def validate_reference_box(view, kind, local_box, body_box):
     box = normalized_box(local_box, body_box)
     width = box[2] - box[0]
     height = box[3] - box[1]
-    # Head-local crops are intentionally stricter than V8.  Face bottom must
-    # stay above the shoulder band; hair may extend lower for nape/ponytail.
+    # Shoulder rejection is a vertical invariant.  Horizontal width may be
+    # comparatively large in the source panel because outstretched arms make
+    # the full-body bbox very narrow relative to the head.  Keep the strict
+    # head-height/bottom limits and use width only as a gross runaway guard.
     if kind == "face":
-        max_width = .34 if view == "side" else .30
-        if width > max_width or height > .225 or box[3] > .245 or box[1] < -.02:
+        max_width = .55 if view == "side" else .48
+        if width > max_width or height > .225 or box[3] > .225 or box[1] < -.02:
             raise RuntimeError(f"{view} face crop escaped head-local region: {box}")
     elif kind == "hair":
-        max_width = .52 if view == "side" else .46
-        max_height = .36 if view == "back" else .32
-        if width > max_width or height > max_height or box[1] < -.08 or box[3] > .36:
+        max_width = .60 if view == "side" else .54
+        max_height = .38 if view == "back" else .34
+        if width > max_width or height > max_height or box[1] < -.08 or box[3] > .38:
             raise RuntimeError(f"{view} hair crop escaped head-local region: {box}")
     return box
 

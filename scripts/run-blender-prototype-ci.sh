@@ -2,9 +2,15 @@
 set -euo pipefail
 
 branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
-if [[ "$branch" != "chatgpt/blender-sera-prototype" ]]; then
+if [[ "${SERA_RUN_BLENDER_PROTOTYPE:-0}" != "1" && "$branch" != "chatgpt/blender-sera-prototype" ]]; then
   echo "Blender prototype skipped on branch: ${branch:-local}"
   exit 0
+fi
+
+source_gltf=".external/quaternius/first/assets/3d/characters/player/Superhero_Female_FullBody.gltf"
+if [[ ! -s "$source_gltf" ]]; then
+  echo "Missing Quaternius source required for Blender runtime generation: $source_gltf" >&2
+  exit 1
 fi
 
 sudo apt-get update -qq
@@ -21,7 +27,7 @@ xvfb-run -a blender --background \
   --python-exit-code 1 \
   --python tools/blender/build-sera-conformal.py \
   -- --output-dir "$out" \
-  --source-gltf ".external/quaternius/first/assets/3d/characters/player/Superhero_Female_FullBody.gltf"
+  --source-gltf "$source_gltf"
 
 test -s "$out/sera-blender-prototype.blend"
 test -s "$out/sera-blender-prototype.glb"

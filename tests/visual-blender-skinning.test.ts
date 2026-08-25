@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as THREE from "three";
+import { authoredPartFromName } from "../src/game/visual-blender-runtime";
 import { classifySeraRuntimeColor, isSeraHeadLockedSemantic } from "../src/game/visual-blender-semantics";
-import { classifySeraRuntimeRegion, normalizeSeraInfluences, solveSeraRuntimeInfluences } from "../src/game/visual-blender-skinning";
+import {
+  assignSeraBlenderSkinning,
+  classifySeraRuntimeRegion,
+  normalizeSeraInfluences,
+  SERA_AUTHORED_PART,
+  solveSeraAuthoredPartInfluences,
+  solveSeraRuntimeInfluences,
+} from "../src/game/visual-blender-skinning";
 
 function rgb(hex: number): [number, number, number] {
   return [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
@@ -68,6 +77,28 @@ test("unknown colors use conservative axial fallback instead of arm assignment",
   assert.equal(classifySeraRuntimeRegion(0.18, 0.42, 0.00, "unknown"), "RIGHT_THIGH");
 });
 
+test("Blender source l/r suffixes are converted to canonical rig sides", () => {
+  // Imported Quaternius/Blender X is mirrored relative to the canonical rig:
+  // source `_r` sits at normalized x<0 and therefore belongs to canonical LEFT.
+  assert.equal(authoredPartFromName("Runtime_SERA_Guard_r"), SERA_AUTHORED_PART.LEFT_FOREARM_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Guard_l"), SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Shin_r"), SERA_AUTHORED_PART.LEFT_SHIN_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Shin_l"), SERA_AUTHORED_PART.RIGHT_SHIN_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_BootFoot_r"), SERA_AUTHORED_PART.LEFT_BOOT);
+  assert.equal(authoredPartFromName("Runtime_SERA_BootFoot_l"), SERA_AUTHORED_PART.RIGHT_BOOT);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Shoulder_r"), SERA_AUTHORED_PART.LEFT_SHOULDER_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Shoulder_l"), SERA_AUTHORED_PART.RIGHT_SHOULDER_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_UpperArm_r"), SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_UpperArm_l"), SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Forearm_r"), SERA_AUTHORED_PART.LEFT_FOREARM_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Forearm_l"), SERA_AUTHORED_PART.RIGHT_FOREARM_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Hand_r"), SERA_AUTHORED_PART.LEFT_HAND_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Hand_l"), SERA_AUTHORED_PART.RIGHT_HAND_REGION);
+  assert.equal(authoredPartFromName("Runtime_SERA_FringeInnerL"), SERA_AUTHORED_PART.HEAD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Collar"), SERA_AUTHORED_PART.HEURISTIC);
+  assert.equal(authoredPartFromName("Runtime_SERA_Body_Base"), SERA_AUTHORED_PART.HEURISTIC);
+});
+
 test("Blender SERA solver keeps head and authored guards on intended bones", () => {
   assert.deepEqual(solveSeraRuntimeInfluences("HEAD", 0.90, BONES, "hair"), [[BONES.head, 1]]);
   const leftGuard = solveSeraRuntimeInfluences("LEFT_FOREARM", 0.58, BONES, "silver");
@@ -76,6 +107,107 @@ test("Blender SERA solver keeps head and authored guards on intended bones", () 
   const shinGuard = solveSeraRuntimeInfluences("RIGHT_SHIN", 0.20, BONES, "blueHi");
   assert.equal(shinGuard[0][0], BONES.rightShin);
   assert.ok(shinGuard[0][1] >= 0.96);
+});
+
+test("authored runtime parts are rigidly attached to their intended canonical bones", () => {
+  const expected = [
+    [SERA_AUTHORED_PART.HEAD, BONES.head],
+    [SERA_AUTHORED_PART.LEFT_FOREARM_GUARD, BONES.leftForearm],
+    [SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD, BONES.rightForearm],
+    [SERA_AUTHORED_PART.LEFT_SHIN_GUARD, BONES.leftShin],
+    [SERA_AUTHORED_PART.RIGHT_SHIN_GUARD, BONES.rightShin],
+    [SERA_AUTHORED_PART.LEFT_BOOT, BONES.leftFoot],
+    [SERA_AUTHORED_PART.RIGHT_BOOT, BONES.rightFoot],
+  ] as const;
+  for (const [part, bone] of expected) {
+    assert.deepEqual(solveSeraAuthoredPartInfluences(part, BONES), [[bone, 1]], `part ${part}`);
+  }
+  assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.HEURISTIC, BONES), null);
+  assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.LEFT_FOREARM_REGION, BONES), null);
+  assert.equal(solveSeraAuthoredPartInfluences(SERA_AUTHORED_PART.RIGHT_HAND_REGION, BONES), null);
+});
+
+test("source-rig arm region IDs override ambiguous coordinate heuristics without rigidifying body", () => {
+  // x=-0.10/y=0.58 would be LEFT_THIGH under the coordinate-only fallback.
+  assert.equal(classifySeraRuntimeRegion(-0.10, 0.58, 0.00, "skin"), "LEFT_THIGH");
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+    -0.10, 0.58, 0.00,
+    0.10, 0.58, 0.00,
+    -0.11, 0.47, 0.02,
+    0.11, 0.47, 0.02,
+  ], 3));
+  const skin = rgb(0xD7A38A);
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute([
+    ...skin, ...skin, ...skin, ...skin,
+  ], 3));
+  geometry.setAttribute("seraPart", new THREE.Float32BufferAttribute([
+    SERA_AUTHORED_PART.LEFT_FOREARM_REGION,
+    SERA_AUTHORED_PART.RIGHT_FOREARM_REGION,
+    SERA_AUTHORED_PART.LEFT_HAND_REGION,
+    SERA_AUTHORED_PART.RIGHT_HAND_REGION,
+  ], 1));
+
+  const diagnostics = assignSeraBlenderSkinning(geometry, BONES);
+  const indices = geometry.getAttribute("skinIndex") as THREE.BufferAttribute;
+  assert.equal(diagnostics.regionCounts.LEFT_FOREARM, 1);
+  assert.equal(diagnostics.regionCounts.RIGHT_FOREARM, 1);
+  assert.equal(diagnostics.regionCounts.LEFT_HAND, 1);
+  assert.equal(diagnostics.regionCounts.RIGHT_HAND, 1);
+  assert.equal(indices.getX(0), BONES.leftForearm);
+  assert.equal(indices.getX(1), BONES.rightForearm);
+  assert.equal(indices.getX(2), BONES.leftHand);
+  assert.equal(indices.getX(3), BONES.rightHand);
+  assert.equal(diagnostics.rigidAuthoredVertices, 0);
+  assert.equal(diagnostics.invalidWeightVertices, 0);
+});
+
+test("seraPart identity overrides misleading position and palette heuristics", () => {
+  const parts = [
+    SERA_AUTHORED_PART.LEFT_FOREARM_GUARD,
+    SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD,
+    SERA_AUTHORED_PART.LEFT_SHIN_GUARD,
+    SERA_AUTHORED_PART.RIGHT_SHIN_GUARD,
+    SERA_AUTHORED_PART.LEFT_BOOT,
+    SERA_AUTHORED_PART.RIGHT_BOOT,
+    SERA_AUTHORED_PART.HEAD,
+  ] as const;
+  const expectedBones = [
+    BONES.leftForearm,
+    BONES.rightForearm,
+    BONES.leftShin,
+    BONES.rightShin,
+    BONES.leftFoot,
+    BONES.rightFoot,
+    BONES.head,
+  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+    0.31, 0.91, 0.20,
+    -0.31, 0.08, -0.20,
+    0.28, 0.82, 0.16,
+    -0.28, 0.82, -0.16,
+    0.22, 0.70, 0.10,
+    -0.22, 0.70, -0.10,
+    0.00, 0.12, 0.00,
+  ], 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(new Array(parts.length * 3).fill(0.5), 3));
+  geometry.setAttribute("seraPart", new THREE.Float32BufferAttribute([...parts], 1));
+
+  const diagnostics = assignSeraBlenderSkinning(geometry, BONES);
+  const indices = geometry.getAttribute("skinIndex") as THREE.BufferAttribute;
+  const weights = geometry.getAttribute("skinWeight") as THREE.BufferAttribute;
+  for (let vertex = 0; vertex < parts.length; vertex += 1) {
+    assert.equal(indices.getX(vertex), expectedBones[vertex], `part ${parts[vertex]} bone`);
+    assert.equal(weights.getX(vertex), 1, `part ${parts[vertex]} weight`);
+    assert.equal(weights.getY(vertex), 0);
+    assert.equal(weights.getZ(vertex), 0);
+    assert.equal(weights.getW(vertex), 0);
+  }
+  assert.equal(diagnostics.rigidAuthoredVertices, parts.length);
+  assert.equal(diagnostics.invalidWeightVertices, 0);
+  assert.equal(geometry.getAttribute("seraPart"), undefined);
+  assert.equal(geometry.userData.skinningVersion, "SERA_BLENDER_SKIN_V3_PART_AWARE");
 });
 
 test("every profile produces finite normalized weights with at most four influences", () => {

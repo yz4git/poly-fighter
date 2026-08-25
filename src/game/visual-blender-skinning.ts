@@ -25,11 +25,33 @@ export type SeraRuntimeRegion =
   | "LEFT_FOOT"
   | "RIGHT_FOOT";
 
+export const SERA_AUTHORED_PART = {
+  HEURISTIC: 0,
+  HEAD: 1,
+  LEFT_FOREARM_GUARD: 2,
+  RIGHT_FOREARM_GUARD: 3,
+  LEFT_SHIN_GUARD: 4,
+  RIGHT_SHIN_GUARD: 5,
+  LEFT_BOOT: 6,
+  RIGHT_BOOT: 7,
+  LEFT_SHOULDER_REGION: 8,
+  RIGHT_SHOULDER_REGION: 9,
+  LEFT_UPPER_ARM_REGION: 10,
+  RIGHT_UPPER_ARM_REGION: 11,
+  LEFT_FOREARM_REGION: 12,
+  RIGHT_FOREARM_REGION: 13,
+  LEFT_HAND_REGION: 14,
+  RIGHT_HAND_REGION: 15,
+} as const;
+
+export type SeraAuthoredPartCode = typeof SERA_AUTHORED_PART[keyof typeof SERA_AUTHORED_PART];
 export type SeraInfluence = readonly [bone: number, weight: number];
 
 export interface SeraSkinningDiagnostics {
   regionCounts: Partial<Record<SeraRuntimeRegion, number>>;
   semanticCounts: Partial<Record<SeraRuntimeSemantic, number>>;
+  authoredPartCounts: Record<number, number>;
+  rigidAuthoredVertices: number;
   headLockedVertices: number;
   invalidWeightVertices: number;
   maxInfluenceCount: number;
@@ -110,6 +132,43 @@ export function classifySeraRuntimeRegion(
 function boneForSide(bones: Record<string, number>, side: "LEFT" | "RIGHT", suffix: string): number {
   const prefix = side === "LEFT" ? "left" : "right";
   return bones[`${prefix}${suffix}`];
+}
+
+function authoredRegion(part: SeraAuthoredPartCode): SeraRuntimeRegion | null {
+  switch (part) {
+    case SERA_AUTHORED_PART.HEAD: return "HEAD";
+    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD: return "LEFT_FOREARM";
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD: return "RIGHT_FOREARM";
+    case SERA_AUTHORED_PART.LEFT_SHIN_GUARD: return "LEFT_SHIN";
+    case SERA_AUTHORED_PART.RIGHT_SHIN_GUARD: return "RIGHT_SHIN";
+    case SERA_AUTHORED_PART.LEFT_BOOT: return "LEFT_FOOT";
+    case SERA_AUTHORED_PART.RIGHT_BOOT: return "RIGHT_FOOT";
+    case SERA_AUTHORED_PART.LEFT_SHOULDER_REGION: return "LEFT_SHOULDER";
+    case SERA_AUTHORED_PART.RIGHT_SHOULDER_REGION: return "RIGHT_SHOULDER";
+    case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION: return "LEFT_UPPER_ARM";
+    case SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION: return "RIGHT_UPPER_ARM";
+    case SERA_AUTHORED_PART.LEFT_FOREARM_REGION: return "LEFT_FOREARM";
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION: return "RIGHT_FOREARM";
+    case SERA_AUTHORED_PART.LEFT_HAND_REGION: return "LEFT_HAND";
+    case SERA_AUTHORED_PART.RIGHT_HAND_REGION: return "RIGHT_HAND";
+    default: return null;
+  }
+}
+
+export function solveSeraAuthoredPartInfluences(
+  part: SeraAuthoredPartCode,
+  boneIndices: Record<string, number>,
+): SeraInfluence[] | null {
+  switch (part) {
+    case SERA_AUTHORED_PART.HEAD: return normalizeSeraInfluences([[boneIndices.head, 1]]);
+    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD: return normalizeSeraInfluences([[boneIndices.leftForearm, 1]]);
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD: return normalizeSeraInfluences([[boneIndices.rightForearm, 1]]);
+    case SERA_AUTHORED_PART.LEFT_SHIN_GUARD: return normalizeSeraInfluences([[boneIndices.leftShin, 1]]);
+    case SERA_AUTHORED_PART.RIGHT_SHIN_GUARD: return normalizeSeraInfluences([[boneIndices.rightShin, 1]]);
+    case SERA_AUTHORED_PART.LEFT_BOOT: return normalizeSeraInfluences([[boneIndices.leftFoot, 1]]);
+    case SERA_AUTHORED_PART.RIGHT_BOOT: return normalizeSeraInfluences([[boneIndices.rightFoot, 1]]);
+    default: return null;
+  }
 }
 
 export function solveSeraRuntimeInfluences(
@@ -205,21 +264,51 @@ export function solveSeraRuntimeInfluences(
   }
 }
 
+function authoredPartAt(attribute: THREE.BufferAttribute | null, vertex: number): SeraAuthoredPartCode {
+  if (!attribute) return SERA_AUTHORED_PART.HEURISTIC;
+  const value = Math.round(attribute.getX(vertex));
+  return Object.values(SERA_AUTHORED_PART).includes(value as SeraAuthoredPartCode)
+    ? value as SeraAuthoredPartCode
+    : SERA_AUTHORED_PART.HEURISTIC;
+}
+
 export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIndices: Record<string, number>): SeraSkinningDiagnostics {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!position) throw new Error("SERA_BLENDER_SKINNING_REQUIRES_POSITION");
   const color = (geometry.getAttribute("color") as THREE.BufferAttribute | undefined) ?? null;
+  const authoredPart = (geometry.getAttribute("seraPart") as THREE.BufferAttribute | undefined) ?? null;
   const indices: number[] = [];
   const weights: number[] = [];
-  const diagnostics: SeraSkinningDiagnostics = { regionCounts: {}, semanticCounts: {}, headLockedVertices: 0, invalidWeightVertices: 0, maxInfluenceCount: 0 };
+  const diagnostics: SeraSkinningDiagnostics = {
+    regionCounts: {},
+    semanticCounts: {},
+    authoredPartCounts: {},
+    rigidAuthoredVertices: 0,
+    headLockedVertices: 0,
+    invalidWeightVertices: 0,
+    maxInfluenceCount: 0,
+  };
 
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const semantic = semanticFromColorAttribute(color, vertex);
-    const region = classifySeraRuntimeRegion(position.getX(vertex), position.getY(vertex), position.getZ(vertex), semantic);
-    const influences = solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices, semantic);
+    const part = authoredPartAt(authoredPart, vertex);
+    const forced = solveSeraAuthoredPartInfluences(part, boneIndices);
+    const heuristicRegion = classifySeraRuntimeRegion(
+      position.getX(vertex),
+      position.getY(vertex),
+      position.getZ(vertex),
+      semantic,
+    );
+    const region = authoredRegion(part) ?? heuristicRegion;
+    const influences = forced ?? solveSeraRuntimeInfluences(region, position.getY(vertex), boneIndices, semantic);
+
     diagnostics.semanticCounts[semantic] = (diagnostics.semanticCounts[semantic] ?? 0) + 1;
     diagnostics.regionCounts[region] = (diagnostics.regionCounts[region] ?? 0) + 1;
-    if (isSeraHeadLockedSemantic(semantic)) diagnostics.headLockedVertices += 1;
+    diagnostics.authoredPartCounts[part] = (diagnostics.authoredPartCounts[part] ?? 0) + 1;
+    if (forced) diagnostics.rigidAuthoredVertices += 1;
+    if (part === SERA_AUTHORED_PART.HEAD || (part === SERA_AUTHORED_PART.HEURISTIC && isSeraHeadLockedSemantic(semantic))) {
+      diagnostics.headLockedVertices += 1;
+    }
     diagnostics.maxInfluenceCount = Math.max(diagnostics.maxInfluenceCount, influences.length);
     const sum = influences.reduce((total, [, weight]) => total + weight, 0);
     if (!Number.isFinite(sum) || Math.abs(sum - 1) > 1e-4 || influences.length > 4) diagnostics.invalidWeightVertices += 1;
@@ -231,7 +320,8 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
 
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
-  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V2";
+  geometry.deleteAttribute("seraPart");
+  geometry.userData.skinningVersion = "SERA_BLENDER_SKIN_V3_PART_AWARE";
   geometry.userData.skinningDiagnostics = diagnostics;
   return diagnostics;
 }

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build V5 local Reference crops in a face-landmark coordinate system.
+"""Build V8 local Reference crops in a symmetric 2D semantic-landmark system.
 
 The global objective keeps its body-aligned masks. The independent face/hair
-objectives use eye/nose/mouth landmarks as their own anchor so neither shoulder
-width nor torso proportions can determine the local crop.
+objectives use eye/nose/mouth landmarks detected from the 2D semantic masks,
+so Reference and Generated use the same coordinate system and neither body
+proportions nor 3D object origins can determine the local crop.
 """
 from __future__ import annotations
 
@@ -111,6 +112,7 @@ def normalized_box(local_box, body_box):
 
 
 def hair_limits(view):
+    """View-aware locality guard for semantic-landmark windows, not a fit target."""
     if view == "side":
         return 1.20, .42
     if view == "three-quarter":
@@ -127,11 +129,11 @@ def validate_reference_box(view, kind, local_box, body_box):
     if kind == "face":
         max_width = .66 if view == "side" else (.52 if view == "three-quarter" else .48)
         if width > max_width or height > .30:
-            raise RuntimeError(f"{view} face crop escaped landmark region: {box}")
+            raise RuntimeError(f"{view} face crop escaped semantic landmark region: {box}")
     elif kind == "hair":
         max_width, max_height = hair_limits(view)
         if width > max_width or height > max_height or box[1] < -.16 or box[3] > .42:
-            raise RuntimeError(f"{view} hair crop escaped landmark region: {box}")
+            raise RuntimeError(f"{view} hair crop escaped semantic landmark region: {box}")
     return box
 
 
@@ -159,11 +161,11 @@ def main():
         if view != "back":
             face_box = landmark_window(landmarks, silhouette.shape, "face")
             if face_box is None:
-                raise RuntimeError(f"could not derive landmark face crop for {view}")
+                raise RuntimeError(f"could not derive semantic landmark face crop for {view}")
             face_canvas, face_transform = prepare._crop_canvas(skin, face_box)
             prepare.save_mask(face_canvas, objective_dir / f"reference-{view}-face-local.png")
             local["face"] = {
-                "normalizedBox": {"anchorMode": "faceLandmarks", "kind": "face"},
+                "normalizedBox": {"anchorMode": "semanticMaskLandmarks", "kind": "face"},
                 "referenceNormalizedBox": validate_reference_box(view, "face", face_box, body),
                 "landmarks": {
                     key: prepare._point_to_crop(value, face_box, face_transform)
@@ -176,25 +178,25 @@ def main():
             bh = max(1, by1 - by0 + 1)
             cx = (bx0 + bx1) * .5
             hair_box = clip_box([cx - bh*.13, by0, cx + bh*.13, by0 + bh*.24], silhouette.shape[1], silhouette.shape[0])
-            generated_anchor = {"anchorMode": "bodyHeadFallback", "kind": "hair"}
+            generated_anchor = normalized_box(hair_box, body)
         else:
             hair_box = landmark_window(landmarks, silhouette.shape, "hair")
-            generated_anchor = {"anchorMode": "faceLandmarks", "kind": "hair"}
+            generated_anchor = {"anchorMode": "semanticMaskLandmarks", "kind": "hair"}
         if hair_box is None:
-            raise RuntimeError(f"could not derive landmark hair crop for {view}")
+            raise RuntimeError(f"could not derive semantic landmark hair crop for {view}")
         head_hair = clean_head_hair(hair, silhouette, hair_box)
         hair_canvas, _ = prepare._crop_canvas(head_hair, hair_box)
         prepare.save_mask(hair_canvas, objective_dir / f"reference-{view}-hair-local.png")
         local["hair"] = {
-            "normalizedBox": generated_anchor if view != "back" else normalized_box(hair_box, body),
+            "normalizedBox": generated_anchor,
             "referenceNormalizedBox": validate_reference_box(view, "hair", hair_box, body),
         }
         metadata["views"][view]["localCrops"] = local
 
-    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V7_GEOMETRY_ANCHORED_TIGHT_LOCAL_WINDOWS"
+    metadata["version"] = "SERA_REFERENCE_OBJECTIVE_V8_SEMANTIC_MASK_LOCAL_WINDOWS"
     metadata["localCropPurpose"] = {
-        "face": "tight eye/nose/mouth-anchored face skin window ending just below the mouth; shoulders excluded",
-        "hair": "tight face-landmark head-hair window; long hair remains globally scored",
+        "face": "2D semantic-mask eye/nose/mouth anchored face silhouette and landmarks; same detector for Reference and Generated",
+        "hair": "2D semantic-mask face-landmark anchored head-hair window for front/3q/side; back uses bounded head fallback",
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("SERA_LOCAL_REFERENCE_CROPS_REFINED", objective_dir)

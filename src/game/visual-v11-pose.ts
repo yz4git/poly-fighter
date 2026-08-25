@@ -14,4 +14,59 @@ function guardPose(visual: FighterVisual): void { const b = visual.rig.bones; vi
 function punchPose(visual: FighterVisual): void { const lf = endpointInRoot(visual, visual.leftArm.end); const rf = endpointInRoot(visual, visual.rightArm.end); const punchSide: -1 | 1 = lf.z > rf.z ? -1 : 1; const supportSide = (punchSide * -1) as -1 | 1; const b = visual.rig.bones; b.spineLower.rotation.y += punchSide * -0.045; b.spineUpper.rotation.y += punchSide * 0.070; b.chest.rotation.y += punchSide * 0.050; const supportZ = supportSide < 0 ? -0.020 : 0.080; solveArm(visual, supportSide, new THREE.Vector3(supportSide * 0.115, 0.690, supportZ), new THREE.Vector3(supportSide * 0.210, 0.640, supportSide < 0 ? -0.060 : 0.020)); stanceFeet(visual, 0.86); }
 function kickPose(visual: FighterVisual): void { const leftFoot = endpointInRoot(visual, visual.leftLeg.end); const rightFoot = endpointInRoot(visual, visual.rightLeg.end); const kickSide: -1 | 1 = leftFoot.y > rightFoot.y ? -1 : 1; const b = visual.rig.bones; b.spineLower.rotation.x -= 0.060; b.spineUpper.rotation.x -= 0.040; b.chest.rotation.y += kickSide * -0.065; solveArm(visual, -1, new THREE.Vector3(-0.120, 0.690, -0.030), new THREE.Vector3(-0.210, 0.640, -0.070)); solveArm(visual, 1, new THREE.Vector3(0.120, 0.650, 0.090), new THREE.Vector3(0.210, 0.610, 0.025)); }
 function applyPose(visual: FighterVisual): void { visual.root.updateMatrixWorld(true); const pose = classifyPose(visual); if (pose === "IDLE") idlePose(visual); else if (pose === "GUARD") guardPose(visual); else if (pose === "PUNCH") punchPose(visual); else kickPose(visual); visual.root.userData.v11ReferencePose = pose; visual.root.updateMatrixWorld(true); }
-export function applyV11ReferencePose(visual: FighterVisual): FighterVisual { const geometry = new THREE.BufferGeometry(); geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0.0001, 0, 0, 0, 0.0001, 0], 3)); const material = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false }); const anchor = new THREE.Mesh(geometry, material); anchor.name = "v11-reference-pose-anchor"; anchor.frustumCulled = false; anchor.renderOrder = -10000; anchor.onBeforeRender = () => applyPose(visual); visual.root.add(anchor); visual.root.userData.v11PoseController = "V16_COMPACT_CHIN_GUARD"; return visual; }
+
+export function applyV11ReferencePose(visual: FighterVisual): FighterVisual {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0.0001, 0, 0, 0, 0.0001, 0], 3));
+  const material = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false });
+  const anchor = new THREE.Mesh(geometry, material);
+  const tracked = [visual.hips, ...Object.values(visual.rig.bones)];
+  const lastAppliedPoseState = new Float64Array(tracked.length * 7);
+  let hasLastAppliedPoseState = false;
+
+  const poseMatchesLastAppliedState = (): boolean => {
+    if (!hasLastAppliedPoseState) return false;
+    let offset = 0;
+    for (const object of tracked) {
+      if (
+        object.position.x !== lastAppliedPoseState[offset]
+        || object.position.y !== lastAppliedPoseState[offset + 1]
+        || object.position.z !== lastAppliedPoseState[offset + 2]
+        || object.quaternion.x !== lastAppliedPoseState[offset + 3]
+        || object.quaternion.y !== lastAppliedPoseState[offset + 4]
+        || object.quaternion.z !== lastAppliedPoseState[offset + 5]
+        || object.quaternion.w !== lastAppliedPoseState[offset + 6]
+      ) return false;
+      offset += 7;
+    }
+    return true;
+  };
+
+  const captureAppliedPoseState = (): void => {
+    let offset = 0;
+    for (const object of tracked) {
+      lastAppliedPoseState[offset] = object.position.x;
+      lastAppliedPoseState[offset + 1] = object.position.y;
+      lastAppliedPoseState[offset + 2] = object.position.z;
+      lastAppliedPoseState[offset + 3] = object.quaternion.x;
+      lastAppliedPoseState[offset + 4] = object.quaternion.y;
+      lastAppliedPoseState[offset + 5] = object.quaternion.z;
+      lastAppliedPoseState[offset + 6] = object.quaternion.w;
+      offset += 7;
+    }
+    hasLastAppliedPoseState = true;
+  };
+
+  anchor.name = "v11-reference-pose-anchor";
+  anchor.frustumCulled = false;
+  anchor.renderOrder = -10000;
+  anchor.onBeforeRender = () => {
+    if (poseMatchesLastAppliedState()) return;
+    applyPose(visual);
+    captureAppliedPoseState();
+  };
+  visual.root.add(anchor);
+  visual.root.userData.v11PoseController = "V16_COMPACT_CHIN_GUARD";
+  visual.root.userData.v11PoseStabilityGuard = "SKIP_UNCHANGED_BONE_STATE_V1";
+  return visual;
+}

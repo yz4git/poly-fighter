@@ -10,23 +10,15 @@ from __future__ import annotations
 
 import math
 from collections import deque
-
 import numpy as np
 
 HEAD_SEMANTIC_VERSION = "SERA_HEAD_SEMANTIC_V1_TOP_HAIR_FACE_SKIN"
-
-# Signal limits are deliberately tighter than the canvas crop. The canvas can
-# include empty padding for stable alignment, while semantic pixels below the
-# chin band are rejected before scoring.
 FACE_SIGNAL_BOTTOM = 0.82
 HAIR_SIGNAL_BOTTOM = {
-    # Local hair intentionally stops around the jaw. Long ponytail/nape shape
-    # remains part of the global silhouette objective; keeping it here lets
-    # dark shoulder/costume pixels pollute the Reference hair target.
-    "front": 0.90,
-    "three-quarter": 0.92,
-    "side": 0.94,
-    "back": 0.96,
+    "front": 0.78,
+    "three-quarter": 0.80,
+    "side": 0.82,
+    "back": 0.86,
 }
 
 
@@ -56,7 +48,7 @@ def _components(mask):
     mask = np.asarray(mask, dtype=bool)
     h, w = mask.shape
     seen = np.zeros_like(mask, dtype=bool)
-    components = []
+    out = []
     for sy, sx in np.argwhere(mask):
         sy, sx = int(sy), int(sx)
         if seen[sy, sx]:
@@ -66,8 +58,7 @@ def _components(mask):
         points = []
         min_x = max_x = sx
         min_y = max_y = sy
-        sum_x = 0.0
-        sum_y = 0.0
+        sum_x = sum_y = 0.0
         while queue:
             y, x = queue.popleft()
             points.append((y, x))
@@ -88,15 +79,13 @@ def _components(mask):
                     seen[ny, nx] = True
                     queue.append((ny, nx))
         area = len(points)
-        components.append({
+        out.append({
             "points": points,
             "area": area,
             "box": [min_x, min_y, max_x, max_y],
-            # Pixel centroid is more useful than bbox center for rejecting a
-            # shoulder crescent connected only by sparse antialiasing pixels.
             "center": [sum_x / area, sum_y / area],
         })
-    return components
+    return out
 
 
 def _component_mask(shape, components):
@@ -107,52 +96,64 @@ def _component_mask(shape, components):
     return result
 
 
+def _near_mask(mask, radius):
+    """Small square dilation implemented with NumPy shifts only."""
+    radius = max(0, int(radius))
+    result = np.asarray(mask, dtype=bool).copy()
+    if radius == 0:
+        return result
+    source = result.copy()
+    h, w = source.shape
+    for dy in range(-radius, radius + 1):
+        ys0, yd0 = max(0, -dy), max(0, dy)
+        ly = h - abs(dy)
+        if ly <= 0:
+            continue
+        for dx in range(-radius, radius + 1):
+            xs0, xd0 = max(0, -dx), max(0, dx)
+            lx = w - abs(dx)
+            if lx <= 0:
+                continue
+            result[yd0:yd0 + ly, xd0:xd0 + lx] |= source[ys0:ys0 + ly, xs0:xs0 + lx]
+    return result
+
+
 def _head_band_center(silhouette, body_box):
-    """Estimate head center from upper silhouette rows, never from shoulders."""
     bx0, by0, bx1, by1 = body_box
     body_h = max(1.0, by1 - by0 + 1.0)
-    # Stay above the shoulder band. The 4-16% body-height interval is stable
-    # across front, 3/4 and side views and tolerates a high ponytail.
     y0 = max(0, int(round(by0 + body_h * .04)))
     y1 = min(silhouette.shape[0] - 1, int(round(by0 + body_h * .16)))
-    band = silhouette[y0:y1 + 1]
-    ys, xs = np.nonzero(band)
-    if len(xs):
-        return float(np.median(xs))
-    return (bx0 + bx1) * .5
+    _, xs = np.nonzero(silhouette[y0:y1 + 1])
+    return float(np.median(xs)) if len(xs) else (bx0 + bx1) * .5
 
 
 def _select_head_hair(silhouette, hair, body_box):
-    """Select only the top hair seed; never let a dark shirt define the head."""
+    """Select only top-hair seed components; dark clothing cannot anchor the head."""
     bx0, by0, bx1, by1 = body_box
     body_h = max(1.0, by1 - by0 + 1.0)
     body_w = max(1.0, bx1 - bx0 + 1.0)
     head_cx = _head_band_center(silhouette, body_box)
-
     search = np.zeros_like(hair, dtype=bool)
-    # Old V1 searched to 43% of body height, allowing connected costume pixels
-    # to become the "hair" component. 24% ends below the head but above chest.
     y1 = min(hair.shape[0] - 1, int(round(by0 + body_h * .24)))
     half = max(body_h * .15, body_w * .24)
     x0 = max(0, int(round(head_cx - half)))
     x1 = min(hair.shape[1] - 1, int(round(head_cx + half)))
     search[by0:y1 + 1, x0:x1 + 1] = (
-        hair[by0:y1 + 1, x0:x1 + 1]
-        & silhouette[by0:y1 + 1, x0:x1 + 1]
+        hair[by0:y1 + 1, x0:x1 + 1] & silhouette[by0:y1 + 1, x0:x1 + 1]
     )
-    components = [component for component in _components(search) if component["area"] >= 3]
+    components = [c for c in _components(search) if c["area"] >= 3]
     if not components:
         return np.zeros_like(hair, dtype=bool), None, []
 
-    def score(component):
-        cx, cy = component["center"]
-        _, top, _, bottom = component["box"]
+    def score(c):
+        cx, cy = c["center"]
+        _, top, _, bottom = c["box"]
         height = bottom - top + 1
         center_penalty = abs(cx - head_cx) / max(body_h * .18, 1.0)
         vertical_penalty = max(0.0, (cy - (by0 + body_h * .13)) / max(body_h * .13, 1.0))
         top_bonus = max(0.0, 1.0 - (top - by0) / max(body_h * .15, 1.0))
         return (
-            math.log1p(component["area"]) * 2.0
+            math.log1p(c["area"]) * 2.0
             + height / body_h * 7.0
             + top_bonus * 5.0
             - center_penalty * 3.0
@@ -163,48 +164,44 @@ def _select_head_hair(silhouette, hair, body_box):
     px0, py0, px1, py1 = primary["box"]
     pcx, pcy = primary["center"]
     selected = []
-    for component in components:
-        x0, y0, x1, y1 = component["box"]
-        cx, cy = component["center"]
+    for c in components:
+        x0, y0, x1, _ = c["box"]
+        cx, cy = c["center"]
         near_primary = (
             x1 >= px0 - body_h * .045
             and x0 <= px1 + body_h * .045
             and y0 <= py1 + body_h * .045
         )
         near_center = abs(cx - pcx) <= body_h * .11 and abs(cy - pcy) <= body_h * .13
-        if component is primary or near_primary or near_center:
-            selected.append(component)
+        if c is primary or near_primary or near_center:
+            selected.append(c)
     return _component_mask(hair.shape, selected), primary, selected
 
 
 def _select_face_skin(skin, region, center_x, head_top, head_height, view):
     """Keep face/ear skin components and reject neck/shoulder/chest components."""
     candidate = np.asarray(skin, dtype=bool) & np.asarray(region, dtype=bool)
-    # A hard signal floor prevents a face component connected through the neck
-    # from dragging shoulder pixels into the local objective. Crop padding stays
-    # larger, so this does not destabilize Reference/Generated alignment.
     signal_bottom = min(
         candidate.shape[0] - 1,
         int(round(head_top + head_height * FACE_SIGNAL_BOTTOM)),
     )
     candidate[signal_bottom + 1:] = False
-    components = [component for component in _components(candidate) if component["area"] >= 2]
+    components = [c for c in _components(candidate) if c["area"] >= 2]
     if not components:
         return candidate
 
     target_y = head_top + head_height * (.47 if view == "side" else .50)
     max_center_dx = head_height * (.58 if view == "side" else .48)
 
-    def score(component):
-        cx, cy = component["center"]
-        x0, y0, x1, y1 = component["box"]
-        width = x1 - x0 + 1
-        height = y1 - y0 + 1
+    def score(c):
+        cx, cy = c["center"]
+        x0, y0, x1, y1 = c["box"]
+        width, height = x1 - x0 + 1, y1 - y0 + 1
         center_penalty = abs(cx - center_x) / max(max_center_dx, 1.0)
         vertical_penalty = abs(cy - target_y) / max(head_height * .42, 1.0)
         low_penalty = max(0.0, (cy - (head_top + head_height * .68)) / max(head_height * .14, 1.0))
         return (
-            math.log1p(component["area"]) * 2.5
+            math.log1p(c["area"]) * 2.5
             + min(1.0, height / max(head_height * .58, 1.0)) * 3.0
             + min(1.0, width / max(head_height * .35, 1.0)) * 1.5
             - center_penalty * 3.0
@@ -213,24 +210,19 @@ def _select_face_skin(skin, region, center_x, head_top, head_height, view):
         )
 
     plausible = [
-        component
-        for component in components
-        if abs(component["center"][0] - center_x) <= max_center_dx * 1.35
-        and component["center"][1] <= head_top + head_height * .76
+        c for c in components
+        if abs(c["center"][0] - center_x) <= max_center_dx * 1.35
+        and c["center"][1] <= head_top + head_height * .76
     ]
     primary = max(plausible or components, key=score)
     px0, py0, px1, py1 = primary["box"]
-    pcx, pcy = primary["center"]
-
+    pcx, _ = primary["center"]
     selected = [primary]
-    for component in components:
-        if component is primary:
+    for c in components:
+        if c is primary:
             continue
-        cx, cy = component["center"]
-        x0, y0, x1, y1 = component["box"]
-        # Ears/nose highlights can be detached. Keep only small components that
-        # stay beside the primary face and in the upper face band; a low, wide
-        # shoulder island cannot satisfy these constraints.
+        cx, cy = c["center"]
+        x0, y0, x1, y1 = c["box"]
         near = (
             x1 >= px0 - head_height * .16
             and x0 <= px1 + head_height * .16
@@ -239,9 +231,9 @@ def _select_face_skin(skin, region, center_x, head_top, head_height, view):
         )
         upper = cy <= head_top + head_height * .72
         centered = abs(cx - pcx) <= head_height * (.45 if view == "side" else .34)
-        small_enough = component["area"] <= max(primary["area"] * .42, 80)
+        small_enough = c["area"] <= max(primary["area"] * .42, 80)
         if near and upper and centered and small_enough:
-            selected.append(component)
+            selected.append(c)
     return _component_mask(candidate.shape, selected)
 
 
@@ -264,32 +256,26 @@ def detect_head_semantics(silhouette, skin, hair, view):
     body_box = bbox(silhouette)
     if body_box is None:
         return None
-    bx0, by0, bx1, by1 = body_box
+    _, by0, _, by1 = body_box
     body_h = max(1.0, by1 - by0 + 1.0)
     silhouette_head_cx = _head_band_center(silhouette, body_box)
 
     head_hair_seed, primary, selected = _select_head_hair(silhouette, hair, body_box)
     primary_box = None if primary is None else primary["box"]
     if primary_box is not None:
-        hx0, hy0, hx1, hy1 = primary_box
+        _, hy0, _, _ = primary_box
         hair_cx = primary["center"][0]
         head_top = max(float(by0), float(hy0))
-        # Blend top-hair and upper-silhouette centers. This prevents an
-        # asymmetric ponytail or contaminated dark component from moving the
-        # local face window away from the actual head.
         center_x = hair_cx * .46 + silhouette_head_cx * .54
-        cap_width = max(1.0, hx1 - hx0 + 1.0)
+        cap_width = max(1.0, primary_box[2] - primary_box[0] + 1.0)
     else:
         head_top = float(by0)
         center_x = silhouette_head_cx
         cap_width = body_h * (.11 if view == "side" else .13)
 
-    # A face is ~18-20% of body height in this turnaround.
     head_height = body_h * (0.205 if view == "side" else 0.185)
     cap_width = min(max(cap_width, head_height * .46), head_height * 1.02)
 
-    # The canvas remains generous for stable alignment, but semantic face skin
-    # is independently clipped and component-filtered below.
     head_half = max(cap_width * .55, head_height * (.50 if view == "side" else .45))
     face_region_box = _clip([
         center_x - head_half,
@@ -301,13 +287,10 @@ def detect_head_semantics(silhouette, skin, hair, view):
     face_region = np.zeros_like(silhouette, dtype=bool)
     face_region[fy0:fy1 + 1, fx0:fx1 + 1] = True
 
-    # face skin can never extend into the shoulder/chest band: low pixels are
-    # removed first, then only the principal face/ear connected components are
-    # retained. This fixes Side-view detached shoulder islands.
+    # face skin can never extend into the shoulder/chest band.
     face_skin = _select_face_skin(
         skin, face_region, center_x, head_top, head_height, view
     )
-
     face_signal_region = face_region.copy()
     face_signal_bottom = min(
         silhouette.shape[0] - 1,
@@ -323,9 +306,7 @@ def detect_head_semantics(silhouette, skin, hair, view):
         head_top + head_height * .98,
     ], silhouette.shape)
 
-    # Hair-local means head hair. Long ponytail/costume interaction remains in
-    # the global silhouette objective; the local score must not see torso/arms.
-    hair_bottom = HAIR_SIGNAL_BOTTOM.get(view, 1.06)
+    hair_bottom = HAIR_SIGNAL_BOTTOM.get(view, .84)
     hair_box = _clip([
         center_x - head_height * (.78 if view == "side" else .70),
         head_top - head_height * .08,
@@ -336,38 +317,34 @@ def detect_head_semantics(silhouette, skin, hair, view):
     hair_region = np.zeros_like(silhouette, dtype=bool)
     hair_region[hy0:hy1 + 1, hx0:hx1 + 1] = True
 
-    # Restrict hair to components that touch the selected top-hair seed. This
-    # rejects dark costume/face-detail islands produced by Reference thresholding.
+    # The raw Reference dark mask is noisy. Use it only inside the head-local
+    # window, erase confirmed face skin, and retain components connected to the
+    # top-hair seed. Detached upper strands are allowed only when they are large
+    # and spatially adjacent to the primary head-hair mass.
     hair_candidate = hair & hair_region
-    local_hair = np.zeros_like(hair_candidate, dtype=bool)
-    hair_components = [component for component in _components(hair_candidate) if component["area"] >= 2]
+    if np.any(face_skin):
+        hair_candidate &= ~_near_mask(face_skin, 2)
+    hair_components = [c for c in _components(hair_candidate) if c["area"] >= 2]
     seed = _near_mask(head_hair_seed, 2) if np.any(head_hair_seed) else None
     chosen_hair = []
-    for component in hair_components:
-        component_mask = _component_mask(hair_candidate.shape, [component])
-        touches_seed = seed is not None and np.any(component_mask & seed)
-        cx, cy = component["center"]
-        top = component["box"][1]
-        upper_central = (
-            top <= head_top + head_height * .34
-            and abs(cx - center_x) <= head_height * .72
-            and cy <= head_top + head_height * .78
-        )
-        if touches_seed or upper_central:
-            chosen_hair.append(component)
+    for c in hair_components:
+        cmask = _component_mask(hair_candidate.shape, [c])
+        touches_seed = seed is not None and np.any(cmask & seed)
+        detached_strand = False
+        if primary is not None:
+            detached_strand = (
+                c["area"] >= max(5, int(primary["area"] * .04))
+                and c["box"][1] <= primary["box"][3] + body_h * .03
+                and abs(c["center"][0] - primary["center"][0]) <= head_height * .65
+            )
+        if touches_seed or detached_strand:
+            chosen_hair.append(c)
     if chosen_hair:
         local_hair = _component_mask(hair_candidate.shape, chosen_hair)
     elif np.any(head_hair_seed):
         local_hair = head_hair_seed & hair_region
     else:
         local_hair = hair_candidate
-
-    # Facial features are dark in the illustrated Reference and can be tagged
-    # by the coarse hair threshold. Remove pixels touching confirmed face skin
-    # so eyes/brows do not become a false hair target. The same erosion runs on
-    # Generated semantics, preserving symmetry.
-    if np.any(face_skin):
-        local_hair &= ~_near_mask(face_skin, 2)
 
     landmarks = {}
     if view != "back":
@@ -415,27 +392,3 @@ def detect_head_semantics(silhouette, skin, hair, view):
         "headHair": local_hair,
         "landmarks": landmarks,
     }
-
-
-def _near_mask(mask, radius):
-    """Small square dilation implemented with NumPy shifts only."""
-    radius = max(0, int(radius))
-    result = np.asarray(mask, dtype=bool).copy()
-    if radius == 0:
-        return result
-    h, w = result.shape
-    source = result.copy()
-    for dy in range(-radius, radius + 1):
-        ys0, yd0 = max(0, -dy), max(0, dy)
-        length_y = h - abs(dy)
-        if length_y <= 0:
-            continue
-        for dx in range(-radius, radius + 1):
-            xs0, xd0 = max(0, -dx), max(0, dx)
-            length_x = w - abs(dx)
-            if length_x <= 0:
-                continue
-            result[yd0:yd0 + length_y, xd0:xd0 + length_x] |= (
-                source[ys0:ys0 + length_y, xs0:xs0 + length_x]
-            )
-    return result

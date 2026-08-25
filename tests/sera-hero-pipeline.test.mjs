@@ -16,6 +16,7 @@ const objectiveV9Path = new URL('../tools/blender/hero/sera_reference_objective_
 const headSemanticPath = new URL('../tools/blender/hero/sera_head_semantic.py', import.meta.url);
 const boneFollowPath = new URL('../tools/blender/sera_bone_follow.py', import.meta.url);
 const identityPath = new URL('../tools/blender/sera_identity_parts.py', import.meta.url);
+const conformalPath = new URL('../tools/blender/build-sera-conformal.py', import.meta.url);
 const preparePath = new URL('../scripts/prepare-sera-reference-objective.py', import.meta.url);
 const refinePath = new URL('../scripts/refine-sera-local-reference-crops.py', import.meta.url);
 const runnerPath = new URL('../scripts/run-sera-hero-ai-pipeline.sh', import.meta.url);
@@ -34,6 +35,7 @@ const objectiveV9 = readFileSync(objectiveV9Path, 'utf8');
 const headSemantic = readFileSync(headSemanticPath, 'utf8');
 const boneFollow = readFileSync(boneFollowPath, 'utf8');
 const identity = readFileSync(identityPath, 'utf8');
+const conformal = readFileSync(conformalPath, 'utf8');
 const prepare = readFileSync(preparePath, 'utf8');
 const refine = readFileSync(refinePath, 'utf8');
 const runner = readFileSync(runnerPath, 'utf8');
@@ -147,6 +149,20 @@ test('authored armor remains bone-followed and hair retains dedicated clumps', (
   assert.match(boneFollow, /parent_type = 'BONE'/);
   for (const bone of ['lowerarm_', 'calf_', 'foot_']) assert.ok(identity.includes(bone));
   for (const object of ['SERA_FringeInnerL','SERA_FringeInnerR','SERA_FringeOuterL','SERA_FringeOuterR','SERA_BackHairCenter','SERA_BackHairL','SERA_BackHairR','SERA_PonyFanL','SERA_PonyFanR']) assert.ok(identity.includes(object));
+});
+
+test('V15 runtime export compacts both hand regions without touching Hero reference geometry', () => {
+  assert.match(conformal, /def compact_runtime_hand_mesh\(mesh\):/);
+  assert.match(conformal, /if region in \('Hand_l', 'Hand_r'\):\n\s+compact_runtime_hand_mesh\(mesh\)/);
+  assert.match(conformal, /seraRuntimeHandPose.*CLOSED_COMPACT_V1/);
+  assert.match(conformal, /runtimeHandPose.*CLOSED_COMPACT_V1/);
+  assert.match(conformal, /SERA_QUATERNIUS_CONFORMAL_V15_RUNTIME_FISTS/);
+  assert.match(conformal, /return runtime_bytes/);
+  const splitIndex = conformal.indexOf('def split_evaluated_body');
+  const compactCallIndex = conformal.indexOf('compact_runtime_hand_mesh(mesh)', splitIndex);
+  const authoredSaveIndex = conformal.indexOf("bpy.ops.wm.save_as_mainfile", splitIndex);
+  assert.ok(compactCallIndex > splitIndex, 'fist deformation belongs to runtime split/export');
+  assert.ok(compactCallIndex < authoredSaveIndex || authoredSaveIndex === -1, 'runtime fist deformation must not mutate the authored Hero scene before reference save');
 });
 
 test('V5 pipeline reports independent objectives and keeps T-pose dimensions diagnostic-only', () => {

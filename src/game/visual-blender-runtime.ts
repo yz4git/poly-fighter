@@ -30,8 +30,9 @@ function materialColor(material: THREE.Material | undefined): THREE.Color {
  * The imported Quaternius source uses the opposite X-side convention from the
  * canonical POLY FIGHTER rig: Blender `_r` pieces are on normalized x < 0,
  * which is canonical LEFT, while `_l` pieces are on x > 0 (canonical RIGHT).
- * The old coordinate heuristic handled this implicitly; the explicit part-ID
- * path must preserve the same conversion or rigid pieces cross the body.
+ * The explicit IDs cover both rigid authored equipment and V14 source-rig arm
+ * regions. Region IDs select the correct smooth skinning profile without making
+ * the organic body rigid; equipment IDs still force one-bone attachment.
  */
 export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   const name = rawName.replace(/^Runtime_/, "").replace(/\.\d+$/, "");
@@ -41,6 +42,14 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   if (name === "SERA_Shin_l") return SERA_AUTHORED_PART.RIGHT_SHIN_GUARD;
   if (name === "SERA_BootFoot_r") return SERA_AUTHORED_PART.LEFT_BOOT;
   if (name === "SERA_BootFoot_l") return SERA_AUTHORED_PART.RIGHT_BOOT;
+  if (name === "SERA_Body_Shoulder_r") return SERA_AUTHORED_PART.LEFT_SHOULDER_REGION;
+  if (name === "SERA_Body_Shoulder_l") return SERA_AUTHORED_PART.RIGHT_SHOULDER_REGION;
+  if (name === "SERA_Body_UpperArm_r") return SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION;
+  if (name === "SERA_Body_UpperArm_l") return SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION;
+  if (name === "SERA_Body_Forearm_r") return SERA_AUTHORED_PART.LEFT_FOREARM_REGION;
+  if (name === "SERA_Body_Forearm_l") return SERA_AUTHORED_PART.RIGHT_FOREARM_REGION;
+  if (name === "SERA_Body_Hand_r") return SERA_AUTHORED_PART.LEFT_HAND_REGION;
+  if (name === "SERA_Body_Hand_l") return SERA_AUTHORED_PART.RIGHT_HAND_REGION;
   if (
     name.startsWith("SERA_Hair")
     || name.startsWith("SERA_Fringe")

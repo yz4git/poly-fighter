@@ -66,7 +66,12 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - name: Run regression tests and optional Blender prototype
-        run: npm test
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            SERA_RUN_BLENDER_PROTOTYPE=1 npm test
+          else
+            npm test
+          fi
       - name: Stage Blender runtime asset for the real game audit
         if: github.event_name == 'pull_request'
         run: |
@@ -149,7 +154,7 @@ jobs:
           done
           test -s artifacts/visual-audit/blender-runtime-state.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and match poses, with the Blender-authored SERA runtime asset and dedicated SERA_BLENDER_SKIN_V2 weights." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and match poses, with the Blender-authored SERA runtime asset and part-aware SERA_BLENDER_SKIN_V3 weights." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-webgl-visual-audit

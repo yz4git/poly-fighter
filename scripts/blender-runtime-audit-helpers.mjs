@@ -33,6 +33,7 @@ export async function waitForBlenderRuntime(execute, sessionId, delay, options =
         skinningVersion: visual?.root?.userData?.skinningVersion ?? null,
         metadata: visual?.root?.userData?.blenderRuntimeMetadata ?? null,
         reconstruction: visual?.bodyMesh?.userData?.reconstruction ?? null,
+        authoredPieces: visual?.root?.userData?.blenderRuntimeAuthoredPieces ?? null,
       };
     `);
     if (last?.ready) return last;
@@ -47,13 +48,19 @@ export function assertBlenderRuntimeAuditState(state) {
   if (state.pipeline !== "BLENDER_CONFORMAL_GLB_CANONICAL_RIG") {
     throw new Error(`Unexpected SERA visual pipeline: ${JSON.stringify(state)}`);
   }
-  if (state.skinningVersion !== "SERA_BLENDER_SKIN_V2") {
+  if (state.skinningVersion !== "SERA_BLENDER_SKIN_V3_PART_AWARE") {
     throw new Error(`Unexpected SERA skinning version: ${JSON.stringify(state)}`);
   }
-  if (state.reconstruction !== "blender-conformal-runtime-glb") {
+  if (state.reconstruction !== "blender-conformal-runtime-glb-part-aware") {
     throw new Error(`Blender runtime mesh was not installed: ${JSON.stringify(state)}`);
   }
   if (!state.metadata || state.metadata.maxInfluenceCount > 4 || state.metadata.headLockedVertices <= 0) {
     throw new Error(`Blender runtime metadata is incomplete: ${JSON.stringify(state)}`);
+  }
+  if (!(state.metadata.rigidAuthoredVertices > 0) || !state.metadata.authoredPartCounts) {
+    throw new Error(`SERA authored-part attachments were not preserved: ${JSON.stringify(state)}`);
+  }
+  if (!(state.authoredPieces > 0)) {
+    throw new Error(`SERA runtime GLB did not expose authored pieces: ${JSON.stringify(state)}`);
   }
 }

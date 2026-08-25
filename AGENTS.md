@@ -5,6 +5,8 @@ These rules are mandatory for ChatGPT/agent work in this repository.
 ## GitHub operations
 
 - Use the GitHub connector tools for all repository reads and writes: branch inspection, file fetch/update/create/delete, commits, pull requests, workflow runs, jobs, logs, artifacts, and merges.
+- **Direct implementation from ChatGPT is supported and expected:** use GitHub connector writes plus GitHub Actions to edit code, checkpoint work, open PRs, run CI/headless Blender/WebGL validation, inspect artifacts, iterate, and merge. Do not tell the user this repository cannot be implemented from chat without first attempting this established workflow.
+- For tasks that require executable validation or rendering, prefer the repository's existing GitHub Actions workflows instead of stopping at a code-only proposal.
 - Do **not** use `container`, shell `git`, `gh`, `curl`, Python networking, or raw HTTP as a fallback for GitHub operations.
 - If a GitHub tool is not currently loaded, call `api_tool.list_resources` for the GitHub connector and load the exact function needed, then continue with the GitHub connector.
 - If a GitHub connector call fails, diagnose/retry with the connector. Do not switch to shell GitHub access.

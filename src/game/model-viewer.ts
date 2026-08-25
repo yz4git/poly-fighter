@@ -3,6 +3,7 @@ import type { FighterDefinition } from "./types";
 import {
   createFighterVisual,
   disposeFighterVisual,
+  getSoleContactPoint,
   type FighterVisual,
   type FighterVisualQuality,
 } from "./visual-entry";
@@ -13,8 +14,17 @@ export interface ModelViewerOptions {
   onFallback?: (message: string) => void;
 }
 
+type ModelAuditView = "front" | "three-quarter" | "side" | "back";
+type ModelAuditCanvas = HTMLCanvasElement & {
+  __polyFighterSetAuditView?: (view: ModelAuditView) => boolean;
+  __polyFighterGetAuditState?: () => Record<string, unknown>;
+};
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.max(minimum, Math.min(maximum, value));
+
+const finiteVector = (value: THREE.Vector3): boolean =>
+  Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
 
 export class ModelViewer {
   readonly renderer: THREE.WebGLRenderer;
@@ -35,6 +45,7 @@ export class ModelViewer {
   private fitDistance = 6;
   private previousPinch = 0;
   private userMoved = false;
+  private auditLocked = false;
   private runtimeState = "";
 
   constructor(mount: HTMLElement, options: ModelViewerOptions) {
@@ -79,6 +90,7 @@ export class ModelViewer {
     this.createFloor(options.definition.colors.primary);
     this.fitModel(true);
     this.runtimeState = String(this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    this.installAuditHooks();
 
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
@@ -112,6 +124,33 @@ export class ModelViewer {
     this.scene.add(this.floor);
   }
 
+  private readGrounding(): {
+    left: THREE.Vector3;
+    right: THREE.Vector3;
+    minimumY: number;
+    maximumGap: number;
+  } | null {
+    this.visual.root.updateMatrixWorld(true);
+    const left = getSoleContactPoint(this.visual, "left");
+    const right = getSoleContactPoint(this.visual, "right");
+    if (!finiteVector(left) || !finiteVector(right)) return null;
+    const minimumY = Math.min(left.y, right.y);
+    return {
+      left,
+      right,
+      minimumY,
+      maximumGap: Math.max(left.y, right.y) - minimumY,
+    };
+  }
+
+  private syncFloorToSoles(): void {
+    const grounding = this.readGrounding();
+    if (!grounding) return;
+    // Use the visible sole contacts, not Box3.min. The invisible V11 render
+    // anchor lives at root y=0 and otherwise makes SERA look as if she floats.
+    this.floor.position.y = grounding.minimumY - 0.006;
+  }
+
   private fitModel(resetDistance: boolean): void {
     this.visual.root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.visual.root);
@@ -123,7 +162,7 @@ export class ModelViewer {
     this.fitDistance = clamp(Math.max(maxDimension * 1.32, verticalFit * 1.12), 3.2, 13.5);
     if (resetDistance) this.distance = this.fitDistance;
     else this.distance = clamp(this.distance, this.fitDistance * 0.58, this.fitDistance * 1.9);
-    this.floor.position.y = box.min.y - 0.018;
+    this.syncFloorToSoles();
     this.floor.scale.setScalar(clamp(maxDimension / 3.2, 0.72, 1.5));
     this.updateCamera();
   }
@@ -136,6 +175,48 @@ export class ModelViewer {
       this.target.z + Math.cos(this.yaw) * horizontal,
     );
     this.camera.lookAt(this.target);
+  }
+
+  private installAuditHooks(): void {
+    const canvas = this.renderer.domElement as ModelAuditCanvas;
+    canvas.dataset.modelAuditHook = "SERA_MODEL_QUALITY_V1";
+    canvas.__polyFighterSetAuditView = (view) => {
+      const yawByView: Record<ModelAuditView, number> = {
+        front: 0,
+        "three-quarter": Math.PI / 4,
+        side: Math.PI / 2,
+        back: Math.PI,
+      };
+      if (!(view in yawByView)) return false;
+      this.auditLocked = true;
+      this.userMoved = true;
+      this.yaw = yawByView[view];
+      this.pitch = 0.045;
+      this.fitModel(false);
+      this.updateCamera();
+      return true;
+    };
+    canvas.__polyFighterGetAuditState = () => {
+      const grounding = this.readGrounding();
+      const box = new THREE.Box3().setFromObject(this.visual.root);
+      const size = box.isEmpty() ? new THREE.Vector3() : box.getSize(new THREE.Vector3());
+      return {
+        auditVersion: "SERA_MODEL_QUALITY_V1",
+        runtimeState: String(this.visual.root.userData.blenderRuntimeAssetState ?? "static"),
+        yaw: this.yaw,
+        pitch: this.pitch,
+        distance: this.distance,
+        fitDistance: this.fitDistance,
+        floorY: this.floor.position.y,
+        leftSoleY: grounding?.left.y ?? null,
+        rightSoleY: grounding?.right.y ?? null,
+        minimumSoleY: grounding?.minimumY ?? null,
+        soleHeightDelta: grounding?.maximumGap ?? null,
+        floorToLowestSoleGap: grounding ? grounding.minimumY - this.floor.position.y : null,
+        modelSize: size.toArray(),
+        stabilityGuard: String(this.visual.root.userData.v11PoseStabilityGuard ?? "none"),
+      };
+    };
   }
 
   private resize = (): void => {
@@ -153,6 +234,7 @@ export class ModelViewer {
 
   private onPointerDown = (event: PointerEvent): void => {
     event.preventDefault();
+    this.auditLocked = false;
     this.userMoved = true;
     this.renderer.domElement.style.cursor = "grabbing";
     this.renderer.domElement.setPointerCapture?.(event.pointerId);
@@ -191,6 +273,7 @@ export class ModelViewer {
 
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
+    this.auditLocked = false;
     this.userMoved = true;
     this.distance = clamp(this.distance * Math.exp(event.deltaY * 0.0012), this.fitDistance * 0.58, this.fitDistance * 1.9);
     this.updateCamera();
@@ -199,6 +282,7 @@ export class ModelViewer {
   reset(): void {
     this.yaw = 0.34;
     this.pitch = 0.055;
+    this.auditLocked = false;
     this.userMoved = false;
     this.fitModel(true);
   }
@@ -214,7 +298,7 @@ export class ModelViewer {
     if (!this.running) return;
     const dt = clamp((time - this.lastTime) / 1000, 0, 0.05);
     this.lastTime = time;
-    if (!this.userMoved && this.pointers.size === 0) {
+    if (!this.auditLocked && !this.userMoved && this.pointers.size === 0) {
       this.yaw += dt * 0.16;
       this.updateCamera();
     }
@@ -224,6 +308,9 @@ export class ModelViewer {
       if (nextRuntimeState === "ready") this.fitModel(false);
     }
     this.renderer.render(this.scene, this.camera);
+    // The V16 presentation controller runs in onBeforeRender. Re-ground after
+    // that pose has been applied so the next displayed frame uses the real soles.
+    this.syncFloorToSoles();
     this.raf = window.requestAnimationFrame(this.loop);
   };
 
@@ -238,6 +325,10 @@ export class ModelViewer {
     this.renderer.domElement.removeEventListener("pointercancel", this.onPointerEnd);
     this.renderer.domElement.removeEventListener("lostpointercapture", this.onPointerEnd);
     this.renderer.domElement.removeEventListener("wheel", this.onWheel);
+    const canvas = this.renderer.domElement as ModelAuditCanvas;
+    delete canvas.__polyFighterSetAuditView;
+    delete canvas.__polyFighterGetAuditState;
+    delete canvas.dataset.modelAuditHook;
     disposeFighterVisual(this.visual);
     this.floor.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;

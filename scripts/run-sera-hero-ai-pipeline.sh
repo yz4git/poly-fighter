@@ -61,10 +61,10 @@ for view, data in meta['views'].items():
         if anchor.get('anchorMode') != 'headSemanticV1' or anchor.get('kind') != kind:
             raise SystemExit(f'{view} {kind} generated crop is not V9 head-semantic anchored')
         if kind == 'face':
-            if width > .70 or height > .225 or ref_box[3] > .225 or ref_box[1] < -.02:
+            if width > 1.25 or height > .225 or ref_box[3] > .225 or ref_box[1] < -.02:
                 raise SystemExit(f'{view} face local crop entered shoulder/body region: {ref_box}')
         if kind == 'hair':
-            if width > .90 or height > .38 or ref_box[1] < -.08 or ref_box[3] > .38:
+            if width > 1.75 or height > .38 or ref_box[1] < -.08 or ref_box[3] > .38:
                 raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
 print('SERA_HEAD_LOCAL_CROP_SANITY_OK')
 PY

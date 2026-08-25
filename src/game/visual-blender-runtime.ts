@@ -86,17 +86,39 @@ export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly 
 }
 
 /**
- * Retarget arm segment rest centers into the existing production IK bind frame.
+ * How strongly each authored arm piece should be pulled toward the old V9 bind
+ * centroid. The Blender runtime is already an anatomically continuous arms-down
+ * body. Moving every split arm region 100% to an independently-authored V9
+ * centroid created visible gaps at shoulder/elbow/wrist. Retaining most source
+ * placement keeps the original shared boundaries overlapping while still giving
+ * the production IK pivots a modest bind-frame correction.
+ */
+export function seraArmBindRetargetStrength(part: SeraAuthoredPartCode): number {
+  switch (part) {
+    case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION:
+    case SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION:
+    case SERA_AUTHORED_PART.LEFT_FOREARM_REGION:
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION:
+    case SERA_AUTHORED_PART.LEFT_HAND_REGION:
+    case SERA_AUTHORED_PART.RIGHT_HAND_REGION:
+      return 0.30;
+    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD:
+    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD:
+      return 0.35;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Apply a continuity-preserving bind correction to Blender arm regions.
  *
- * V14 already freezes the source in an arms-down pose and preserves exact source
- * arm ownership, but Quaternius' arm axis sits several centimetres inward and
- * the hand/forearm masses sit higher than the V9 canonical rig. Skinning those
- * pieces around V9 pivots without this bind correction turns the small rest
- * offset into large detached chunks during guard/attack rotations.
- *
- * Translation is computed from each actual merged part centroid, not from a
- * source-version-specific hardcoded delta. This keeps source facet shape intact
- * while matching the existing shoulder/elbow/wrist chain used by gameplay IK.
+ * The old V7 runtime translated each split arm piece all the way to a separate
+ * V9 centroid. On the current Quaternius runtime that moved upper-arm centers
+ * about 0.045 normalized height outward while the shoulder region stayed put;
+ * hand centers were also moved about 0.08 downward. That was large enough to
+ * visibly detach the anatomy before animation even started. V17 only applies a
+ * fraction of that correction, preserving source overlap across split borders.
  */
 function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
@@ -106,7 +128,7 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const sums = new Map<number, { x: number; y: number; z: number; count: number }>();
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const code = Math.round(part.getX(vertex)) as SeraAuthoredPartCode;
-    if (!targetSeraArmBindCentroid(code)) continue;
+    if (!targetSeraArmBindCentroid(code) || seraArmBindRetargetStrength(code) <= 0) continue;
     const entry = sums.get(code) ?? { x: 0, y: 0, z: 0, count: 0 };
     entry.x += position.getX(vertex);
     entry.y += position.getY(vertex);
@@ -118,11 +140,15 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const offsets = new Map<number, THREE.Vector3>();
   for (const [code, sum] of sums) {
     if (sum.count <= 0) continue;
-    const target = targetSeraArmBindCentroid(code as SeraAuthoredPartCode);
+    const typedCode = code as SeraAuthoredPartCode;
+    const target = targetSeraArmBindCentroid(typedCode);
     if (!target) continue;
+    const strength = seraArmBindRetargetStrength(typedCode);
     const current = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
-    const offset = new THREE.Vector3(target[0], target[1], target[2]).sub(current);
-    if (offset.length() > 0.12) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
+    const fullOffset = new THREE.Vector3(target[0], target[1], target[2]).sub(current);
+    if (fullOffset.length() > 0.12) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
+    const offset = fullOffset.multiplyScalar(strength);
+    if (offset.length() > 0.045) throw new Error(`SERA_ARM_BIND_CONTINUITY_OFFSET_OUT_OF_RANGE_${code}`);
     offsets.set(code, offset);
   }
 
@@ -138,7 +164,7 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
     );
   }
   position.needsUpdate = true;
-  geometry.userData.armBindRetarget = "V9_SEGMENT_CENTROIDS_V1";
+  geometry.userData.armBindRetarget = "SOURCE_CONTINUITY_30_V17";
   geometry.userData.armBindRetargetOffsets = Object.fromEntries(
     [...offsets.entries()].map(([code, offset]) => [String(code), offset.toArray()]),
   );
@@ -263,7 +289,7 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V8_CONTINUITY_RETARGET";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
@@ -338,7 +364,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V8_CONTINUITY_RETARGET";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

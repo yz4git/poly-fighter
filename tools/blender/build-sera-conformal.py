@@ -111,6 +111,36 @@ def source_vertex_arm_scores(source, vertex_index):
     return scores
 
 
+def compact_runtime_hand_mesh(mesh):
+    """Fold an arms-down source hand into a compact gameplay fist volume.
+
+    The production rig intentionally has one hand bone per side and no finger
+    bones. Keeping the Quaternius T-pose's spread fingers rigid therefore makes
+    guard/punch silhouettes read as claws. Preserve the wrist ring, then shrink
+    the distal length and transverse spread progressively toward the fingertips.
+    This changes only the runtime copy; the authored/reference Blender character
+    remains untouched for Hero objective renders.
+    """
+    if not mesh.vertices:
+        return
+    max_z = max(vertex.co.z for vertex in mesh.vertices)
+    min_z = min(vertex.co.z for vertex in mesh.vertices)
+    span = max_z - min_z
+    if span <= 1e-6:
+        return
+    center_x = sum(vertex.co.x for vertex in mesh.vertices) / len(mesh.vertices)
+    center_y = sum(vertex.co.y for vertex in mesh.vertices) / len(mesh.vertices)
+    for vertex in mesh.vertices:
+        t = max(0.0, min(1.0, (max_z - vertex.co.z) / span))
+        distal = t * t
+        length_retain = 1.0 - 0.48 * distal
+        radial_retain = 1.0 - 0.28 * distal
+        vertex.co.z = max_z - (max_z - vertex.co.z) * length_retain
+        vertex.co.x = center_x + (vertex.co.x - center_x) * radial_retain
+        vertex.co.y = center_y + (vertex.co.y - center_y) * radial_retain
+    mesh.update()
+
+
 def split_evaluated_body(source, evaluated_mesh):
     """Partition the evaluated body using the original source-rig arm weights.
 
@@ -159,6 +189,8 @@ def split_evaluated_body(source, evaluated_mesh):
         mesh = bpy.data.meshes.new('SERA_Body_' + region + 'Mesh')
         mesh.from_pydata(vertices, [], faces)
         mesh.update()
+        if region in ('Hand_l', 'Hand_r'):
+            compact_runtime_hand_mesh(mesh)
         for mat in evaluated_mesh.materials:
             if mat:
                 mesh.materials.append(mat)
@@ -169,6 +201,8 @@ def split_evaluated_body(source, evaluated_mesh):
         copy.matrix_world = source.matrix_world.copy()
         copy['seraRuntimeSourcePart'] = 'Superhero_Female'
         copy['seraRuntimeArmRegion'] = region
+        if region in ('Hand_l', 'Hand_r'):
+            copy['seraRuntimeHandPose'] = 'CLOSED_COMPACT_V1'
         bpy.context.collection.objects.link(copy)
         copies.append(copy)
     return copies
@@ -307,7 +341,7 @@ def main():
     save_version(output)
     triangles = sum(max(1, len(poly.vertices) - 2) for poly in body.data.polygons)
     metrics = {
-        'prototype': 'SERA_QUATERNIUS_CONFORMAL_V14_SOURCE_RIG_REGIONS',
+        'prototype': 'SERA_QUATERNIUS_CONFORMAL_V15_RUNTIME_FISTS',
         'source': 'Quaternius Superhero Female FullBody',
         'sourceLicense': 'CC0 1.0 Universal',
         'heightMeters': 1.68,
@@ -320,11 +354,12 @@ def main():
         'runtimeSwitched': True,
         'runtimeBindPose': 'CANONICAL_ARMS_DOWN_V1',
         'runtimeBodyRegions': 'QUATERNIUS_SOURCE_VERTEX_GROUPS_V1',
+        'runtimeHandPose': 'CLOSED_COMPACT_V1',
         'runtimePalette': 'material primitives converted to vertex colors in browser',
         'runtimeIntegration': 'BLENDER_CONFORMAL_GLB_CANONICAL_RIG_PART_AWARE',
         'runtimePartIdentity': 'Runtime_* mesh names retain equipment and source-rig arm regions',
         'gameplayRig': 'POLY FIGHTER V10-compatible canonical rig and IK',
-        'design': 'coherent rigged source body with runtime arms-down bind conversion, source-rig arm region preservation, direct head shaping, named authored equipment and canonical runtime reskinning',
+        'design': 'coherent rigged source body with runtime arms-down bind conversion, compact fighting fists, source-rig arm region preservation, direct head shaping, named authored equipment and canonical runtime reskinning',
     }
     with open(os.path.join(output, 'sera-blender-metrics.json'), 'w') as handle:
         json.dump(metrics, handle, indent=2)
@@ -332,13 +367,14 @@ def main():
     with open(os.path.join(output, 'README.txt'), 'w') as handle:
         handle.write(
             'Runtime export temporarily rotates the Quaternius T-pose upper arms into '
-            'the POLY FIGHTER arms-down bind, then partitions the evaluated base body '
-            'using the original Quaternius arm vertex groups. Runtime_* names preserve '
-            'those arm-region hints plus authored guards, shin shells, boots and head '
-            'pieces for canonical browser reskinning.\n'
+            'the POLY FIGHTER arms-down bind, partitions the evaluated base body using '
+            'the original Quaternius arm vertex groups, and progressively compacts the '
+            'two hand regions into closed gameplay fist volumes while preserving each '
+            'wrist ring. Runtime_* names preserve those arm-region hints plus authored '
+            'guards, shin shells, boots and head pieces for canonical browser reskinning.\n'
         )
     print(
-        'SERA_CONFORMAL_V14_OK',
+        'SERA_CONFORMAL_V15_OK',
         len(body.data.vertices),
         triangles,
         'RUNTIME_BYTES',

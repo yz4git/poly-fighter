@@ -45,37 +45,31 @@ python3 - "$REFERENCE_OBJECTIVE_DIR/reference-objective.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding='utf-8') as fp:
     meta=json.load(fp)
-if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V8_SEMANTIC_MASK_LOCAL_WINDOWS':
-    raise SystemExit('symmetric semantic-mask local Reference crop refinement did not run')
+if meta.get('version') != 'SERA_REFERENCE_OBJECTIVE_V9_HEAD_LOCAL_SEMANTIC':
+    raise SystemExit('V9 head-local Reference crop refinement did not run')
+if meta.get('localAnchorMode') != 'headSemanticV1':
+    raise SystemExit('V9 Reference local anchor mode missing')
+if meta.get('headSemanticVersion') != 'SERA_HEAD_SEMANTIC_V1_TOP_HAIR_FACE_SKIN':
+    raise SystemExit('V9 Reference head semantic version missing')
 for view, data in meta['views'].items():
     for kind, entry in data.get('localCrops', {}).items():
         ref_box=entry.get('referenceNormalizedBox')
         if not isinstance(ref_box, list) or len(ref_box) != 4:
             raise SystemExit(f'{view} {kind} missing reference crop bounds')
         width=ref_box[2]-ref_box[0]; height=ref_box[3]-ref_box[1]
+        anchor=entry.get('normalizedBox', {})
+        if anchor.get('anchorMode') != 'headSemanticV1' or anchor.get('kind') != kind:
+            raise SystemExit(f'{view} {kind} generated crop is not V9 head-semantic anchored')
         if kind == 'face':
-            max_width=.66 if view == 'side' else (.52 if view == 'three-quarter' else .48)
-            if width > max_width or height > .30:
-                raise SystemExit(f'{view} face local crop too broad: {ref_box}')
-            anchor=entry.get('normalizedBox', {})
-            if anchor.get('anchorMode') != 'semanticMaskLandmarks' or anchor.get('kind') != 'face':
-                raise SystemExit(f'{view} face generated crop is not semantic-mask anchored')
+            max_width=.34 if view == 'side' else .30
+            if width > max_width or height > .225 or ref_box[3] > .245 or ref_box[1] < -.02:
+                raise SystemExit(f'{view} face local crop entered shoulder/body region: {ref_box}')
         if kind == 'hair':
-            if view == 'side':
-                max_width, max_height = 1.20, .42
-            elif view == 'three-quarter':
-                max_width, max_height = .96, .40
-            elif view == 'back':
-                max_width, max_height = .76, .28
-            else:
-                max_width, max_height = .88, .36
-            if width > max_width or height > max_height or ref_box[1] < -.16 or ref_box[3] > .42:
+            max_width=.52 if view == 'side' else .46
+            max_height=.36 if view == 'back' else .32
+            if width > max_width or height > max_height or ref_box[1] < -.08 or ref_box[3] > .36:
                 raise SystemExit(f'{view} hair local crop too broad: {ref_box}')
-            if view != 'back':
-                anchor=entry.get('normalizedBox', {})
-                if anchor.get('anchorMode') != 'semanticMaskLandmarks' or anchor.get('kind') != 'hair':
-                    raise SystemExit(f'{view} hair generated crop is not semantic-mask anchored')
-print('SERA_LOCAL_CROP_SANITY_OK')
+print('SERA_HEAD_LOCAL_CROP_SANITY_OK')
 PY
 
 export PYTHONPATH="tools/blender:tools/blender/hero:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
@@ -141,8 +135,10 @@ if report['objectiveType'] != 'REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2':
     raise SystemExit('SERA Hero V5 is not using independent local Reference objectives')
 if report['referenceObjective'].get('objectiveVersion') != 'REFERENCE_CROP_INDEPENDENT_FACE_HAIR_V2':
     raise SystemExit('SERA Hero V5 local objective version missing from render result')
-if report['referenceObjective'].get('localAnchorMode') != 'semanticMaskLandmarks':
-    raise SystemExit('SERA Hero local objective did not use symmetric semantic-mask landmarks')
+if report['referenceObjective'].get('localAnchorMode') != 'headSemanticV1':
+    raise SystemExit('SERA Hero local objective did not use V9 head-local semantics')
+if report['referenceObjective'].get('headSemanticVersion') != 'SERA_HEAD_SEMANTIC_V1_TOP_HAIR_FACE_SKIN':
+    raise SystemExit('SERA Hero generated head semantic version missing')
 if report['parameterCount'] != 128 or state['parameterCount'] != 128:
     raise SystemExit('SERA Hero V5 parameter search must retain exactly 128 dimensions')
 if report['parameterSpaceVersion'] != 'SERA_HERO_PARAMETER_SPACE_V2_128D_LOCAL_DEFORM':

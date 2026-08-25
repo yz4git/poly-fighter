@@ -5,6 +5,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { PolyFightGame } from "@/src/game/game";
 import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
+import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
 import {
@@ -14,7 +15,7 @@ import {
   type DigitalDirection,
 } from "@/src/game/virtual-pad";
 
-type Screen = "TITLE" | "SELECT" | "MATCH" | "RESULT";
+type Screen = "TITLE" | "SELECT" | "MODEL_VIEW" | "MATCH" | "RESULT";
 type SettingsDraft = {
   quality: "LOW" | "NORMAL" | "HIGH";
   cameraShake: boolean;
@@ -334,10 +335,13 @@ export default function Home() {
           <button type="button" className="primary-button" onClick={() => { setScreen("SELECT"); requestLandscape(); }}>
             <span>START MATCH</span><small>PRESS TO ENTER THE RING</small>
           </button>
+          <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
           <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.1 // LOCAL DUEL</span></div>
         </section>
       )}
+
+      {screen === "MODEL_VIEW" && <ModelViewerPanel quality={settings.quality} onBack={backToTitle} />}
 
       {screen === "SELECT" && (
         <section className="select-screen screen-panel">

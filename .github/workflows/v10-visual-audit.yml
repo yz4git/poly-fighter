@@ -9,6 +9,9 @@ on:
     branches:
       - main
     paths:
+      - app/page.tsx
+      - src/components/model-viewer-panel.tsx
+      - src/game/model-viewer.ts
       - src/game/visual-v10.ts
       - src/game/visual-v10-stance.ts
       - src/game/visual-v10-polish.ts
@@ -23,10 +26,13 @@ on:
       - public/models/sera-blender-runtime.metrics.json
       - public/models/sera-v10.glb
       - public/sw.js
+      - package.json
       - scripts/blender-runtime-audit-helpers.mjs
+      - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs
       - scripts/run-blender-prototype-ci.sh
       - tools/blender/**
+      - tests/model-viewer.test.mjs
       - tests/pwa-cache.test.mjs
       - tests/visual-v9.test.ts
       - tests/visual-blender-skinning.test.ts
@@ -102,6 +108,26 @@ jobs:
           test -s /tmp/sera-blender-runtime.glb
           curl --fail --silent http://127.0.0.1:3000/models/sera-v10.glb -o /tmp/sera-v10.glb
           test -s /tmp/sera-v10.glb
+      - name: Capture title Model View with ChromeDriver
+        run: |
+          mkdir -p artifacts/visual-audit
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          if [ -z "$DRIVER" ]; then
+            echo "ChromeDriver is not available"
+            exit 1
+          fi
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            MODEL_VIEW_AUDIT_DIR="artifacts/visual-audit" \
+            node scripts/capture-model-view-audit.mjs
+          for fighter in sera kairo; do
+            test -s "artifacts/visual-audit/model-view-${fighter}.png"
+            file "artifacts/visual-audit/model-view-${fighter}.png" | grep -q "PNG image data"
+          done
+          test -s artifacts/visual-audit/model-view-state.json
       - name: Capture actual match frame with ChromeDriver
         run: |
           mkdir -p artifacts/visual-audit
@@ -123,7 +149,7 @@ jobs:
           done
           test -s artifacts/visual-audit/blender-runtime-state.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL canvas screenshots captured in headless Chrome via ChromeDriver with the Blender-authored SERA runtime asset and dedicated SERA_BLENDER_SKIN_V2 weights." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and match poses, with the Blender-authored SERA runtime asset and dedicated SERA_BLENDER_SKIN_V2 weights." > artifacts/visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: sera-v10-webgl-visual-audit

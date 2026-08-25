@@ -38,7 +38,7 @@ def normalized_box(local_box, body_box):
         (x0 - bx0) / bw,
         (y0 - by0) / bh,
         (x1 - bx0 + 1.0) / bw,
-        (y1 - by0 + 1.0) / bh,
+        (y1 - by0) / bh + 1.0 / bh,
     ]
 
 
@@ -48,11 +48,10 @@ def validate_reference_box(view, kind, local_box, body_box):
     height = box[3] - box[1]
     # Shoulder rejection is a vertical invariant. Horizontal size is only a
     # gross runaway guard because the full-body bbox width varies strongly with
-    # pose. Hair uses its own semantic mask, so horizontal background cannot
-    # introduce shoulder/chest skin into the local objective.
+    # pose. Face pixels are already clipped to the head-local skin mask, so
+    # widening the empty horizontal crop cannot re-introduce shoulder/chest skin.
     if kind == "face":
-        max_width = .55 if view == "side" else .48
-        if width > max_width or height > .225 or box[3] > .225 or box[1] < -.02:
+        if width > .70 or height > .225 or box[3] > .225 or box[1] < -.02:
             raise RuntimeError(f"{view} face crop escaped head-local region: {box}")
     elif kind == "hair":
         if width > .90 or height > .38 or box[1] < -.08 or box[3] > .38:

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
+import { authoredPartFromName } from "../src/game/visual-blender-runtime";
 import { classifySeraRuntimeColor, isSeraHeadLockedSemantic } from "../src/game/visual-blender-semantics";
 import {
   assignSeraBlenderSkinning,
@@ -74,6 +75,19 @@ test("unknown colors use conservative axial fallback instead of arm assignment",
   assert.equal(classifySeraRuntimeRegion(0.22, 0.76, 0.00, "unknown"), "TORSO");
   assert.equal(classifySeraRuntimeRegion(-0.22, 0.62, 0.00, "unknown"), "HIPS");
   assert.equal(classifySeraRuntimeRegion(0.18, 0.42, 0.00, "unknown"), "RIGHT_THIGH");
+});
+
+test("Blender source l/r suffixes are converted to canonical rig sides", () => {
+  // Imported Quaternius/Blender X is mirrored relative to the canonical rig:
+  // source `_r` sits at normalized x<0 and therefore belongs to canonical LEFT.
+  assert.equal(authoredPartFromName("Runtime_SERA_Guard_r"), SERA_AUTHORED_PART.LEFT_FOREARM_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Guard_l"), SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Shin_r"), SERA_AUTHORED_PART.LEFT_SHIN_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Shin_l"), SERA_AUTHORED_PART.RIGHT_SHIN_GUARD);
+  assert.equal(authoredPartFromName("Runtime_SERA_BootFoot_r"), SERA_AUTHORED_PART.LEFT_BOOT);
+  assert.equal(authoredPartFromName("Runtime_SERA_BootFoot_l"), SERA_AUTHORED_PART.RIGHT_BOOT);
+  assert.equal(authoredPartFromName("Runtime_SERA_FringeInnerL"), SERA_AUTHORED_PART.HEAD);
+  assert.equal(authoredPartFromName("Runtime_SERA_Collar"), SERA_AUTHORED_PART.HEURISTIC);
 });
 
 test("Blender SERA solver keeps head and authored guards on intended bones", () => {

@@ -406,17 +406,17 @@ function createBodyGeometry(
   const hipX = layout.pelvisWidth * 0.29;
 
   const torso = resampleSections([
-    { y: layout.hipsY - 0.025, cx: 0, cz: -0.002, rx: 0.086, front: 0.061, back: 0.052, nx: 2.8, nz: 2.5, bevel: 0.025 },
-    { y: layout.pelvisTopY, cx: 0, cz: 0.001, rx: 0.096, front: 0.069, back: 0.058, nx: 2.7, nz: 2.4, bevel: 0.035 },
-    { y: layout.waistY, cx: 0, cz: 0.003, rx: 0.081, front: 0.071, back: 0.058, nx: 3.1, nz: 2.6, bevel: -0.025 },
-    { y: layout.ribY - 0.015, cx: 0, cz: 0.004, rx: 0.124, front: 0.091, back: 0.066, nx: 2.5, nz: 2.25, bevel: 0.045 },
-    { y: layout.shoulderY, cx: 0, cz: 0.001, rx: 0.137, front: 0.082, back: 0.063, nx: 2.35, nz: 2.35, bevel: 0.055 },
+    { y: layout.hipsY - 0.025, cx: 0, cz: -0.002, rx: 0.094, front: 0.065, back: 0.056, nx: 2.8, nz: 2.5, bevel: 0.025 },
+    { y: layout.pelvisTopY, cx: 0, cz: 0.001, rx: 0.105, front: 0.074, back: 0.063, nx: 2.7, nz: 2.4, bevel: 0.035 },
+    { y: layout.waistY, cx: 0, cz: 0.003, rx: 0.086, front: 0.075, back: 0.062, nx: 3.1, nz: 2.6, bevel: -0.025 },
+    { y: layout.ribY - 0.015, cx: 0, cz: 0.004, rx: 0.133, front: 0.097, back: 0.071, nx: 2.5, nz: 2.25, bevel: 0.045 },
+    { y: layout.shoulderY, cx: 0, cz: 0.001, rx: 0.146, front: 0.088, back: 0.068, nx: 2.35, nz: 2.35, bevel: 0.055 },
   ], profile.torsoRows);
   builder.addLoft(torso, profile.radial, (_x, y) => torsoWeight(layout, rig, y), MATERIAL_INDEX.dark, false, false);
 
   const neck = resampleSections([
-    { y: layout.shoulderY - 0.008, cx: 0, cz: 0.001, rx: 0.038, front: 0.039, back: 0.033, nx: 2.7, nz: 2.7 },
-    { y: layout.headBottom + 0.010, cx: 0, cz: 0.003, rx: 0.036, front: 0.037, back: 0.032, nx: 2.8, nz: 2.8 },
+    { y: layout.shoulderY - 0.008, cx: 0, cz: 0.001, rx: 0.041, front: 0.042, back: 0.036, nx: 2.7, nz: 2.7 },
+    { y: layout.headBottom + 0.010, cx: 0, cz: 0.003, rx: 0.039, front: 0.040, back: 0.035, nx: 2.8, nz: 2.8 },
   ], Math.max(8, Math.floor(profile.torsoRows * 0.55)));
   builder.addLoft(
     neck,
@@ -436,9 +436,9 @@ function createBodyGeometry(
     const kneeX = side * (hipX + 0.008);
     const ankleX = side * (hipX + 0.012);
     const thigh = resampleSections([
-      { y: layout.hipsY + 0.022, cx: thighX, cz: -0.002, rx: 0.052, front: 0.063, back: 0.056, nx: 2.45, nz: 2.35, bevel: 0.035 },
-      { y: layout.hipsY - 0.090, cx: side * (hipX + 0.003), cz: 0, rx: 0.050, front: 0.060, back: 0.053, nx: 2.55, nz: 2.4, bevel: 0.025 },
-      { y: layout.kneeY + 0.022, cx: kneeX, cz: 0.004, rx: 0.039, front: 0.046, back: 0.041, nx: 2.8, nz: 2.6, bevel: 0.025 },
+      { y: layout.hipsY + 0.022, cx: thighX, cz: -0.002, rx: 0.058, front: 0.069, back: 0.062, nx: 2.45, nz: 2.35, bevel: 0.035 },
+      { y: layout.hipsY - 0.090, cx: side * (hipX + 0.003), cz: 0, rx: 0.056, front: 0.066, back: 0.059, nx: 2.55, nz: 2.4, bevel: 0.025 },
+      { y: layout.kneeY + 0.022, cx: kneeX, cz: 0.004, rx: 0.044, front: 0.051, back: 0.046, nx: 2.8, nz: 2.6, bevel: 0.025 },
     ], profile.limbRows);
     builder.addLoft(
       thigh,
@@ -449,9 +449,9 @@ function createBodyGeometry(
       false,
     );
     const shin = resampleSections([
-      { y: layout.kneeY + 0.026, cx: kneeX, cz: 0.006, rx: 0.039, front: 0.047, back: 0.040, nx: 2.7, nz: 2.5, bevel: 0.035 },
-      { y: layout.kneeY - 0.105, cx: side * (kneeX * side + 0.002), cz: 0.002, rx: 0.036, front: 0.044, back: 0.037, nx: 2.65, nz: 2.5, bevel: 0.02 },
-      { y: layout.ankleY, cx: ankleX, cz: 0, rx: 0.026, front: 0.031, back: 0.028, nx: 3.0, nz: 2.8, bevel: -0.02 },
+      { y: layout.kneeY + 0.026, cx: kneeX, cz: 0.006, rx: 0.044, front: 0.052, back: 0.045, nx: 2.7, nz: 2.5, bevel: 0.035 },
+      { y: layout.kneeY - 0.105, cx: side * (kneeX * side + 0.002), cz: 0.002, rx: 0.041, front: 0.049, back: 0.042, nx: 2.65, nz: 2.5, bevel: 0.02 },
+      { y: layout.ankleY, cx: ankleX, cz: 0, rx: 0.030, front: 0.035, back: 0.032, nx: 3.0, nz: 2.8, bevel: -0.02 },
     ], profile.limbRows);
     builder.addLoft(
       shin,
@@ -469,8 +469,8 @@ function createBodyGeometry(
     const elbowX = shoulderX + side * 0.024;
     const wristX = shoulderX + side * 0.038;
     const upper = resampleSections([
-      { y: layout.shoulderY + 0.004, cx: shoulderX, cz: 0, rx: 0.039, front: 0.043, back: 0.038, nx: 2.45, nz: 2.4, bevel: 0.045 },
-      { y: layout.elbowY + 0.018, cx: elbowX, cz: 0.004, rx: 0.031, front: 0.035, back: 0.031, nx: 2.75, nz: 2.6, bevel: 0.02 },
+      { y: layout.shoulderY + 0.004, cx: shoulderX, cz: 0, rx: 0.045, front: 0.049, back: 0.044, nx: 2.45, nz: 2.4, bevel: 0.045 },
+      { y: layout.elbowY + 0.018, cx: elbowX, cz: 0.004, rx: 0.036, front: 0.040, back: 0.036, nx: 2.75, nz: 2.6, bevel: 0.02 },
     ], profile.limbRows);
     builder.addLoft(
       upper,
@@ -481,9 +481,9 @@ function createBodyGeometry(
       false,
     );
     const forearm = resampleSections([
-      { y: layout.elbowY + 0.018, cx: elbowX, cz: 0.004, rx: 0.031, front: 0.035, back: 0.031, nx: 2.7, nz: 2.55, bevel: 0.02 },
-      { y: layout.elbowY - 0.080, cx: side * (Math.abs(elbowX) + 0.007), cz: 0.007, rx: 0.030, front: 0.034, back: 0.029, nx: 2.8, nz: 2.6, bevel: 0.025 },
-      { y: layout.wristY, cx: wristX, cz: 0.008, rx: 0.022, front: 0.026, back: 0.023, nx: 3.0, nz: 2.8, bevel: -0.015 },
+      { y: layout.elbowY + 0.018, cx: elbowX, cz: 0.004, rx: 0.036, front: 0.040, back: 0.036, nx: 2.7, nz: 2.55, bevel: 0.02 },
+      { y: layout.elbowY - 0.080, cx: side * (Math.abs(elbowX) + 0.007), cz: 0.007, rx: 0.035, front: 0.039, back: 0.034, nx: 2.8, nz: 2.6, bevel: 0.025 },
+      { y: layout.wristY, cx: wristX, cz: 0.008, rx: 0.026, front: 0.030, back: 0.027, nx: 3.0, nz: 2.8, bevel: -0.015 },
     ], profile.limbRows);
     builder.addLoft(
       forearm,
@@ -736,9 +736,9 @@ function createCostume(
 
   const chest = rig.bones.chest;
   const hips = rig.bones.hips;
-  add(chest, prismGeometry(0.205, 0.224, 0.112, 0.92, 0.72, 0.07), materials.primary, "kairo-v1-forge-chest", "CHEST", new THREE.Vector3(0, -0.065, 0.060));
+  add(chest, prismGeometry(0.220, 0.232, 0.120, 0.92, 0.72, 0.07), materials.primary, "kairo-v1-forge-chest", "CHEST", new THREE.Vector3(0, -0.065, 0.060));
   add(chest, bladeGeometry(0.092, 0.216, 0.034, -0.016), materials.dark, "kairo-v1-asymmetric-chest-cut", "CHEST", new THREE.Vector3(0.018, -0.060, 0.119), new THREE.Euler(-0.02, 0, -0.16));
-  add(chest, prismGeometry(0.188, 0.050, 0.080, 0.78, 0.94, 0.04), materials.metal, "kairo-v1-clavicle-armor", "SHOULDER", new THREE.Vector3(0, 0.005, 0.058));
+  add(chest, prismGeometry(0.204, 0.052, 0.086, 0.78, 0.94, 0.04), materials.metal, "kairo-v1-clavicle-armor", "SHOULDER", new THREE.Vector3(0, 0.005, 0.058));
   add(chest, bladeGeometry(0.070, 0.118, 0.050, -0.015), materials.accent, "kairo-v1-left-lapel", "CHEST", new THREE.Vector3(-0.050, -0.010, 0.112), new THREE.Euler(-0.05, 0, -0.20));
   add(chest, bladeGeometry(0.064, 0.104, 0.048, 0.012), materials.primary, "kairo-v1-right-lapel", "CHEST", new THREE.Vector3(0.047, -0.020, 0.113), new THREE.Euler(-0.05, 0, 0.17));
 
@@ -753,7 +753,7 @@ function createCostume(
     const large = side < 0;
     add(
       rig.bones[prefix + "Shoulder"],
-      prismGeometry(large ? 0.118 : 0.098, large ? 0.112 : 0.094, large ? 0.142 : 0.118, 0.64, 1, 0.10),
+      prismGeometry(large ? 0.128 : 0.108, large ? 0.118 : 0.100, large ? 0.150 : 0.126, 0.64, 1, 0.10),
       large ? materials.primary : materials.accent,
       "kairo-v1-" + prefix + "-shoulder-armor",
       "SHOULDER",
@@ -762,7 +762,7 @@ function createCostume(
     );
     add(
       rig.bones[prefix + "UpperArm"],
-      prismGeometry(0.073, 0.104, 0.078, 0.80, 0.96, 0.03),
+      prismGeometry(0.082, 0.108, 0.086, 0.80, 0.96, 0.03),
       materials.dark,
       "kairo-v1-" + prefix + "-bicep-band",
       "ARM",
@@ -770,7 +770,7 @@ function createCostume(
     );
     add(
       rig.bones[prefix + "Forearm"],
-      prismGeometry(0.082, 0.176, 0.093, 0.74, 0.98, 0.10),
+      prismGeometry(0.092, 0.180, 0.102, 0.74, 0.98, 0.10),
       materials.primary,
       "kairo-v1-" + prefix + "-forge-gauntlet",
       "ARM",
@@ -779,7 +779,7 @@ function createCostume(
     );
     add(
       rig.bones[prefix + "Thigh"],
-      prismGeometry(0.090, 0.144, 0.090, 0.82, 0.96, 0.03),
+      prismGeometry(0.098, 0.150, 0.098, 0.82, 0.96, 0.03),
       materials.accent,
       "kairo-v1-" + prefix + "-thigh-guard",
       "LEG",
@@ -788,7 +788,7 @@ function createCostume(
     );
     add(
       rig.bones[prefix + "Shin"],
-      prismGeometry(0.082, 0.216, 0.092, 0.72, 0.98, 0.11),
+      prismGeometry(0.090, 0.220, 0.100, 0.72, 0.98, 0.11),
       materials.primary,
       "kairo-v1-" + prefix + "-shin-armor",
       "LEG",
@@ -810,7 +810,7 @@ function createLimbVisuals(
   if (kind === "ARM") {
     const root = rig.bones[prefix + "UpperArm"];
     const lower = rig.bones[prefix + "Forearm"];
-    const end = mesh(prismGeometry(0.060, layout.handLength, 0.086, 0.78, 0.98, 0.10), materials.dark, "kairo-v1-" + prefix + "-fist");
+    const end = mesh(prismGeometry(0.066, layout.handLength, 0.092, 0.78, 0.98, 0.10), materials.dark, "kairo-v1-" + prefix + "-fist");
     end.position.set(0, -layout.handLength * 0.48, 0.032);
     rig.bones[prefix + "Hand"].add(end);
     const knuckle = mesh(prismGeometry(0.056, 0.030, 0.038, 0.88, 1, 0.12), materials.metal, "kairo-v1-" + prefix + "-knuckle-plate");
@@ -820,14 +820,14 @@ function createLimbVisuals(
   }
   const root = rig.bones[prefix + "Thigh"];
   const lower = rig.bones[prefix + "Shin"];
-  const end = mesh(prismGeometry(0.088, 0.078, layout.footLength * 1.22, 0.66, 0.98, 0.18), materials.dark, "kairo-v1-" + prefix + "-boot");
+  const end = mesh(prismGeometry(0.096, 0.082, layout.footLength * 1.22, 0.66, 0.98, 0.18), materials.dark, "kairo-v1-" + prefix + "-boot");
   end.position.set(0, -0.027, layout.footLength * 0.25);
   rig.bones[prefix + "Foot"].add(end);
-  const toe = mesh(bladeGeometry(0.086, layout.footLength * 0.70, 0.054, 0), materials.primary, "kairo-v1-" + prefix + "-toe-armor");
+  const toe = mesh(bladeGeometry(0.094, layout.footLength * 0.70, 0.058, 0), materials.primary, "kairo-v1-" + prefix + "-toe-armor");
   toe.rotation.x = Math.PI * 0.5;
   toe.position.set(0, -0.020, layout.footLength * 0.49);
   rig.bones[prefix + "Foot"].add(toe);
-  const sole = mesh(prismGeometry(0.092, 0.024, layout.footLength * 1.26, 0.72, 1, 0.02), materials.accent, "kairo-v1-" + prefix + "-sole");
+  const sole = mesh(prismGeometry(0.100, 0.026, layout.footLength * 1.26, 0.72, 1, 0.02), materials.accent, "kairo-v1-" + prefix + "-sole");
   sole.position.set(0, -0.059, layout.footLength * 0.25);
   rig.bones[prefix + "Foot"].add(sole);
   return { root, upper: root, lower, end };

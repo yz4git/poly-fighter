@@ -8,7 +8,7 @@ test("PWA manifest and Blender runtime cache version exist", async () => {
   assert.equal(manifest.name, "POLY FIGHTER");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "landscape");
-  assert.match(serviceWorker, /poly-fighter-v18/);
+  assert.match(serviceWorker, /poly-fighter-v19/);
   assert.match(serviceWorker, /models\/sera-blender-runtime\.glb/);
   assert.match(serviceWorker, /models\/sera-blender-runtime\.metrics\.json/);
   assert.match(serviceWorker, /models\/sera-v10\.glb/);

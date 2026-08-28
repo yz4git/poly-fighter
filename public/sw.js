@@ -1,4 +1,4 @@
-const CACHE_NAME = "poly-fighter-v18";
+const CACHE_NAME = "poly-fighter-v19";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
+import { createKairoReconstructedVisual } from "./visual-kairo-v1";
 import { createFemaleBlenderRuntimeVisual } from "./visual-blender-runtime";
 import { applyV11ReferencePose } from "./visual-v11-pose";
-import { createFighterVisual as createLegacyFighterVisual, disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset } from "./visual";
+import { disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset } from "./visual";
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
 
 function repairSeraWinding(visual: FighterVisual): void {
@@ -44,7 +45,7 @@ export function createFighterVisual(definition: FighterDefinition, quality: Figh
     repairSeraWinding(visual);
     return applyV11ReferencePose(visual);
   }
-  return createLegacyFighterVisual(definition, quality);
+  return createKairoReconstructedVisual(definition, quality);
 }
 
 export { disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset };

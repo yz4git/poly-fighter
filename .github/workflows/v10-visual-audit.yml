@@ -1,4 +1,4 @@
-name: SERA V10 WebGL visual audit
+name: POLY FIGHTER WebGL visual audit
 
 on:
   workflow_dispatch:
@@ -22,6 +22,7 @@ on:
       - src/game/visual-blender-skinning.ts
       - src/game/visual-blender-skinning-profile.ts
       - src/game/visual-entry.ts
+      - src/game/visual-kairo-v1.ts
       - public/models/sera-blender-runtime.glb
       - public/models/sera-blender-runtime.metrics.json
       - public/models/sera-v10.glb
@@ -35,6 +36,7 @@ on:
       - tests/model-viewer.test.mjs
       - tests/pwa-cache.test.mjs
       - tests/visual-v9.test.ts
+      - tests/visual-kairo-v1.test.ts
       - tests/visual-blender-skinning.test.ts
       - .github/workflows/v10-visual-audit.yml
 
@@ -148,17 +150,34 @@ jobs:
             AUDIT_URL="http://127.0.0.1:3000/" \
             AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-canvas-idle.png" \
             node scripts/capture-v10-visual-audit.mjs
+          mkdir -p artifacts/kairo-visual-audit
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            AUDIT_FIGHTER="KAIRO" \
+            AUDIT_DIR="artifacts/kairo-visual-audit" \
+            AUDIT_OUTPUT="artifacts/kairo-visual-audit/kairo-v1-canvas-idle.png" \
+            node scripts/capture-v10-visual-audit.mjs
           for pose in idle guard punch kick; do
             test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
             file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
           done
           test -s artifacts/visual-audit/blender-runtime-state.json
+          for pose in idle guard punch kick; do
+            test -s "artifacts/kairo-visual-audit/kairo-v1-canvas-$pose.png"
+            file "artifacts/kairo-visual-audit/kairo-v1-canvas-$pose.png" | grep -q "PNG image data"
+          done
+          test -s artifacts/kairo-visual-audit/runtime-state.json
+          test -s artifacts/kairo-visual-audit/pose-separation.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and match poses, with the Blender-authored SERA runtime asset and part-aware SERA_BLENDER_SKIN_V3 weights." > artifacts/visual-audit/README.txt
+          cp /tmp/poly-fighter-server.log artifacts/kairo-visual-audit/server.log
+          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and SERA match poses." > artifacts/visual-audit/README.txt
+          printf '%s\n' "Real WebGL KAIRO V1 Forge reconstruction screenshots captured in headless Chrome via ChromeDriver for Idle, Guard, Punch and Kick." > artifacts/kairo-visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: sera-v10-webgl-visual-audit
-          path: artifacts/visual-audit
+          name: poly-fighter-webgl-visual-audit
+          path: |
+            artifacts/visual-audit
+            artifacts/kairo-visual-audit
           if-no-files-found: error
       - name: Upload same-repository runtime candidate
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository

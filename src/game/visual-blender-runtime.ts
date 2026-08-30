@@ -70,7 +70,7 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   return SERA_AUTHORED_PART.HEURISTIC;
 }
 
-/** Canonical V9 segment centers used by the production IK rig at bind time. */
+/** Segment centers in the canonical V9 arms-down bind frame. */
 export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly [number, number, number] | null {
   switch (part) {
     case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION: return [-0.134, 0.738, 0.010];
@@ -79,24 +79,15 @@ export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly 
     case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION: return [0.147, 0.562, 0.015];
     case SERA_AUTHORED_PART.LEFT_HAND_REGION: return [-0.155, 0.438, 0.030];
     case SERA_AUTHORED_PART.RIGHT_HAND_REGION: return [0.155, 0.438, 0.030];
-    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD: return [-0.151, 0.548, 0.036];
-    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD: return [0.151, 0.548, 0.036];
     default: return null;
   }
 }
 
 /**
- * Retarget arm segment rest centers into the existing production IK bind frame.
- *
- * V14 already freezes the source in an arms-down pose and preserves exact source
- * arm ownership, but Quaternius' arm axis sits several centimetres inward and
- * the hand/forearm masses sit higher than the V9 canonical rig. Skinning those
- * pieces around V9 pivots without this bind correction turns the small rest
- * offset into large detached chunks during guard/attack rotations.
- *
- * Translation is computed from each actual merged part centroid, not from a
- * source-version-specific hardcoded delta. This keeps source facet shape intact
- * while matching the existing shoulder/elbow/wrist chain used by gameplay IK.
+ * Fit the source arms to the gameplay skeleton with one continuous rest-space
+ * displacement field per side. Independent translations of exported regions
+ * split the duplicated shoulder/elbow/wrist boundaries, while leaving the
+ * source untouched puts the hands above the rig's wrist pivots.
  */
 function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
@@ -104,8 +95,16 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   if (!position || !part || position.count !== part.count) return;
 
   const sums = new Map<number, { x: number; y: number; z: number; count: number }>();
+  const shoulderTop = [0, 0];
+  const isArm = (code: number) => code >= SERA_AUTHORED_PART.LEFT_SHOULDER_REGION
+    && code <= SERA_AUTHORED_PART.RIGHT_HAND_REGION;
+  const isGuard = (code: number) => code === SERA_AUTHORED_PART.LEFT_FOREARM_GUARD
+    || code === SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD;
+
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const code = Math.round(part.getX(vertex)) as SeraAuthoredPartCode;
+    const side = position.getX(vertex) < 0 ? 0 : 1;
+    if (isArm(code)) shoulderTop[side] = Math.max(shoulderTop[side], position.getY(vertex));
     if (!targetSeraArmBindCentroid(code)) continue;
     const entry = sums.get(code) ?? { x: 0, y: 0, z: 0, count: 0 };
     entry.x += position.getX(vertex);
@@ -115,33 +114,57 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
     sums.set(code, entry);
   }
 
-  const offsets = new Map<number, THREE.Vector3>();
-  for (const [code, sum] of sums) {
-    if (sum.count <= 0) continue;
-    const target = targetSeraArmBindCentroid(code as SeraAuthoredPartCode);
-    if (!target) continue;
-    const current = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
-    const offset = new THREE.Vector3(target[0], target[1], target[2]).sub(current);
-    if (offset.length() > 0.12) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
-    offsets.set(code, offset);
-  }
+  const makeKnot = (code: SeraAuthoredPartCode) => {
+    const sum = sums.get(code);
+    const target = targetSeraArmBindCentroid(code);
+    if (!sum || !target) return null;
+    const source = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
+    const offset = new THREE.Vector3(...target).sub(source);
+    if (offset.length() > 0.20) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
+    return { source, offset };
+  };
+  const chains = [
+    [SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION, SERA_AUTHORED_PART.LEFT_FOREARM_REGION, SERA_AUTHORED_PART.LEFT_HAND_REGION],
+    [SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION, SERA_AUTHORED_PART.RIGHT_FOREARM_REGION, SERA_AUTHORED_PART.RIGHT_HAND_REGION],
+  ].map(codes => codes.map(makeKnot));
 
+  const keyAt = (vertex: number) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)]
+    .map(value => Math.round(value * 1e6)).join(",");
+  const displacements = new Map<string, THREE.Vector3>();
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const code = Math.round(part.getX(vertex));
-    const offset = offsets.get(code);
+    if (!isArm(code) && !isGuard(code)) continue;
+    const x = position.getX(vertex);
+    const y = position.getY(vertex);
+    const side = x < 0 ? 0 : 1;
+    const [upper, forearm, hand] = chains[side];
+    if (!upper || !forearm || !hand) continue;
+    let offset: THREE.Vector3;
+    if (y >= upper.source.y) {
+      const blend = THREE.MathUtils.smoothstep(y, upper.source.y, shoulderTop[side]);
+      const radial = THREE.MathUtils.clamp(Math.abs(x) / (Math.abs(upper.source.x) * 0.6), 0, 1);
+      offset = upper.offset.clone().multiplyScalar((1 - blend) * radial);
+    } else if (y >= forearm.source.y) {
+      const blend = THREE.MathUtils.clamp((upper.source.y - y) / (upper.source.y - forearm.source.y), 0, 1);
+      offset = upper.offset.clone().lerp(forearm.offset, blend);
+    } else {
+      const blend = THREE.MathUtils.clamp((forearm.source.y - y) / (forearm.source.y - hand.source.y), 0, 1);
+      offset = forearm.offset.clone().lerp(hand.offset, blend);
+    }
+    displacements.set(keyAt(vertex), offset);
+  }
+
+  // Include torso-side duplicates, but never move unrelated authored panels.
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const code = Math.round(part.getX(vertex));
+    if (code !== SERA_AUTHORED_PART.HEURISTIC && !isArm(code) && !isGuard(code)) continue;
+    const offset = displacements.get(keyAt(vertex));
     if (!offset) continue;
-    position.setXYZ(
-      vertex,
-      position.getX(vertex) + offset.x,
-      position.getY(vertex) + offset.y,
-      position.getZ(vertex) + offset.z,
-    );
+    position.setXYZ(vertex, position.getX(vertex) + offset.x, position.getY(vertex) + offset.y, position.getZ(vertex) + offset.z);
   }
   position.needsUpdate = true;
-  geometry.userData.armBindRetarget = "V9_SEGMENT_CENTROIDS_V1";
-  geometry.userData.armBindRetargetOffsets = Object.fromEntries(
-    [...offsets.entries()].map(([code, offset]) => [String(code), offset.toArray()]),
-  );
+  geometry.userData.armBindRetarget = "V9_CONTINUOUS_ARM_BIND_V1";
+  geometry.userData.armBindRetargetOffsets = chains.map(chain => chain.map(knot => knot?.offset.toArray() ?? null));
 }
 
 /**
@@ -233,7 +256,7 @@ function collectRuntimePieces(root: THREE.Object3D): THREE.BufferGeometry[] {
   return pieces;
 }
 
-function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
+export function normalizeSeraRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   const pieces = collectRuntimePieces(root);
   const primitiveCount = pieces.length;
   const geometry = mergeGeometries(pieces, false);
@@ -263,7 +286,7 @@ function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V9_CONTINUOUS_BIND";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
@@ -276,7 +299,7 @@ function loadSourceGeometry(): Promise<THREE.BufferGeometry> {
   if (sourceGeometryPromise) return sourceGeometryPromise;
   const loader = new GLTFLoader();
   sourceGeometryPromise = loader.loadAsync(SERA_BLENDER_RUNTIME_ASSET_URL)
-    .then((gltf) => normalizeRuntimeGeometry(gltf.scene))
+    .then((gltf) => normalizeSeraRuntimeGeometry(gltf.scene))
     .catch((error) => {
       sourceGeometryPromise = null;
       throw error;
@@ -326,6 +349,7 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.root.userData.blenderRuntimeBindRetarget = source.userData.armBindRetarget ?? null;
   visual.root.userData.blenderRuntimeBindRetargetOffsets = source.userData.armBindRetargetOffsets ?? null;
   visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
+  visual.root.userData.blenderSkinningSeamContinuity = geometry.userData.skinningSeamContinuity;
   visual.root.userData.blenderWeightAudit = weightAudit;
   visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
   visual.bodyMesh.userData.skinningVersion = runtimeMetadata.skinningVersion;
@@ -338,7 +362,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V7_BIND_RETARGET";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V9_CONTINUOUS_BIND";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

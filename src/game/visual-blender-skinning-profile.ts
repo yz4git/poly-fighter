@@ -1,24 +1,28 @@
 export const SERA_SKIN_PROFILE = {
   collar: { neck: 0.52, chest: 0.48 },
   shoulder: {
-    armBase: 0.34,
-    armLowerBonus: 0.12,
-    blendStartY: 0.700,
-    blendEndY: 0.810,
+    // Blend the clavicle into the arm across the canonical shoulder width.
+    // Duplicate body seam vertices receive identical weights after solving.
+    armBase: 0.05,
+    armOuterMax: 0.98,
+    radialStartX: 0.045,
+    radialEndX: 0.125,
   },
   upperArm: {
-    elbowMax: 0.28,
-    elbowStartY: 0.615,
-    elbowEndY: 0.690,
+    // The continuous bind fit places the elbow around canonical y = .650.
+    elbowMax: 1.0,
+    elbowStartY: 0.625,
+    elbowEndY: 0.675,
   },
   forearm: {
-    handMax: 0.18,
-    handStartY: 0.475,
-    handEndY: 0.535,
+    // Match the fitted wrist to the canonical hand pivot at y = .477.
+    handMax: 0.98,
+    handStartY: 0.460,
+    handEndY: 0.500,
     guardRigidForearm: 0.96,
     guardHand: 0.04,
   },
-  hand: { hand: 0.97, forearm: 0.03 },
+  hand: { hand: 0.85, forearm: 0.15 },
   hips: {
     spineMax: 0.34,
     spineStartY: 0.595,

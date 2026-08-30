@@ -34,6 +34,11 @@ test("V16 reference pose is idempotent when a static Model View frame is rendere
   assert.notEqual(afterFirstFrame, before, "first presentation pose application should still adjust the hips");
   assert.equal(afterSecondFrame, afterFirstFrame, "unchanged static frames must not keep sinking the hips");
   assert.equal(visual.root.userData.v11PoseStabilityGuard, "SKIP_UNCHANGED_BONE_STATE_V1");
+  for (const hand of [visual.leftArm.end, visual.rightArm.end]) {
+    const point = visual.root.worldToLocal(hand.getWorldPosition(new THREE.Vector3()));
+    assert.ok(point.z > 0.07, "ready hands must stay in front of the chest, not behind the back");
+    assert.ok(point.y > 0.65, "ready hands must protect the upper body");
+  }
   disposeFighterVisual(visual);
 });
 

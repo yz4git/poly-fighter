@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import * as THREE from "three";
-import { authoredPartFromName } from "../src/game/visual-blender-runtime";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { authoredPartFromName, normalizeSeraRuntimeGeometry } from "../src/game/visual-blender-runtime";
 import { classifySeraRuntimeColor, isSeraHeadLockedSemantic } from "../src/game/visual-blender-semantics";
 import {
   assignSeraBlenderSkinning,
@@ -40,6 +42,64 @@ const BONES: Record<string, number> = {
 function weightSum(values: readonly (readonly [number, number])[]): number {
   return values.reduce((sum, [, weight]) => sum + weight, 0);
 }
+
+test("the real Blender asset keeps anatomical seams closed under joint rotation", async () => {
+  const bytes = readFileSync(new URL("../public/models/sera-blender-runtime.glb", import.meta.url));
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const gltf = await new GLTFLoader().parseAsync(buffer, "");
+  const geometry = normalizeSeraRuntimeGeometry(gltf.scene);
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const parts = geometry.getAttribute("seraPart") as THREE.BufferAttribute;
+  // Hands must hang below the gameplay wrist pivot (.477), otherwise they
+  // orbit the forearm when guard/punch rotates the rig.
+  for (const handPart of [SERA_AUTHORED_PART.LEFT_HAND_REGION, SERA_AUTHORED_PART.RIGHT_HAND_REGION]) {
+    let sumY = 0;
+    let count = 0;
+    let topY = -Infinity;
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      if (parts.getX(vertex) !== handPart) continue;
+      sumY += position.getY(vertex);
+      topY = Math.max(topY, position.getY(vertex));
+      count += 1;
+    }
+    assert.ok(count > 0, "exercise both hands from the real asset");
+    assert.ok(sumY / count > 0.40 && sumY / count < 0.477, "rest hand mass must sit below its wrist");
+    assert.ok(topY < 0.51, "the wrist ring must remain near the wrist pivot");
+  }
+  const seams = new Map<string, number[]>();
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const part = parts.getX(vertex);
+    if (part !== 0 && (part < 8 || part > 15)) continue;
+    const key = [position.getX(vertex), position.getY(vertex), position.getZ(vertex)]
+      .map(value => Math.round(value * 1e6)).join(",");
+    const group = seams.get(key);
+    if (group) group.push(vertex); else seams.set(key, [vertex]);
+  }
+  assignSeraBlenderSkinning(geometry, BONES);
+  assert.ok(geometry.userData.skinningSeamContinuity.groups > 20, "exercise real source boundaries");
+  const indices = geometry.getAttribute("skinIndex") as THREE.BufferAttribute;
+  const weights = geometry.getAttribute("skinWeight") as THREE.BufferAttribute;
+  const transforms = Array.from({ length: 19 }, (_, bone) => new THREE.Matrix4().compose(
+    new THREE.Vector3(bone * 0.013, -bone * 0.004, bone * 0.007),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(bone * 0.08, bone * -0.12, bone * 0.11)),
+    new THREE.Vector3(1, 1, 1),
+  ));
+  const deformed = (vertex: number) => {
+    const rest = new THREE.Vector3().fromBufferAttribute(position, vertex);
+    const result = new THREE.Vector3();
+    for (let slot = 0; slot < 4; slot += 1) {
+      const weight = weights.getComponent(vertex, slot);
+      if (weight) result.addScaledVector(rest.clone().applyMatrix4(transforms[indices.getComponent(vertex, slot)]), weight);
+    }
+    return result;
+  };
+  for (const group of seams.values()) {
+    if (group.length < 2) continue;
+    const first = deformed(group[0]);
+    for (const vertex of group.slice(1)) assert.ok(first.distanceTo(deformed(vertex)) < 2e-6, "split faces must share a deformed boundary");
+  }
+  geometry.dispose();
+});
 
 test("Blender SERA palette preserves gameplay-relevant semantics", () => {
   assert.equal(classifySeraRuntimeColor(...rgb(0xD7A38A)), "skin");

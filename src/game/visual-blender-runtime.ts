@@ -70,7 +70,7 @@ export function authoredPartFromName(rawName: string): SeraAuthoredPartCode {
   return SERA_AUTHORED_PART.HEURISTIC;
 }
 
-/** Historical V9 segment centers retained for diagnostics/regression comparison. */
+/** Segment centers in the canonical V9 arms-down bind frame. */
 export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly [number, number, number] | null {
   switch (part) {
     case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION: return [-0.134, 0.738, 0.010];
@@ -79,38 +79,15 @@ export function targetSeraArmBindCentroid(part: SeraAuthoredPartCode): readonly 
     case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION: return [0.147, 0.562, 0.015];
     case SERA_AUTHORED_PART.LEFT_HAND_REGION: return [-0.155, 0.438, 0.030];
     case SERA_AUTHORED_PART.RIGHT_HAND_REGION: return [0.155, 0.438, 0.030];
-    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD: return [-0.151, 0.548, 0.036];
-    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD: return [0.151, 0.548, 0.036];
     default: return null;
   }
 }
 
 /**
- * The current Blender runtime already freezes a coherent arms-down anatomical
- * bind. Any per-region translation breaks the shared source boundaries. Keep
- * the V9 target table above only as diagnostics; V18 intentionally retains the
- * Blender source placement for every organic arm/equipment region.
- */
-export function seraArmBindRetargetStrength(part: SeraAuthoredPartCode): number {
-  switch (part) {
-    case SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION:
-    case SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION:
-    case SERA_AUTHORED_PART.LEFT_FOREARM_REGION:
-    case SERA_AUTHORED_PART.RIGHT_FOREARM_REGION:
-    case SERA_AUTHORED_PART.LEFT_HAND_REGION:
-    case SERA_AUTHORED_PART.RIGHT_HAND_REGION:
-    case SERA_AUTHORED_PART.LEFT_FOREARM_GUARD:
-    case SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD:
-      return 0;
-    default:
-      return 0;
-  }
-}
-
-/**
- * Preserve Blender-authored arm continuity. The centroid audit remains here so
- * future runtime sources can opt into a correction without reintroducing the
- * V7/V17 shoulder, elbow and wrist gaps.
+ * Fit the source arms to the gameplay skeleton with one continuous rest-space
+ * displacement field per side. Independent translations of exported regions
+ * split the duplicated shoulder/elbow/wrist boundaries, while leaving the
+ * source untouched puts the hands above the rig's wrist pivots.
  */
 function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
@@ -118,9 +95,17 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
   if (!position || !part || position.count !== part.count) return;
 
   const sums = new Map<number, { x: number; y: number; z: number; count: number }>();
+  const shoulderTop = [0, 0];
+  const isArm = (code: number) => code >= SERA_AUTHORED_PART.LEFT_SHOULDER_REGION
+    && code <= SERA_AUTHORED_PART.RIGHT_HAND_REGION;
+  const isGuard = (code: number) => code === SERA_AUTHORED_PART.LEFT_FOREARM_GUARD
+    || code === SERA_AUTHORED_PART.RIGHT_FOREARM_GUARD;
+
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const code = Math.round(part.getX(vertex)) as SeraAuthoredPartCode;
-    if (!targetSeraArmBindCentroid(code) || seraArmBindRetargetStrength(code) <= 0) continue;
+    const side = position.getX(vertex) < 0 ? 0 : 1;
+    if (isArm(code)) shoulderTop[side] = Math.max(shoulderTop[side], position.getY(vertex));
+    if (!targetSeraArmBindCentroid(code)) continue;
     const entry = sums.get(code) ?? { x: 0, y: 0, z: 0, count: 0 };
     entry.x += position.getX(vertex);
     entry.y += position.getY(vertex);
@@ -129,37 +114,57 @@ function retargetSeraArmBindCentroids(geometry: THREE.BufferGeometry): void {
     sums.set(code, entry);
   }
 
-  const offsets = new Map<number, THREE.Vector3>();
-  for (const [code, sum] of sums) {
-    if (sum.count <= 0) continue;
-    const typedCode = code as SeraAuthoredPartCode;
-    const target = targetSeraArmBindCentroid(typedCode);
-    if (!target) continue;
-    const strength = seraArmBindRetargetStrength(typedCode);
-    const current = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
-    const fullOffset = new THREE.Vector3(target[0], target[1], target[2]).sub(current);
-    if (fullOffset.length() > 0.12) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
-    const offset = fullOffset.multiplyScalar(strength);
-    if (offset.length() > 0.045) throw new Error(`SERA_ARM_BIND_CONTINUITY_OFFSET_OUT_OF_RANGE_${code}`);
-    offsets.set(code, offset);
-  }
+  const makeKnot = (code: SeraAuthoredPartCode) => {
+    const sum = sums.get(code);
+    const target = targetSeraArmBindCentroid(code);
+    if (!sum || !target) return null;
+    const source = new THREE.Vector3(sum.x / sum.count, sum.y / sum.count, sum.z / sum.count);
+    const offset = new THREE.Vector3(...target).sub(source);
+    if (offset.length() > 0.20) throw new Error(`SERA_ARM_BIND_RETARGET_OUT_OF_RANGE_${code}`);
+    return { source, offset };
+  };
+  const chains = [
+    [SERA_AUTHORED_PART.LEFT_UPPER_ARM_REGION, SERA_AUTHORED_PART.LEFT_FOREARM_REGION, SERA_AUTHORED_PART.LEFT_HAND_REGION],
+    [SERA_AUTHORED_PART.RIGHT_UPPER_ARM_REGION, SERA_AUTHORED_PART.RIGHT_FOREARM_REGION, SERA_AUTHORED_PART.RIGHT_HAND_REGION],
+  ].map(codes => codes.map(makeKnot));
 
+  const keyAt = (vertex: number) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)]
+    .map(value => Math.round(value * 1e6)).join(",");
+  const displacements = new Map<string, THREE.Vector3>();
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const code = Math.round(part.getX(vertex));
-    const offset = offsets.get(code);
+    if (!isArm(code) && !isGuard(code)) continue;
+    const x = position.getX(vertex);
+    const y = position.getY(vertex);
+    const side = x < 0 ? 0 : 1;
+    const [upper, forearm, hand] = chains[side];
+    if (!upper || !forearm || !hand) continue;
+    let offset: THREE.Vector3;
+    if (y >= upper.source.y) {
+      const blend = THREE.MathUtils.smoothstep(y, upper.source.y, shoulderTop[side]);
+      const radial = THREE.MathUtils.clamp(Math.abs(x) / (Math.abs(upper.source.x) * 0.6), 0, 1);
+      offset = upper.offset.clone().multiplyScalar((1 - blend) * radial);
+    } else if (y >= forearm.source.y) {
+      const blend = THREE.MathUtils.clamp((upper.source.y - y) / (upper.source.y - forearm.source.y), 0, 1);
+      offset = upper.offset.clone().lerp(forearm.offset, blend);
+    } else {
+      const blend = THREE.MathUtils.clamp((forearm.source.y - y) / (forearm.source.y - hand.source.y), 0, 1);
+      offset = forearm.offset.clone().lerp(hand.offset, blend);
+    }
+    displacements.set(keyAt(vertex), offset);
+  }
+
+  // Include torso-side duplicates, but never move unrelated authored panels.
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const code = Math.round(part.getX(vertex));
+    if (code !== SERA_AUTHORED_PART.HEURISTIC && !isArm(code) && !isGuard(code)) continue;
+    const offset = displacements.get(keyAt(vertex));
     if (!offset) continue;
-    position.setXYZ(
-      vertex,
-      position.getX(vertex) + offset.x,
-      position.getY(vertex) + offset.y,
-      position.getZ(vertex) + offset.z,
-    );
+    position.setXYZ(vertex, position.getX(vertex) + offset.x, position.getY(vertex) + offset.y, position.getZ(vertex) + offset.z);
   }
   position.needsUpdate = true;
-  geometry.userData.armBindRetarget = "BLENDER_SOURCE_NATIVE_V18";
-  geometry.userData.armBindRetargetOffsets = Object.fromEntries(
-    [...offsets.entries()].map(([code, offset]) => [String(code), offset.toArray()]),
-  );
+  geometry.userData.armBindRetarget = "V9_CONTINUOUS_ARM_BIND_V1";
+  geometry.userData.armBindRetargetOffsets = chains.map(chain => chain.map(knot => knot?.offset.toArray() ?? null));
 }
 
 /**
@@ -281,7 +286,7 @@ export function normalizeSeraRuntimeGeometry(root: THREE.Object3D): THREE.Buffer
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.visualVersion = "BLENDER_RUNTIME_V9_SOURCE_NATIVE";
+  geometry.userData.visualVersion = "BLENDER_RUNTIME_V9_CONTINUOUS_BIND";
   geometry.userData.assetUrl = SERA_BLENDER_RUNTIME_ASSET_URL;
   geometry.userData.authoredHeightMeters = 1.68;
   geometry.userData.sourcePrimitiveCount = primitiveCount;
@@ -357,7 +362,7 @@ export function createFemaleBlenderRuntimeVisual(
   const visual = createFemaleV9Visual(definition, quality);
   visual.root.name = `fighter-blender-runtime-${definition.id}`;
   visual.root.userData.visualPipeline = "BLENDER_CONFORMAL_GLB_CANONICAL_RIG";
-  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V9_SOURCE_NATIVE";
+  visual.root.userData.visualVersion = "BLENDER_RUNTIME_V9_CONTINUOUS_BIND";
   visual.root.userData.blenderRuntimeAsset = SERA_BLENDER_RUNTIME_ASSET_URL;
   visual.root.userData.blenderRuntimeAssetState = "pending";
   visual.bodyMesh.userData.reconstruction = "blender-runtime-glb-pending";

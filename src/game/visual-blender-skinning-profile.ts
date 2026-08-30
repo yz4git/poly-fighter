@@ -1,30 +1,24 @@
 export const SERA_SKIN_PROFILE = {
   collar: { neck: 0.52, chest: 0.48 },
   shoulder: {
-    // The Blender source shoulder and upper-arm regions share real geometric
-    // boundaries. Match those duplicated seam vertices by driving the outer
-    // shoulder almost entirely with the upper-arm bone while keeping the inner
-    // clavicle attached to the chest.
-    armBase: 0.16,
+    // Blend the clavicle into the arm across the canonical shoulder width.
+    // Duplicate body seam vertices receive identical weights after solving.
+    armBase: 0.05,
     armOuterMax: 0.98,
-    radialStartX: 0.025,
-    radialEndX: 0.085,
+    radialStartX: 0.045,
+    radialEndX: 0.125,
   },
   upperArm: {
-    // Source upper-arm/forearm regions overlap around y ~= .666-.686. Make the
-    // bottom of the upper-arm region follow the forearm so both copies of the
-    // elbow seam transform together.
-    elbowMax: 0.96,
-    elbowStartY: 0.690,
-    elbowEndY: 0.720,
+    // The continuous bind fit places the elbow around canonical y = .650.
+    elbowMax: 1.0,
+    elbowStartY: 0.625,
+    elbowEndY: 0.675,
   },
   forearm: {
-    // Source forearm/hand regions overlap around y ~= .537-.553. The old .475
-    // thresholds gave the forearm side almost zero hand influence and opened a
-    // visible wrist gap. Blend aggressively through the real source seam.
-    handMax: 0.92,
-    handStartY: 0.540,
-    handEndY: 0.585,
+    // Match the fitted wrist to the canonical hand pivot at y = .477.
+    handMax: 0.98,
+    handStartY: 0.460,
+    handEndY: 0.500,
     guardRigidForearm: 0.96,
     guardHand: 0.04,
   },

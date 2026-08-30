@@ -50,6 +50,22 @@ test("the real Blender asset keeps anatomical seams closed under joint rotation"
   const geometry = normalizeSeraRuntimeGeometry(gltf.scene);
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
   const parts = geometry.getAttribute("seraPart") as THREE.BufferAttribute;
+  // Hands must hang below the gameplay wrist pivot (.477), otherwise they
+  // orbit the forearm when guard/punch rotates the rig.
+  for (const handPart of [SERA_AUTHORED_PART.LEFT_HAND_REGION, SERA_AUTHORED_PART.RIGHT_HAND_REGION]) {
+    let sumY = 0;
+    let count = 0;
+    let topY = -Infinity;
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      if (parts.getX(vertex) !== handPart) continue;
+      sumY += position.getY(vertex);
+      topY = Math.max(topY, position.getY(vertex));
+      count += 1;
+    }
+    assert.ok(count > 0, "exercise both hands from the real asset");
+    assert.ok(sumY / count > 0.40 && sumY / count < 0.477, "rest hand mass must sit below its wrist");
+    assert.ok(topY < 0.51, "the wrist ring must remain near the wrist pivot");
+  }
   const seams = new Map<string, number[]>();
   for (let vertex = 0; vertex < position.count; vertex += 1) {
     const part = parts.getX(vertex);

@@ -1,4 +1,5 @@
 import bpy
+from mathutils import Matrix, Vector
 from sera_blender_helpers import SERA_FRONT_Y
 
 
@@ -6,9 +7,17 @@ def _scale(name, x=1.0, y=1.0, z=1.0):
     obj = bpy.data.objects.get(name)
     if not obj:
         return None
+    # Wedges store world-authored vertices around an origin at zero; segments
+    # have centered origins. Scale around the actual mesh center in both cases.
+    bpy.context.view_layer.update()
+    before = sum((obj.matrix_world @ Vector(corner) for corner in obj.bound_box), Vector()) / 8
     obj.scale.x *= x
     obj.scale.y *= y
     obj.scale.z *= z
+    bpy.context.view_layer.update()
+    after = sum((obj.matrix_world @ Vector(corner) for corner in obj.bound_box), Vector()) / 8
+    obj.matrix_world = Matrix.Translation(before - after) @ obj.matrix_world
+    bpy.context.view_layer.update()
     return obj
 
 
@@ -178,3 +187,5 @@ def apply():
         _scale(name, 0.96, 0.98, 0.98)
 
     _compact_source_hands()
+    from sera_head_fit import fit_identity_to_source_head
+    fit_identity_to_source_head(bpy.data.objects.get('Superhero_Female'))

@@ -132,7 +132,9 @@ def compact_runtime_hand_mesh(mesh):
     center_y = sum(vertex.co.y for vertex in mesh.vertices) / len(mesh.vertices)
     for vertex in mesh.vertices:
         t = max(0.0, min(1.0, (max_z - vertex.co.z) / span))
-        distal = t * t
+        # Shared wrist-ring vertices also belong to forearm faces. Leave the
+        # proximal 45% untouched so partitioning cannot tear that boundary.
+        distal = max(0.0, (t - 0.45) / 0.55) ** 2
         length_retain = 1.0 - 0.48 * distal
         radial_retain = 1.0 - 0.28 * distal
         vertex.co.z = max_z - (max_z - vertex.co.z) * length_retain

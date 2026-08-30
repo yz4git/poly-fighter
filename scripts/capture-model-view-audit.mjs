@@ -163,6 +163,9 @@ try {
 
   for (const [view, state] of Object.entries(seraViews)) {
     if (state.runtimeState !== "ready") throw new Error(`SERA runtime not ready in ${view}: ${JSON.stringify(state)}`);
+    if (state.groundingSource !== "skinned-runtime-soles" || !(state.seamContinuity?.groups > 20)) {
+      throw new Error(`SERA visible geometry audit missing in ${view}: ${JSON.stringify(state)}`);
+    }
     if (Math.abs((state.floorToLowestSoleGap ?? 99) - 0.006) > 0.0035) {
       throw new Error(`SERA MODEL VIEW grounding drift in ${view}: ${JSON.stringify(state)}`);
     }

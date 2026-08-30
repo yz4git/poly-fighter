@@ -282,6 +282,57 @@ function authoredPartAt(attribute: THREE.BufferAttribute | null, vertex: number)
     : SERA_AUTHORED_PART.HEURISTIC;
 }
 
+/** Keep duplicated anatomical boundary vertices together without smoothing facets. */
+function lockBodySeamWeights(
+  position: THREE.BufferAttribute,
+  authoredPart: THREE.BufferAttribute | null,
+  indices: number[],
+  weights: number[],
+): { groups: number; vertices: number } {
+  const groups = new Map<string, number[]>();
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const part = authoredPartAt(authoredPart, vertex);
+    // Armor, hair and cloth panels must retain their independent attachments.
+    if (part !== SERA_AUTHORED_PART.HEURISTIC && (
+      part < SERA_AUTHORED_PART.LEFT_SHOULDER_REGION
+      || part > SERA_AUTHORED_PART.RIGHT_HAND_REGION
+    )) continue;
+    const key = [position.getX(vertex), position.getY(vertex), position.getZ(vertex)]
+      .map(value => Math.round(value * 1e6)).join(",");
+    const group = groups.get(key);
+    if (group) group.push(vertex);
+    else groups.set(key, [vertex]);
+  }
+
+  let lockedGroups = 0;
+  let lockedVertices = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Count each distinct solution once: triangle density must not favor one
+    // side of a shoulder, elbow, wrist or material boundary.
+    const solutions = new Map<string, SeraInfluence[]>();
+    for (const vertex of group) {
+      const pairs: SeraInfluence[] = [];
+      for (let slot = 0; slot < 4; slot += 1) {
+        const offset = vertex * 4 + slot;
+        if (weights[offset] > 0) pairs.push([indices[offset], weights[offset]]);
+      }
+      solutions.set(JSON.stringify(pairs), pairs);
+    }
+    if (solutions.size < 2) continue;
+    const common = normalizeSeraInfluences([...solutions.values()].flat());
+    for (const vertex of group) {
+      for (let slot = 0; slot < 4; slot += 1) {
+        indices[vertex * 4 + slot] = common[slot]?.[0] ?? 0;
+        weights[vertex * 4 + slot] = common[slot]?.[1] ?? 0;
+      }
+    }
+    lockedGroups += 1;
+    lockedVertices += group.length;
+  }
+  return { groups: lockedGroups, vertices: lockedVertices };
+}
+
 export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIndices: Record<string, number>): SeraSkinningDiagnostics {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!position) throw new Error("SERA_BLENDER_SKINNING_REQUIRES_POSITION");
@@ -334,6 +385,7 @@ export function assignSeraBlenderSkinning(geometry: THREE.BufferGeometry, boneIn
     }
   }
 
+  geometry.userData.skinningSeamContinuity = lockBodySeamWeights(position, authoredPart, indices, weights);
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(indices, 4));
   geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
   geometry.deleteAttribute("seraPart");

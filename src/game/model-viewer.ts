@@ -47,6 +47,8 @@ export class ModelViewer {
   private userMoved = false;
   private auditLocked = false;
   private runtimeState = "";
+  private soleGeometry: THREE.BufferGeometry | null = null;
+  private soleSamples: Record<"left" | "right", number[]> = { left: [], right: [] };
 
   constructor(mount: HTMLElement, options: ModelViewerOptions) {
     this.mount = mount;
@@ -124,6 +126,41 @@ export class ModelViewer {
     this.scene.add(this.floor);
   }
 
+  private visibleSole(side: "left" | "right"): THREE.Vector3 {
+    if (this.visual.root.userData.blenderRuntimeAssetState !== "ready") {
+      return getSoleContactPoint(this.visual, side);
+    }
+    const mesh = this.visual.bodyMesh;
+    if (this.soleGeometry !== mesh.geometry) {
+      this.soleGeometry = mesh.geometry;
+      const position = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+      for (const foot of ["left", "right"] as const) {
+        const candidates: number[] = [];
+        const seen = new Set<string>();
+        let lowest = Infinity;
+        for (let vertex = 0; vertex < position.count; vertex += 1) {
+          if ((position.getX(vertex) < 0 ? "left" : "right") !== foot || position.getY(vertex) > 0.12) continue;
+          const key = [position.getX(vertex), position.getY(vertex), position.getZ(vertex)].map(v => Math.round(v * 1e6)).join(",");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          candidates.push(vertex);
+          lowest = Math.min(lowest, position.getY(vertex));
+        }
+        this.soleSamples[foot] = candidates.filter(vertex => position.getY(vertex) <= lowest + 0.025);
+      }
+    }
+    // V9 helper contacts belong to the fallback mesh. Measure the actual GLB
+    // soles after skinning so a successful numeric audit cannot hide floating feet.
+    const result = new THREE.Vector3(0, Infinity, 0);
+    const point = new THREE.Vector3();
+    for (const vertex of this.soleSamples[side]) {
+      mesh.getVertexPosition(vertex, point);
+      mesh.localToWorld(point);
+      if (point.y < result.y) result.copy(point);
+    }
+    return finiteVector(result) ? result : getSoleContactPoint(this.visual, side);
+  }
+
   private readGrounding(): {
     left: THREE.Vector3;
     right: THREE.Vector3;
@@ -131,8 +168,8 @@ export class ModelViewer {
     maximumGap: number;
   } | null {
     this.visual.root.updateMatrixWorld(true);
-    const left = getSoleContactPoint(this.visual, "left");
-    const right = getSoleContactPoint(this.visual, "right");
+    const left = this.visibleSole("left");
+    const right = this.visibleSole("right");
     if (!finiteVector(left) || !finiteVector(right)) return null;
     const minimumY = Math.min(left.y, right.y);
     return {
@@ -213,6 +250,8 @@ export class ModelViewer {
         minimumSoleY: grounding?.minimumY ?? null,
         soleHeightDelta: grounding?.maximumGap ?? null,
         floorToLowestSoleGap: grounding ? grounding.minimumY - this.floor.position.y : null,
+        groundingSource: this.soleSamples.left.length ? "skinned-runtime-soles" : "rig-contacts",
+        seamContinuity: this.visual.root.userData.blenderSkinningSeamContinuity ?? null,
         modelSize: size.toArray(),
         stabilityGuard: String(this.visual.root.userData.v11PoseStabilityGuard ?? "none"),
       };

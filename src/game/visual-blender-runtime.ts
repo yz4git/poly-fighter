@@ -251,7 +251,7 @@ function collectRuntimePieces(root: THREE.Object3D): THREE.BufferGeometry[] {
   return pieces;
 }
 
-function normalizeRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
+export function normalizeSeraRuntimeGeometry(root: THREE.Object3D): THREE.BufferGeometry {
   const pieces = collectRuntimePieces(root);
   const primitiveCount = pieces.length;
   const geometry = mergeGeometries(pieces, false);
@@ -294,7 +294,7 @@ function loadSourceGeometry(): Promise<THREE.BufferGeometry> {
   if (sourceGeometryPromise) return sourceGeometryPromise;
   const loader = new GLTFLoader();
   sourceGeometryPromise = loader.loadAsync(SERA_BLENDER_RUNTIME_ASSET_URL)
-    .then((gltf) => normalizeRuntimeGeometry(gltf.scene))
+    .then((gltf) => normalizeSeraRuntimeGeometry(gltf.scene))
     .catch((error) => {
       sourceGeometryPromise = null;
       throw error;
@@ -344,6 +344,7 @@ function installRuntimeGeometry(visual: FighterVisual, source: THREE.BufferGeome
   visual.root.userData.blenderRuntimeBindRetarget = source.userData.armBindRetarget ?? null;
   visual.root.userData.blenderRuntimeBindRetargetOffsets = source.userData.armBindRetargetOffsets ?? null;
   visual.root.userData.blenderSkinningDiagnostics = skinningDiagnostics;
+  visual.root.userData.blenderSkinningSeamContinuity = geometry.userData.skinningSeamContinuity;
   visual.root.userData.blenderWeightAudit = weightAudit;
   visual.root.userData.blenderRuntimeMetadata = runtimeMetadata;
   visual.bodyMesh.userData.skinningVersion = runtimeMetadata.skinningVersion;

@@ -1,11 +1,15 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import process from "node:process";
 import { assertBlenderRuntimeAuditState, waitForBlenderRuntime } from "./blender-runtime-audit-helpers.mjs";
 
 const driver = process.env.WEBDRIVER_BIN;
 const url = process.env.AUDIT_URL ?? "http://127.0.0.1:3000/";
 const output = process.env.AUDIT_OUTPUT ?? "artifacts/visual-audit/sera-v10-3-game.png";
+const auditDir = process.env.AUDIT_DIR ?? dirname(output);
+const auditFighter = (process.env.AUDIT_FIGHTER ?? "SERA").toUpperCase();
+if (!["SERA", "KAIRO"].includes(auditFighter)) throw new Error("AUDIT_FIGHTER must be SERA or KAIRO");
 if (!driver) throw new Error("WEBDRIVER_BIN is required");
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -332,10 +336,14 @@ try {
   const start = await clickButton(sessionId, "START MATCH");
   if (!start?.clicked) throw new Error(`START MATCH was not found: ${JSON.stringify(start)}`);
   await delay(350);
-  const selectedP1 = await chooseFighter(sessionId, "SERA", "PLAYER 1 / SPEED");
-  if (!selectedP1?.clicked) throw new Error(`PLAYER 1 SERA was not found: ${JSON.stringify(selectedP1)}`);
-  const selectedP2 = await chooseFighter(sessionId, "KAIRO", "PLAYER 2 / POWER");
-  if (!selectedP2?.clicked) throw new Error(`PLAYER 2 KAIRO was not found: ${JSON.stringify(selectedP2)}`);
+  const p1Name = auditFighter;
+  const p2Name = auditFighter === "KAIRO" ? "SERA" : "KAIRO";
+  const p1Role = auditFighter === "KAIRO" ? "PLAYER 1 / POWER" : "PLAYER 1 / SPEED";
+  const p2Role = auditFighter === "KAIRO" ? "PLAYER 2 / SPEED" : "PLAYER 2 / POWER";
+  const selectedP1 = await chooseFighter(sessionId, p1Name, p1Role);
+  if (!selectedP1?.clicked) throw new Error(`PLAYER 1 ${p1Name} was not found: ${JSON.stringify(selectedP1)}`);
+  const selectedP2 = await chooseFighter(sessionId, p2Name, p2Role);
+  if (!selectedP2?.clicked) throw new Error(`PLAYER 2 ${p2Name} was not found: ${JSON.stringify(selectedP2)}`);
   await delay(150);
   const enter = await clickButton(sessionId, "ENTER RING");
   if (!enter?.clicked) throw new Error(`ENTER RING was not found: ${JSON.stringify(enter)}`);
@@ -354,11 +362,61 @@ try {
     throw new Error(`Match canvas/HUD was not ready: ${JSON.stringify(state)}`);
   }
 
-  const blenderRuntimeState = await waitForBlenderRuntime(execute, sessionId, delay);
-  assertBlenderRuntimeAuditState(blenderRuntimeState);
+  const runtimeState = auditFighter === "SERA"
+    ? await waitForBlenderRuntime(execute, sessionId, delay)
+    : await execute(sessionId, `
+      function findGame() {
+        const host = document.querySelector('main.poly-app');
+        if (!host) return null;
+        const key = Object.keys(host).find((entry) => entry.startsWith('__reactFiber$'));
+        let fiber = key ? host[key] : null;
+        const visited = new Set();
+        while (fiber && !visited.has(fiber)) {
+          visited.add(fiber);
+          let hook = fiber.memoizedState;
+          while (hook) {
+            const value = hook.memoizedState;
+            const current = value && typeof value === 'object' && 'current' in value ? value.current : null;
+            if (current && current.p1 && current.p2 && current.renderer) return current;
+            hook = hook.next;
+          }
+          fiber = fiber.return;
+        }
+        return null;
+      }
+      const game = findGame();
+      const visual = game?.p1?.visual;
+      return {
+        ready: Boolean(visual),
+        fighter: game?.p1?.definition?.name ?? null,
+        visualVersion: visual?.visualVersion ?? null,
+        pipeline: visual?.root?.userData?.visualPipeline ?? null,
+        characterSource: visual?.root?.userData?.characterSource ?? null,
+        legacyGenerator: visual?.root?.userData?.legacyKairoGenerator ?? null,
+        rigCompatibility: visual?.root?.userData?.rigCompatibility ?? null,
+        reconstruction: visual?.bodyMesh?.userData?.reconstruction ?? null,
+        triangleCount: visual?.stats?.triangleCount ?? 0,
+        meshCount: visual?.stats?.meshCount ?? 0,
+      };
+    `);
+  if (auditFighter === "SERA") {
+    assertBlenderRuntimeAuditState(runtimeState);
+  } else if (
+    !runtimeState?.ready ||
+    runtimeState.fighter !== "KAIRO" ||
+    runtimeState.visualVersion !== "KAIRO_V1" ||
+    runtimeState.pipeline !== "KAIRO_V1_FORGE_RECONSTRUCTION" ||
+    runtimeState.characterSource !== "FROM_SCRATCH_AUTHORED_RUNTIME" ||
+    runtimeState.legacyGenerator !== false ||
+    runtimeState.rigCompatibility !== "V4_CANONICAL_21_BONE_IK" ||
+    runtimeState.reconstruction !== "kairo-from-scratch-continuous-skinned-mesh" ||
+    runtimeState.triangleCount < 5000
+  ) {
+    throw new Error(`KAIRO reconstruction was not active in the real game: ${JSON.stringify(runtimeState)}`);
+  }
   const canvasState = await inspectWebglCanvas(sessionId);
 
-  await mkdir(output.split("/").slice(0, -1).join("/"), { recursive: true });
+  await mkdir(auditDir, { recursive: true });
   const poses = ["IDLE", "GUARD", "PUNCH", "KICK"];
   const poseStates = {};
   for (const pose of poses) {
@@ -375,12 +433,15 @@ try {
     pose,
     { ...value, signature: { ...value.signature, values: undefined } },
   ]));
-  await writeFile("artifacts/visual-audit/webdriver.log", driverLog);
-  await writeFile("artifacts/visual-audit/canvas-state.json", JSON.stringify(canvasState, null, 2));
-  await writeFile("artifacts/visual-audit/blender-runtime-state.json", JSON.stringify(blenderRuntimeState, null, 2));
-  await writeFile("artifacts/visual-audit/pose-states.json", JSON.stringify(compactStates, null, 2));
-  await writeFile("artifacts/visual-audit/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
-  console.log(JSON.stringify({ output, state, blenderRuntimeState, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
+  await writeFile(auditDir + "/webdriver.log", driverLog);
+  await writeFile(auditDir + "/canvas-state.json", JSON.stringify(canvasState, null, 2));
+  await writeFile(auditDir + "/runtime-state.json", JSON.stringify(runtimeState, null, 2));
+  if (auditFighter === "SERA") {
+    await writeFile(auditDir + "/blender-runtime-state.json", JSON.stringify(runtimeState, null, 2));
+  }
+  await writeFile(auditDir + "/pose-states.json", JSON.stringify(compactStates, null, 2));
+  await writeFile(auditDir + "/pose-separation.json", JSON.stringify(poseSeparation, null, 2));
+  console.log(JSON.stringify({ output, auditFighter, state, runtimeState, selectedP1, selectedP2, poseStates: compactStates, poseSeparation }));
   auditSucceeded = true;
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

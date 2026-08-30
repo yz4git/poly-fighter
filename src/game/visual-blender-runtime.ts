@@ -12,7 +12,7 @@ import {
 } from "./visual-blender-skinning";
 import { createFemaleV9Visual } from "./visual-v9";
 
-export const SERA_BLENDER_RUNTIME_ASSET_URL = "/models/sera-blender-runtime.glb";
+export const SERA_BLENDER_RUNTIME_ASSET_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/models/sera-blender-runtime.glb`;
 
 let sourceGeometryPromise: Promise<THREE.BufferGeometry> | null = null;
 

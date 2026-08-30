@@ -28,7 +28,14 @@ def fit_identity_to_source_head(body):
     finally:
         evaluated.to_mesh_clear()
     top = max(point.z for point in points)
-    head = [point for point in points if point.z > top - 0.18]
+    # T-pose hands can reach the neck's height. Use source head ownership so
+    # those distant vertices never inflate the width used to place the eyes.
+    head_groups = {group.index for group in body.vertex_groups if group.name.lower() == 'head'}
+    head_indices = [vertex.index for vertex in body.data.vertices
+                    if any(item.group in head_groups and item.weight > 0.35 for item in vertex.groups)]
+    head = [points[index] for index in head_indices if index < len(points) and points[index].z > top - 0.18]
+    if len(head) < 16:
+        head = [point for point in points if point.z > top - 0.13 and abs(point.x) < 0.12]
     width = max(point.x for point in head) - min(point.x for point in head)
     center_x = (max(point.x for point in head) + min(point.x for point in head)) * 0.5
     center_y = (max(point.y for point in head) + min(point.y for point in head)) * 0.5
@@ -100,7 +107,7 @@ def fit_identity_to_source_head(body):
         center = _center(obj)
         hit = front_at(center_x + width * side, top - below_top)
         if hit is None:
-            raise RuntimeError('SERA facial surface fit missed: ' + name)
+            raise RuntimeError(f'SERA facial surface fit missed: {name} (width={width}, top={top})')
         corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
         half_depth = (max(p.y for p in corners) - min(p.y for p in corners)) * 0.5
         target = hit + Vector((0, SERA_FRONT_Y * (half_depth + 0.0008), 0))

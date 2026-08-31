@@ -63,8 +63,8 @@ export class TpsGraphicsDirector {
     side: THREE.DoubleSide,
   });
   private readonly centerGlow = new THREE.Mesh(this.centerGlowGeometry, this.centerGlowMaterial);
-  private readonly p1Rim = new THREE.PointLight(0xff476a, 0.9, 4.6, 2);
-  private readonly p2Rim = new THREE.PointLight(0x54caff, 0.9, 4.6, 2);
+  private readonly p1Rim = new THREE.PointLight(0xff9aad, 0.52, 5.4, 2);
+  private readonly p2Rim = new THREE.PointLight(0xa6e4ff, 0.52, 5.4, 2);
   private readonly impactLight = new THREE.PointLight(0xffffff, 0, 4.2, 2);
   private readonly atmosphereGeometry = new THREE.BufferGeometry();
   private readonly atmosphereMaterial = new THREE.PointsMaterial({
@@ -168,8 +168,8 @@ export class TpsGraphicsDirector {
     this.renderer.toneMappingExposure = quality === "HIGH" ? 1.12 : quality === "LOW" ? 1.02 : 1.08;
     const low = quality === "LOW";
     this.atmosphere.visible = !low;
-    this.p1Rim.intensity = low ? 0.46 : 0.9;
-    this.p2Rim.intensity = low ? 0.46 : 0.9;
+    this.p1Rim.intensity = low ? 0.24 : 0.52;
+    this.p2Rim.intensity = low ? 0.24 : 0.52;
   }
 
   hit(event: HitEvent, camera: THREE.Camera): void {
@@ -188,7 +188,7 @@ export class TpsGraphicsDirector {
 
     this.impactLight.position.set(event.position.x, event.position.y, event.position.z);
     this.impactLight.color.setHex(color);
-    this.impactLight.intensity = this.quality === "LOW" ? 1.1 : 3.8 + strength * 1.4;
+    this.impactLight.intensity = this.quality === "LOW" ? 0.72 : 2.25 + strength * 0.78;
     this.impactLightLife = 0.12 + strength * 0.025;
   }
 
@@ -201,12 +201,18 @@ export class TpsGraphicsDirector {
     this.playerGroundRing.scale.setScalar(playerPulse);
     this.playerGroundMaterial.opacity = p1.state === "SIDESTEP" ? 0.36 : p1.state === "ATTACK" ? 0.28 : 0.17;
 
-    this.p1Rim.position.set(p1.position.x - 0.15, 1.28, p1.position.z + 0.15);
-    this.p2Rim.position.set(p2.position.x + 0.15, 1.28, p2.position.z - 0.15);
-    const rimPulse = 0.88 + Math.sin(time * 4.4) * 0.08;
+    const fighterForward = p2.position.clone().sub(p1.position).setY(0);
+    if (fighterForward.lengthSq() < 1e-8) fighterForward.set(0, 0, 1);
+    else fighterForward.normalize();
+    const fighterRight = new THREE.Vector3(-fighterForward.z, 0, fighterForward.x);
+    this.p1Rim.position.copy(p1.position).addScaledVector(fighterForward, -1.3).addScaledVector(fighterRight, 0.72);
+    this.p1Rim.position.y = 1.72;
+    this.p2Rim.position.copy(p2.position).addScaledVector(fighterForward, 1.3).addScaledVector(fighterRight, -0.72);
+    this.p2Rim.position.y = 1.72;
+    const rimPulse = 0.9 + Math.sin(time * 4.4) * 0.06;
     if (this.quality !== "LOW") {
-      this.p1Rim.intensity = (p1.state === "ATTACK" ? 1.35 : 0.82) * rimPulse;
-      this.p2Rim.intensity = (p2.state === "ATTACK" ? 1.35 : 0.82) * rimPulse;
+      this.p1Rim.intensity = (p1.state === "ATTACK" ? 0.78 : 0.48) * rimPulse;
+      this.p2Rim.intensity = (p2.state === "ATTACK" ? 0.78 : 0.48) * rimPulse;
     }
 
     this.arenaGlowMaterial.opacity = 0.09 + Math.sin(time * 1.7) * 0.025;

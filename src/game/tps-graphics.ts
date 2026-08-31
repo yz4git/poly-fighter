@@ -6,6 +6,10 @@ export const TPS_GRAPHICS_PROFILE = Object.freeze({
   contactShadows: true,
   localRimLights: 2,
   impactWavePool: 8,
+  attackTrailPool: 6,
+  quickstepGhostPool: 4,
+  skylineMonoliths: 8,
+  floorAccentArcs: 12,
   toneMapping: "ACESFilmic",
   lowAtmospherePoints: 42,
   mediumAtmospherePoints: 72,
@@ -20,10 +24,28 @@ interface ImpactWave {
   maxLife: number;
 }
 
+interface AttackTrail {
+  mesh: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+  life: number;
+  maxLife: number;
+}
+
+interface GhostPulse {
+  group: THREE.Group;
+  material: THREE.MeshBasicMaterial;
+  life: number;
+  maxLife: number;
+}
+
 function pointCount(quality: GraphicsQuality): number {
   if (quality === "LOW") return TPS_GRAPHICS_PROFILE.lowAtmospherePoints;
   if (quality === "HIGH") return TPS_GRAPHICS_PROFILE.highAtmospherePoints;
   return TPS_GRAPHICS_PROFILE.mediumAtmospherePoints;
+}
+
+function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
+  const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
+  return result.lengthSq() > 1e-8 ? result.normalize() : new THREE.Vector3(0, 0, 1);
 }
 
 export class TpsGraphicsDirector {
@@ -63,6 +85,26 @@ export class TpsGraphicsDirector {
     side: THREE.DoubleSide,
   });
   private readonly centerGlow = new THREE.Mesh(this.centerGlowGeometry, this.centerGlowMaterial);
+  private readonly floorCoreGeometry = new THREE.CircleGeometry(1.28, 56);
+  private readonly floorCoreMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0x0a2036,
+    emissive: 0x02101d,
+    emissiveIntensity: 0.42,
+    metalness: 0.34,
+    roughness: 0.48,
+    clearcoat: 0.34,
+    clearcoatRoughness: 0.72,
+  });
+  private readonly floorCore = new THREE.Mesh(this.floorCoreGeometry, this.floorCoreMaterial);
+  private readonly floorAccentMaterial = new THREE.MeshBasicMaterial({
+    color: 0x3ccfff,
+    transparent: true,
+    opacity: 0.2,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+  private readonly floorAccentGeometries: THREE.RingGeometry[] = [];
   private readonly p1Rim = new THREE.PointLight(0xff9aad, 0.52, 5.4, 2);
   private readonly p2Rim = new THREE.PointLight(0xa6e4ff, 0.52, 5.4, 2);
   private readonly impactLight = new THREE.PointLight(0xffffff, 0, 4.2, 2);
@@ -77,10 +119,33 @@ export class TpsGraphicsDirector {
     blending: THREE.AdditiveBlending,
   });
   private readonly atmosphere: THREE.Points;
+  private readonly skylineGeometry = new THREE.BoxGeometry(0.52, 1, 0.52);
+  private readonly skylineMaterial = new THREE.MeshStandardMaterial({
+    color: 0x07182a,
+    emissive: 0x04182a,
+    emissiveIntensity: 0.72,
+    roughness: 0.68,
+    metalness: 0.32,
+  });
+  private readonly skylineBeaconGeometry = new THREE.OctahedronGeometry(0.085, 0);
+  private readonly skylineBeaconMaterial = new THREE.MeshBasicMaterial({
+    color: 0x75e9ff,
+    transparent: true,
+    opacity: 0.72,
+    blending: THREE.AdditiveBlending,
+  });
   private readonly waveGeometry = new THREE.RingGeometry(0.18, 0.25, 32);
   private readonly waves: ImpactWave[] = [];
+  private readonly attackTrailGeometry = new THREE.TorusGeometry(0.72, 0.034, 6, 36, Math.PI * 0.78);
+  private readonly attackTrails: AttackTrail[] = [];
+  private readonly ghostBodyGeometry = new THREE.CylinderGeometry(0.28, 0.35, 1.02, 8);
+  private readonly ghostHeadGeometry = new THREE.SphereGeometry(0.2, 8, 6);
+  private readonly ghosts: GhostPulse[] = [];
   private quality: GraphicsQuality;
   private impactLightLife = 0;
+  private lastP1TrailSpawn = -Infinity;
+  private lastP2TrailSpawn = -Infinity;
+  private lastGhostSpawn = -Infinity;
 
   constructor(
     scene: THREE.Scene,
@@ -116,6 +181,10 @@ export class TpsGraphicsDirector {
     this.centerGlow.rotation.x = -Math.PI / 2;
     this.centerGlow.position.y = 0.025;
 
+    this.floorCore.name = "tps-floor-core";
+    this.floorCore.rotation.x = -Math.PI / 2;
+    this.floorCore.position.y = -0.002;
+
     this.p1Rim.name = "tps-rim-light-p1";
     this.p2Rim.name = "tps-rim-light-p2";
     this.impactLight.name = "tps-impact-light";
@@ -136,6 +205,7 @@ export class TpsGraphicsDirector {
     this.group.add(
       this.p1Shadow,
       this.p2Shadow,
+      this.floorCore,
       this.playerGroundRing,
       this.arenaGlow,
       this.centerGlow,
@@ -144,6 +214,36 @@ export class TpsGraphicsDirector {
       this.impactLight,
       this.atmosphere,
     );
+
+    for (let index = 0; index < TPS_GRAPHICS_PROFILE.floorAccentArcs; index += 1) {
+      const layer = index % 3;
+      const radius = 2.12 + layer * 1.34;
+      const thetaStart = index * (Math.PI * 2 / TPS_GRAPHICS_PROFILE.floorAccentArcs) + layer * 0.085;
+      const geometry = new THREE.RingGeometry(radius, radius + 0.052, 18, 1, thetaStart, 0.42);
+      const accent = new THREE.Mesh(geometry, this.floorAccentMaterial);
+      accent.name = `tps-floor-accent-${index}`;
+      accent.rotation.x = -Math.PI / 2;
+      accent.position.y = 0.013;
+      this.floorAccentGeometries.push(geometry);
+      this.group.add(accent);
+    }
+
+    for (let index = 0; index < TPS_GRAPHICS_PROFILE.skylineMonoliths; index += 1) {
+      const angle = index * (Math.PI * 2 / TPS_GRAPHICS_PROFILE.skylineMonoliths) + Math.PI / 8;
+      const radius = arenaRadius + 6.1;
+      const height = 4.2 + (index % 4) * 0.72;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      const tower = new THREE.Mesh(this.skylineGeometry, this.skylineMaterial);
+      tower.name = `tps-skyline-monolith-${index}`;
+      tower.position.set(x, height * 0.5 - 0.18, z);
+      tower.scale.y = height;
+      tower.rotation.y = -angle + Math.PI / 4;
+      const beacon = new THREE.Mesh(this.skylineBeaconGeometry, this.skylineBeaconMaterial);
+      beacon.name = `tps-skyline-beacon-${index}`;
+      beacon.position.set(x, height + 0.06, z);
+      this.group.add(tower, beacon);
+    }
 
     for (let index = 0; index < TPS_GRAPHICS_PROFILE.impactWavePool; index += 1) {
       const material = new THREE.MeshBasicMaterial({
@@ -161,6 +261,44 @@ export class TpsGraphicsDirector {
       this.group.add(mesh);
       this.waves.push({ mesh, life: 0, maxLife: 0 });
     }
+
+    for (let index = 0; index < TPS_GRAPHICS_PROFILE.attackTrailPool; index += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(this.attackTrailGeometry, material);
+      mesh.name = `tps-attack-trail-${index}`;
+      mesh.visible = false;
+      mesh.renderOrder = 18;
+      this.group.add(mesh);
+      this.attackTrails.push({ mesh, life: 0, maxLife: 0 });
+    }
+
+    for (let index = 0; index < TPS_GRAPHICS_PROFILE.quickstepGhostPool; index += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xff6f8b,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+      });
+      const ghost = new THREE.Group();
+      ghost.name = `tps-quickstep-ghost-${index}`;
+      const body = new THREE.Mesh(this.ghostBodyGeometry, material);
+      body.position.y = 0.78;
+      const head = new THREE.Mesh(this.ghostHeadGeometry, material);
+      head.position.y = 1.47;
+      ghost.add(body, head);
+      ghost.visible = false;
+      this.group.add(ghost);
+      this.ghosts.push({ group: ghost, material, life: 0, maxLife: 0 });
+    }
   }
 
   setQuality(quality: GraphicsQuality): void {
@@ -168,6 +306,9 @@ export class TpsGraphicsDirector {
     this.renderer.toneMappingExposure = quality === "HIGH" ? 1.12 : quality === "LOW" ? 1.02 : 1.08;
     const low = quality === "LOW";
     this.atmosphere.visible = !low;
+    this.floorAccentMaterial.opacity = low ? 0.11 : 0.2;
+    this.skylineMaterial.emissiveIntensity = low ? 0.42 : 0.72;
+    this.skylineBeaconMaterial.opacity = low ? 0.45 : 0.72;
     this.p1Rim.intensity = low ? 0.24 : 0.52;
     this.p2Rim.intensity = low ? 0.24 : 0.52;
   }
@@ -201,9 +342,7 @@ export class TpsGraphicsDirector {
     this.playerGroundRing.scale.setScalar(playerPulse);
     this.playerGroundMaterial.opacity = p1.state === "SIDESTEP" ? 0.36 : p1.state === "ATTACK" ? 0.28 : 0.17;
 
-    const fighterForward = p2.position.clone().sub(p1.position).setY(0);
-    if (fighterForward.lengthSq() < 1e-8) fighterForward.set(0, 0, 1);
-    else fighterForward.normalize();
+    const fighterForward = horizontalDirection(p1.position, p2.position);
     const fighterRight = new THREE.Vector3(-fighterForward.z, 0, fighterForward.x);
     this.p1Rim.position.copy(p1.position).addScaledVector(fighterForward, -1.3).addScaledVector(fighterRight, 0.72);
     this.p1Rim.position.y = 1.72;
@@ -215,8 +354,17 @@ export class TpsGraphicsDirector {
       this.p2Rim.intensity = (p2.state === "ATTACK" ? 0.78 : 0.48) * rimPulse;
     }
 
+    this.spawnAttackTrail(p1, p2, time, true);
+    this.spawnAttackTrail(p2, p1, time, false);
+    if (p1.state === "SIDESTEP" && time - this.lastGhostSpawn >= 0.042) {
+      this.spawnQuickstepGhost(p1, p2);
+      this.lastGhostSpawn = time;
+    }
+
     this.arenaGlowMaterial.opacity = 0.09 + Math.sin(time * 1.7) * 0.025;
     this.centerGlowMaterial.opacity = 0.055 + Math.sin(time * 2.3 + 0.8) * 0.025;
+    this.floorAccentMaterial.opacity = (this.quality === "LOW" ? 0.095 : 0.17) + Math.sin(time * 1.35) * 0.035;
+    this.floorCoreMaterial.emissiveIntensity = 0.38 + Math.sin(time * 1.9) * 0.06;
     const arenaPulse = 1 + Math.sin(time * 1.55) * 0.0025;
     this.arenaGlow.scale.setScalar(arenaPulse);
     this.atmosphere.rotation.y = time * 0.012;
@@ -233,6 +381,30 @@ export class TpsGraphicsDirector {
       }
     }
 
+    for (const trail of this.attackTrails) {
+      if (trail.life <= 0) continue;
+      trail.life -= delta;
+      const progress = 1 - Math.max(0, trail.life) / Math.max(1e-4, trail.maxLife);
+      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.42);
+      trail.mesh.scale.multiplyScalar(1 + delta * 1.35);
+      if (trail.life <= 0) {
+        trail.mesh.visible = false;
+        trail.mesh.material.opacity = 0;
+      }
+    }
+
+    for (const ghost of this.ghosts) {
+      if (ghost.life <= 0) continue;
+      ghost.life -= delta;
+      const progress = 1 - Math.max(0, ghost.life) / Math.max(1e-4, ghost.maxLife);
+      ghost.material.opacity = Math.max(0, (1 - progress) * 0.15);
+      ghost.group.scale.setScalar(1 + progress * 0.045);
+      if (ghost.life <= 0) {
+        ghost.group.visible = false;
+        ghost.material.opacity = 0;
+      }
+    }
+
     if (this.impactLightLife > 0) {
       this.impactLightLife -= delta;
       this.impactLight.intensity *= Math.exp(-18 * delta);
@@ -243,12 +415,66 @@ export class TpsGraphicsDirector {
   reset(): void {
     this.impactLight.intensity = 0;
     this.impactLightLife = 0;
+    this.lastP1TrailSpawn = -Infinity;
+    this.lastP2TrailSpawn = -Infinity;
+    this.lastGhostSpawn = -Infinity;
     for (const wave of this.waves) {
       wave.life = 0;
       wave.maxLife = 0;
       wave.mesh.visible = false;
       wave.mesh.material.opacity = 0;
     }
+    for (const trail of this.attackTrails) {
+      trail.life = 0;
+      trail.maxLife = 0;
+      trail.mesh.visible = false;
+      trail.mesh.material.opacity = 0;
+    }
+    for (const ghost of this.ghosts) {
+      ghost.life = 0;
+      ghost.maxLife = 0;
+      ghost.group.visible = false;
+      ghost.material.opacity = 0;
+    }
+  }
+
+  private spawnAttackTrail(attacker: FighterRuntime, defender: FighterRuntime, time: number, p1: boolean): void {
+    const move = attacker.currentMove;
+    if (attacker.state !== "ATTACK" || !move) return;
+    const lastSpawn = p1 ? this.lastP1TrailSpawn : this.lastP2TrailSpawn;
+    if (time - lastSpawn < 0.048) return;
+    if (move.animation === "throw") return;
+    if (p1) this.lastP1TrailSpawn = time;
+    else this.lastP2TrailSpawn = time;
+
+    const trail = this.attackTrails.find((item) => item.life <= 0) ?? this.attackTrails[0];
+    const forward = horizontalDirection(attacker.position, defender.position);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const kick = move.animation === "kick" || move.visualContact === "LEFT_FOOT" || move.visualContact === "RIGHT_FOOT";
+    const active = attacker.isActive();
+    trail.life = active ? 0.17 : 0.12;
+    trail.maxLife = trail.life;
+    trail.mesh.visible = true;
+    trail.mesh.position.copy(attacker.position).addScaledVector(forward, kick ? 0.68 : 0.56);
+    trail.mesh.position.y = kick ? 0.83 : 1.28;
+    trail.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), right);
+    trail.mesh.rotateZ((attacker.moveTick / Math.max(1, move.startup + move.active)) * 0.55 - 0.26);
+    trail.mesh.scale.set(kick ? 1.26 : 0.88, kick ? 0.92 : 0.7, 1);
+    trail.mesh.material.color.setHex(attacker.definition.colors.glow);
+    trail.mesh.material.opacity = active ? 0.42 : 0.24;
+  }
+
+  private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime): void {
+    const ghost = this.ghosts.find((item) => item.life <= 0) ?? this.ghosts[0];
+    const forward = horizontalDirection(fighter.position, opponent.position);
+    ghost.life = 0.19;
+    ghost.maxLife = ghost.life;
+    ghost.group.visible = true;
+    ghost.group.position.copy(fighter.position);
+    ghost.group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);
+    ghost.group.scale.setScalar(0.96);
+    ghost.material.color.setHex(fighter.definition.colors.glow);
+    ghost.material.opacity = 0.15;
   }
 
   private updateFighterShadow(
@@ -275,10 +501,23 @@ export class TpsGraphicsDirector {
     this.arenaGlowMaterial.dispose();
     this.centerGlowGeometry.dispose();
     this.centerGlowMaterial.dispose();
+    this.floorCoreGeometry.dispose();
+    this.floorCoreMaterial.dispose();
+    for (const geometry of this.floorAccentGeometries) geometry.dispose();
+    this.floorAccentMaterial.dispose();
     this.atmosphereGeometry.dispose();
     this.atmosphereMaterial.dispose();
+    this.skylineGeometry.dispose();
+    this.skylineMaterial.dispose();
+    this.skylineBeaconGeometry.dispose();
+    this.skylineBeaconMaterial.dispose();
     this.waveGeometry.dispose();
     for (const wave of this.waves) wave.mesh.material.dispose();
+    this.attackTrailGeometry.dispose();
+    for (const trail of this.attackTrails) trail.mesh.material.dispose();
+    this.ghostBodyGeometry.dispose();
+    this.ghostHeadGeometry.dispose();
+    for (const ghost of this.ghosts) ghost.material.dispose();
     this.group.clear();
   }
 }

@@ -55,7 +55,15 @@ function createCircularArena(): { group: THREE.Group; disposables: Array<THREE.B
   const disposables: Array<THREE.BufferGeometry | THREE.Material> = [];
 
   const floorGeometry = new THREE.CircleGeometry(ARENA_RADIUS, 72);
-  const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x09182b, roughness: 0.88, metalness: 0.12 });
+  const floorMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0x081827,
+  emissive: 0x02070e,
+  emissiveIntensity: 0.34,
+  roughness: 0.62,
+  metalness: 0.28,
+  clearcoat: 0.32,
+  clearcoatRoughness: 0.78,
+});
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.012;

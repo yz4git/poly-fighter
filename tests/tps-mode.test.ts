@@ -52,6 +52,8 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /ENEMY_TACTIC_INTERVAL/);
   assert.match(source, /this\.difficulty === "HARD"/);
   assert.match(source, /cameraImpact/);
+  assert.match(source, /enemyOpeningGraceTicks = 132/);
+  assert.match(source, /this\.enemyOpeningGraceTicks <= 0 && this\.enemyCooldown <= 0/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {

@@ -157,6 +157,9 @@ export class TpsFightGame {
   private renderTime = 0;
   private timerTicks = ROUND_TICKS;
   private enemyCooldown = 48;
+  // Give the player a brief orientation/read window at the start of a TPS duel.
+  // The CPU may reposition or guard during this window, but it cannot open with an attack.
+  private enemyOpeningGraceTicks = 132;
   private finished = false;
   private resultWinner: "p1" | "p2" | "draw" | null = null;
   private lastHudTick = -1;
@@ -412,6 +415,7 @@ export class TpsFightGame {
     if (this.advanceLockedState(this.p2)) return;
 
     this.enemyCooldown -= 1;
+    if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.enemyTacticTicks -= 1;
     if (this.enemyTacticTicks <= 0) {
       const slot = Math.floor(this.simulationTicks / ENEMY_TACTIC_INTERVAL);
@@ -445,7 +449,7 @@ export class TpsFightGame {
 
     if (shouldGuard) {
       this.p2.state = "GUARD";
-    } else if (this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {
+    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {
       const selector = (Math.floor(this.simulationTicks / 17) + (this.enemyTactic === "PRESSURE" ? 1 : 0)) % 5;
       const punishGuard = playerGuarding && distance < 1.42;
       const punishRecovery = this.difficulty !== "EASY"
@@ -636,6 +640,7 @@ export class TpsFightGame {
     this.p1.resetForRound(0, 3.2, 1);
     this.p2.resetForRound(0, -2.2, -1);
     this.enemyCooldown = 52;
+    this.enemyOpeningGraceTicks = 132;
     this.enemyTactic = "ORBIT";
     this.enemyTacticTicks = 0;
     this.enemyOrbitSign = 1;
@@ -674,7 +679,9 @@ export class TpsFightGame {
       p2Name: this.p2.definition.name,
       message: this.finished
         ? "BATTLE COMPLETE"
-        : this.p2.state === "ATTACK"
+        : this.enemyOpeningGraceTicks > 0
+          ? "READ THE TARGET"
+          : this.p2.state === "ATTACK"
           ? "INCOMING"
           : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
             ? "STRIKE RANGE"

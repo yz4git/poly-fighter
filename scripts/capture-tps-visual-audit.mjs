@@ -162,10 +162,32 @@ try {
     params: {},
   });
   await delay(300);
+  // The screenshots above intentionally exercise the live tactical CPU. From this
+  // point onward isolate locomotion so a CPU hit cannot invalidate the input probe.
+  // Keep requestAnimationFrame active: only enemy decision-making is frozen.
+  await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.input.clear();
+    game.p1.resetForRound(0, 3.2, 1);
+    game.p2.resetForRound(0, -2.2, -1);
+    game.enemyOpeningGraceTicks = 9999;
+    game.updateEnemy = () => {
+      game.p2.currentMove = null;
+      game.p2.moveTick = 0;
+      game.p2.velocity.set(0, 0, 0);
+      game.p2.state = 'IDLE';
+    };
+    game.updateVisual(game.p1, game.p2, game.renderTime);
+    game.updateVisual(game.p2, game.p1, game.renderTime + 0.23);
+    game.updateCamera(1);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return true;
+  `);
+  await delay(120);
   // Real-time input probes stay on requestAnimationFrame so they audit the same
   // continuous movement/camera path a player uses in the browser. Re-sample the
-  // live lock basis immediately before input: the tactical CPU continues moving
-  // while the iPhone viewport audit runs, so the earlier idle basis is stale.
+  // lock basis immediately before input after the deterministic combat reset.
   const beforeStrafe = await state(sessionId);
   await execute(sessionId, `${gameLookup} const game = findGame(); game.press('right', 'tps-audit-move'); return true;`);
   await delay(420);

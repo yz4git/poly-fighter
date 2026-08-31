@@ -444,6 +444,11 @@ export class TpsFightGame {
   private updateVisual(fighter: FighterRuntime, opponent: FighterRuntime, time: number): void {
     fighter.facing = opponent.position.x >= fighter.position.x ? 1 : -1;
     this.animation.update(fighter, opponent, time);
+    // The shared 1v1 attack aura is intentionally large and reads well from
+    // the side camera, but in shoulder-view TPS it becomes a full-screen
+    // translucent slab at contact. Keep particles/flash impacts and suppress
+    // only that presentation aura in this mode.
+    fighter.visual.aura.visible = false;
     const forward = horizontalDirection(fighter.position, opponent.position);
     fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);
     fighter.visual.root.updateMatrixWorld(true);

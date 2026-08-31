@@ -28,6 +28,7 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /resolveAttack\(this\.p2, this\.p1, this\.p1\.state === "GUARD"\)/);
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
   assert.match(source, /moveSpeed \* 0\.42/);
+  assert.match(source, /fighter\.visual\.aura\.visible = false/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {

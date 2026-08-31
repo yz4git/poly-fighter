@@ -381,17 +381,20 @@ export class TpsGraphicsDirector {
       event.blocked ? 0.025 : visualTier === 3 ? TPS_IMPACT_FEEL_PROFILE.heavyExposurePunch : visualTier === 2 ? 0.085 : 0.045,
     );
 
-    const sharedHitStop = sharedHitStopForTier(tier, event.blocked);
+    // Throws already own a long launch/animation beat. Shared strike hitstop there
+    // only delays the next action after the throw has visually finished, so reserve
+    // the new attacker freeze for punches and kicks where contact needs extra weight.
+    const sharedHitStop = event.move.hitLevel === "THROW" ? 0 : sharedHitStopForTier(tier, event.blocked);
     const attacker = event.attacker === this.latestP1?.id
       ? this.latestP1
       : event.attacker === this.latestP2?.id
         ? this.latestP2
         : null;
-    if (attacker) {
+    if (sharedHitStop > 0 && attacker) {
       attacker.hitStop = Math.max(attacker.hitStop, sharedHitStop);
       this.pendingAttackerId = null;
       this.pendingAttackerHitStop = 0;
-    } else {
+    } else if (sharedHitStop > 0) {
       this.pendingAttackerId = event.attacker;
       this.pendingAttackerHitStop = Math.max(this.pendingAttackerHitStop, sharedHitStop);
     }

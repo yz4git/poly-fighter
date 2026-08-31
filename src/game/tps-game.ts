@@ -321,7 +321,7 @@ export class TpsFightGame {
     this.camera.aspect = aspect;
     // iPhone landscape has much less vertical room than the wide desktop audit.
     // A slightly wider lens keeps both fighters readable without shrinking touch UI.
-    this.camera.fov = width > height && aspect < 2.4 ? 54 : 47;
+    this.camera.fov = width > height && aspect < 2.4 ? 52 : 47;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   };
@@ -609,18 +609,19 @@ export class TpsFightGame {
     // Pull back as the fighters close instead of moving the shoulder camera inward.
     // This preserves both silhouettes during punch/throw scrambles and gives iPhone
     // landscape enough vertical room for the HUD and touch controls.
-    const backDistance = 5.05 + closeFactor * 0.72 + compactLandscapeFactor * 0.34;
-    const shoulderOffset = 2.08 + closeFactor * 1.08 + compactLandscapeFactor * (0.46 + closeFactor * 0.38);
-    const cameraHeight = 2.30 + closeFactor * 0.22 + compactLandscapeFactor * 0.05;
+    // Keep a modest extra pullback at contact, but preserve the strong lateral
+    // shoulder angle that keeps both fighter centers separated on iPhone.
+    const backDistance = 4.80 + compactLandscapeFactor * 0.20;
+    const shoulderOffset = 2.50 + closeFactor * 1.70 + compactLandscapeFactor * (0.55 + closeFactor * 0.50);
+    const cameraHeight = 2.32 + closeFactor * 0.18 + compactLandscapeFactor * 0.04;
     this.cameraTarget.copy(this.p2.position)
-      .lerp(this.p1.position, closeFactor * 0.16)
-      .addScaledVector(right, -0.20 * closeFactor)
-      .add(new THREE.Vector3(0, 1.18 + closeFactor * 0.05, 0));
+      .addScaledVector(right, -0.30 * closeFactor)
+      .add(new THREE.Vector3(0, 1.18 + closeFactor * 0.04, 0));
     this.cameraDesired.copy(this.p1.position)
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset)
       .add(new THREE.Vector3(0, cameraHeight, 0));
-    ease(this.camera.position, this.cameraDesired, 10.8, delta);
+    ease(this.camera.position, this.cameraDesired, 11.6, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
       this.cameraImpact *= Math.exp(-10 * delta);
@@ -686,9 +687,9 @@ export class TpsFightGame {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     this.camera.position.copy(this.p1.position)
-      .addScaledVector(forward, -5.05)
-      .addScaledVector(right, 2.08)
-      .add(new THREE.Vector3(0, 2.30, 0));
+      .addScaledVector(forward, -4.92)
+      .addScaledVector(right, 2.50)
+      .add(new THREE.Vector3(0, 2.32, 0));
     this.updateCamera(1);
     this.updateLockOn();
   }

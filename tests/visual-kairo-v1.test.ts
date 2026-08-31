@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
+import { CHARACTER_GRAPHICS_POLISH_ID } from "../src/game/character-graphics-polish";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { createFighterVisual, disposeFighterVisual } from "../src/game/visual-entry";
 import { KAIRO_RECONSTRUCTION_ID, createKairoReconstructedVisual } from "../src/game/visual-kairo-v1";
@@ -19,6 +20,8 @@ test("KAIRO runtime uses the from-scratch Forge reconstruction", () => {
   assert.equal(visual.root.userData.characterSource, "FROM_SCRATCH_AUTHORED_RUNTIME");
   assert.equal(visual.root.userData.legacyKairoGenerator, false);
   assert.equal(visual.root.userData.rigCompatibility, "V4_CANONICAL_21_BONE_IK");
+  assert.equal(visual.root.userData.characterGraphicsPolish, CHARACTER_GRAPHICS_POLISH_ID);
+  assert.equal(visual.root.userData.characterGraphicsDetailMeshCount, 6);
   assert.equal(String(visual.visualVersion), "KAIRO_V1");
   assert.equal(visual.root.name, "fighter-kairo-v1-red");
   assert.equal(visual.bodyMesh.name, "kairo-v1-continuous-skinned-body");
@@ -30,6 +33,18 @@ test("KAIRO runtime uses the from-scratch Forge reconstruction", () => {
   assertFiniteAttribute(visual.bodyMesh.geometry, "normal");
   assertFiniteAttribute(visual.bodyMesh.geometry, "skinIndex");
   assertFiniteAttribute(visual.bodyMesh.geometry, "skinWeight");
+
+  const names = new Set(visual.allMeshes.map((value) => value.name));
+  for (const required of [
+    "kairo-polish-left-temple-lock",
+    "kairo-polish-right-temple-lock",
+    "kairo-polish-rear-hair-ridge",
+    "kairo-polish-chest-sigil",
+    "kairo-polish-left-shoulder-edge",
+    "kairo-polish-right-shoulder-edge",
+  ]) {
+    assert.equal(names.has(required), true, "Missing KAIRO graphics polish detail: " + required);
+  }
 
   const weights = visual.bodyMesh.geometry.getAttribute("skinWeight");
   for (let vertex = 0; vertex < weights.count; vertex += 1) {

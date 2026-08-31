@@ -136,7 +136,7 @@ export class TpsGraphicsDirector {
   });
   private readonly waveGeometry = new THREE.RingGeometry(0.18, 0.25, 32);
   private readonly waves: ImpactWave[] = [];
-  private readonly attackTrailGeometry = new THREE.TorusGeometry(0.56, 0.022, 6, 32, Math.PI * 0.64);
+  private readonly attackTrailGeometry = new THREE.TorusGeometry(0.48, 0.018, 6, 28, Math.PI * 0.48);
   private readonly attackTrails: AttackTrail[] = [];
   private readonly ghostBodyGeometry = new THREE.CylinderGeometry(0.28, 0.35, 1.02, 8);
   private readonly ghostHeadGeometry = new THREE.SphereGeometry(0.2, 8, 6);
@@ -146,6 +146,8 @@ export class TpsGraphicsDirector {
   private lastP1TrailSpawn = -Infinity;
   private lastP2TrailSpawn = -Infinity;
   private lastGhostSpawn = -Infinity;
+  private readonly previousP1Position = new THREE.Vector3();
+  private hasPreviousP1Position = false;
 
   constructor(
     scene: THREE.Scene,
@@ -356,10 +358,13 @@ export class TpsGraphicsDirector {
 
     this.spawnAttackTrail(p1, p2, time, true);
     this.spawnAttackTrail(p2, p1, time, false);
-    if (p1.state === "SIDESTEP" && time - this.lastGhostSpawn >= 0.042) {
-      this.spawnQuickstepGhost(p1, p2);
+    const p1Motion = this.hasPreviousP1Position ? p1.position.clone().sub(this.previousP1Position) : new THREE.Vector3();
+    if (p1.state === "SIDESTEP" && time - this.lastGhostSpawn >= 0.055) {
+      this.spawnQuickstepGhost(p1, p2, p1Motion);
       this.lastGhostSpawn = time;
     }
+    this.previousP1Position.copy(p1.position);
+    this.hasPreviousP1Position = true;
 
     this.arenaGlowMaterial.opacity = 0.09 + Math.sin(time * 1.7) * 0.025;
     this.centerGlowMaterial.opacity = 0.055 + Math.sin(time * 2.3 + 0.8) * 0.025;
@@ -385,7 +390,7 @@ export class TpsGraphicsDirector {
       if (trail.life <= 0) continue;
       trail.life -= delta;
       const progress = 1 - Math.max(0, trail.life) / Math.max(1e-4, trail.maxLife);
-      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.3);
+      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.24);
       trail.mesh.scale.multiplyScalar(1 + delta * 1.35);
       if (trail.life <= 0) {
         trail.mesh.visible = false;
@@ -418,6 +423,7 @@ export class TpsGraphicsDirector {
     this.lastP1TrailSpawn = -Infinity;
     this.lastP2TrailSpawn = -Infinity;
     this.lastGhostSpawn = -Infinity;
+    this.hasPreviousP1Position = false;
     for (const wave of this.waves) {
       wave.life = 0;
       wave.maxLife = 0;
@@ -442,8 +448,9 @@ export class TpsGraphicsDirector {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move) return;
     const lastSpawn = p1 ? this.lastP1TrailSpawn : this.lastP2TrailSpawn;
-    if (time - lastSpawn < 0.048) return;
+    if (time - lastSpawn < 0.09) return;
     if (move.animation === "throw") return;
+    if (attacker.moveTick > move.startup + move.active + 1) return;
     if (p1) this.lastP1TrailSpawn = time;
     else this.lastP2TrailSpawn = time;
 
@@ -452,34 +459,40 @@ export class TpsGraphicsDirector {
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const kick = move.animation === "kick" || move.visualContact === "LEFT_FOOT" || move.visualContact === "RIGHT_FOOT";
     const active = attacker.isActive();
-    trail.life = active ? 0.17 : 0.12;
+    trail.life = active ? 0.11 : 0.08;
     trail.maxLife = trail.life;
     trail.mesh.visible = true;
     const contactSide = move.visualContact === "LEFT_FIST" || move.visualContact === "LEFT_FOOT" ? -1 : move.visualContact === "RIGHT_FIST" || move.visualContact === "RIGHT_FOOT" ? 1 : 0;
     trail.mesh.position.copy(attacker.position)
-      .addScaledVector(forward, kick ? 0.76 : 0.72)
-      .addScaledVector(right, contactSide * (kick ? 0.22 : 0.28));
+      .addScaledVector(forward, kick ? 0.78 : 0.76)
+      .addScaledVector(right, contactSide * (kick ? 0.28 : 0.34));
     trail.mesh.position.y = kick ? 0.78 : 1.42;
     trail.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), right);
     trail.mesh.rotateZ((attacker.moveTick / Math.max(1, move.startup + move.active)) * 0.55 - 0.26);
-    trail.mesh.scale.set(kick ? 1.18 : 0.82, kick ? 0.82 : 0.6, 1);
+    trail.mesh.scale.set(kick ? 1.08 : 0.74, kick ? 0.74 : 0.52, 1);
     trail.mesh.material.color.setHex(attacker.definition.colors.glow);
-    trail.mesh.material.opacity = active ? 0.3 : 0.16;
+    trail.mesh.material.opacity = active ? 0.24 : 0.12;
   }
 
-  private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime, motion: THREE.Vector3): void {
     const ghost = this.ghosts.find((item) => item.life <= 0) ?? this.ghosts[0];
     const forward = horizontalDirection(fighter.position, opponent.position);
     ghost.life = 0.26;
     ghost.maxLife = ghost.life;
     ghost.group.visible = true;
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 0;
-    ghost.group.position.copy(fighter.position).addScaledVector(right, -sideSign * 0.46);
+    const fallbackRight = new THREE.Vector3(-forward.z, 0, forward.x);
+    const motionDirection = motion.clone().setY(0);
+    if (motionDirection.lengthSq() < 1e-5) {
+      const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 1;
+      motionDirection.copy(fallbackRight).multiplyScalar(sideSign);
+    } else {
+      motionDirection.normalize();
+    }
+    ghost.group.position.copy(fighter.position).addScaledVector(motionDirection, -0.58);
     ghost.group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);
     ghost.group.scale.setScalar(0.96);
     ghost.material.color.setHex(fighter.definition.colors.glow);
-    ghost.material.opacity = 0.19;
+    ghost.material.opacity = 0.22;
   }
 
   private updateFighterShadow(

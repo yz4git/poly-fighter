@@ -1,0 +1,86 @@
+name: Apply TPS combat review v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tps-combat-review-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tps-combat-review-v2
+  cancel-in-progress: true
+
+jobs:
+  review-implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply playtest improvements
+        run: python3 scripts/apply-tps-combat-review-v2.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-tps-v2-server.log 2>&1 &
+          echo $! > /tmp/poly-fighter-tps-v2-server.pid
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-tps-v2-server.log
+          exit 1
+      - name: Real WebGL combat playcheck
+        run: |
+          mkdir -p artifacts/tps-combat-review-v2
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          if [ -z "$DRIVER" ]; then
+            echo "ChromeDriver is not available"
+            exit 1
+          fi
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            TPS_AUDIT_DIR="artifacts/tps-combat-review-v2" \
+            node scripts/capture-tps-visual-audit.mjs
+          for image in tps-idle tps-iphone-idle tps-quickstep tps-punch tps-combo tps-dash-attack tps-flank; do
+            test -s "artifacts/tps-combat-review-v2/${image}.png"
+            file "artifacts/tps-combat-review-v2/${image}.png" | grep -q "PNG image data"
+          done
+          test -s artifacts/tps-combat-review-v2/tps-runtime-state.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-tps-combat-review-v2
+          path: artifacts/tps-combat-review-v2
+          if-no-files-found: error
+          retention-days: 14
+      - name: Verify source diff
+        run: |
+          git diff --check
+          git status --short
+          test -n "$(git status --porcelain)"
+      - name: Commit reviewed implementation
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game.ts app/page.tsx tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
+          git commit -m "Improve TPS dodge reads combos and flank camera"
+          git push

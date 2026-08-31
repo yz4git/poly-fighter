@@ -65,7 +65,7 @@ export function createFighterVisual(
 ): FighterVisual {
   const visual = createOriginalFighterVisual(definition, quality);
   visual.root.userData.modelSkin = modelId;
-  if (modelId === "QUATERNIUS_UBC") installQuaterniusModelSkin(visual, definition.colors.primary);
+  if (modelId === "QUATERNIUS_UBC") installQuaterniusModelSkin(visual, definition);
   return visual;
 }
 

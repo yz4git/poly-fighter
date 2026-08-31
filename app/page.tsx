@@ -433,7 +433,7 @@ export default function Home() {
               {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
             </div>
           </section>
-          <div className="input-hint">{battleMode === "TPS" ? <>MOVE <b>8-WAY</b> / PUNCH <b>P</b> / KICK <b>K</b> / HOLD <b>G + MOVE</b> GUARD STEP</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
+          <div className="input-hint">{battleMode === "TPS" ? <>MOVE <b>8-WAY</b> / PUNCH <b>P</b> / KICK <b>K</b> / HOLD <b>G + MOVE</b> GUARD STEP / <b>G + SIDE</b> QUICKSTEP</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
         </>
       )}
 

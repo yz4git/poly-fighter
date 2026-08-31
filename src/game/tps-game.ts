@@ -197,14 +197,14 @@ export class TpsFightGame {
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
 
     const lockGeometry = new THREE.TorusGeometry(0.34, 0.018, 8, 40);
-    const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.92, depthTest: false });
+    const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.92, depthTest: true });
     this.lockRing = new THREE.Mesh(lockGeometry, lockMaterial);
     this.lockRing.renderOrder = 20;
     this.scene.add(this.lockRing);
     this.arenaDisposables.push(lockGeometry, lockMaterial);
 
     const stemGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0.34, 0)]);
-    const stemMaterial = new THREE.LineBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.72, depthTest: false });
+    const stemMaterial = new THREE.LineBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.72, depthTest: true });
     this.lockStem = new THREE.Line(stemGeometry, stemMaterial);
     this.lockStem.renderOrder = 20;
     this.scene.add(this.lockStem);
@@ -485,7 +485,7 @@ export class TpsFightGame {
     // Pull back and widen the shoulder offset as fighters collapse into striking
     // range. This keeps both heads and the target reticle readable at contact.
     const backDistance = 5.65 + closeFactor * 1.35;
-    const shoulderOffset = 2.0 + closeFactor * 0.55;
+    const shoulderOffset = 2.0 + closeFactor * 1.15;
     const cameraHeight = 2.5 + closeFactor * 0.34;
     this.cameraTarget.copy(this.p2.position).add(new THREE.Vector3(0, 1.28 + closeFactor * 0.05, 0));
     this.cameraDesired.copy(this.p1.position)

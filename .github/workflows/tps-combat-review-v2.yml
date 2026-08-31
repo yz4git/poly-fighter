@@ -87,4 +87,4 @@ jobs:
           git commit -m "Improve TPS dodge reads combos and flank camera"
           git push
 
-# v2.4: reactive side-step rewards are retained through STEP completion.
+# v2.5: aligned static contract plus real WebGL acceptance.

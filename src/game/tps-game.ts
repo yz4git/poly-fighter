@@ -8,7 +8,7 @@ import { PresentationAnimationController } from "./presentation-animation";
 import { SettingsManager } from "./settings";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
-import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
+import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame } from "./types";
 import { EMPTY_INPUT } from "./types";
 
 export interface TpsFightGameOptions {
@@ -25,7 +25,6 @@ export interface TpsFightGameOptions {
 const ARENA_RADIUS = 6.8;
 const FIXED_STEP = 1 / 60;
 const ROUND_TICKS = 99 * 60;
-const UP = new THREE.Vector3(0, 1, 0);
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {

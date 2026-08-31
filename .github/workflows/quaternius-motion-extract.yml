@@ -37,7 +37,7 @@ jobs:
         run: |
           mkdir -p src/game/generated
           cp artifacts/quaternius-motion-data.ts src/game/generated/quaternius-motion-data.ts
-          if git diff --quiet -- src/game/generated/quaternius-motion-data.ts; then
+          if [ -z "$(git status --porcelain -- src/game/generated/quaternius-motion-data.ts)" ]; then
             echo "Generated motion data is unchanged."
             exit 0
           fi

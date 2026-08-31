@@ -1,4 +1,4 @@
-name: TPS movement implementation runner
+name: TPS quickstep audit capture fix
 
 on:
   push:
@@ -9,122 +9,79 @@ permissions:
   contents: write
 
 jobs:
-  implement:
+  fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: chatgpt/tps-step-spacing-v1
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
-      - name: Implement TPS movement changes
+      - run: npm ci --no-audit --no-fund
+      - name: Make deterministic quickstep capture exercise graphics director
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          path = Path('src/game/tps-game.ts')
+          path = Path('scripts/capture-tps-visual-audit.mjs')
           text = path.read_text()
-
-          def one(old, new):
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected exactly one match, got {count}: {old[:100]!r}')
-              text = text.replace(old, new, 1)
-
-          one(
-              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nconst TPS_COMBO_GRACE_TICKS = 34;',
-              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nexport const TPS_STEP_DISTANCE_SCALE = 2;\nconst ENEMY_TRACK_RATE = 0.16;\nconst ENEMY_SIDE_STEP_TRACK_RATE = 0.06;\nconst ENEMY_SPACING_DEAD_ZONE = 0.30;\nconst ENEMY_ORBIT_ACTIVE_TICKS = 28;\nconst ENEMY_ATTACK_ALIGNMENT = 0.82;\nconst TPS_COMBO_GRACE_TICKS = 34;'
-          )
-          one(
-              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;',
-              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;\n  private readonly enemyVisualForward = new THREE.Vector3(0, 0, 1);'
-          )
-          one(
-              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);',
-              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier * TPS_STEP_DISTANCE_SCALE);'
-          )
-          one('''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
-    const distance = this.p2.position.distanceTo(this.p1.position);
-    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
-    const movement = new THREE.Vector3();
-    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.48 : this.enemyTactic === "BAIT" ? 2.25 : 1.82;
-    const orbitStrength = this.enemyTactic === "ORBIT" ? 0.66 : this.enemyTactic === "BAIT" ? 0.34 : 0.22;
-
-    if (distance > desiredDistance + 0.18) movement.add(towardPlayer);
-    else if (distance < desiredDistance - 0.24) movement.addScaledVector(towardPlayer, -1);
-    movement.addScaledVector(tangent, this.enemyOrbitSign * orbitStrength);
-''', '''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
-    const distance = this.p2.position.distanceTo(this.p1.position);
-    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
-    const movement = new THREE.Vector3();
-
-    // Lateral STEP should create a real angle instead of being erased by an
-    // instant lock-on snap. Neutral tracking stays responsive; side-step tracking
-    // deliberately lags, and attacks wait until the torso has turned back enough.
-    const sideStepTracking = this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45;
-    const trackingRate = sideStepTracking ? ENEMY_SIDE_STEP_TRACK_RATE : ENEMY_TRACK_RATE;
-    if (this.enemyVisualForward.lengthSq() < 1e-6) this.enemyVisualForward.copy(towardPlayer);
-    else this.enemyVisualForward.lerp(towardPlayer, trackingRate).normalize();
-    const enemyFacingAlignment = THREE.MathUtils.clamp(this.enemyVisualForward.dot(towardPlayer), -1, 1);
-
-    // Hold a readable combat interval instead of perpetually walking toward zero
-    // distance. The dead zone removes micro-corrections, and ORBIT only moves in
-    // short bursts so the CPU visibly plants between repositioning beats.
-    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.72 : this.enemyTactic === "BAIT" ? 2.55 : 2.08;
-    const distanceError = distance - desiredDistance;
-    if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(towardPlayer);
-    else if (distanceError < -ENEMY_SPACING_DEAD_ZONE) movement.addScaledVector(towardPlayer, -1);
-    const orbitActive = this.enemyTactic === "ORBIT"
-      && Math.abs(distanceError) <= 0.82
-      && this.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
-    if (orbitActive) movement.addScaledVector(tangent, this.enemyOrbitSign * 0.58);
-''')
-          one(
-              '    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {',
-              '    } else if (this.enemyOpeningGraceTicks <= 0\n      && this.enemyCooldown <= 0\n      && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)\n      && enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT) {'
-          )
-          one(
-              '    const forward = horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);',
-              '    const forward = fighter === this.p2\n      ? this.enemyVisualForward\n      : horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);'
-          )
-          one(
-              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyCooldown = 52;',
-              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyVisualForward.copy(horizontalDirection(this.p2.position, this.p1.position));\n    this.enemyCooldown = 52;'
-          )
-          path.write_text(text)
-
-          tests_path = Path('tests/tps-mode.test.ts')
-          tests = tests_path.read_text()
-          marker = '  assert.match(source, /TPS_STEP_COOLDOWN_TICKS = 18/);\n'
-          addition = '''  assert.match(source, /TPS_STEP_DISTANCE_SCALE = 2/);
-  assert.match(source, /stepMultiplier \\* TPS_STEP_DISTANCE_SCALE/);
-  assert.match(source, /ENEMY_TRACK_RATE = 0\\.16/);
-  assert.match(source, /ENEMY_SIDE_STEP_TRACK_RATE = 0\\.06/);
-  assert.match(source, /enemyVisualForward/);
-  assert.match(source, /enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT/);
-  assert.match(source, /ENEMY_SPACING_DEAD_ZONE = 0\\.30/);
-  assert.match(source, /ENEMY_ORBIT_ACTIVE_TICKS = 28/);
-  assert.match(source, /desiredDistance = this\\.enemyTactic === "PRESSURE" \\? 1\\.72/);
+          old = '''    game.press('guard', 'tps-audit-evade-g');
+    game.press('right', 'tps-audit-evade-side');
+    for (let index = 0; index < 6; index += 1) game.step();
+    game.release('guard', 'tps-audit-evade-g');
+    game.release('right', 'tps-audit-evade-side');
+    for (let index = 0; index < 18; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { start, end: { x: game.p1.position.x, z: game.p1.position.z }, state: game.p1.state };
 '''
-          if tests.count(marker) != 1:
-              raise SystemExit('TPS assertion insertion marker not found exactly once')
-          tests_path.write_text(tests.replace(marker, marker + addition, 1))
+          new = '''    game.press('guard', 'tps-audit-evade-g');
+    game.press('right', 'tps-audit-evade-side');
+    const graphicsBaseTime = game.renderTime;
+    for (let index = 0; index < 6; index += 1) {
+      game.step();
+      game.graphics.update(game.p1, game.p2, graphicsBaseTime + index * 0.06, 1 / 60);
+    }
+    game.release('guard', 'tps-audit-evade-g');
+    game.release('right', 'tps-audit-evade-side');
+    for (let index = 0; index < 18; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const visibleGhosts = game.graphics.group.children.filter((child) => child.name.startsWith('tps-quickstep-ghost-') && child.visible).length;
+    return { start, end: { x: game.p1.position.x, z: game.p1.position.z }, state: game.p1.state, visibleGhosts };
+'''
+          if old not in text:
+              raise SystemExit('quickstep capture anchor missing')
+          text = text.replace(old, new, 1)
+          old_assert = '''  if (quickstepTravel < 0.45) throw new Error(`TPS quickstep travel too small: ${JSON.stringify({ quickstepProbe, quickstepTravel })}`);
+  await screenshot(sessionId, `${outputDir}/tps-quickstep.png`);
+'''
+          new_assert = '''  if (quickstepTravel < 0.45) throw new Error(`TPS quickstep travel too small: ${JSON.stringify({ quickstepProbe, quickstepTravel })}`);
+  if (!(quickstepProbe.visibleGhosts >= 1)) throw new Error(`TPS quickstep afterimage did not render: ${JSON.stringify(quickstepProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-quickstep.png`);
+'''
+          if old_assert not in text:
+              raise SystemExit('quickstep assertion anchor missing')
+          path.write_text(text.replace(old_assert, new_assert, 1))
           PY
-      - name: Validate implementation
-        run: npm ci --no-audit --no-fund && npm run test:ci:tps && npm run lint && npm run build
-      - name: Restore workflows and publish implementation branch
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Publish audit fix
         shell: bash
         run: |
-          git checkout origin/main -- .github/workflows/tps-audit-ghost-capture-fix.yml .github/workflows/tps-visual-audit.yml
-          rm -f .github/workflows/tps-step-spacing-autopatch.yml
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to publish"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/game/tps-game.ts tests/tps-mode.test.ts .github/workflows/tps-audit-ghost-capture-fix.yml .github/workflows/tps-visual-audit.yml .github/workflows/tps-step-spacing-autopatch.yml
-          git commit -m "Double TPS steps and improve enemy spacing"
-          git push origin HEAD:chatgpt/tps-step-spacing-v1
+          git add scripts/capture-tps-visual-audit.mjs
+          git commit -m "Audit TPS quickstep afterimage rendering"
+          git push origin HEAD:main

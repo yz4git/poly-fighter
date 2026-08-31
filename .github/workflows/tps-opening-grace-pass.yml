@@ -1,0 +1,48 @@
+name: TPS opening grace pass
+
+on:
+  push:
+    paths:
+      - 'scripts/apply-tps-opening-grace.py'
+      - '.github/workflows/tps-opening-grace-pass.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply TPS opening grace
+        run: python3 scripts/apply-tps-opening-grace.py
+      - name: Check capture script syntax
+        run: node --check scripts/capture-tps-visual-audit.mjs
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: PWA startup regressions
+        run: npm run test:pwa
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Publish validated pass
+        run: |
+          rm -f scripts/apply-tps-opening-grace.py .github/workflows/tps-opening-grace-pass.yml
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Improve TPS opening flow and audit isolation"
+          git push origin HEAD:main

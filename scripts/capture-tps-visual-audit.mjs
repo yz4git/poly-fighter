@@ -131,7 +131,7 @@ try {
   let initial = null;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     initial = await state(sessionId);
-    if (initial?.ready && initial?.tpsText && initial?.arena && initial?.canvasWidth > 2 && initial?.canvasHeight > 2) break;
+    if (initial?.ready && initial?.targetLocked && initial?.arena && initial?.canvasWidth > 2 && initial?.canvasHeight > 2) break;
     await delay(100);
   }
   if (!initial?.ready || !initial?.arena) throw new Error(`TPS WebGL did not become ready: ${JSON.stringify(initial)}`);
@@ -160,8 +160,17 @@ try {
   await delay(420);
   await execute(sessionId, `${gameLookup} const game = findGame(); game.release('right', 'tps-audit-move'); return true;`);
   const afterStrafe = await state(sessionId);
-  if (!afterStrafe?.p1 || !initial?.p1 || Math.abs(afterStrafe.p1.x - initial.p1.x) < 0.25) {
-    throw new Error(`TPS strafe did not move laterally: ${JSON.stringify({ initial, afterStrafe })}`);
+  if (!afterStrafe?.p1 || !initial?.p1 || !initial?.p2) throw new Error(`TPS strafe state missing: ${JSON.stringify({ initial, afterStrafe })}`);
+  const initialForwardX = initial.p2.x - initial.p1.x;
+  const initialForwardZ = initial.p2.z - initial.p1.z;
+  const initialForwardLength = Math.max(1e-5, Math.hypot(initialForwardX, initialForwardZ));
+  const initialRightX = -initialForwardZ / initialForwardLength;
+  const initialRightZ = initialForwardX / initialForwardLength;
+  const strafeDX = afterStrafe.p1.x - initial.p1.x;
+  const strafeDZ = afterStrafe.p1.z - initial.p1.z;
+  const lateralTravel = Math.abs(strafeDX * initialRightX + strafeDZ * initialRightZ);
+  if (lateralTravel < 0.25) {
+    throw new Error(`TPS strafe did not move along the lock-relative tangent: ${JSON.stringify({ lateralTravel, initial, afterStrafe })}`);
   }
 
   const beforeForwardDistance = Math.hypot(afterStrafe.p2.x - afterStrafe.p1.x, afterStrafe.p2.z - afterStrafe.p1.z);
@@ -244,7 +253,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, beforeForwardDistance, afterForward, afterForwardDistance, punchProbe, afterPunch, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, punchProbe, afterPunch, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

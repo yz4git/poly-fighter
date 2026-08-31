@@ -284,3 +284,29 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
   .reference-toolbar p { font-size: 7px; }
   .reference-controls { gap: 5px; }
 }
+
+
+/* TPS LOCK-ON BATTLE */
+.tps-mode-button {
+  border-color: rgba(91, 221, 255, 0.7) !important;
+  background: linear-gradient(90deg, rgba(17, 70, 103, 0.46), rgba(7, 21, 38, 0.7)) !important;
+}
+.tps-mode-button span { display: block; font-weight: 900; letter-spacing: .14em; }
+.tps-mode-button small { display: block; margin-top: .18rem; opacity: .65; font-size: .58rem; letter-spacing: .16em; }
+.tps-badge { border-color: rgba(90, 226, 255, .75) !important; color: #a9f3ff !important; }
+.tps-mode-hud {
+  position: fixed;
+  left: 50%;
+  top: max(14%, calc(env(safe-area-inset-top) + 58px));
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 7;
+  color: #aaf4ff;
+  text-shadow: 0 0 12px rgba(65, 214, 255, .75);
+}
+.tps-mode-hud span { font-size: .52rem; letter-spacing: .34em; opacity: .8; }
+.tps-mode-hud b { font-size: .72rem; letter-spacing: .16em; margin-top: .1rem; }
+.tps-mode-hud i { font-style: normal; font-size: 1.5rem; line-height: 1; animation: tps-lock-pulse .9s ease-in-out infinite alternate; }
+@keyframes tps-lock-pulse { from { transform: scale(.86); opacity: .58; } to { transform: scale(1.08); opacity: 1; } }

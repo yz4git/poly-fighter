@@ -16,6 +16,7 @@ export interface TpsFightGameOptions {
   p2Definition: FighterDefinition;
   p1Model?: FighterModelId;
   p2Model?: FighterModelId;
+  difficulty?: unknown;
   onHud?: (snapshot: HudSnapshot) => void;
   onResult?: (winner: "p1" | "p2" | "draw") => void;
   onFallback?: (message: string) => void;
@@ -289,7 +290,7 @@ export class TpsFightGame {
     if (this.advanceLockedState(this.p1)) return;
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
-    const right = toEnemy.clone().cross(UP).normalize().multiplyScalar(-1);
+    const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
     const forwardAxis = (input.up ? 1 : 0) - (input.down ? 1 : 0);
     const sideAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const move = toEnemy.multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
@@ -425,7 +426,7 @@ export class TpsFightGame {
 
   private updateCamera(delta: number): void {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
-    const right = new THREE.Vector3(forward.z, 0, -forward.x);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
     this.cameraTarget.copy(this.p1.position).addScaledVector(forward, 1.7).add(new THREE.Vector3(0, 1.16, 0));
     this.cameraDesired.copy(this.p1.position)
       .addScaledVector(forward, -4.75)

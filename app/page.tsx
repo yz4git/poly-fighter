@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { PolyFightGame } from "@/src/game/game";
+import { TpsFightGame } from "@/src/game/tps-game";
 import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
 import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
 import type { CpuDifficulty } from "@/src/game/fighter";
@@ -16,7 +17,9 @@ import {
   type DigitalDirection,
 } from "@/src/game/virtual-pad";
 
-type Screen = "TITLE" | "SELECT" | "MODEL_VIEW" | "MATCH" | "RESULT";
+type Screen = "TITLE" | "SELECT" | "MODEL_VIEW" | "MATCH" | "TPS_MATCH" | "RESULT";
+type BattleMode = "DUEL" | "TPS";
+type GameRuntime = PolyFightGame | TpsFightGame;
 type SettingsDraft = {
   quality: "LOW" | "NORMAL" | "HIGH";
   cameraShake: boolean;
@@ -42,7 +45,7 @@ function requestLandscape(): void {
 }
 
 function pressableAction(
-  gameRef: { current: PolyFightGame | null },
+  gameRef: { current: GameRuntime | null },
   action: InputAction,
   label: string,
   children: ReactNode,
@@ -77,7 +80,7 @@ function VirtualPad({
   gameRef,
   paused,
 }: {
-  gameRef: { current: PolyFightGame | null };
+  gameRef: { current: GameRuntime | null };
   paused: boolean;
 }) {
   const padRef = useRef<HTMLDivElement>(null);
@@ -199,8 +202,9 @@ function HealthBar({ value, reverse = false }: { value: number; reverse?: boolea
 
 export default function Home() {
   const mountRef = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<PolyFightGame | null>(null);
+  const gameRef = useRef<GameRuntime | null>(null);
   const [screen, setScreen] = useState<Screen>("TITLE");
+  const [battleMode, setBattleMode] = useState<BattleMode>("DUEL");
   const [p1Choice, setP1Choice] = useState("red");
   const [p2Choice, setP2Choice] = useState("blue");
   const [modelChoice, setModelChoice] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
@@ -240,12 +244,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (screen !== "MATCH" || !mountRef.current) return undefined;
+    if ((screen !== "MATCH" && screen !== "TPS_MATCH") || !mountRef.current) return undefined;
     setFallback(null);
-    let game: PolyFightGame;
+    let game: GameRuntime;
     let reportedFallback = false;
     try {
-      game = new PolyFightGame(mountRef.current, {
+      game = new (screen === "TPS_MATCH" ? TpsFightGame : PolyFightGame)(mountRef.current, {
         p1Definition: FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red,
         p2Definition: FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue,
         p1Model: modelChoice,
@@ -302,8 +306,17 @@ export default function Home() {
 
   const startMatch = () => {
     requestLandscape();
+    setBattleMode("DUEL");
     setHud(null);
     setScreen("MATCH");
+  };
+
+  const startTpsMatch = () => {
+    requestLandscape();
+    setBattleMode("TPS");
+    setHud(null);
+    setPaused(false);
+    setScreen("TPS_MATCH");
   };
 
   const backToTitle = () => {
@@ -320,7 +333,7 @@ export default function Home() {
 
   const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
-  const isGameSurface = screen === "MATCH" || screen === "RESULT";
+  const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH" || screen === "RESULT";
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
 
@@ -339,6 +352,7 @@ export default function Home() {
           <button type="button" className="primary-button" onClick={() => { setScreen("SELECT"); requestLandscape(); }}>
             <span>START MATCH</span><small>PRESS TO ENTER THE RING</small>
           </button>
+          <button type="button" className="ghost-button tps-mode-button" onClick={startTpsMatch}><span>TPS LOCK-ON BATTLE</span><small>360° CIRCULAR ARENA</small></button>
           <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
           <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.1 // LOCAL DUEL</span></div>
@@ -409,7 +423,8 @@ export default function Home() {
             <div className="round-readout"><span>ROUND {hud?.round ?? 1}</span><b>{String(hud?.timer ?? 60).padStart(2, "0")}</b><small>{hud?.message ?? "ROUND 1"}</small></div>
             <div className="hud-player right-player"><div className="hud-name"><span>CPU // PLAYER 2</span><strong>{hud?.p2Name ?? p2.name}</strong></div><HealthBar value={hud?.p2Health ?? 100} reverse /><div className="win-pips"><i className={(hud?.p2Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p2Wins ?? 0) > 1 ? "won" : ""} /></div></div>
           </section>
-          <div className="match-badge">HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</div>
+          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""}`}>{battleMode === "TPS" ? <>TPS LOCK-ON <span>•</span> CIRCULAR ARENA</> : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
+          {battleMode === "TPS" && <div className="tps-mode-hud"><span>LOCK</span><b>{hud?.p2Name ?? p2.name}</b><i>◇</i></div>}
           <button type="button" className="pause-button" aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
@@ -419,7 +434,7 @@ export default function Home() {
               {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
             </div>
           </section>
-          <div className="input-hint">PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</div>
+          <div className="input-hint">{battleMode === "TPS" ? <>MOVE <b>8-WAY</b> / PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> TARGET LOCKED</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
         </>
       )}
 
@@ -428,7 +443,7 @@ export default function Home() {
           <span className="result-kicker">MATCH COMPLETE</span>
           <h2>{hud?.message ?? "RESULT"}</h2>
           <div className="result-score"><b>{hud?.p1Wins ?? 0}</b><span>—</span><b>{hud?.p2Wins ?? 0}</b></div>
-          <button type="button" className="primary-button compact" onClick={() => setScreen("MATCH")}><span>REMATCH</span><small>RUN IT BACK</small></button>
+          <button type="button" className="primary-button compact" onClick={() => setScreen(battleMode === "TPS" ? "TPS_MATCH" : "MATCH")}><span>REMATCH</span><small>{battleMode === "TPS" ? "RE-ENGAGE TARGET" : "RUN IT BACK"}</small></button>
           <button type="button" className="ghost-button" onClick={backToTitle}>TITLE</button>
         </section>
       )}

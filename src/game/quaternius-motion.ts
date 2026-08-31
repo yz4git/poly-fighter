@@ -4,6 +4,7 @@ import {
   type QuaterniusMotionSample,
 } from "./generated/quaternius-motion-data";
 
+// Runtime retarget layer validated against POLY FIGHTER's deterministic IK/contact pipeline.
 export type QuaterniusMotionPoint =
   | "hipsDelta"
   | "chest"

@@ -5,26 +5,49 @@ on:
   push:
     branches:
       - main
+    paths:
+      - app/**
+      - src/game/**
+      - public/models/**
+      - package.json
+      - package-lock.json
+      - scripts/capture-tps-visual-audit.mjs
+      - tests/fight-rules.test.ts
+      - tests/input-rules.test.ts
+      - tests/runtime-regression.test.ts
+      - tests/quaternius-motion.test.ts
+      - tests/quaternius-model-skin.test.ts
+      - tests/tps-mode.test.ts
+      - .github/workflows/tps-visual-audit.yml
   pull_request:
     branches:
       - main
     paths:
-      - app/page.tsx
-      - app/globals.css
-      - src/game/tps-game.ts
-      - src/game/presentation-animation.ts
-      - src/game/visual-quaternius-runtime.ts
+      - app/**
+      - src/game/**
+      - public/models/**
+      - package.json
+      - package-lock.json
       - scripts/capture-tps-visual-audit.mjs
+      - tests/fight-rules.test.ts
+      - tests/input-rules.test.ts
+      - tests/runtime-regression.test.ts
+      - tests/quaternius-motion.test.ts
+      - tests/quaternius-model-skin.test.ts
       - tests/tps-mode.test.ts
       - .github/workflows/tps-visual-audit.yml
 
 permissions:
   contents: read
 
+concurrency:
+  group: tps-webgl-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,14 +55,17 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run test:rules
-      - run: npm run build
-      - run: npm run lint
+      - name: Run TPS-focused regression suite
+        run: npm run test:rules:tps
+      - name: Run lint
+        run: npm run lint
+      - name: Build production preview
+        run: npm run build
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-tps-server.log 2>&1 &
           echo $! > /tmp/poly-fighter-tps-server.pid
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
               exit 0
             fi
@@ -62,18 +88,15 @@ jobs:
             AUDIT_URL="http://127.0.0.1:3000/" \
             TPS_AUDIT_DIR="artifacts/tps-visual-audit" \
             node scripts/capture-tps-visual-audit.mjs
-          test -s artifacts/tps-visual-audit/tps-idle.png
-          test -s artifacts/tps-visual-audit/tps-iphone-idle.png
-          test -s artifacts/tps-visual-audit/tps-punch.png
-          test -s artifacts/tps-visual-audit/tps-punch-settled.png
+          for image in tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled; do
+            test -s "artifacts/tps-visual-audit/${image}.png"
+            file "artifacts/tps-visual-audit/${image}.png" | grep -q "PNG image data"
+          done
           test -s artifacts/tps-visual-audit/tps-runtime-state.json
-          file artifacts/tps-visual-audit/tps-idle.png | grep -q "PNG image data"
-          file artifacts/tps-visual-audit/tps-iphone-idle.png | grep -q "PNG image data"
-          file artifacts/tps-visual-audit/tps-punch.png | grep -q "PNG image data"
-          file artifacts/tps-visual-audit/tps-punch-settled.png | grep -q "PNG image data"
           cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
       - uses: actions/upload-artifact@v4
         with:
           name: poly-fighter-tps-webgl-audit
           path: artifacts/tps-visual-audit
           if-no-files-found: error
+          retention-days: 14

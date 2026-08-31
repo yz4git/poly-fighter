@@ -10,9 +10,11 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /new THREE\.Vector3\(-toEnemy\.z, 0, toEnemy\.x\)/);
   assert.match(source, /fighter\.visual\.root\.quaternion\.setFromUnitVectors\(MODEL_FORWARD, forward\)/);
   assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
-  assert.match(source, /addScaledVector\(forward, -5\.35\)/);
-  assert.match(source, /addScaledVector\(right, 1\.62\)/);
-  assert.match(source, /lockRing/);
+  assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
+  assert.match(source, /backDistance = 5\.65 \+ closeFactor \* 1\.35/);
+  assert.match(source, /shoulderOffset = 2\.0 \+ closeFactor \* 0\.55/);
+  assert.match(source, /new THREE\.TorusGeometry\(0\.34/);
+  assert.match(source, /ARENA_RADIUS \+ 2\.15/);
 });
 
 test("TPS attacks reuse fighter move data while resolving radial range, knockback, and defender guard", async () => {
@@ -24,6 +26,8 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /defender\.velocity\.z = direction\.z \* knockback/);
   assert.match(source, /resolveAttack\(this\.p1, this\.p2, this\.p2\.state === "GUARD"\)/);
   assert.match(source, /resolveAttack\(this\.p2, this\.p1, this\.p1\.state === "GUARD"\)/);
+  assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
+  assert.match(source, /moveSpeed \* 0\.42/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {
@@ -40,5 +44,6 @@ test("title and result flow expose TPS as an independent mode", async () => {
   assert.match(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /startTpsMatch/);
   assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
-  assert.match(page, /TARGET LOCKED/);
+  assert.match(page, /CIRCULAR ARENA/);
+  assert.match(page, /GUARD STEP/);
 });

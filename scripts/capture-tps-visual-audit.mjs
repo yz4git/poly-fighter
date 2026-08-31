@@ -141,6 +141,19 @@ try {
   initial = await state(sessionId);
   await screenshot(sessionId, `${outputDir}/tps-idle.png`);
 
+  // Capture an iPhone-landscape-sized CSS viewport as a permanent UI regression
+  // target. Chrome's headless outer window is taller than its content viewport,
+  // so 573px yields roughly a 430px gameplay canvas.
+  await command(`/session/${sessionId}/window/rect`, "POST", { width: 932, height: 573, x: 0, y: 0 });
+  await delay(260);
+  const iphone = await state(sessionId);
+  if (!(iphone?.canvasWidth >= 800 && iphone?.canvasHeight >= 340 && iphone?.canvasHeight <= 480)) {
+    throw new Error(`TPS iPhone viewport probe is outside the expected range: "${JSON.stringify(iphone)}"`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-iphone-idle.png`);
+  await command(`/session/${sessionId}/window/rect`, "POST", { width: 1536, height: 706, x: 0, y: 0 });
+  await delay(260);
+
   // Real-time input probes stay on requestAnimationFrame so they audit the same
   // continuous movement/camera path a player uses in the browser.
   await execute(sessionId, `${gameLookup} const game = findGame(); game.press('right', 'tps-audit-move'); return true;`);
@@ -200,6 +213,16 @@ try {
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
+  await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.effects.update(0.3);
+    for (let index = 0; index < 10; index += 1) game.step();
+    game.updateCamera(1 / 30);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return true;
+  `);
+  await screenshot(sessionId, `${outputDir}/tps-punch-settled.png`);
 
   await execute(sessionId, `${gameLookup}
     const game = findGame();
@@ -221,7 +244,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, afterStrafe, beforeForwardDistance, afterForward, afterForwardDistance, punchProbe, afterPunch, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, beforeForwardDistance, afterForward, afterForwardDistance, punchProbe, afterPunch, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

@@ -88,13 +88,16 @@ function createCircularArena(): { group: THREE.Group; disposables: Array<THREE.B
     disposables.push(geometry);
   }
 
-  const pillarGeometry = new THREE.CylinderGeometry(0.13, 0.2, 2.2, 8);
-  const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0x102844, emissive: 0x06294b, emissiveIntensity: 0.5, roughness: 0.7 });
+  // Keep scenery outside the shoulder-camera orbit. The previous pillar ring
+  // sat directly between the camera and fighters and produced large foreground
+  // slabs during strafing. These thinner beacons preserve depth without blocking play.
+  const pillarGeometry = new THREE.CylinderGeometry(0.07, 0.12, 1.45, 8);
+  const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0x102844, emissive: 0x06294b, emissiveIntensity: 0.58, roughness: 0.7 });
   disposables.push(pillarGeometry, pillarMaterial);
-  for (let index = 0; index < 16; index += 1) {
-    const angle = index * Math.PI / 8;
+  for (let index = 0; index < 12; index += 1) {
+    const angle = index * Math.PI / 6;
     const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-    pillar.position.set(Math.cos(angle) * (ARENA_RADIUS + 0.42), 1.1, Math.sin(angle) * (ARENA_RADIUS + 0.42));
+    pillar.position.set(Math.cos(angle) * (ARENA_RADIUS + 2.15), 0.725, Math.sin(angle) * (ARENA_RADIUS + 2.15));
     group.add(pillar);
   }
 
@@ -154,7 +157,7 @@ export class TpsFightGame {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x030b16);
     this.scene.fog = new THREE.FogExp2(0x030b16, 0.032);
-    this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 80);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = false;
     this.renderer.domElement.setAttribute("aria-label", "POLY FIGHTER TPS lock-on battle arena");
@@ -190,7 +193,7 @@ export class TpsFightGame {
     this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
 
-    const lockGeometry = new THREE.TorusGeometry(0.62, 0.025, 8, 48);
+    const lockGeometry = new THREE.TorusGeometry(0.34, 0.018, 8, 40);
     const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.92, depthTest: false });
     this.lockRing = new THREE.Mesh(lockGeometry, lockMaterial);
     this.lockRing.renderOrder = 20;
@@ -274,6 +277,11 @@ export class TpsFightGame {
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
+    // A short authored step-in keeps lock-on melee responsive without pulling a
+    // fighter across the arena. It is only active during startup and only when
+    // the target is already just outside normal contact range.
+    this.applyAttackStepIn(this.p1, this.p2);
+    this.applyAttackStepIn(this.p2, this.p1);
     this.resolveAttack(this.p1, this.p2, this.p2.state === "GUARD");
     this.resolveAttack(this.p2, this.p1, this.p1.state === "GUARD");
     this.separateFighters();
@@ -295,12 +303,18 @@ export class TpsFightGame {
     const sideAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const move = toEnemy.multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
 
+    const moveSpeed = this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
     if (input.guard) {
+      // TPS defense should not root the player in place. Guard-step movement is
+      // deliberately slow enough that offense can still corner or chase it.
+      if (move.lengthSq() > 0.001) {
+        move.normalize();
+        this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * 0.42);
+      }
       this.p1.state = "GUARD";
     } else if (move.lengthSq() > 0.001) {
       move.normalize();
-      const speed = this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
-      this.p1.position.addScaledVector(move, FIXED_STEP * speed);
+      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed);
       this.p1.state = "WALK";
     } else {
       this.p1.state = "IDLE";
@@ -326,16 +340,16 @@ export class TpsFightGame {
     const orbitSign = Math.sin(this.renderTime * 0.72) >= 0 ? 1 : -1;
     const movement = new THREE.Vector3();
 
-    if (distance > 2.55) movement.add(towardPlayer);
-    else if (distance < 1.45) movement.addScaledVector(towardPlayer, -0.9);
-    movement.addScaledVector(tangent, orbitSign * 0.58);
+    if (distance > 2.35) movement.add(towardPlayer);
+    else if (distance < 1.3) movement.addScaledVector(towardPlayer, -0.9);
+    movement.addScaledVector(tangent, orbitSign * 0.46);
 
     const playerThreat = this.p1.state === "ATTACK" && this.p1.currentMove && distance < this.p1.currentMove.reach + 0.85;
     const shouldGuard = Boolean(playerThreat && this.p1.moveTick >= Math.max(0, (this.p1.currentMove?.startup ?? 8) - 2) && Math.sin(this.renderTime * 7.1) > -0.15);
 
     if (shouldGuard) {
       this.p2.state = "GUARD";
-    } else if (this.enemyCooldown <= 0 && distance < 2.3) {
+    } else if (this.enemyCooldown <= 0 && distance < 2.05) {
       const selector = Math.floor(this.renderTime * 3.7) % 5;
       this.p2.beginMove(selector === 0 ? "power" : selector <= 2 ? "jab" : "kick");
       this.enemyCooldown = selector === 0 ? 92 : 58;
@@ -406,6 +420,17 @@ export class TpsFightGame {
     if (!blocked && this.settings.get().vibration && attacker.id === "p1") navigator.vibrate?.(move.power > 1.45 ? 22 : 9);
   }
 
+  private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {
+    const move = attacker.currentMove;
+    if (attacker.state !== "ATTACK" || !move || attacker.moveTick > move.startup) return;
+    const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
+    const desiredContact = Math.max(1.02, move.reach + 0.52);
+    if (distance <= desiredContact || distance > desiredContact + 0.72) return;
+    const remaining = distance - desiredContact;
+    const stepDistance = Math.min(remaining, 0.038 + move.power * 0.014);
+    attacker.position.addScaledVector(horizontalDirection(attacker.position, defender.position), stepDistance);
+  }
+
   private separateFighters(): void {
     const delta = new THREE.Vector3(this.p2.position.x - this.p1.position.x, 0, this.p2.position.z - this.p1.position.z);
     const distance = delta.length();
@@ -427,25 +452,29 @@ export class TpsFightGame {
   private updateCamera(delta: number): void {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    // A true over-the-shoulder composition: keep the locked opponent near the
-    // center while the player occupies the lower-left third instead of hiding
-    // the target directly behind their torso.
-    this.cameraTarget.copy(this.p2.position).add(new THREE.Vector3(0, 1.22, 0));
+    const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+    const closeFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
+    // Pull back and widen the shoulder offset as fighters collapse into striking
+    // range. This keeps both heads and the target reticle readable at contact.
+    const backDistance = 5.65 + closeFactor * 1.35;
+    const shoulderOffset = 2.0 + closeFactor * 0.55;
+    const cameraHeight = 2.5 + closeFactor * 0.34;
+    this.cameraTarget.copy(this.p2.position).add(new THREE.Vector3(0, 1.28 + closeFactor * 0.05, 0));
     this.cameraDesired.copy(this.p1.position)
-      .addScaledVector(forward, -5.35)
-      .addScaledVector(right, 1.62)
-      .add(new THREE.Vector3(0, 2.42, 0));
-    ease(this.camera.position, this.cameraDesired, 9.5, delta);
+      .addScaledVector(forward, -backDistance)
+      .addScaledVector(right, shoulderOffset)
+      .add(new THREE.Vector3(0, cameraHeight, 0));
+    ease(this.camera.position, this.cameraDesired, 10.5, delta);
     this.camera.lookAt(this.cameraTarget);
   }
 
   private updateLockOn(): void {
-    const target = this.p2.position.clone().add(new THREE.Vector3(0, 1.35, 0));
+    const target = this.p2.position.clone().add(new THREE.Vector3(0, 1.56, 0));
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
-    const pulse = 1 + Math.sin(this.renderTime * 5.5) * 0.055;
+    const pulse = 1 + Math.sin(this.renderTime * 5.5) * 0.04;
     this.lockRing.scale.setScalar(pulse);
-    this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.72, 0));
+    this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.46, 0));
     this.lockStem.lookAt(this.camera.position);
   }
 
@@ -472,9 +501,9 @@ export class TpsFightGame {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     this.camera.position.copy(this.p1.position)
-      .addScaledVector(forward, -5.35)
-      .addScaledVector(right, 1.62)
-      .add(new THREE.Vector3(0, 2.42, 0));
+      .addScaledVector(forward, -5.65)
+      .addScaledVector(right, 2.0)
+      .add(new THREE.Vector3(0, 2.5, 0));
     this.updateCamera(1);
     this.updateLockOn();
   }

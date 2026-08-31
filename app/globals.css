@@ -216,10 +216,20 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
   .fighter-orb { width: 36px; height: 52px; }
   .fighter-card strong { font-size: 17px; }
   .select-screen { padding-top: 24px; }
-  .touch-controls { bottom: max(9px, env(safe-area-inset-bottom)); }
+  .fight-hud { grid-template-columns: 1fr 88px 1fr; gap: 10px; top: max(8px, env(safe-area-inset-top)); }
+  .hud-name { margin-bottom: 4px; }
+  .hud-name strong { font-size: clamp(14px, 2.5vw, 20px); }
+  .health-track { height: 12px; }
+  .round-readout { padding: 4px 6px 6px; }
+  .round-readout b { font-size: 25px; }
+  .touch-controls { bottom: max(8px, env(safe-area-inset-bottom)); }
+  .virtual-pad { width: 132px; }
+  .virtual-pad-knob { width: 44px; }
+  .action-buttons { gap: 10px; }
+  .action-buttons .touch-action { width: 58px; height: 58px; font-size: 24px; }
   .input-hint { display: none; }
-  .match-badge { top: 79px; }
-  .pause-button { display: block; }
+  .match-badge { top: 70px; font-size: 7px; }
+  .pause-button { display: block; top: max(76px, calc(env(safe-area-inset-top) + 68px)); width: 31px; height: 31px; }
 }
 
 @media (orientation: portrait) {
@@ -294,19 +304,4 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .tps-mode-button span { display: block; font-weight: 900; letter-spacing: .14em; }
 .tps-mode-button small { display: block; margin-top: .18rem; opacity: .65; font-size: .58rem; letter-spacing: .16em; }
 .tps-badge { border-color: rgba(90, 226, 255, .75) !important; color: #a9f3ff !important; }
-.tps-mode-hud {
-  position: fixed;
-  left: 50%;
-  top: max(14%, calc(env(safe-area-inset-top) + 58px));
-  transform: translateX(-50%);
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  z-index: 7;
-  color: #aaf4ff;
-  text-shadow: 0 0 12px rgba(65, 214, 255, .75);
-}
-.tps-mode-hud span { font-size: .52rem; letter-spacing: .34em; opacity: .8; }
-.tps-mode-hud b { font-size: .72rem; letter-spacing: .16em; margin-top: .1rem; }
-.tps-mode-hud i { font-style: normal; font-size: 1.5rem; line-height: 1; animation: tps-lock-pulse .9s ease-in-out infinite alternate; }
-@keyframes tps-lock-pulse { from { transform: scale(.86); opacity: .58; } to { transform: scale(1.08); opacity: 1; } }
+.tps-badge b { color: #e9fdff; font-weight: 900; text-shadow: 0 0 10px rgba(65, 214, 255, .6); }

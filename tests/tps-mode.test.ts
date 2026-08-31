@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+async function readTpsSource(): Promise<string> {
+  const [core, extension] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
+  ]);
+  return `${core}\n${extension}`;
+}
+
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
-  const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
+  const source = await readTpsSource();
   assert.match(source, /ARENA_RADIUS = 6\.8/);
   assert.match(source, /new THREE\.CircleGeometry\(ARENA_RADIUS/);
   assert.match(source, /horizontalDirection\(this\.p1\.position, this\.p2\.position\)/);
@@ -18,14 +26,16 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
 });
 
 test("TPS player combat is ATTACK plus directional STEP with range attacks, combos, dash attacks, and flank punishment", async () => {
-  const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
+  const source = await readTpsSource();
   assert.match(source, /TPS_CLOSE_ATTACK_RANGE = 1\.58/);
   assert.match(source, /TPS_STEP_TICKS = 9/);
   assert.match(source, /TPS_STEP_COOLDOWN_TICKS = 18/);
+  assert.match(source, /TPS_STEP_DISTANCE_SCALE = 2/);
   assert.match(source, /TPS_PERFECT_EVADE_TICKS = 18/);
   assert.match(source, /playerStepDirection/);
   assert.match(source, /playerStepForwardWeight/);
   assert.match(source, /playerStepSideWeight/);
+  assert.match(source, /TPS_STEP_DISTANCE_SCALE - 1/);
   assert.match(source, /playerComboStage/);
   assert.match(source, /playerAttackQueued/);
   assert.match(source, /const comboConfirmed = this\.p1\.hitTargets\.has\(this\.p2\.id\)/);
@@ -57,10 +67,18 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
   assert.match(source, /enemyTactic/);
   assert.match(source, /enemyOpeningGraceTicks = 132/);
+  assert.match(source, /ENEMY_TRACK_RATE = 0\.16/);
+  assert.match(source, /ENEMY_SIDE_STEP_TRACK_RATE = 0\.06/);
+  assert.match(source, /ENEMY_SPACING_DEAD_ZONE = 0\.30/);
+  assert.match(source, /ENEMY_ORBIT_ACTIVE_TICKS = 28/);
+  assert.match(source, /ENEMY_ATTACK_ALIGNMENT = 0\.82/);
+  assert.match(source, /enemyVisualForward/);
+  assert.match(source, /desiredDistance = game\.enemyTactic === "PRESSURE"/);
+  assert.match(source, /game\.p2\.state = "IDLE"/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {
-  const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
   assert.match(source, /resultWinner/);
   assert.match(source, /this\.resultWinner = winner/);
   assert.match(source, /p1Wins: this\.resultWinner === "p1" \? 1 : 0/);

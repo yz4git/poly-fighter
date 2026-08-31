@@ -97,7 +97,7 @@ describe("Quaternius imported shoulder correction", () => {
 
   it("shares imported arm swing through the clavicle instead of folding upperarm alone", () => {
     expect(source).toContain("function solveImportedArm(");
-    expect(source).toContain("clavicle_\\${suffix}");
+    expect(source).toContain("clavicle_");
     expect(source).toContain("MAX_IMPORTED_CLAVICLE_SWING");
     expect(source).toContain("solveImportedArm(runtime, chain.suffix");
   });

@@ -194,6 +194,7 @@ try {
     game.running = false;
     game.finished = false;
     game.input.clear();
+    game.effects.update(2);
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
     game.p1.currentMove = null;
     game.p1.moveTick = 0;
@@ -283,6 +284,42 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-punch-settled.png`);
 
+  const throwProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    game.effects.update(2);
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.48);
+    game.p2.position.set(0, 0, -0.48);
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); if (game.p2.state !== 'HIT' && game.p2.state !== 'KNOCKDOWN') game.p2.state = 'IDLE'; };
+    game.press('guard', 'tps-audit-throw-g');
+    game.step();
+    game.press('kick', 'tps-audit-throw-k');
+    game.step();
+    const moveId = game.p1.currentMove?.id ?? null;
+    game.release('guard', 'tps-audit-throw-g');
+    game.release('kick', 'tps-audit-throw-k');
+    let steps = 2;
+    while (steps < 45 && game.p2.health === 100) { game.step(); steps += 1; }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { moveId, steps, p2Health: game.p2.health, p2State: game.p2.state };
+  `);
+  if (throwProbe.moveId !== 'throw' || !(throwProbe.p2Health < 100)) throw new Error(`TPS G+K throw failed: ${JSON.stringify(throwProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-throw.png`);
+
   await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -303,7 +340,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

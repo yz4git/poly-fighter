@@ -423,8 +423,8 @@ export default function Home() {
             <div className="round-readout"><span>ROUND {hud?.round ?? 1}</span><b>{String(hud?.timer ?? 60).padStart(2, "0")}</b><small>{hud?.message ?? "ROUND 1"}</small></div>
             <div className="hud-player right-player"><div className="hud-name"><span>CPU // PLAYER 2</span><strong>{hud?.p2Name ?? p2.name}</strong></div><HealthBar value={hud?.p2Health ?? 100} reverse /><div className="win-pips"><i className={(hud?.p2Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p2Wins ?? 0) > 1 ? "won" : ""} /></div></div>
           </section>
-          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""}`}>{battleMode === "TPS" ? <>TARGET <b>{hud?.p2Name ?? p2.name}</b> <span>•</span> LOCKED <span>•</span> CIRCULAR ARENA</> : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
-          <button type="button" className="pause-button" aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
+          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""}`}>{battleMode === "TPS" ? <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></> : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
+          <button type="button" className={`pause-button ${battleMode === "TPS" ? "tps-pause-button" : ""}`} aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons">
@@ -433,7 +433,7 @@ export default function Home() {
               {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
             </div>
           </section>
-          <div className="input-hint">{battleMode === "TPS" ? <>MOVE <b>8-WAY</b> / PUNCH <b>P</b> / KICK <b>K</b> / HOLD <b>G + MOVE</b> GUARD STEP / <b>G + SIDE</b> QUICKSTEP</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
+          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>G+SIDE</b> QUICKSTEP <span>•</span> <b>G+K</b> THROW <span>•</span> <b>G+P</b> COUNTER <span>•</span> <b>P+K</b> POWER</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
         </>
       )}
 

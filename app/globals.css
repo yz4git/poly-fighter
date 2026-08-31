@@ -305,3 +305,33 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .tps-mode-button small { display: block; margin-top: .18rem; opacity: .65; font-size: .58rem; letter-spacing: .16em; }
 .tps-badge { border-color: rgba(90, 226, 255, .75) !important; color: #a9f3ff !important; }
 .tps-badge b { color: #e9fdff; font-weight: 900; text-shadow: 0 0 10px rgba(65, 214, 255, .6); }
+
+
+/* TPS PLAYTEST POLISH v2 */
+.tps-badge {
+  top: 72px;
+  padding: 5px 11px;
+  border: 1px solid rgba(90, 226, 255, .42);
+  background: rgba(3, 14, 28, .7);
+  font-size: clamp(8px, 1vw, 10px);
+  font-weight: 800;
+  letter-spacing: .12em;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+}
+.tps-badge strong { color: #ffd86a; font-weight: 900; }
+.tps-badge span { color: #5de5ff; padding: 0 7px; }
+.tps-pause-button { top: max(58px, calc(env(safe-area-inset-top) + 46px)); right: max(12px, env(safe-area-inset-right)); width: 30px; height: 30px; }
+.tps-input-hint {
+  bottom: max(10px, env(safe-area-inset-bottom));
+  padding: 4px 9px;
+  color: rgba(212, 235, 248, .8);
+  background: rgba(3, 13, 26, .68);
+  border: 1px solid rgba(124, 213, 255, .18);
+  font-size: clamp(7px, .9vw, 9px);
+  letter-spacing: .08em;
+}
+@media (max-width: 760px) {
+  .tps-badge { top: 62px; font-size: 8px; padding: 4px 9px; }
+  .tps-pause-button { top: 57px; right: max(9px, env(safe-area-inset-right)); }
+  .tps-input-hint { font-size: 7px; bottom: max(7px, env(safe-area-inset-bottom)); }
+}

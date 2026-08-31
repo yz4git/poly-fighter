@@ -11,15 +11,22 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /fighter\.visual\.root\.quaternion\.setFromUnitVectors\(MODEL_FORWARD, forward\)/);
   assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
-  assert.match(source, /backDistance = 5\.65 \+ closeFactor \* 1\.35/);
-  assert.match(source, /shoulderOffset = 2\.0 \+ closeFactor \* 1\.15/);
-  assert.match(source, /new THREE\.TorusGeometry\(0\.34/);
+  assert.match(source, /new THREE\.PerspectiveCamera\(47/);
+  assert.match(source, /backDistance = 5\.15 \+ closeFactor \* 0\.45/);
+  assert.match(source, /shoulderOffset = 1\.85 \+ closeFactor \* 0\.82/);
+  assert.match(source, /new THREE\.TorusGeometry\(0\.46/);
+  assert.match(source, /depthTest: false, depthWrite: false/);
+  assert.match(source, /horizonGeometry = new THREE\.TorusGeometry\(ARENA_RADIUS \+ 2\.15/);
   assert.match(source, /ARENA_RADIUS \+ 2\.15/);
 });
 
 test("TPS attacks reuse fighter move data while resolving radial range, knockback, and defender guard", async () => {
   const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
   assert.match(source, /beginMove\("power"\)/);
+  assert.match(source, /throwPressed/);
+  assert.match(source, /counterPressed/);
+  assert.match(source, /this\.p1\.beginMove\("throw"\)/);
+  assert.match(source, /this\.p1\.beginMove\("counter"\)/);
   assert.match(source, /beginMove\(forwardAxis > 0 \? "straight" : "jab"\)/);
   assert.match(source, /beginMove\(sideAxis !== 0 \? "dashKick" : "kick"\)/);
   assert.match(source, /distance > move\.reach \+ 0\.72/);
@@ -35,6 +42,10 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /move\.hitLevel !== "THROW"/);
   assert.match(source, /visual\.layout\.ribY/);
   assert.match(source, /threat \? 0xff667f : inStrikeRange \? 0xffd45c/);
+  assert.match(source, /punishGuard/);
+  assert.match(source, /moveId = punishGuard \? "throw"/);
+  assert.match(source, /simulationTicks \* FIXED_STEP/);
+  assert.match(source, /cameraImpact/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {
@@ -52,5 +63,8 @@ test("title and result flow expose TPS as an independent mode", async () => {
   assert.match(page, /startTpsMatch/);
   assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
   assert.match(page, /CIRCULAR ARENA/);
-  assert.match(page, /GUARD STEP/);
+  assert.match(page, /G\+SIDE/);
+  assert.match(page, /G\+K/);
+  assert.match(page, /G\+P/);
+  assert.match(page, /P\+K/);
 });

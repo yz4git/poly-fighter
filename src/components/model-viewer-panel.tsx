@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { ModelViewer } from "@/src/game/model-viewer";
+import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
 
 export interface ModelViewerPanelProps {
   quality: "LOW" | "NORMAL" | "HIGH";
@@ -15,6 +16,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<ModelViewer | null>(null);
   const [fighterId, setFighterId] = useState<(typeof fighterIds)[number]>("blue");
+  const [modelId, setModelId] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
   const [fallback, setFallback] = useState<string | null>(null);
   const fighter = FIGHTER_DEFINITIONS[fighterId];
 
@@ -27,6 +29,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
       viewer = new ModelViewer(host, {
         definition: fighter,
         quality,
+        modelId,
         onFallback: setFallback,
       });
       viewerRef.current = viewer;
@@ -41,7 +44,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
       viewerRef.current = null;
       viewer.destroy();
     };
-  }, [fighter, quality]);
+  }, [fighter, modelId, quality]);
 
   return (
     <section
@@ -123,6 +126,31 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
               }}
             >
               {value.name}
+            </button>
+          );
+        })}
+        <div style={{ marginTop: 8, color: "#7894ae", fontSize: 8, letterSpacing: ".16em" }}>VISUAL MODEL</div>
+        {FIGHTER_MODEL_OPTIONS.map((option) => {
+          const active = option.id === modelId;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setModelId(option.id)}
+              style={{
+                minWidth: 104,
+                padding: "9px 12px",
+                border: active ? "1px solid #5ce8ff" : "1px solid rgba(175,218,255,.25)",
+                background: active ? "rgba(24,61,91,.9)" : "rgba(5,15,30,.76)",
+                color: active ? "#f5fbff" : "#91a7bf",
+                fontSize: 9,
+                fontWeight: 900,
+                letterSpacing: ".12em",
+                textAlign: "left",
+              }}
+            >
+              {option.label}<br /><small style={{ fontSize: 6, opacity: .7 }}>{option.detail}</small>
             </button>
           );
         })}

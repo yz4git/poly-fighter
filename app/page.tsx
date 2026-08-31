@@ -8,6 +8,7 @@ import { ReferenceReconstructionPanel } from "@/src/components/reference-reconst
 import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
+import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
 import {
   directionToInput,
   directionVector,
@@ -202,6 +203,7 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("TITLE");
   const [p1Choice, setP1Choice] = useState("red");
   const [p2Choice, setP2Choice] = useState("blue");
+  const [modelChoice, setModelChoice] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
   const [difficulty, setDifficulty] = useState<CpuDifficulty>("NORMAL");
   const [hud, setHud] = useState<HudSnapshot | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
@@ -246,6 +248,8 @@ export default function Home() {
       game = new PolyFightGame(mountRef.current, {
         p1Definition: FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red,
         p2Definition: FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue,
+        p1Model: modelChoice,
+        p2Model: modelChoice,
         difficulty,
         onHud: setHud,
         onFallback: (message) => {
@@ -282,7 +286,7 @@ export default function Home() {
       gameRef.current = null;
       game.destroy();
     };
-  }, [difficulty, p1Choice, p2Choice, screen]);
+  }, [difficulty, modelChoice, p1Choice, p2Choice, screen]);
 
   const persistSettings = (patch: Partial<SettingsDraft>) => {
     const next = { ...settings, ...patch };
@@ -378,6 +382,17 @@ export default function Home() {
                 </button>
               );
             })}
+          </div>
+          <div className="difficulty" style={{ marginTop: 10 }}>
+            <span>VISUAL MODEL</span>
+            {FIGHTER_MODEL_OPTIONS.map((option) => (
+              <button key={option.id} type="button" className={modelChoice === option.id ? "active" : ""} onClick={() => setModelChoice(option.id)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ color: "#7894ae", fontSize: 8, letterSpacing: ".12em", margin: "5px 0 2px" }}>
+            {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : "POLY FIGHTER CUSTOM VISUAL"}
           </div>
           <div className="select-bottom">
             <div className="difficulty"><span>CPU DIFFICULTY</span>{(["EASY", "NORMAL", "HARD"] as CpuDifficulty[]).map((level) => <button key={level} type="button" className={difficulty === level ? "active" : ""} onClick={() => setDifficulty(level)}>{level}</button>)}</div>

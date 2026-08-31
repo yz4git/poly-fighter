@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
+import type { FighterModelId } from "./model-skins";
 import {
   createFighterVisual,
   disposeFighterVisual,
@@ -10,6 +11,7 @@ import {
 export interface ModelViewerOptions {
   definition: FighterDefinition;
   quality?: FighterVisualQuality;
+  modelId?: FighterModelId;
   onFallback?: (message: string) => void;
 }
 
@@ -74,7 +76,7 @@ export class ModelViewer {
     fill.position.set(-5, 2, -4);
     this.scene.add(hemi, key, rim, fill);
 
-    this.visual = createFighterVisual(options.definition, options.quality ?? "NORMAL");
+    this.visual = createFighterVisual(options.definition, options.quality ?? "NORMAL", options.modelId ?? "ORIGINAL");
     this.scene.add(this.visual.root);
     this.createFloor(options.definition.colors.primary);
     this.fitModel(true);

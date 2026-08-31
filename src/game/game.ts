@@ -17,11 +17,14 @@ import { RoundManager } from "./round";
 import { SettingsManager } from "./settings";
 import { FixedStepClock } from "./fixed";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
+import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HudSnapshot, InputAction } from "./types";
 
 export interface PolyFightGameOptions {
   p1Definition: FighterDefinition;
   p2Definition: FighterDefinition;
+  p1Model?: FighterModelId;
+  p2Model?: FighterModelId;
   difficulty?: CpuDifficulty;
   onHud?: (snapshot: HudSnapshot) => void;
   onResult?: (winner: "p1" | "p2" | "draw") => void;
@@ -118,8 +121,8 @@ export class PolyFightGame {
     this.arena = new Arena();
     this.effects = new EffectsManager();
     this.scene.add(this.arena.group, this.effects.group);
-    this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality));
-    this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality));
+    this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality, options.p1Model ?? "ORIGINAL"));
+    this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
     this.fightCamera = new FightCamera(this.camera);
     this.effects.onShake = (amount) => {

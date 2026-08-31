@@ -2,15 +2,21 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterRuntime } from "./fighter";
+import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-export const QUATERNIUS_UBC_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male.glb`;
+export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male-flat.glb`;
+export const QUATERNIUS_UBC_FEMALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-female-flat.glb`;
 export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
+
+export type QuaterniusBodyType = "MALE" | "FEMALE";
 
 type RuntimeResources = {
   model: THREE.Group;
   clips: Map<string, THREE.AnimationClip>;
+  bodyType: QuaterniusBodyType;
+  modelUrl: string;
 };
 
 type QuaterniusRuntime = {
@@ -24,32 +30,99 @@ type QuaterniusRuntime = {
   lastTime: number;
   lastMoveTick: number;
   ownedMaterials: THREE.Material[];
+  bodyType: QuaterniusBodyType;
+  modelUrl: string;
 };
 
 const runtimes = new WeakMap<THREE.Group, QuaterniusRuntime>();
 const installTokens = new WeakMap<THREE.Group, object>();
-let resourcesPromise: Promise<RuntimeResources> | null = null;
+const modelPromises = new Map<QuaterniusBodyType, Promise<THREE.Group>>();
+let clipsPromise: Promise<Map<string, THREE.AnimationClip>> | null = null;
 
-function loadResources(): Promise<RuntimeResources> {
-  if (resourcesPromise) return resourcesPromise;
-  const loader = new GLTFLoader();
-  resourcesPromise = Promise.all([
-    loader.loadAsync(QUATERNIUS_UBC_MODEL_URL),
-    loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
-  ]).then(([model, ual1]) => ({
-    model: model.scene,
-    clips: new Map(ual1.animations.map((clip) => [clip.name, clip])),
-  })).catch((error) => {
-    resourcesPromise = null;
-    throw error;
-  });
-  return resourcesPromise;
+export function quaterniusBodyTypeForDefinition(definition: FighterDefinition): QuaterniusBodyType {
+  return definition.archetype === "SPEED" ? "FEMALE" : "MALE";
 }
 
-function cloneAndStyleModel(source: THREE.Group, visual: FighterVisual, primary: number): Pick<QuaterniusRuntime, "host" | "model" | "bones" | "ownedMaterials"> {
+export function quaterniusModelUrlForBodyType(bodyType: QuaterniusBodyType): string {
+  return bodyType === "FEMALE" ? QUATERNIUS_UBC_FEMALE_MODEL_URL : QUATERNIUS_UBC_MALE_MODEL_URL;
+}
+
+function loadModel(bodyType: QuaterniusBodyType): Promise<THREE.Group> {
+  const cached = modelPromises.get(bodyType);
+  if (cached) return cached;
+  const url = quaterniusModelUrlForBodyType(bodyType);
+  const promise = new GLTFLoader().loadAsync(url).then((gltf) => gltf.scene).catch((error) => {
+    modelPromises.delete(bodyType);
+    throw error;
+  });
+  modelPromises.set(bodyType, promise);
+  return promise;
+}
+
+function loadClips(): Promise<Map<string, THREE.AnimationClip>> {
+  if (clipsPromise) return clipsPromise;
+  clipsPromise = new GLTFLoader().loadAsync(QUATERNIUS_UAL_CORE_URL).then((gltf) =>
+    new Map(gltf.animations.map((clip) => [clip.name, clip])),
+  ).catch((error) => {
+    clipsPromise = null;
+    throw error;
+  });
+  return clipsPromise;
+}
+
+function loadResources(bodyType: QuaterniusBodyType): Promise<RuntimeResources> {
+  const modelUrl = quaterniusModelUrlForBodyType(bodyType);
+  return Promise.all([loadModel(bodyType), loadClips()]).then(([model, clips]) => ({
+    model,
+    clips,
+    bodyType,
+    modelUrl,
+  }));
+}
+
+function styleMaterial(material: THREE.Material, definition: FighterDefinition): THREE.Material {
+  const next = material.clone();
+  if (!(next instanceof THREE.MeshStandardMaterial)) return next;
+
+  const name = next.name.toLowerCase();
+  const primary = new THREE.Color(definition.colors.primary);
+  const secondary = new THREE.Color(definition.colors.secondary);
+  const accent = new THREE.Color(definition.colors.accent);
+  const skin = new THREE.Color(definition.colors.skin);
+  const hair = new THREE.Color(definition.colors.hair);
+
+  // The runtime GLBs are intentionally textureless. Material names are used
+  // only as a best-effort semantic hint; unknown materials become the fighter's
+  // primary suit color rather than reverting to a white mannequin.
+  next.map = null;
+  next.normalMap = null;
+  next.roughnessMap = null;
+  next.metalnessMap = null;
+  next.aoMap = null;
+  next.emissiveMap = null;
+  next.alphaMap = null;
+  next.flatShading = true;
+  next.roughness = 0.84;
+  next.metalness = 0.04;
+
+  if (name.includes("hair")) next.color.copy(hair);
+  else if (name.includes("skin") || name.includes("face")) next.color.copy(skin);
+  else if (name.includes("eye")) next.color.copy(accent);
+  else if (name.includes("dark") || name.includes("black")) next.color.copy(secondary);
+  else next.color.lerp(primary, 0.72);
+
+  next.needsUpdate = true;
+  return next;
+}
+
+function cloneAndStyleModel(
+  source: THREE.Group,
+  visual: FighterVisual,
+  definition: FighterDefinition,
+  bodyType: QuaterniusBodyType,
+): Pick<QuaterniusRuntime, "host" | "model" | "bones" | "ownedMaterials"> {
   const model = cloneSkeleton(source) as THREE.Group;
   const ownedMaterials: THREE.Material[] = [];
-  const tint = new THREE.Color(primary);
   model.updateMatrixWorld(true);
   const sourceBounds = new THREE.Box3().setFromObject(model);
   const size = sourceBounds.getSize(new THREE.Vector3());
@@ -63,22 +136,15 @@ function cloneAndStyleModel(source: THREE.Group, visual: FighterVisual, primary:
     mesh.receiveShadow = false;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const cloned = materials.map((material) => {
-      const next = material.clone();
+      const next = styleMaterial(material, definition);
       ownedMaterials.push(next);
-      if (next instanceof THREE.MeshStandardMaterial) {
-        next.flatShading = true;
-        next.roughness = Math.max(0.62, next.roughness);
-        next.metalness = Math.min(0.16, next.metalness);
-        next.color.lerp(tint, 0.12);
-        next.needsUpdate = true;
-      }
       return next;
     });
     mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
   });
 
   const host = new THREE.Group();
-  host.name = "quaternius-ubc-runtime";
+  host.name = `quaternius-ubc-${bodyType.toLowerCase()}-runtime`;
   host.scale.setScalar(1 / height);
   // Existing POLY FIGHTER visuals use normalized 0..1 body height inside a
   // root that applies the final world scale. Keep the imported model in that
@@ -214,15 +280,18 @@ function advance(runtime: QuaterniusRuntime, timeSeconds: number): void {
   runtime.model.updateMatrixWorld(true);
 }
 
-export function installQuaterniusModelSkin(visual: FighterVisual, primary: number): void {
+export function installQuaterniusModelSkin(visual: FighterVisual, definition: FighterDefinition): void {
   if (typeof window === "undefined" || runtimes.has(visual.root)) return;
   const token = {};
+  const bodyType = quaterniusBodyTypeForDefinition(definition);
+  const modelUrl = quaterniusModelUrlForBodyType(bodyType);
   installTokens.set(visual.root, token);
   visual.root.userData.modelSkin = "QUATERNIUS_UBC";
+  visual.root.userData.quaterniusBodyType = bodyType;
   visual.root.userData.quaterniusModelState = "loading";
-  void loadResources().then((resources) => {
+  void loadResources(bodyType).then((resources) => {
     if (installTokens.get(visual.root) !== token) return;
-    const styled = cloneAndStyleModel(resources.model, visual, primary);
+    const styled = cloneAndStyleModel(resources.model, visual, definition, bodyType);
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
@@ -231,6 +300,8 @@ export function installQuaterniusModelSkin(visual: FighterVisual, primary: numbe
       currentAction: null,
       lastTime: 0,
       lastMoveTick: -1,
+      bodyType: resources.bodyType,
+      modelUrl: resources.modelUrl,
     };
     runtimes.set(visual.root, runtime);
     // Keep the canonical rig alive for deterministic hitboxes/IK, but hide its
@@ -239,12 +310,12 @@ export function installQuaterniusModelSkin(visual: FighterVisual, primary: numbe
       if (mesh !== visual.aura) mesh.visible = false;
     }
     visual.root.userData.quaterniusModelState = "ready";
-    visual.root.userData.quaterniusModelAsset = QUATERNIUS_UBC_MODEL_URL;
+    visual.root.userData.quaterniusModelAsset = modelUrl;
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";
-    console.error("[POLY FIGHTER] Quaternius UBC model load failed", error);
+    console.error(`[POLY FIGHTER] Quaternius UBC ${bodyType.toLowerCase()} model load failed`, error);
   });
 }
 

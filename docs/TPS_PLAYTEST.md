@@ -32,3 +32,21 @@ Measured browser pass:
 - deterministic close-range punch: SERA HP 100 -> 94 in 6 fixed steps;
 - circular arena boundary clamp: 6.08 m;
 - desktop and iPhone-landscape screenshots captured successfully.
+
+## 2026-08-31 — /goal visual gameplay review pass
+
+Observed in real-WebGL baseline captures:
+- close-range shoulder framing let the foreground fighter cover too much of the target;
+- the chest reticle could read through the foreground body and sat too high on UBC characters;
+- iPhone landscape duplicated tactical status in the center lane;
+- CPU orbit/attack rhythm was deterministic but mechanically uniform;
+- TPS launched directly from title, bypassing fighter/model/difficulty loadout choice.
+
+Implemented:
+- stronger close-range lateral shoulder camera with target-side framing bias;
+- depth-tested chest lock plus a target ground ring for occlusion-safe spatial read;
+- tactical CPU states (PRESSURE / ORBIT / BAIT), contextual guard/throw/recovery punish, and real EASY/NORMAL/HARD tuning;
+- TPS loadout selection before battle;
+- context glow on Guard during INCOMING and P/K during STRIKE RANGE;
+- removed redundant center TPS badge on iPhone-height landscape;
+- visual audit now asserts close-range screen separation and target ground marker presence.

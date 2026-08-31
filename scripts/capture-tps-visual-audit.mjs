@@ -127,6 +127,9 @@ try {
   await delay(650);
   const click = await clickButton(sessionId, "TPS LOCK-ON BATTLE");
   if (!click?.clicked) throw new Error(`TPS title button not found: ${JSON.stringify(click)}`);
+  await delay(120);
+  const engage = await clickButton(sessionId, "ENGAGE TPS");
+  if (!engage?.clicked) throw new Error(`TPS loadout engage button not found: ${JSON.stringify(engage)}`);
 
   let initial = null;
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -257,6 +260,15 @@ try {
     for (let index = 0; index < 24; index += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
+    const canvas = game.renderer.domElement;
+    const playerScreen = game.p1.position.clone();
+    const enemyScreen = game.p2.position.clone();
+    playerScreen.y = 1.2;
+    enemyScreen.y = 1.2;
+    playerScreen.project(game.camera);
+    enemyScreen.project(game.camera);
+    const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
+    const targetGroundRing = Boolean(game.scene.getObjectByName('tps-target-ground-ring'));
     game.press('punch', 'tps-audit-punch');
     game.step();
     game.release('punch', 'tps-audit-punch');
@@ -268,10 +280,12 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state };
+    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, targetGroundRing };
   `);
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
+  if (!(punchProbe?.screenSeparation >= 55)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
+  if (!punchProbe?.targetGroundRing) throw new Error(`TPS target ground ring was not present: ${JSON.stringify(punchProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
   await execute(sessionId, `${gameLookup}
     const game = findGame();

@@ -334,6 +334,8 @@ export default function Home() {
   const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH" || screen === "RESULT";
+  const tpsIncoming = battleMode === "TPS" && hud?.message === "INCOMING";
+  const tpsStrikeRange = battleMode === "TPS" && hud?.message === "STRIKE RANGE";
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
 
@@ -349,10 +351,10 @@ export default function Home() {
           <p className="title-subtitle">HIGH-POLY FLAT SHADING // RING 01</p>
           <div className="title-mark"><span /> <b>01</b> <span /></div>
           <p className="title-copy">A textureless 3D duel built from light, color, and sharp geometry.</p>
-          <button type="button" className="primary-button" onClick={() => { setScreen("SELECT"); requestLandscape(); }}>
+          <button type="button" className="primary-button" onClick={() => { setBattleMode("DUEL"); setScreen("SELECT"); requestLandscape(); }}>
             <span>START MATCH</span><small>PRESS TO ENTER THE RING</small>
           </button>
-          <button type="button" className="ghost-button tps-mode-button" onClick={startTpsMatch}><span>TPS LOCK-ON BATTLE</span><small>360° CIRCULAR ARENA</small></button>
+          <button type="button" className="ghost-button tps-mode-button" onClick={() => { setBattleMode("TPS"); setScreen("SELECT"); requestLandscape(); }}><span>TPS LOCK-ON BATTLE</span><small>360° CIRCULAR ARENA / LOADOUT SELECT</small></button>
           <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
           <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.1 // LOCAL DUEL</span></div>
@@ -363,7 +365,7 @@ export default function Home() {
 
       {screen === "SELECT" && (
         <section className="select-screen screen-panel">
-          <div className="screen-heading"><span>CHARACTER SELECT</span><i>CHOOSE YOUR VECTOR</i></div>
+          <div className="screen-heading"><span>{battleMode === "TPS" ? "TPS LOADOUT" : "CHARACTER SELECT"}</span><i>{battleMode === "TPS" ? "LOCK-ON FIGHTER / CPU / DIFFICULTY" : "CHOOSE YOUR VECTOR"}</i></div>
           <div className="fighter-select-grid">
             {[FIGHTER_DEFINITIONS.red, FIGHTER_DEFINITIONS.blue].map((fighter) => {
               const selected = fighter.id === p1Choice;
@@ -410,7 +412,7 @@ export default function Home() {
           </div>
           <div className="select-bottom">
             <div className="difficulty"><span>CPU DIFFICULTY</span>{(["EASY", "NORMAL", "HARD"] as CpuDifficulty[]).map((level) => <button key={level} type="button" className={difficulty === level ? "active" : ""} onClick={() => setDifficulty(level)}>{level}</button>)}</div>
-            <button type="button" className="primary-button compact" onClick={startMatch}><span>ENTER RING</span><small>{p1.name} / {p2.name}</small></button>
+            <button type="button" className="primary-button compact" onClick={battleMode === "TPS" ? startTpsMatch : startMatch}><span>{battleMode === "TPS" ? "ENGAGE TPS" : "ENTER RING"}</span><small>{p1.name} / {p2.name} / {difficulty}</small></button>
           </div>
           <button type="button" className="back-button" onClick={backToTitle}>← TITLE</button>
         </section>
@@ -428,9 +430,9 @@ export default function Home() {
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons">
-              {pressableAction(gameRef, "guard", "Guard", "G", "guard")}
-              {pressableAction(gameRef, "punch", "Punch", "P", "punch")}
-              {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
+              {pressableAction(gameRef, "guard", "Guard", "G", "guard " + (tpsIncoming ? "tps-threat-action" : ""))}
+              {pressableAction(gameRef, "punch", "Punch", "P", "punch " + (tpsStrikeRange ? "tps-ready-action" : ""))}
+              {pressableAction(gameRef, "kick", "Kick", "K", "kick " + (tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
           <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>G+SIDE</b> QUICKSTEP <span>•</span> <b>G+K</b> THROW <span>•</span> <b>G+P</b> COUNTER <span>•</span> <b>P+K</b> POWER</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>

@@ -12,10 +12,12 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
   assert.match(source, /new THREE\.PerspectiveCamera\(47/);
-  assert.match(source, /backDistance = 5\.15 \+ closeFactor \* 0\.45/);
-  assert.match(source, /shoulderOffset = 1\.85 \+ closeFactor \* 0\.82/);
+  assert.match(source, /backDistance = 4\.85 - closeFactor \* 0\.45/);
+  assert.match(source, /shoulderOffset = 2\.2 \+ closeFactor \* 1\.25/);
   assert.match(source, /new THREE\.TorusGeometry\(0\.46/);
-  assert.match(source, /depthTest: false, depthWrite: false/);
+  assert.match(source, /depthTest: true, depthWrite: false/);
+  assert.match(source, /new THREE\.RingGeometry\(0\.58, 0\.70/);
+  assert.match(source, /tps-target-ground-ring/);
   assert.match(source, /horizonGeometry = new THREE\.TorusGeometry\(ARENA_RADIUS \+ 2\.15/);
   assert.match(source, /ARENA_RADIUS \+ 2\.15/);
 });
@@ -43,8 +45,12 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /visual\.layout\.ribY/);
   assert.match(source, /threat \? 0xff667f : inStrikeRange \? 0xffd45c/);
   assert.match(source, /punishGuard/);
-  assert.match(source, /moveId = punishGuard \? "throw"/);
-  assert.match(source, /simulationTicks \* FIXED_STEP/);
+  assert.match(source, /const moveId = punishGuard/);
+  assert.match(source, /\? "throw"/);
+  assert.match(source, /punishRecovery/);
+  assert.match(source, /enemyTactic/);
+  assert.match(source, /ENEMY_TACTIC_INTERVAL/);
+  assert.match(source, /this\.difficulty === "HARD"/);
   assert.match(source, /cameraImpact/);
 });
 
@@ -61,6 +67,11 @@ test("title and result flow expose TPS as an independent mode", async () => {
   assert.match(page, /TPS_MATCH/);
   assert.match(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /startTpsMatch/);
+  assert.match(page, /TPS LOADOUT/);
+  assert.match(page, /ENGAGE TPS/);
+  assert.match(page, /setBattleMode\("TPS"\)/);
+  assert.match(page, /tps-threat-action/);
+  assert.match(page, /tps-ready-action/);
   assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
   assert.match(page, /CIRCULAR ARENA/);
   assert.match(page, /G\+SIDE/);

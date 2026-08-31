@@ -193,3 +193,20 @@
     top: max(57px, calc(env(safe-area-inset-top) + 49px));
   }
 }
+
+/* TPS /goal pass: tactical status moves onto the actions, leaving the center lane clear. */
+.action-buttons .tps-threat-action {
+  outline: 2px solid rgba(255, 102, 127, .92);
+  outline-offset: 3px;
+  animation: tps-threat-pulse .48s ease-in-out infinite alternate;
+}
+.action-buttons .tps-ready-action {
+  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);
+}
+@keyframes tps-threat-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.28); }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .tps-badge { display: none; }
+}

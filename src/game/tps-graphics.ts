@@ -16,7 +16,18 @@ export const TPS_GRAPHICS_PROFILE = Object.freeze({
   highAtmospherePoints: 108,
 });
 
+export const TPS_IMPACT_FEEL_PROFILE = Object.freeze({
+  sharedAttackerHitStop: true,
+  lightHitStopTicks: 2,
+  mediumHitStopTicks: 4,
+  heavyHitStopTicks: 6,
+  maxImpactWaves: 3,
+  heavyExposurePunch: 0.14,
+});
+
 type GraphicsQuality = "LOW" | "MEDIUM" | "HIGH" | string;
+
+type ImpactTier = 1 | 2 | 3;
 
 interface ImpactWave {
   mesh: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
@@ -41,6 +52,25 @@ function pointCount(quality: GraphicsQuality): number {
   if (quality === "LOW") return TPS_GRAPHICS_PROFILE.lowAtmospherePoints;
   if (quality === "HIGH") return TPS_GRAPHICS_PROFILE.highAtmospherePoints;
   return TPS_GRAPHICS_PROFILE.mediumAtmospherePoints;
+}
+
+function baseExposure(quality: GraphicsQuality): number {
+  if (quality === "HIGH") return 1.12;
+  if (quality === "LOW") return 1.02;
+  return 1.08;
+}
+
+export function tpsImpactTier(moveId: string, power: number): ImpactTier {
+  if (["power", "risingKick", "dashKick", "counter", "backfist"].includes(moveId) || power >= 1.6) return 3;
+  if (["straight", "lowKick", "bodyBlow", "kick"].includes(moveId) || power >= 1.25) return 2;
+  return 1;
+}
+
+function sharedHitStopForTier(tier: ImpactTier, blocked: boolean): number {
+  if (blocked) return 1;
+  if (tier === 3) return TPS_IMPACT_FEEL_PROFILE.heavyHitStopTicks;
+  if (tier === 2) return TPS_IMPACT_FEEL_PROFILE.mediumHitStopTicks;
+  return TPS_IMPACT_FEEL_PROFILE.lightHitStopTicks;
 }
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -143,6 +173,11 @@ export class TpsGraphicsDirector {
   private readonly ghosts: GhostPulse[] = [];
   private quality: GraphicsQuality;
   private impactLightLife = 0;
+  private impactExposure = 0;
+  private pendingAttackerId: string | null = null;
+  private pendingAttackerHitStop = 0;
+  private latestP1: FighterRuntime | null = null;
+  private latestP2: FighterRuntime | null = null;
   private lastP1TrailSpawn = -Infinity;
   private lastP2TrailSpawn = -Infinity;
   private lastGhostSpawn = -Infinity;
@@ -160,7 +195,7 @@ export class TpsGraphicsDirector {
     scene.add(this.group);
 
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = quality === "HIGH" ? 1.12 : quality === "LOW" ? 1.02 : 1.08;
+    this.renderer.toneMappingExposure = baseExposure(quality);
 
     this.p1Shadow.name = "tps-contact-shadow-p1";
     this.p2Shadow.name = "tps-contact-shadow-p2";
@@ -305,7 +340,7 @@ export class TpsGraphicsDirector {
 
   setQuality(quality: GraphicsQuality): void {
     this.quality = quality;
-    this.renderer.toneMappingExposure = quality === "HIGH" ? 1.12 : quality === "LOW" ? 1.02 : 1.08;
+    this.renderer.toneMappingExposure = baseExposure(quality) + this.impactExposure;
     const low = quality === "LOW";
     this.atmosphere.visible = !low;
     this.floorAccentMaterial.opacity = low ? 0.11 : 0.2;
@@ -316,26 +351,66 @@ export class TpsGraphicsDirector {
   }
 
   hit(event: HitEvent, camera: THREE.Camera): void {
+    const tier = tpsImpactTier(event.move.id, event.move.power);
+    const visualTier: ImpactTier = event.blocked ? 1 : tier;
     const color = event.blocked ? 0x62e8ff : event.counter ? 0xffd85d : event.attacker === "p1" ? 0xff4f70 : 0x58d9ff;
-    const strength = Math.max(0.7, event.move.power * (event.blocked ? 0.7 : 1));
-    const wave = this.waves.find((item) => item.life <= 0) ?? this.waves[0];
-    wave.life = 0.18 + strength * 0.035;
-    wave.maxLife = wave.life;
-    wave.mesh.visible = true;
-    wave.mesh.position.set(event.position.x, event.position.y, event.position.z);
-    wave.mesh.scale.setScalar(0.72 + strength * 0.22);
-    wave.mesh.material.color.setHex(color);
-    wave.mesh.material.opacity = event.blocked ? 0.45 : 0.78;
-    const facing = camera.position.clone().sub(wave.mesh.position).normalize();
-    wave.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
+    const tierBoost = visualTier === 3 ? 1.42 : visualTier === 2 ? 1.18 : 1;
+    const strength = Math.max(0.7, event.move.power * (event.blocked ? 0.7 : 1) * tierBoost);
+    const waveCount = event.blocked ? 1 : visualTier === 3 ? 3 : visualTier === 2 ? 2 : 1;
+    const facing = camera.position.clone().sub(new THREE.Vector3(event.position.x, event.position.y, event.position.z)).normalize();
+
+    for (let index = 0; index < waveCount; index += 1) {
+      const wave = this.waves.find((item) => item.life <= 0) ?? this.waves[index % this.waves.length];
+      wave.life = 0.18 + strength * 0.035 + index * 0.018;
+      wave.maxLife = wave.life;
+      wave.mesh.visible = true;
+      wave.mesh.position.set(event.position.x, event.position.y, event.position.z);
+      wave.mesh.scale.setScalar(0.68 + strength * 0.20 + index * 0.17);
+      wave.mesh.material.color.setHex(color);
+      wave.mesh.material.opacity = event.blocked ? 0.45 : Math.max(0.48, 0.82 - index * 0.13);
+      wave.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
+      wave.mesh.rotateZ(index * 0.52);
+    }
 
     this.impactLight.position.set(event.position.x, event.position.y, event.position.z);
     this.impactLight.color.setHex(color);
-    this.impactLight.intensity = this.quality === "LOW" ? 0.72 : 2.25 + strength * 0.78;
-    this.impactLightLife = 0.12 + strength * 0.025;
+    this.impactLight.intensity = this.quality === "LOW" ? 0.72 + visualTier * 0.12 : 2.25 + strength * (visualTier === 3 ? 1.08 : 0.78);
+    this.impactLightLife = 0.12 + strength * 0.025 + (visualTier - 1) * 0.025;
+    this.impactExposure = Math.max(
+      this.impactExposure,
+      event.blocked ? 0.025 : visualTier === 3 ? TPS_IMPACT_FEEL_PROFILE.heavyExposurePunch : visualTier === 2 ? 0.085 : 0.045,
+    );
+
+    const sharedHitStop = sharedHitStopForTier(tier, event.blocked);
+    const attacker = event.attacker === this.latestP1?.id
+      ? this.latestP1
+      : event.attacker === this.latestP2?.id
+        ? this.latestP2
+        : null;
+    if (attacker) {
+      attacker.hitStop = Math.max(attacker.hitStop, sharedHitStop);
+      this.pendingAttackerId = null;
+      this.pendingAttackerHitStop = 0;
+    } else {
+      this.pendingAttackerId = event.attacker;
+      this.pendingAttackerHitStop = Math.max(this.pendingAttackerHitStop, sharedHitStop);
+    }
+
+    this.group.userData.lastImpactTier = visualTier;
+    this.group.userData.lastSharedAttackerHitStop = sharedHitStop;
+    this.group.userData.lastImpactWaveCount = waveCount;
   }
 
   update(p1: FighterRuntime, p2: FighterRuntime, time: number, delta: number): void {
+    this.latestP1 = p1;
+    this.latestP2 = p2;
+    if (this.pendingAttackerHitStop > 0 && this.pendingAttackerId) {
+      const attacker = this.pendingAttackerId === p1.id ? p1 : this.pendingAttackerId === p2.id ? p2 : null;
+      if (attacker) attacker.hitStop = Math.max(attacker.hitStop, this.pendingAttackerHitStop);
+      this.pendingAttackerId = null;
+      this.pendingAttackerHitStop = 0;
+    }
+
     this.updateFighterShadow(this.p1Shadow, this.p1ShadowMaterial, p1, time);
     this.updateFighterShadow(this.p2Shadow, this.p2ShadowMaterial, p2, time + 0.37);
 
@@ -390,7 +465,7 @@ export class TpsGraphicsDirector {
       if (trail.life <= 0) continue;
       trail.life -= delta;
       const progress = 1 - Math.max(0, trail.life) / Math.max(1e-4, trail.maxLife);
-      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.24);
+      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.32);
       trail.mesh.scale.multiplyScalar(1 + delta * 1.35);
       if (trail.life <= 0) {
         trail.mesh.visible = false;
@@ -415,11 +490,22 @@ export class TpsGraphicsDirector {
       this.impactLight.intensity *= Math.exp(-18 * delta);
       if (this.impactLightLife <= 0) this.impactLight.intensity = 0;
     }
+
+    if (this.impactExposure > 0.0005) this.impactExposure *= Math.exp(-22 * delta);
+    else this.impactExposure = 0;
+    this.renderer.toneMappingExposure = baseExposure(this.quality) + this.impactExposure;
   }
 
   reset(): void {
     this.impactLight.intensity = 0;
     this.impactLightLife = 0;
+    this.impactExposure = 0;
+    this.pendingAttackerId = null;
+    this.pendingAttackerHitStop = 0;
+    this.renderer.toneMappingExposure = baseExposure(this.quality);
+    this.group.userData.lastImpactTier = 0;
+    this.group.userData.lastSharedAttackerHitStop = 0;
+    this.group.userData.lastImpactWaveCount = 0;
     this.lastP1TrailSpawn = -Infinity;
     this.lastP2TrailSpawn = -Infinity;
     this.lastGhostSpawn = -Infinity;
@@ -459,7 +545,8 @@ export class TpsGraphicsDirector {
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const kick = move.animation === "kick" || move.visualContact === "LEFT_FOOT" || move.visualContact === "RIGHT_FOOT";
     const active = attacker.isActive();
-    trail.life = active ? 0.11 : 0.08;
+    const tier = tpsImpactTier(move.id, move.power);
+    trail.life = active ? 0.11 + (tier - 1) * 0.018 : 0.08 + (tier - 1) * 0.01;
     trail.maxLife = trail.life;
     trail.mesh.visible = true;
     const contactSide = move.visualContact === "LEFT_FIST" || move.visualContact === "LEFT_FOOT" ? -1 : move.visualContact === "RIGHT_FIST" || move.visualContact === "RIGHT_FOOT" ? 1 : 0;
@@ -469,9 +556,10 @@ export class TpsGraphicsDirector {
     trail.mesh.position.y = kick ? 0.78 : 1.42;
     trail.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), right);
     trail.mesh.rotateZ((attacker.moveTick / Math.max(1, move.startup + move.active)) * 0.55 - 0.26);
-    trail.mesh.scale.set(kick ? 1.08 : 0.74, kick ? 0.74 : 0.52, 1);
+    const tierScale = 1 + (tier - 1) * 0.12;
+    trail.mesh.scale.set((kick ? 1.08 : 0.74) * tierScale, (kick ? 0.74 : 0.52) * tierScale, 1);
     trail.mesh.material.color.setHex(attacker.definition.colors.glow);
-    trail.mesh.material.opacity = active ? 0.24 : 0.12;
+    trail.mesh.material.opacity = active ? 0.24 + (tier - 1) * 0.07 : 0.12 + (tier - 1) * 0.035;
   }
 
   private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime, motion: THREE.Vector3): void {

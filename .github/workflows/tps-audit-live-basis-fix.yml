@@ -1,0 +1,43 @@
+name: TPS audit live basis fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/fix-tps-audit-live-basis.py
+      - .github/workflows/tps-audit-live-basis-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Patch TPS live-basis audit
+        run: python3 scripts/fix-tps-audit-live-basis.py
+      - name: Check capture script syntax
+        run: node --check scripts/capture-tps-visual-audit.mjs
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Publish audit fix
+        run: |
+          if [ -z "$(git status --porcelain scripts/capture-tps-visual-audit.mjs)" ]; then
+            echo "TPS audit fix already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-tps-visual-audit.mjs
+          git commit -m "Measure TPS strafe from live lock basis"
+          git push origin HEAD:main

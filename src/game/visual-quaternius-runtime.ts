@@ -296,6 +296,23 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
   solveImportedLimb(chain.root, chain.mid, chain.end, target, pole);
 }
 
+function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
+  if (fighter.state !== "GUARD") return;
+  const chains = [
+    { suffix: "l" as const, contact: "LEFT_FIST" as const, poleSide: 1 },
+    { suffix: "r" as const, contact: "RIGHT_FIST" as const, poleSide: -1 },
+  ];
+  for (const chain of chains) {
+    const root = runtime.bones.get(`upperarm_${chain.suffix}`);
+    const mid = runtime.bones.get(`lowerarm_${chain.suffix}`);
+    const end = runtime.bones.get(`hand_${chain.suffix}`);
+    if (!root || !mid || !end) continue;
+    const target = getVisualContactPoint(fighter.visual, chain.contact);
+    const pole = fighter.visual.root.localToWorld(new THREE.Vector3(chain.poleSide * 0.52, 0.78, 0.28));
+    solveImportedLimb(root, mid, end, target, pole);
+  }
+}
+
 function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; speed: number } {
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
@@ -396,6 +413,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.lastMoveTick = fighter.moveTick;
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack);
   advance(runtime, timeSeconds);
+  guardPoseCorrection(runtime, fighter);
   attackContactCorrection(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
 }

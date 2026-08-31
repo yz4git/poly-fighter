@@ -1,0 +1,49 @@
+name: Quaternius shoulder repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/fix-quaternius-shoulder.mjs
+      - .github/workflows/quaternius-shoulder-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quaternius-shoulder-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply shoulder distribution fix
+        run: node scripts/fix-quaternius-shoulder.mjs
+      - name: Run shoulder and combat regressions
+        run: npx vitest run tests/quaternius-shoulder.test.ts tests/quaternius-model-skin.test.ts tests/quaternius-motion.test.ts tests/tps-mode.test.ts tests/fight-rules.test.ts
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Publish validated repair
+        run: |
+          if [ -z "$(git status --porcelain src/game/visual-quaternius-runtime.ts tests/quaternius-shoulder.test.ts)" ]; then
+            echo "Shoulder repair already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/visual-quaternius-runtime.ts tests/quaternius-shoulder.test.ts
+          git commit -m "Fix Quaternius shoulder folding"
+          git push origin HEAD:main

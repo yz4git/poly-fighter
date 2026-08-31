@@ -1,5 +1,12 @@
 import type { HitEvent } from "./types";
 
+function impactTier(event: HitEvent): 1 | 2 | 3 {
+  const id = event.move.id;
+  if (["power", "risingKick", "dashKick", "counter", "backfist"].includes(id) || event.move.power >= 1.6) return 3;
+  if (["straight", "lowKick", "bodyBlow", "kick"].includes(id) || event.move.power >= 1.25) return 2;
+  return 1;
+}
+
 export class AudioManager {
   private context: AudioContext | null = null;
   private enabled = true;
@@ -48,8 +55,22 @@ export class AudioManager {
       this.tone(520, 0.04, "triangle", 0.025, -220);
       return;
     }
-    const base = event.move.power > 1.5 ? 86 : event.counter ? 138 : 116;
-    this.tone(base, event.move.power > 1.5 ? 0.16 : 0.09, "sawtooth", event.move.power > 1.5 ? 0.08 : 0.055, -base * 0.48);
+
+    const tier = impactTier(event);
+    const heavy = tier >= 3;
+    const base = heavy ? 78 : event.counter ? 138 : tier === 2 ? 104 : 118;
+    const bodyGain = heavy ? 0.09 : tier === 2 ? 0.068 : 0.052;
+    const bodyDuration = heavy ? 0.18 : tier === 2 ? 0.12 : 0.085;
+
+    // Body + transient + sub layers make contact readable even on a phone speaker.
+    // Higher combo tiers add weight without making every jab sound equally huge.
+    this.tone(base, bodyDuration, "sawtooth", bodyGain, -base * (heavy ? 0.58 : 0.46));
+    this.tone(heavy ? 56 : tier === 2 ? 68 : 82, heavy ? 0.13 : 0.085, "triangle", heavy ? 0.052 : 0.032, -18);
+    this.tone(event.counter ? 920 : heavy ? 760 : 1080, heavy ? 0.038 : 0.026, "square", heavy ? 0.026 : 0.016, heavy ? -260 : -360);
+
+    if (heavy) {
+      window.setTimeout(() => this.tone(46, 0.12, "triangle", 0.034, -6), 18);
+    }
   }
 
   roundStart(): void {

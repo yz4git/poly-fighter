@@ -13,6 +13,13 @@ interface Flash {
   life: number;
 }
 
+function impactTier(event: HitEvent): 1 | 2 | 3 {
+  const id = event.move.id;
+  if (["power", "risingKick", "dashKick", "counter", "backfist"].includes(id) || event.move.power >= 1.6) return 3;
+  if (["straight", "lowKick", "bodyBlow", "kick"].includes(id) || event.move.power >= 1.25) return 2;
+  return 1;
+}
+
 export class EffectsManager {
   readonly group = new THREE.Group();
   private readonly fragments: Particle[] = [];
@@ -45,8 +52,10 @@ export class EffectsManager {
 
   hit(event: HitEvent): void {
     const color = event.blocked ? 0x63e9ff : event.counter ? 0xffd45c : event.attacker === "p1" ? 0xff405d : 0x58e7ff;
-    const strength = event.move.power * (event.blocked ? 0.72 : 1);
-    let remaining = Math.round(5 + strength * 4);
+    const tier = event.blocked ? 1 : impactTier(event);
+    const tierScale = tier === 3 ? 1.42 : tier === 2 ? 1.18 : 1;
+    const strength = event.move.power * (event.blocked ? 0.72 : 1) * tierScale;
+    let remaining = Math.min(22, Math.round(5 + strength * (tier === 3 ? 6 : 4.5)));
     for (const particle of this.fragments) {
       if (remaining <= 0) break;
       if (particle.life > 0) continue;
@@ -56,22 +65,23 @@ export class EffectsManager {
       const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * 3.6 * strength;
       particle.velocity.set(Math.cos(angle) * speed, 1 + Math.random() * 3.2 * strength, Math.sin(angle) * speed * 0.65);
-      particle.life = 0.22 + Math.random() * 0.3;
+      particle.life = 0.22 + Math.random() * 0.3 + (tier - 1) * 0.035;
       particle.maxLife = particle.life;
-      particle.mesh.scale.setScalar(0.65 + Math.random() * 1.25 * strength);
+      particle.mesh.scale.setScalar((0.65 + Math.random() * 1.25 * strength) * (tier === 3 ? 1.12 : 1));
       remaining -= 1;
     }
     const flash = this.flashes.find((item) => item.life <= 0);
     if (flash) {
       flash.mesh.visible = true;
       flash.mesh.position.set(event.position.x, event.position.y, event.position.z);
-      flash.mesh.scale.setScalar(0.7 + strength * 0.56);
+      flash.mesh.scale.setScalar((0.7 + strength * 0.56) * (tier === 3 ? 1.18 : 1));
       const flashMaterial = flash.mesh.material as THREE.MeshBasicMaterial;
       flashMaterial.color.setHex(color);
-      flashMaterial.opacity = event.blocked ? 0.62 : 0.94;
-      flash.life = 0.16 + strength * 0.04;
+      flashMaterial.opacity = event.blocked ? 0.62 : tier === 3 ? 1 : 0.94;
+      flash.life = 0.16 + strength * 0.04 + (tier - 1) * 0.02;
     }
-    this.onShake?.(event.blocked ? 0.035 : 0.07 + strength * 0.04);
+    const shake = event.blocked ? 0.035 : (0.07 + strength * 0.04) * (tier === 3 ? 1.22 : tier === 2 ? 1.08 : 1);
+    this.onShake?.(shake);
   }
 
   private materialFor(color: number): THREE.MeshStandardMaterial {

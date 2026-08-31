@@ -1,0 +1,50 @@
+name: Import Quaternius combat animation library 2
+
+on:
+  push:
+    paths:
+      - ".github/workflows/quaternius-ual2-import.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download pinned CC0 UAL2
+        run: |
+          set -euxo pipefail
+          mkdir -p public/models/quaternius docs
+          PIN=db3df04d1e4714298a09510b26fb6de6645138a2
+          URL="https://raw.githubusercontent.com/agentkaerf/FreeModels/$PIN/Universal%20Animation%20Library%202%5BStandard%5D/Unreal-Godot/UAL2_Standard.glb"
+          LICENSE_URL="https://raw.githubusercontent.com/agentkaerf/FreeModels/$PIN/Universal%20Animation%20Library%202%5BStandard%5D/License.txt"
+          curl -L --fail --retry 3 "$URL" -o public/models/quaternius/universal-animation-library-2.glb
+          curl -L --fail --retry 3 "$LICENSE_URL" -o public/models/quaternius/LICENSE-ANIMATIONS-2.txt
+          test "$(git hash-object public/models/quaternius/universal-animation-library-2.glb)" = "dc684c2a664927964307e8eb7b27b0000ebf6a18"
+
+      - name: Inspect model and UAL2 compatibility
+        run: |
+          node scripts/inspect-quaternius-character.mjs \
+            public/models/quaternius/ubc-superhero-male.glb \
+            public/models/quaternius/universal-animation-library-2.glb \
+            docs/quaternius-ual2-model-report.json
+
+      - name: Publish UAL2 asset
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/models/quaternius/universal-animation-library-2.glb public/models/quaternius/LICENSE-ANIMATIONS-2.txt docs/quaternius-ual2-model-report.json
+          if git diff --cached --quiet; then
+            echo "UAL2 already current"
+            exit 0
+          fi
+          git commit -m "Add CC0 Quaternius combat animation library 2"
+          git push origin HEAD:main

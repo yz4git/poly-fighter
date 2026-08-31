@@ -1,0 +1,99 @@
+name: TPS Final Close-Combat Polish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tps-final-polish.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply close-combat camera and reticle polish
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          game = Path('src/game/tps-game.ts')
+          s = game.read_text()
+          s = s.replace(
+            'new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.92, depthTest: false })',
+            'new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.92, depthTest: true })',
+            1,
+          )
+          s = s.replace(
+            'new THREE.LineBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.72, depthTest: false })',
+            'new THREE.LineBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.72, depthTest: true })',
+            1,
+          )
+          old = 'const shoulderOffset = 2.0 + closeFactor * 0.55;'
+          new = 'const shoulderOffset = 2.0 + closeFactor * 1.15;'
+          if old not in s: raise SystemExit('shoulder camera anchor missing')
+          s = s.replace(old, new, 1)
+          game.write_text(s)
+
+          tests = Path('tests/tps-mode.test.ts')
+          t = tests.read_text()
+          t = t.replace(
+            r'assert.match(source, /shoulderOffset = 2\.0 \+ closeFactor \* 0\.55/);',
+            r'assert.match(source, /shoulderOffset = 2\.0 \+ closeFactor \* 1\.15/);',
+            1,
+          )
+          if 'closeFactor \\* 1\\.15' not in t: raise SystemExit('camera test patch missing')
+          tests.write_text(t)
+
+          page = Path('app/page.tsx')
+          p = page.read_text()
+          old = 'HOLD <b>G + MOVE</b> GUARD STEP</>'
+          new = 'HOLD <b>G + MOVE</b> GUARD STEP / <b>G + SIDE</b> QUICKSTEP</>'
+          if old not in p: raise SystemExit('TPS input hint anchor missing')
+          page.write_text(p.replace(old, new, 1))
+          PY
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:rules
+      - run: npm run build
+      - run: npm run lint
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-tps-final.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-tps-final.log
+          exit 1
+      - name: Re-play final TPS battle
+        run: |
+          mkdir -p artifacts/tps-final-polish
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-final-polish" node scripts/capture-tps-visual-audit.mjs
+          test -s artifacts/tps-final-polish/tps-idle.png
+          test -s artifacts/tps-final-polish/tps-iphone-idle.png
+          test -s artifacts/tps-final-polish/tps-quickstep.png
+          test -s artifacts/tps-final-polish/tps-punch.png
+          cp /tmp/poly-fighter-tps-final.log artifacts/tps-final-polish/server.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-tps-final-polish
+          path: artifacts/tps-final-polish
+          if-no-files-found: error
+      - name: Commit final TPS polish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game.ts tests/tps-mode.test.ts app/page.tsx
+          git commit -m "Polish TPS close-combat readability"
+          git push

@@ -86,3 +86,5 @@ jobs:
           git add src/game/tps-game.ts app/page.tsx tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
           git commit -m "Improve TPS dodge reads combos and flank camera"
           git push
+
+# v2.1: perfect-step audit samples at authored STEP end.

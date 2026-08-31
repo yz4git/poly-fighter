@@ -56,3 +56,16 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /updateQuaterniusModelPreview/);
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
 });
+
+test("Quaternius hero graphics follow bind-to-animated deltas instead of absolute bind rotations", async () => {
+  const polish = await readFile(new URL("../src/game/quaternius-graphics-polish.ts", import.meta.url), "utf8");
+  assert.match(polish, /QUATERNIUS_HERO_KIT_V2_REST_DELTA/);
+  assert.match(polish, /BIND_TO_ANIMATED_DELTA/);
+  assert.match(polish, /inverseBindBoneRootQuaternion/);
+  assert.match(polish, /poseDelta\.copy\(currentBoneRootQuaternion\)\.multiply\(inverseBindBoneRootQuaternion\)/);
+  assert.doesNotMatch(polish, /mesh\.quaternion\.copy\(localQuaternion\)/);
+  assert.match(polish, /ubc-kairo-forge-chest-left/);
+  assert.match(polish, /ubc-kairo-forge-chest-right/);
+  assert.match(polish, /ubc-sera-ponytail-upper/);
+  assert.match(polish, /ubc-sera-ponytail-lower/);
+});

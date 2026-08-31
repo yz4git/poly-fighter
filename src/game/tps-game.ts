@@ -6,6 +6,7 @@ import { FixedStepClock } from "./fixed";
 import { InputSystem } from "./input";
 import { PresentationAnimationController } from "./presentation-animation";
 import { SettingsManager } from "./settings";
+import { TpsGraphicsDirector } from "./tps-graphics";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame } from "./types";
@@ -140,6 +141,7 @@ export class TpsFightGame {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
   readonly effects = new EffectsManager();
+  readonly graphics: TpsGraphicsDirector;
 
   private readonly mount: HTMLElement;
   private readonly options: TpsFightGameOptions;
@@ -227,6 +229,7 @@ export class TpsFightGame {
     const arena = createCircularArena();
     this.arenaDisposables = arena.disposables;
     this.scene.add(arena.group, this.effects.group);
+    this.graphics = new TpsGraphicsDirector(this.scene, this.renderer, ARENA_RADIUS, settings.quality);
 
     this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality, options.p1Model ?? "ORIGINAL"));
     this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
@@ -284,6 +287,7 @@ export class TpsFightGame {
     const dpr = settings.quality === "LOW" ? 1 : settings.quality === "HIGH" ? 1.75 : 1.35;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dpr));
     this.resize();
+    this.graphics.setQuality(settings.quality);
   }
 
   start(): void {
@@ -322,6 +326,7 @@ export class TpsFightGame {
       this.clock.advance(elapsed, () => this.step());
       this.renderTime += elapsed;
       this.effects.update(elapsed);
+      this.graphics.update(this.p1, this.p2, this.renderTime, elapsed);
       this.updateCamera(Math.max(0.001, elapsed));
       this.updateLockOn();
       this.renderer.render(this.scene, this.camera);
@@ -541,6 +546,7 @@ export class TpsFightGame {
       position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },
     };
     this.effects.hit(event);
+    this.graphics.hit(event, this.camera);
     this.audio.impact(event);
     if (!blocked && this.settings.get().vibration && attacker.id === "p1") navigator.vibrate?.(move.power > 1.45 ? 22 : 9);
   }
@@ -658,6 +664,7 @@ export class TpsFightGame {
     this.cameraImpact = 0;
     this.timerTicks = ROUND_TICKS;
     this.resultWinner = null;
+    this.graphics.reset();
     this.updateVisual(this.p1, this.p2, 0);
     this.updateVisual(this.p2, this.p1, 0.23);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
@@ -708,6 +715,7 @@ export class TpsFightGame {
     document.removeEventListener("visibilitychange", this.visibilityHandler);
     this.input.destroy();
     this.audio.destroy();
+    this.graphics.dispose();
     this.effects.dispose();
     disposeFighterVisual(this.p1.visual);
     disposeFighterVisual(this.p2.visual);

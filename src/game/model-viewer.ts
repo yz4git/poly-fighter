@@ -7,6 +7,7 @@ import {
   type FighterVisual,
   type FighterVisualQuality,
 } from "./visual-entry";
+import { updateQuaterniusModelPreview } from "./visual-quaternius-runtime";
 
 export interface ModelViewerOptions {
   definition: FighterDefinition;
@@ -80,7 +81,7 @@ export class ModelViewer {
     this.scene.add(this.visual.root);
     this.createFloor(options.definition.colors.primary);
     this.fitModel(true);
-    this.runtimeState = String(this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    this.runtimeState = String(this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
 
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
@@ -216,11 +217,12 @@ export class ModelViewer {
     if (!this.running) return;
     const dt = clamp((time - this.lastTime) / 1000, 0, 0.05);
     this.lastTime = time;
+    updateQuaterniusModelPreview(this.visual, time / 1000);
     if (!this.userMoved && this.pointers.size === 0) {
       this.yaw += dt * 0.16;
       this.updateCamera();
     }
-    const nextRuntimeState = String(this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    const nextRuntimeState = String(this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
     if (nextRuntimeState !== this.runtimeState) {
       this.runtimeState = nextRuntimeState;
       if (nextRuntimeState === "ready") this.fitModel(false);

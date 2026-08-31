@@ -1,0 +1,75 @@
+name: POLY FIGHTER TPS WebGL audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/page.tsx
+      - app/globals.css
+      - src/game/tps-game.ts
+      - src/game/presentation-animation.ts
+      - src/game/visual-quaternius-runtime.ts
+      - scripts/capture-tps-visual-audit.mjs
+      - tests/tps-mode.test.ts
+      - .github/workflows/tps-visual-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:rules
+      - run: npm run build
+      - run: npm run lint
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-tps-server.log 2>&1 &
+          echo $! > /tmp/poly-fighter-tps-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-tps-server.log
+          exit 1
+      - name: Capture and exercise TPS battle
+        run: |
+          mkdir -p artifacts/tps-visual-audit
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          if [ -z "$DRIVER" ]; then
+            echo "ChromeDriver is not available"
+            exit 1
+          fi
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            TPS_AUDIT_DIR="artifacts/tps-visual-audit" \
+            node scripts/capture-tps-visual-audit.mjs
+          test -s artifacts/tps-visual-audit/tps-idle.png
+          test -s artifacts/tps-visual-audit/tps-punch.png
+          test -s artifacts/tps-visual-audit/tps-runtime-state.json
+          file artifacts/tps-visual-audit/tps-idle.png | grep -q "PNG image data"
+          file artifacts/tps-visual-audit/tps-punch.png | grep -q "PNG image data"
+          cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-tps-webgl-audit
+          path: artifacts/tps-visual-audit
+          if-no-files-found: error

@@ -1,0 +1,33 @@
+name: Extract Quaternius motion data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/import-quaternius-motion-data.mjs
+      - .github/workflows/quaternius-motion-extract.yml
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Extract normalized CC0 motion trajectories
+        run: node scripts/import-quaternius-motion-data.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quaternius-motion-data
+          path: |
+            artifacts/quaternius-motion-data.ts
+            artifacts/quaternius-motion-data-report.json
+          if-no-files-found: error
+          retention-days: 1

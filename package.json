@@ -12,6 +12,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test:rules": "node --import tsx --test tests/fight-rules.test.ts tests/input-rules.test.ts tests/runtime-regression.test.ts tests/visual-v2.test.ts tests/visual-v4.test.ts tests/visual-v5.test.ts tests/reference-v6.test.ts tests/visual-v8.test.ts tests/visual-v9.test.ts tests/visual-kairo-v1.test.ts tests/visual-blender-skinning.test.ts tests/quaternius-motion.test.ts tests/quaternius-model-skin.test.ts tests/tps-mode.test.ts",
     "test:rules:tps": "node --import tsx --test tests/fight-rules.test.ts tests/input-rules.test.ts tests/runtime-regression.test.ts tests/quaternius-motion.test.ts tests/quaternius-model-skin.test.ts tests/tps-mode.test.ts",
+    "test:ci:tps": "npm run test:rules:tps",
     "test:pwa": "node --test tests/pwa-cache.test.mjs tests/startup-safety.test.mjs tests/model-viewer.test.mjs",
     "test:hero-pipeline": "node --test tests/sera-hero-pipeline.test.mjs",
     "test:ci:static": "npm run test:rules && npm run test:pwa && npm run test:hero-pipeline",

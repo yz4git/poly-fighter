@@ -57,9 +57,9 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
 });
 
-test("Quaternius hero graphics use full armor and bind-to-animated delta followers", async () => {
+test("Quaternius hero graphics use body-conforming armor and bind-delta followers", async () => {
   const polish = await readFile(new URL("../src/game/quaternius-graphics-polish.ts", import.meta.url), "utf8");
-  assert.match(polish, /QUATERNIUS_HERO_KIT_V3_FULL_ARMOR/);
+  assert.match(polish, /QUATERNIUS_HERO_KIT_V4_REFINED_SURFACE/);
   assert.match(polish, /BIND_TO_ANIMATED_DELTA/);
   assert.match(polish, /inverseBindBoneRootQuaternion/);
   assert.match(polish, /poseDelta\.copy\(currentBoneRootQuaternion\)\.multiply\(inverseBindBoneRootQuaternion\)/);
@@ -67,6 +67,7 @@ test("Quaternius hero graphics use full armor and bind-to-animated delta followe
   assert.match(polish, /ubc-kairo-torso-core/);
   assert.match(polish, /ubc-kairo-left-gauntlet/);
   assert.match(polish, /ubc-kairo-left-shin-guard/);
+  assert.match(polish, /new THREE\.CylinderGeometry\(0\.034, 0\.041, 0\.108/);
   assert.match(polish, /ubc-sera-left-forearm-guard/);
   assert.match(polish, /lowerarm_l/);
   assert.match(polish, /ubc-sera-left-shin-guard/);

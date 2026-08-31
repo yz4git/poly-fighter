@@ -1,102 +1,134 @@
-name: POLY FIGHTER TPS WebGL audit
+name: POLY FIGHTER TPS movement branch implementation
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
     paths:
-      - app/**
-      - src/game/**
-      - public/models/**
-      - package.json
-      - package-lock.json
-      - scripts/capture-tps-visual-audit.mjs
-      - tests/fight-rules.test.ts
-      - tests/input-rules.test.ts
-      - tests/runtime-regression.test.ts
-      - tests/quaternius-motion.test.ts
-      - tests/quaternius-model-skin.test.ts
-      - tests/tps-mode.test.ts
-      - .github/workflows/tps-visual-audit.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - app/**
-      - src/game/**
-      - public/models/**
-      - package.json
-      - package-lock.json
-      - scripts/capture-tps-visual-audit.mjs
-      - tests/fight-rules.test.ts
-      - tests/input-rules.test.ts
-      - tests/runtime-regression.test.ts
-      - tests/quaternius-motion.test.ts
-      - tests/quaternius-model-skin.test.ts
-      - tests/tps-mode.test.ts
       - .github/workflows/tps-visual-audit.yml
 
 permissions:
-  contents: read
-
-concurrency:
-  group: tps-webgl-audit-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  capture:
+  implement:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/tps-step-spacing-v1
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Run TPS-focused regression suite
-        run: npm run test:ci:tps
-      - name: Run lint
-        run: npm run lint
-      - name: Build production preview
-        run: npm run build
-      - name: Start production preview
+      - name: Apply requested TPS movement pass
+        shell: bash
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-tps-server.log 2>&1 &
-          echo $! > /tmp/poly-fighter-tps-server.pid
-          for attempt in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/poly-fighter-tps-server.log
-          exit 1
-      - name: Capture and exercise TPS battle
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/game/tps-game.ts')
+          text = path.read_text()
+
+          def one(old, new):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, got {count}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          one(
+              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nconst TPS_COMBO_GRACE_TICKS = 34;',
+              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nexport const TPS_STEP_DISTANCE_SCALE = 2;\nconst ENEMY_TRACK_RATE = 0.16;\nconst ENEMY_SIDE_STEP_TRACK_RATE = 0.06;\nconst ENEMY_SPACING_DEAD_ZONE = 0.30;\nconst ENEMY_ORBIT_ACTIVE_TICKS = 28;\nconst ENEMY_ATTACK_ALIGNMENT = 0.82;\nconst TPS_COMBO_GRACE_TICKS = 34;'
+          )
+          one(
+              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;',
+              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;\n  private readonly enemyVisualForward = new THREE.Vector3(0, 0, 1);'
+          )
+          one(
+              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);',
+              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier * TPS_STEP_DISTANCE_SCALE);'
+          )
+
+          one('''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
+    const distance = this.p2.position.distanceTo(this.p1.position);
+    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
+    const movement = new THREE.Vector3();
+    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.48 : this.enemyTactic === "BAIT" ? 2.25 : 1.82;
+    const orbitStrength = this.enemyTactic === "ORBIT" ? 0.66 : this.enemyTactic === "BAIT" ? 0.34 : 0.22;
+
+    if (distance > desiredDistance + 0.18) movement.add(towardPlayer);
+    else if (distance < desiredDistance - 0.24) movement.addScaledVector(towardPlayer, -1);
+    movement.addScaledVector(tangent, this.enemyOrbitSign * orbitStrength);
+''', '''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
+    const distance = this.p2.position.distanceTo(this.p1.position);
+    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
+    const movement = new THREE.Vector3();
+
+    // Lateral STEP should create a real angle instead of being erased by an
+    // instant lock-on snap. Neutral tracking stays responsive; side-step tracking
+    // deliberately lags, and attacks wait until the torso has turned back enough.
+    const sideStepTracking = this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45;
+    const trackingRate = sideStepTracking ? ENEMY_SIDE_STEP_TRACK_RATE : ENEMY_TRACK_RATE;
+    if (this.enemyVisualForward.lengthSq() < 1e-6) this.enemyVisualForward.copy(towardPlayer);
+    else this.enemyVisualForward.lerp(towardPlayer, trackingRate).normalize();
+    const enemyFacingAlignment = THREE.MathUtils.clamp(this.enemyVisualForward.dot(towardPlayer), -1, 1);
+
+    // Hold a readable combat interval instead of perpetually walking toward zero
+    // distance. The dead zone removes micro-corrections, and ORBIT only moves in
+    // short bursts so the CPU visibly plants between repositioning beats.
+    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.72 : this.enemyTactic === "BAIT" ? 2.55 : 2.08;
+    const distanceError = distance - desiredDistance;
+    if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(towardPlayer);
+    else if (distanceError < -ENEMY_SPACING_DEAD_ZONE) movement.addScaledVector(towardPlayer, -1);
+    const orbitActive = this.enemyTactic === "ORBIT"
+      && Math.abs(distanceError) <= 0.82
+      && this.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
+    if (orbitActive) movement.addScaledVector(tangent, this.enemyOrbitSign * 0.58);
+''')
+
+          one(
+              '    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {',
+              '    } else if (this.enemyOpeningGraceTicks <= 0\n      && this.enemyCooldown <= 0\n      && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)\n      && enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT) {'
+          )
+          one(
+              '    const forward = horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);',
+              '    const forward = fighter === this.p2\n      ? this.enemyVisualForward\n      : horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);'
+          )
+          one(
+              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyCooldown = 52;',
+              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyVisualForward.copy(horizontalDirection(this.p2.position, this.p1.position));\n    this.enemyCooldown = 52;'
+          )
+          path.write_text(text)
+
+          tests_path = Path('tests/tps-mode.test.ts')
+          tests = tests_path.read_text()
+          marker = '  assert.match(source, /TPS_STEP_COOLDOWN_TICKS = 18/);\n'
+          addition = '''  assert.match(source, /TPS_STEP_DISTANCE_SCALE = 2/);
+  assert.match(source, /stepMultiplier \\* TPS_STEP_DISTANCE_SCALE/);
+  assert.match(source, /ENEMY_TRACK_RATE = 0\\.16/);
+  assert.match(source, /ENEMY_SIDE_STEP_TRACK_RATE = 0\\.06/);
+  assert.match(source, /enemyVisualForward/);
+  assert.match(source, /enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT/);
+  assert.match(source, /ENEMY_SPACING_DEAD_ZONE = 0\\.30/);
+  assert.match(source, /ENEMY_ORBIT_ACTIVE_TICKS = 28/);
+  assert.match(source, /desiredDistance = this\\.enemyTactic === "PRESSURE" \\? 1\\.72/);
+'''
+          if tests.count(marker) != 1:
+              raise SystemExit('TPS assertion insertion marker not found exactly once')
+          tests_path.write_text(tests.replace(marker, marker + addition, 1))
+          PY
+      - name: Validate branch implementation
+        run: npm ci --no-audit --no-fund && npm run test:ci:tps && npm run lint && npm run build
+      - name: Restore branch workflows and push gameplay commit
+        shell: bash
         run: |
-          mkdir -p artifacts/tps-visual-audit
-          DRIVER="$(command -v chromedriver || true)"
-          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
-            DRIVER="$CHROMEWEBDRIVER/chromedriver"
-          fi
-          if [ -z "$DRIVER" ]; then
-            echo "ChromeDriver is not available"
-            exit 1
-          fi
-          WEBDRIVER_BIN="$DRIVER" \
-            AUDIT_URL="http://127.0.0.1:3000/" \
-            TPS_AUDIT_DIR="artifacts/tps-visual-audit" \
-            node scripts/capture-tps-visual-audit.mjs
-          for image in tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled tps-throw; do
-            test -s "artifacts/tps-visual-audit/${image}.png"
-            file "artifacts/tps-visual-audit/${image}.png" | grep -q "PNG image data"
-          done
-          test -s artifacts/tps-visual-audit/tps-runtime-state.json
-          cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
-      - uses: actions/upload-artifact@v4
-        with:
-          name: poly-fighter-tps-webgl-audit
-          path: artifacts/tps-visual-audit
-          if-no-files-found: error
-          retention-days: 14
+          git checkout 74605e02499bf458f4e8f2d273462568257ec88c -- .github/workflows/tps-visual-audit.yml .github/workflows/tps-audit-ghost-capture-fix.yml
+          rm -f .github/workflows/tps-step-spacing-autopatch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game.ts tests/tps-mode.test.ts .github/workflows/tps-visual-audit.yml .github/workflows/tps-audit-ghost-capture-fix.yml .github/workflows/tps-step-spacing-autopatch.yml
+          git commit -m "Double TPS steps and improve enemy spacing"
+          git push origin HEAD:chatgpt/tps-step-spacing-v1

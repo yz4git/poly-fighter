@@ -15,3 +15,10 @@ test("neutral and guard elbow poles stay outside the torso", () => {
   assert.ok(source.includes("chain.poleSide * 0.60"));
   assert.ok(source.includes("chain.poleSide * 0.66"));
 });
+
+
+test("neutral ready pose keeps an elbow bend", () => {
+  assert.ok(source.includes("MAX_IMPORTED_NEUTRAL_REACH = 0.76"));
+  assert.ok(source.includes("clampImportedArmTarget(root, mid, end, rawTarget, MAX_IMPORTED_NEUTRAL_REACH)"));
+  assert.ok(source.includes("solveImportedArm(runtime, chain.suffix, root, mid, end, target, pole, 0.28)"));
+});

@@ -349,6 +349,31 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
   else solveImportedArm(runtime, chain.suffix, chain.root, chain.mid, chain.end, target, pole, 0.24);
 }
 
+
+// Neutral ready stances must keep an elbow bend. The deterministic fist targets
+// can sit near full arm extension (especially on KAIRO), which pulls the UBC
+// shoulder skin inward even after clavicle distribution. Clamp only neutral/
+// walk/crouch targets; guard and active attacks keep their authored contact reach.
+const MAX_IMPORTED_NEUTRAL_REACH = 0.76;
+
+function clampImportedArmTarget(
+  upperArm: THREE.Object3D,
+  forearm: THREE.Object3D,
+  hand: THREE.Object3D,
+  target: THREE.Vector3,
+  reachFraction: number,
+): THREE.Vector3 {
+  upperArm.updateWorldMatrix(true, true);
+  const rootPos = upperArm.getWorldPosition(new THREE.Vector3());
+  const midPos = forearm.getWorldPosition(new THREE.Vector3());
+  const endPos = hand.getWorldPosition(new THREE.Vector3());
+  const armLength = rootPos.distanceTo(midPos) + midPos.distanceTo(endPos);
+  const delta = target.clone().sub(rootPos);
+  const maxReach = armLength * THREE.MathUtils.clamp(reachFraction, 0.55, 0.98);
+  if (delta.length() > maxReach) delta.setLength(maxReach);
+  return rootPos.add(delta);
+}
+
 function neutralPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
   if (fighter.state !== "IDLE" && fighter.state !== "WALK" && fighter.state !== "CROUCH") return;
   const chains = [
@@ -360,9 +385,10 @@ function neutralPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRunti
     const mid = runtime.bones.get(`lowerarm_${chain.suffix}`);
     const end = runtime.bones.get(`hand_${chain.suffix}`);
     if (!root || !mid || !end) continue;
-    const target = getVisualContactPoint(fighter.visual, chain.contact);
+    const rawTarget = getVisualContactPoint(fighter.visual, chain.contact);
+    const target = clampImportedArmTarget(root, mid, end, rawTarget, MAX_IMPORTED_NEUTRAL_REACH);
     const pole = fighter.visual.root.localToWorld(new THREE.Vector3(chain.poleSide * 0.60, 0.72, 0.30));
-    solveImportedArm(runtime, chain.suffix, root, mid, end, target, pole, 0.30);
+    solveImportedArm(runtime, chain.suffix, root, mid, end, target, pole, 0.28);
   }
 }
 

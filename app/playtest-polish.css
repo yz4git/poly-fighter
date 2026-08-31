@@ -93,8 +93,15 @@
   }
 
   /* The tiny production tagline was competing with the actual fight HUD. */
-  .match-badge {
+  .match-badge:not(.tps-badge) {
     display: none;
+  }
+
+  .tps-badge {
+    display: block;
+    top: max(59px, calc(env(safe-area-inset-top) + 51px));
+    padding: 4px 9px;
+    font-size: 8px;
   }
 
   .touch-controls {
@@ -124,12 +131,25 @@
     font-size: clamp(19px, 6vh, 25px);
   }
 
-  .pause-button {
+  .pause-button:not(.tps-pause-button) {
     top: max(9px, env(safe-area-inset-top));
     right: max(10px, env(safe-area-inset-right));
     width: 30px;
     height: 30px;
     opacity: .82;
+  }
+
+  .tps-pause-button {
+    top: max(60px, calc(env(safe-area-inset-top) + 52px));
+    right: max(12px, calc(env(safe-area-inset-right) + 4px));
+    width: 30px;
+    height: 30px;
+    opacity: .9;
+  }
+
+  .tps-input-hint {
+    font-size: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
   }
 
   .scanlines {
@@ -151,6 +171,10 @@
     font-size: 22px;
   }
 
+  .round-readout small {
+    font-size: 7px;
+  }
+
   .virtual-pad {
     width: clamp(106px, 31vh, 122px);
   }
@@ -158,5 +182,14 @@
   .action-buttons .touch-action {
     width: clamp(48px, 14vh, 56px);
     height: clamp(48px, 14vh, 56px);
+  }
+
+  .tps-badge {
+    top: max(56px, calc(env(safe-area-inset-top) + 48px));
+    font-size: 7px;
+  }
+
+  .tps-pause-button {
+    top: max(57px, calc(env(safe-area-inset-top) + 49px));
   }
 }

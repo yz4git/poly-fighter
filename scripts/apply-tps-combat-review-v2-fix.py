@@ -45,6 +45,10 @@ old = '  assert.match(page, /STEP \\+ 8-WAY/);\n'
 if old not in text:
     raise SystemExit("legacy STEP + 8-WAY assertion not found")
 text = text.replace(old, '', 1)
+old = '  assert.match(source, /defender\\.state === "SIDESTEP" && this\\.playerStepSideWeight > 0\\.45/);\n'
+if old not in text:
+    raise SystemExit("legacy direct SIDESTEP assertion not found")
+text = text.replace(old, '', 1)
 text = text.replace('  assert.match(source, /PERFECT STEP/);', '  assert.match(source, /PERFECT STEP/);\n  assert.match(source, /SIDE STEP/);\n  assert.match(source, /playerStepThreatTicks/);\n  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n  assert.match(source, /const trackedSideEvade/);', 1)
 p.write_text(text)
 
@@ -69,4 +73,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 p.write_text(text)
 
-print("Updated TPS v2 with reactive threat tracking, HUD/test expectations, and perfect-step audit timing.")
+print("Updated TPS v2 with reactive threat tracking, current assertions, and perfect-step audit timing.")

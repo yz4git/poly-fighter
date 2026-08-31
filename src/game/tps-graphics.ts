@@ -105,8 +105,8 @@ export class TpsGraphicsDirector {
     side: THREE.DoubleSide,
   });
   private readonly floorAccentGeometries: THREE.RingGeometry[] = [];
-  private readonly p1Rim = new THREE.PointLight(0xff9aad, 0.52, 5.4, 2);
-  private readonly p2Rim = new THREE.PointLight(0xa6e4ff, 0.52, 5.4, 2);
+  private readonly p1Rim = new THREE.PointLight(0xff8ca3, 0.68, 5.8, 2);
+  private readonly p2Rim = new THREE.PointLight(0x8edfff, 0.68, 5.8, 2);
   private readonly impactLight = new THREE.PointLight(0xffffff, 0, 4.2, 2);
   private readonly atmosphereGeometry = new THREE.BufferGeometry();
   private readonly atmosphereMaterial = new THREE.PointsMaterial({
@@ -311,8 +311,8 @@ export class TpsGraphicsDirector {
     this.floorAccentMaterial.opacity = low ? 0.11 : 0.2;
     this.skylineMaterial.emissiveIntensity = low ? 0.42 : 0.72;
     this.skylineBeaconMaterial.opacity = low ? 0.45 : 0.72;
-    this.p1Rim.intensity = low ? 0.24 : 0.52;
-    this.p2Rim.intensity = low ? 0.24 : 0.52;
+    this.p1Rim.intensity = low ? 0.32 : 0.68;
+    this.p2Rim.intensity = low ? 0.32 : 0.68;
   }
 
   hit(event: HitEvent, camera: THREE.Camera): void {
@@ -346,14 +346,14 @@ export class TpsGraphicsDirector {
 
     const fighterForward = horizontalDirection(p1.position, p2.position);
     const fighterRight = new THREE.Vector3(-fighterForward.z, 0, fighterForward.x);
-    this.p1Rim.position.copy(p1.position).addScaledVector(fighterForward, -1.3).addScaledVector(fighterRight, 0.72);
-    this.p1Rim.position.y = 1.72;
-    this.p2Rim.position.copy(p2.position).addScaledVector(fighterForward, 1.3).addScaledVector(fighterRight, -0.72);
-    this.p2Rim.position.y = 1.72;
-    const rimPulse = 0.9 + Math.sin(time * 4.4) * 0.06;
+    this.p1Rim.position.copy(p1.position).addScaledVector(fighterForward, -1.18).addScaledVector(fighterRight, 0.92);
+    this.p1Rim.position.y = 1.58;
+    this.p2Rim.position.copy(p2.position).addScaledVector(fighterForward, 1.18).addScaledVector(fighterRight, -0.92);
+    this.p2Rim.position.y = 1.58;
+    const rimPulse = 0.92 + Math.sin(time * 4.4) * 0.055;
     if (this.quality !== "LOW") {
-      this.p1Rim.intensity = (p1.state === "ATTACK" ? 0.78 : 0.48) * rimPulse;
-      this.p2Rim.intensity = (p2.state === "ATTACK" ? 0.78 : 0.48) * rimPulse;
+      this.p1Rim.intensity = (p1.state === "ATTACK" ? 1.08 : 0.68) * rimPulse;
+      this.p2Rim.intensity = (p2.state === "ATTACK" ? 1.08 : 0.68) * rimPulse;
     }
 
     this.spawnAttackTrail(p1, p2, time, true);
@@ -505,7 +505,7 @@ export class TpsGraphicsDirector {
     const airborne = fighter.state === "JUMP" || fighter.position.y > 0.08;
     const evadeStretch = fighter.state === "SIDESTEP" ? 1.18 : 1;
     shadow.scale.set(evadeStretch, 1, 1);
-    material.opacity = airborne ? 0.11 : 0.25 + Math.sin(time * 3.7) * 0.018;
+    material.opacity = airborne ? 0.13 : 0.32 + Math.sin(time * 3.7) * 0.020;
   }
 
   dispose(): void {

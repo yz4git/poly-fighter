@@ -45,12 +45,13 @@ for old, label in [
     ('  assert.match(page, /STEP \\+ 8-WAY/);\n', "legacy STEP + 8-WAY assertion"),
     ('  assert.match(source, /defender\\.state === "SIDESTEP" && this\\.playerStepSideWeight > 0\\.45/);\n', "legacy direct SIDESTEP assertion"),
     ('  assert.match(source, /this\\.playerFlankWindowTicks = TPS_FLANK_WINDOW_TICKS/);\n', "legacy fixed flank-window assertion"),
+    ('  assert.match(source, /this\\.playerPerfectEvadeTicks = TPS_PERFECT_EVADE_TICKS/);\n', "legacy exact perfect-evade assertion"),
     ('  assert.doesNotMatch(source, /this\\.playerFlankWindowTicks = TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n', "legacy no-reactive-flank assertion"),
 ]:
     if old not in text:
         raise SystemExit(f"{label} not found")
     text = text.replace(old, '', 1)
-text = text.replace('  assert.match(source, /PERFECT STEP/);', '  assert.match(source, /PERFECT STEP/);\n  assert.match(source, /SIDE STEP/);\n  assert.match(source, /playerStepThreatTicks/);\n  assert.match(source, /const reactiveSideStep = Boolean/);\n  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n  assert.match(source, /TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n  assert.match(source, /Math\\.max\\(this\\.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS\\)/);\n  assert.match(source, /const trackedSideEvade/);', 1)
+text = text.replace('  assert.match(source, /PERFECT STEP/);', '  assert.match(source, /PERFECT STEP/);\n  assert.match(source, /SIDE STEP/);\n  assert.match(source, /playerStepThreatTicks/);\n  assert.match(source, /const reactiveSideStep = Boolean/);\n  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n  assert.match(source, /TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n  assert.match(source, /Math\\.max\\(this\\.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS\\)/);\n  assert.match(source, /Math\\.max\\(this\\.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS\\)/);\n  assert.match(source, /const trackedSideEvade/);', 1)
 p.write_text(text)
 
 # The flank probe releases side input at the authored STEP end. Capture the earned

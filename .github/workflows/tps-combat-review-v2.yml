@@ -87,4 +87,4 @@ jobs:
           git commit -m "Improve TPS dodge reads combos and flank camera"
           git push
 
-# v2.2: reactive side-step threat tracking audit.
+# v2.3: current reactive-step assertions and WebGL acceptance.

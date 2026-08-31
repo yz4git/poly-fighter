@@ -89,23 +89,22 @@ else if (!source.includes(guardAfter)) throw new Error("Guard shoulder patch anc
 fs.writeFileSync(runtimePath, source);
 
 const testPath = "tests/quaternius-shoulder.test.ts";
-const testSource = `import { describe, expect, it } from "vitest";
+const testSource = `import test from "node:test";
+import assert from "node:assert/strict";
 import fs from "node:fs";
 
-describe("Quaternius imported shoulder correction", () => {
-  const source = fs.readFileSync("src/game/visual-quaternius-runtime.ts", "utf8");
+const source = fs.readFileSync("src/game/visual-quaternius-runtime.ts", "utf8");
 
-  it("shares imported arm swing through the clavicle instead of folding upperarm alone", () => {
-    expect(source).toContain("function solveImportedArm(");
-    expect(source).toContain("clavicle_");
-    expect(source).toContain("MAX_IMPORTED_CLAVICLE_SWING");
-    expect(source).toContain("solveImportedArm(runtime, chain.suffix");
-  });
+test("imported arm swing is shared through the clavicle", () => {
+  assert.match(source, /function solveImportedArm\\(/);
+  assert.ok(source.includes("clavicle_"));
+  assert.ok(source.includes("MAX_IMPORTED_CLAVICLE_SWING"));
+  assert.ok(source.includes("solveImportedArm(runtime, chain.suffix"));
+});
 
-  it("keeps elbow poles outside the torso for neutral and guard corrections", () => {
-    expect(source).toContain("chain.poleSide * 0.60");
-    expect(source).toContain("chain.poleSide * 0.66");
-  });
+test("neutral and guard elbow poles stay outside the torso", () => {
+  assert.ok(source.includes("chain.poleSide * 0.60"));
+  assert.ok(source.includes("chain.poleSide * 0.66"));
 });
 `;
 fs.writeFileSync(testPath, testSource);

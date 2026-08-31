@@ -26,33 +26,41 @@ jobs:
       - name: Install glTF Transform core
         run: npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
 
+      - name: Fetch pinned source libraries
+        run: |
+          set -euxo pipefail
+          mkdir -p .tmp-quaternius
+          BASE_PIN=aa02a4e6d8337a0604d2da131bcbbeb1f01badf0
+          BASE_URL=https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/$BASE_PIN/public/assets/vendor/quaternius
+          UAL2_PIN=db3df04d1e4714298a09510b26fb6de6645138a2
+          UAL2_URL="https://raw.githubusercontent.com/agentkaerf/FreeModels/$UAL2_PIN/Universal%20Animation%20Library%202%5BStandard%5D/Unreal-Godot/UAL2_Standard.glb"
+          curl -L --fail --retry 3 "$BASE_URL/universal-animation-library.glb" -o .tmp-quaternius/ual1.glb
+          curl -L --fail --retry 3 "$UAL2_URL" -o .tmp-quaternius/ual2.glb
+          echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1.glb' | sha256sum -c -
+          test "$(git hash-object .tmp-quaternius/ual2.glb)" = "dc684c2a664927964307e8eb7b27b0000ebf6a18"
+
       - name: Curate fight clips
         run: |
           set -euxo pipefail
           node scripts/curate-quaternius-animations.mjs \
-            public/models/quaternius/universal-animation-library.glb \
+            .tmp-quaternius/ual1.glb \
             public/models/quaternius/ual-fight-core.glb \
             Idle_Loop,Walk_Loop,Crouch_Idle_Loop,Jump_Start,Jump_Loop,Jump_Land,Punch_Jab,Punch_Cross,Hit_Chest,Hit_Head,Death01,Roll
           node scripts/curate-quaternius-animations.mjs \
-            public/models/quaternius/universal-animation-library-2.glb \
+            .tmp-quaternius/ual2.glb \
             public/models/quaternius/ual2-fight-core.glb \
             Melee_Hook,Hit_Knockback,Idle_Shield_Loop,OverhandThrow,Slide_Start,Slide_Loop,Slide_Exit,NinjaJump_Start,NinjaJump_Idle_Loop,NinjaJump_Land
           ls -lh public/models/quaternius/*.glb
-
-      - name: Remove uncurated runtime copies
-        run: |
-          rm public/models/quaternius/universal-animation-library.glb
-          rm public/models/quaternius/universal-animation-library-2.glb
 
       - name: Publish curated assets
         run: |
           set -euxo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A public/models/quaternius
+          git add public/models/quaternius/ual-fight-core.glb public/models/quaternius/ual2-fight-core.glb
           if git diff --cached --quiet; then
             echo "Curated assets already current"
             exit 0
           fi
-          git commit -m "Curate Quaternius runtime fight clips"
+          git commit -m "Optimize Quaternius runtime fight clips"
           git push origin HEAD:main

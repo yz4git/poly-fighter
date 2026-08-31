@@ -87,4 +87,4 @@ jobs:
           git commit -m "Improve TPS dodge reads combos and flank camera"
           git push
 
-# v2.5: aligned static contract plus real WebGL acceptance.
+# v2.6: final static contract and real WebGL acceptance.

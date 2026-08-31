@@ -1,0 +1,75 @@
+name: Fix TPS audit iPhone viewport
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tps-audit-viewport-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Replace window resize with deterministic CDP metrics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/capture-tps-visual-audit.mjs')
+          text = path.read_text()
+          old = '''  // Capture an iPhone-landscape-sized CSS viewport as a permanent UI regression
+  // target. Chrome's headless outer window is taller than its content viewport,
+  // so 573px yields roughly a 430px gameplay canvas.
+  await command(`/session/${sessionId}/window/rect`, "POST", { width: 932, height: 573, x: 0, y: 0 });
+  await delay(260);
+  const iphone = await state(sessionId);
+  if (!(iphone?.canvasWidth >= 800 && iphone?.canvasHeight >= 340 && iphone?.canvasHeight <= 480)) {
+    throw new Error(`TPS iPhone viewport probe is outside the expected range: "${JSON.stringify(iphone)}"`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-iphone-idle.png`);
+  await command(`/session/${sessionId}/window/rect`, "POST", { width: 1536, height: 706, x: 0, y: 0 });
+  await delay(260);
+'''
+          new = '''  // Capture a deterministic iPhone-landscape CSS viewport. Window-rect resizing
+  // is runner/decoration dependent in headless Chrome, so drive the CSS viewport
+  // directly through Chrome DevTools device metrics instead.
+  await command(`/session/${sessionId}/goog/cdp/execute`, "POST", {
+    cmd: "Emulation.setDeviceMetricsOverride",
+    params: { width: 932, height: 430, deviceScaleFactor: 1, mobile: false },
+  });
+  await delay(300);
+  const iphone = await state(sessionId);
+  if (!(iphone?.canvasWidth >= 900 && iphone?.canvasWidth <= 950 && iphone?.canvasHeight >= 400 && iphone?.canvasHeight <= 450)) {
+    throw new Error(`TPS iPhone viewport probe is outside the expected range: "${JSON.stringify(iphone)}"`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-iphone-idle.png`);
+  await command(`/session/${sessionId}/goog/cdp/execute`, "POST", {
+    cmd: "Emulation.clearDeviceMetricsOverride",
+    params: {},
+  });
+  await delay(300);
+'''
+          if old not in text:
+              raise SystemExit('expected viewport block not found')
+          path.write_text(text.replace(old, new))
+          PY
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:rules
+      - run: npm run build
+      - run: npm run lint
+      - name: Commit durable audit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-tps-visual-audit.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "Make TPS iPhone audit viewport deterministic"
+          git push origin HEAD:main

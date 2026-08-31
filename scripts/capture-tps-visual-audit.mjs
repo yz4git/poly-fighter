@@ -161,8 +161,16 @@ try {
 
   await execute(sessionId, `${gameLookup}
     const game = findGame();
-    game.p1.position.set(0, 0, 0.9);
-    game.p2.position.set(0, 0, -0.55);
+    // Freeze only the CPU locomotion for this deterministic contact probe.
+    // Normal CPU orbit/guard/attack behavior is exercised before this point.
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (game.p2.state !== 'HIT' && game.p2.state !== 'BLOCK_STUN') game.p2.state = 'IDLE';
+    };
+    game.p1.position.set(0, 0, 0.72);
+    game.p2.position.set(0, 0, -0.42);
+    game.p1.velocity.set(0, 0, 0);
+    game.p2.velocity.set(0, 0, 0);
     game.p1.health = 100;
     game.p2.health = 100;
     game.p1.state = 'IDLE';

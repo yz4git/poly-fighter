@@ -1,0 +1,142 @@
+name: TPS step spacing one-shot implementation
+
+on:
+  push:
+    branches:
+      - chatgpt/tps-step-spacing-v1
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/tps-step-spacing-v1
+          fetch-depth: 0
+      - name: Patch TPS movement, facing, and spacing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          game_path = Path('src/game/tps-game.ts')
+          text = game_path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one match, found {count}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nconst TPS_COMBO_GRACE_TICKS = 34;',
+              'const TPS_STEP_TICKS = 9;\nconst TPS_STEP_COOLDOWN_TICKS = 18;\nexport const TPS_STEP_DISTANCE_SCALE = 2;\nconst ENEMY_TRACK_RATE = 0.16;\nconst ENEMY_SIDE_STEP_TRACK_RATE = 0.06;\nconst ENEMY_SPACING_DEAD_ZONE = 0.30;\nconst ENEMY_ORBIT_ACTIVE_TICKS = 28;\nconst ENEMY_ATTACK_ALIGNMENT = 0.82;\nconst TPS_COMBO_GRACE_TICKS = 34;'
+          )
+
+          replace_once(
+              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;',
+              '  private enemyTacticTicks = 0;\n  private enemyOrbitSign = 1;\n  private readonly enemyVisualForward = new THREE.Vector3(0, 0, 1);'
+          )
+
+          replace_once(
+              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);',
+              '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier * TPS_STEP_DISTANCE_SCALE);'
+          )
+
+          old_enemy = '''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
+    const distance = this.p2.position.distanceTo(this.p1.position);
+    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
+    const movement = new THREE.Vector3();
+    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.48 : this.enemyTactic === "BAIT" ? 2.25 : 1.82;
+    const orbitStrength = this.enemyTactic === "ORBIT" ? 0.66 : this.enemyTactic === "BAIT" ? 0.34 : 0.22;
+
+    if (distance > desiredDistance + 0.18) movement.add(towardPlayer);
+    else if (distance < desiredDistance - 0.24) movement.addScaledVector(towardPlayer, -1);
+    movement.addScaledVector(tangent, this.enemyOrbitSign * orbitStrength);
+'''
+          new_enemy = '''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
+    const distance = this.p2.position.distanceTo(this.p1.position);
+    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
+    const movement = new THREE.Vector3();
+
+    // Do not let lock-on rotation erase a successful lateral STEP instantly.
+    // The CPU turns normally in neutral, but tracks much more slowly while the
+    // player is bursting sideways. Attacks are also gated until the body has
+    // substantially turned back toward the player.
+    const sideStepTracking = this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45;
+    const trackingRate = sideStepTracking ? ENEMY_SIDE_STEP_TRACK_RATE : ENEMY_TRACK_RATE;
+    if (this.enemyVisualForward.lengthSq() < 1e-6) this.enemyVisualForward.copy(towardPlayer);
+    else this.enemyVisualForward.lerp(towardPlayer, trackingRate).normalize();
+    const enemyFacingAlignment = THREE.MathUtils.clamp(this.enemyVisualForward.dot(towardPlayer), -1, 1);
+
+    // Keep a real fighting interval instead of continuously walking into the
+    // player. PRESSURE remains the closest style, ORBIT lives just outside it,
+    // and BAIT deliberately creates more room. A dead zone eliminates tiny
+    // forward/back corrections, while ORBIT moves in short bursts with rests.
+    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.72 : this.enemyTactic === "BAIT" ? 2.55 : 2.08;
+    const distanceError = distance - desiredDistance;
+    if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(towardPlayer);
+    else if (distanceError < -ENEMY_SPACING_DEAD_ZONE) movement.addScaledVector(towardPlayer, -1);
+    const orbitActive = this.enemyTactic === "ORBIT"
+      && Math.abs(distanceError) <= 0.82
+      && this.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
+    if (orbitActive) movement.addScaledVector(tangent, this.enemyOrbitSign * 0.58);
+'''
+          replace_once(old_enemy, new_enemy)
+
+          replace_once(
+              '    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {',
+              '    } else if (this.enemyOpeningGraceTicks <= 0\n      && this.enemyCooldown <= 0\n      && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)\n      && enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT) {'
+          )
+
+          replace_once(
+              '    const forward = horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);',
+              '    const forward = fighter === this.p2\n      ? this.enemyVisualForward\n      : horizontalDirection(fighter.position, opponent.position);\n    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);'
+          )
+
+          replace_once(
+              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyCooldown = 52;',
+              '    this.p1.resetForRound(0, 3.2, 1);\n    this.p2.resetForRound(0, -2.2, -1);\n    this.enemyVisualForward.copy(horizontalDirection(this.p2.position, this.p1.position));\n    this.enemyCooldown = 52;'
+          )
+
+          game_path.write_text(text)
+
+          test_path = Path('tests/tps-mode.test.ts')
+          tests = test_path.read_text()
+          old_asserts = '''  assert.match(source, /TPS_STEP_TICKS = 9/);
+  assert.match(source, /TPS_STEP_COOLDOWN_TICKS = 18/);
+  assert.match(source, /TPS_PERFECT_EVADE_TICKS = 18/);'''
+          new_asserts = '''  assert.match(source, /TPS_STEP_TICKS = 9/);
+  assert.match(source, /TPS_STEP_COOLDOWN_TICKS = 18/);
+  assert.match(source, /TPS_STEP_DISTANCE_SCALE = 2/);
+  assert.match(source, /stepMultiplier \\* TPS_STEP_DISTANCE_SCALE/);
+  assert.match(source, /ENEMY_TRACK_RATE = 0\\.16/);
+  assert.match(source, /ENEMY_SIDE_STEP_TRACK_RATE = 0\\.06/);
+  assert.match(source, /enemyVisualForward/);
+  assert.match(source, /enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT/);
+  assert.match(source, /PRESSURE\\" \\? 1\\.72 : this\\.enemyTactic === \\"BAIT\\" \\? 2\\.55 : 2\\.08/);
+  assert.match(source, /ENEMY_SPACING_DEAD_ZONE/);
+  assert.match(source, /const orbitActive/);
+  assert.match(source, /ENEMY_ORBIT_ACTIVE_TICKS/);
+  assert.match(source, /TPS_PERFECT_EVADE_TICKS = 18/);'''
+          if tests.count(old_asserts) != 1:
+              raise SystemExit('TPS test insertion point not found exactly once')
+          test_path.write_text(tests.replace(old_asserts, new_asserts, 1))
+
+          Path('.github/workflows/tps-step-spacing-autopatch.yml').unlink()
+          PY
+      - name: Validate TPS rules
+        run: npm ci --no-audit --no-fund && npm run test:ci:tps && npm run lint && npm run build
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game.ts tests/tps-mode.test.ts .github/workflows/tps-step-spacing-autopatch.yml
+          git commit -m "Double TPS steps and improve enemy spacing"
+          git push origin HEAD:chatgpt/tps-step-spacing-v1

@@ -15,13 +15,15 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /lockRing/);
 });
 
-test("TPS attacks reuse fighter move data while resolving radial range and knockback", async () => {
+test("TPS attacks reuse fighter move data while resolving radial range, knockback, and defender guard", async () => {
   const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
   assert.match(source, /beginMove\("power"\)/);
   assert.match(source, /beginMove\(forwardAxis > 0 \? "straight" : "jab"\)/);
   assert.match(source, /beginMove\(sideAxis !== 0 \? "dashKick" : "kick"\)/);
   assert.match(source, /distance > move\.reach \+ 0\.72/);
   assert.match(source, /defender\.velocity\.z = direction\.z \* knockback/);
+  assert.match(source, /resolveAttack\(this\.p1, this\.p2, this\.p2\.state === "GUARD"\)/);
+  assert.match(source, /resolveAttack\(this\.p2, this\.p1, this\.p1\.state === "GUARD"\)/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {

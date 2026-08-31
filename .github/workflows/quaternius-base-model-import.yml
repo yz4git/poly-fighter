@@ -1,0 +1,52 @@
+name: Import Quaternius base fighter model
+
+on:
+  push:
+    paths:
+      - ".github/workflows/quaternius-base-model-import.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download pinned CC0 Quaternius assets
+        run: |
+          set -euxo pipefail
+          mkdir -p public/models/quaternius docs
+          PIN=aa02a4e6d8337a0604d2da131bcbbeb1f01badf0
+          BASE=https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/$PIN/public/assets/vendor/quaternius
+          curl -L --fail --retry 3 "$BASE/night-striker.glb" -o public/models/quaternius/ubc-superhero-male.glb
+          curl -L --fail --retry 3 "$BASE/universal-animation-library.glb" -o public/models/quaternius/universal-animation-library.glb
+          curl -L --fail --retry 3 "$BASE/LICENSE-BASE-CHARACTERS.txt" -o public/models/quaternius/LICENSE-BASE-CHARACTERS.txt
+          curl -L --fail --retry 3 "$BASE/LICENSE-ANIMATIONS.txt" -o public/models/quaternius/LICENSE-ANIMATIONS.txt
+          echo 'a466828c67a4acc9b2413212ce6d9cde235e3aed9b675680c14fd9673858f118  public/models/quaternius/ubc-superhero-male.glb' | sha256sum -c -
+          echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  public/models/quaternius/universal-animation-library.glb' | sha256sum -c -
+
+      - name: Inspect model and motion rig compatibility
+        run: |
+          node scripts/inspect-quaternius-character.mjs \
+            public/models/quaternius/ubc-superhero-male.glb \
+            public/models/quaternius/universal-animation-library.glb \
+            docs/quaternius-base-model-report.json
+
+      - name: Publish imported assets
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/models/quaternius docs/quaternius-base-model-report.json
+          if git diff --cached --quiet; then
+            echo "Assets already current"
+            exit 0
+          fi
+          git commit -m "Add CC0 Quaternius base fighter model"
+          git push origin HEAD:main

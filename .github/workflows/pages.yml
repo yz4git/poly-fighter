@@ -3,6 +3,18 @@ name: Deploy POLY FIGHTER to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - app/**
+      - src/**
+      - public/**
+      - package.json
+      - package-lock.json
+      - next.config.*
+      - tsconfig.json
+      - postcss.config.*
+      - scripts/build-verified.sh
+      - scripts/sites-env.sh
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
@@ -17,6 +29,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,11 +37,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.13.0
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

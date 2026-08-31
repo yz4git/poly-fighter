@@ -1,4 +1,5 @@
 name: TPS visual gameplay review pass
+# Python patch pipeline; obsolete JS patchers intentionally removed.
 
 on:
   push:

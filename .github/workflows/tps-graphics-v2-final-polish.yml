@@ -1,0 +1,84 @@
+name: Final TPS trail motion polish
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tps-graphics-v2-final-polish.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply final motion-effect polish
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/game/tps-graphics.ts')
+          text = path.read_text()
+          replacements = [
+            ('private readonly attackTrailGeometry = new THREE.TorusGeometry(0.56, 0.022, 6, 32, Math.PI * 0.64);',
+             'private readonly attackTrailGeometry = new THREE.TorusGeometry(0.48, 0.018, 6, 28, Math.PI * 0.48);'),
+            ('  private lastGhostSpawn = -Infinity;\n',
+             '  private lastGhostSpawn = -Infinity;\n  private readonly previousP1Position = new THREE.Vector3();\n  private hasPreviousP1Position = false;\n'),
+            ('    this.spawnAttackTrail(p1, p2, time, true);\n    this.spawnAttackTrail(p2, p1, time, false);\n    if (p1.state === "SIDESTEP" && time - this.lastGhostSpawn >= 0.042) {\n      this.spawnQuickstepGhost(p1, p2);\n      this.lastGhostSpawn = time;\n    }',
+             '    this.spawnAttackTrail(p1, p2, time, true);\n    this.spawnAttackTrail(p2, p1, time, false);\n    const p1Motion = this.hasPreviousP1Position ? p1.position.clone().sub(this.previousP1Position) : new THREE.Vector3();\n    if (p1.state === "SIDESTEP" && time - this.lastGhostSpawn >= 0.055) {\n      this.spawnQuickstepGhost(p1, p2, p1Motion);\n      this.lastGhostSpawn = time;\n    }\n    this.previousP1Position.copy(p1.position);\n    this.hasPreviousP1Position = true;'),
+            ('      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.3);',
+             '      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.24);'),
+            ('    this.lastGhostSpawn = -Infinity;\n',
+             '    this.lastGhostSpawn = -Infinity;\n    this.hasPreviousP1Position = false;\n'),
+            ('    if (time - lastSpawn < 0.048) return;\n    if (move.animation === "throw") return;',
+             '    if (time - lastSpawn < 0.09) return;\n    if (move.animation === "throw") return;\n    if (attacker.moveTick > move.startup + move.active + 1) return;'),
+            ('    trail.life = active ? 0.17 : 0.12;',
+             '    trail.life = active ? 0.11 : 0.08;'),
+            ('      .addScaledVector(forward, kick ? 0.76 : 0.72)\n      .addScaledVector(right, contactSide * (kick ? 0.22 : 0.28));',
+             '      .addScaledVector(forward, kick ? 0.78 : 0.76)\n      .addScaledVector(right, contactSide * (kick ? 0.28 : 0.34));'),
+            ('    trail.mesh.scale.set(kick ? 1.18 : 0.82, kick ? 0.82 : 0.6, 1);',
+             '    trail.mesh.scale.set(kick ? 1.08 : 0.74, kick ? 0.74 : 0.52, 1);'),
+            ('    trail.mesh.material.opacity = active ? 0.3 : 0.16;',
+             '    trail.mesh.material.opacity = active ? 0.24 : 0.12;'),
+            ('  private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime): void {',
+             '  private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime, motion: THREE.Vector3): void {'),
+            ('    const right = new THREE.Vector3(-forward.z, 0, forward.x);\n    const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 0;\n    ghost.group.position.copy(fighter.position).addScaledVector(right, -sideSign * 0.46);',
+             '    const fallbackRight = new THREE.Vector3(-forward.z, 0, forward.x);\n    const motionDirection = motion.clone().setY(0);\n    if (motionDirection.lengthSq() < 1e-5) {\n      const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 1;\n      motionDirection.copy(fallbackRight).multiplyScalar(sideSign);\n    } else {\n      motionDirection.normalize();\n    }\n    ghost.group.position.copy(fighter.position).addScaledVector(motionDirection, -0.58);'),
+            ('    ghost.material.opacity = 0.19;',
+             '    ghost.material.opacity = 0.22;'),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing final polish anchor: {old[:100]}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: PWA regressions
+        run: npm run test:pwa
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Publish final TPS motion-effect polish
+        shell: bash
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-graphics.ts
+          git commit -m "Finalize TPS attack trails and quickstep afterimages"
+          git push origin HEAD:main

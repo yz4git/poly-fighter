@@ -136,6 +136,9 @@ export class TpsFightGame {
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
+  private playerEvadeTicks = 0;
+  private playerEvadeCooldown = 0;
+  private playerEvadeSign = 0;
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
     this.mount = mount;
@@ -304,6 +307,22 @@ export class TpsFightGame {
     const move = toEnemy.multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
 
     const moveSpeed = this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
+    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;
+    const evadePressed = input.guard && sideAxis !== 0 && (
+      this.p1.justPressed("guard") || this.p1.justPressed("left") || this.p1.justPressed("right")
+    );
+    if (evadePressed && this.playerEvadeCooldown <= 0) {
+      this.playerEvadeTicks = 9;
+      this.playerEvadeCooldown = 32;
+      this.playerEvadeSign = sideAxis > 0 ? 1 : -1;
+    }
+    if (this.playerEvadeTicks > 0) {
+      this.playerEvadeTicks -= 1;
+      this.p1.position.addScaledVector(right, FIXED_STEP * moveSpeed * 2.35 * this.playerEvadeSign);
+      this.p1.state = "SIDESTEP";
+      this.p1.updatePhysics(FIXED_STEP);
+      return;
+    }
     if (input.guard) {
       // TPS defense should not root the player in place. Guard-step movement is
       // deliberately slow enough that offense can still corner or chase it.
@@ -385,6 +404,10 @@ export class TpsFightGame {
   private resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return;
+    // The opening frames of a guard-side quickstep evade strikes, while throws
+    // still catch the movement. This gives TPS lateral movement a real timing
+    // purpose without changing the shared deterministic move definitions.
+    if (defender === this.p1 && this.playerEvadeTicks > 3 && move.hitLevel !== "THROW") return;
     const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
     if (distance > move.reach + 0.72) return;
 
@@ -474,12 +497,22 @@ export class TpsFightGame {
   }
 
   private updateLockOn(): void {
-    const target = this.p2.position.clone().add(new THREE.Vector3(0, 1.56, 0));
+    // Anchor the reticle to the actual rendered chest instead of a hard-coded
+    // world height so both body types keep the marker off the waist/legs.
+    this.p2.visual.root.updateMatrixWorld(true);
+    const target = this.p2.visual.root.localToWorld(new THREE.Vector3(0, this.p2.visual.layout.ribY + 0.025, 0));
+    const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+    const threat = this.p2.state === "ATTACK";
+    const inStrikeRange = distance < 2.12;
+    const lockColor = threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;
+    this.lockRing.material.color.setHex(lockColor);
+    this.lockStem.material.color.setHex(lockColor);
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
-    const pulse = 1 + Math.sin(this.renderTime * 5.5) * 0.04;
+    const pulseRate = threat ? 10.5 : 5.5;
+    const pulse = (threat ? 0.78 : 0.72) + Math.sin(this.renderTime * pulseRate) * 0.035;
     this.lockRing.scale.setScalar(pulse);
-    this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.46, 0));
+    this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.32, 0));
     this.lockStem.lookAt(this.camera.position);
   }
 
@@ -499,6 +532,9 @@ export class TpsFightGame {
     this.p1.resetForRound(0, 3.2, 1);
     this.p2.resetForRound(0, -2.2, -1);
     this.enemyCooldown = 52;
+    this.playerEvadeTicks = 0;
+    this.playerEvadeCooldown = 0;
+    this.playerEvadeSign = 0;
     this.timerTicks = ROUND_TICKS;
     this.resultWinner = null;
     this.updateVisual(this.p1, this.p2, 0);

@@ -183,6 +183,37 @@ try {
     throw new Error(`TPS forward input did not track target: ${JSON.stringify({ beforeForwardDistance, afterForwardDistance })}`);
   }
 
+  const quickstepProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    cancelAnimationFrame(game.raf);
+    game.running = false;
+    game.finished = false;
+    game.input.clear();
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
+    game.p1.currentMove = null;
+    game.p1.moveTick = 0;
+    game.p1.velocity.set(0, 0, 0);
+    game.p1.state = 'IDLE';
+    game.playerEvadeTicks = 0;
+    game.playerEvadeCooldown = 0;
+    game.playerEvadeSign = 0;
+    game.p1.position.set(0, 0, 1.4);
+    game.p2.position.set(0, 0, -0.3);
+    const start = { x: game.p1.position.x, z: game.p1.position.z };
+    game.press('guard', 'tps-audit-evade-g');
+    game.press('right', 'tps-audit-evade-side');
+    for (let index = 0; index < 6; index += 1) game.step();
+    game.release('guard', 'tps-audit-evade-g');
+    game.release('right', 'tps-audit-evade-side');
+    for (let index = 0; index < 18; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { start, end: { x: game.p1.position.x, z: game.p1.position.z }, state: game.p1.state };
+  `);
+  const quickstepTravel = Math.hypot(quickstepProbe.end.x - quickstepProbe.start.x, quickstepProbe.end.z - quickstepProbe.start.z);
+  if (quickstepTravel < 0.45) throw new Error(`TPS quickstep travel too small: ${JSON.stringify({ quickstepProbe, quickstepTravel })}`);
+  await screenshot(sessionId, `${outputDir}/tps-quickstep.png`);
+
   const punchProbe = await execute(sessionId, `${gameLookup}
     const game = findGame();
     // Freeze RAF only after the real-time locomotion probes. From here onward,
@@ -206,6 +237,14 @@ try {
     }
     game.p1.position.set(0, 0, 0.72);
     game.p2.position.set(0, 0, -0.42);
+    game.playerEvadeTicks = 0;
+    game.playerEvadeCooldown = 0;
+    game.playerEvadeSign = 0;
+    // Settle the shoulder camera after the deterministic close-range teleport.
+    // This makes the captured framing representative of actual continuous play.
+    for (let index = 0; index < 24; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
     game.press('punch', 'tps-audit-punch');
     game.step();
     game.release('punch', 'tps-audit-punch');
@@ -253,7 +292,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, punchProbe, afterPunch, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

@@ -29,6 +29,12 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
   assert.match(source, /moveSpeed \* 0\.42/);
   assert.match(source, /fighter\.visual\.aura\.visible = false/);
+  assert.match(source, /playerEvadeTicks = 9/);
+  assert.match(source, /playerEvadeCooldown = 32/);
+  assert.match(source, /defender === this\.p1 && this\.playerEvadeTicks > 3/);
+  assert.match(source, /move\.hitLevel !== "THROW"/);
+  assert.match(source, /visual\.layout\.ribY/);
+  assert.match(source, /threat \? 0xff667f : inStrikeRange \? 0xffd45c/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {

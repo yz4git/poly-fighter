@@ -82,7 +82,7 @@ async function state(sessionId) {
     return {
       ready: Boolean(game && canvas && gl),
       tpsText: document.body.innerText.includes('TPS LOCK-ON'),
-      targetLocked: document.body.innerText.includes('TARGET LOCKED'),
+      targetLocked: Boolean(game?.scene?.getObjectByName?.('tps-target-ground-ring')),
       arena: Boolean(game?.scene?.getObjectByName?.('tps-circular-arena')),
       canvasWidth: canvas?.width ?? 0,
       canvasHeight: canvas?.height ?? 0,

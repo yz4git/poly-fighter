@@ -27,3 +27,6 @@ test("neutral and guard corrections no longer reuse legacy fist targets", () => 
   assert.ok(readyBlock.includes("importedReadyArmPose(fighter, suffix, root, false)"));
   assert.ok(readyBlock.includes("importedReadyArmPose(fighter, suffix, root, true)"));
 });
+
+// This file also intentionally triggers the real-WebGL audit whenever arm/body
+// clearance constraints change, so static checks cannot hide a visual regression.

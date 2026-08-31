@@ -1,0 +1,527 @@
+{
+  "source": {
+    "model": "Quaternius Universal Base Characters — Superhero Male FullBody",
+    "animations": "Quaternius Universal Animation Library",
+    "license": "CC0-1.0"
+  },
+  "model": {
+    "file": "ubc-superhero-male.glb",
+    "asset": {
+      "generator": "glTF-Transform v4.4.1",
+      "version": "2.0"
+    },
+    "scenes": 1,
+    "nodes": 69,
+    "meshes": 3,
+    "materials": 3,
+    "textures": 7,
+    "skins": 1,
+    "animations": [],
+    "jointNames": [
+      "Head",
+      "ball_l",
+      "ball_leaf_l",
+      "ball_leaf_r",
+      "ball_r",
+      "calf_l",
+      "calf_r",
+      "clavicle_l",
+      "clavicle_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "index_01_l",
+      "index_01_r",
+      "index_02_l",
+      "index_02_r",
+      "index_03_l",
+      "index_03_r",
+      "index_04_leaf_l",
+      "index_04_leaf_r",
+      "lowerarm_l",
+      "lowerarm_r",
+      "middle_01_l",
+      "middle_01_r",
+      "middle_02_l",
+      "middle_02_r",
+      "middle_03_l",
+      "middle_03_r",
+      "middle_04_leaf_l",
+      "middle_04_leaf_r",
+      "neck_01",
+      "pelvis",
+      "pinky_01_l",
+      "pinky_01_r",
+      "pinky_02_l",
+      "pinky_02_r",
+      "pinky_03_l",
+      "pinky_03_r",
+      "pinky_04_leaf_l",
+      "pinky_04_leaf_r",
+      "ring_01_l",
+      "ring_01_r",
+      "ring_02_l",
+      "ring_02_r",
+      "ring_03_l",
+      "ring_03_r",
+      "ring_04_leaf_l",
+      "ring_04_leaf_r",
+      "root",
+      "spine_01",
+      "spine_02",
+      "spine_03",
+      "thigh_l",
+      "thigh_r",
+      "thumb_01_l",
+      "thumb_01_r",
+      "thumb_02_l",
+      "thumb_02_r",
+      "thumb_03_l",
+      "thumb_03_r",
+      "thumb_04_leaf_l",
+      "thumb_04_leaf_r",
+      "upperarm_l",
+      "upperarm_r"
+    ],
+    "animationTargetNames": []
+  },
+  "motion": {
+    "file": "universal-animation-library.glb",
+    "asset": {
+      "generator": "glTF-Transform v4.4.1",
+      "version": "2.0"
+    },
+    "scenes": 1,
+    "nodes": 67,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 0,
+    "skins": 1,
+    "animations": [
+      {
+        "index": 0,
+        "name": "A_TPose",
+        "channels": 195
+      },
+      {
+        "index": 1,
+        "name": "Crouch_Fwd_Loop",
+        "channels": 195
+      },
+      {
+        "index": 2,
+        "name": "Crouch_Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 3,
+        "name": "Dance_Loop",
+        "channels": 195
+      },
+      {
+        "index": 4,
+        "name": "Death01",
+        "channels": 195
+      },
+      {
+        "index": 5,
+        "name": "Driving_Loop",
+        "channels": 195
+      },
+      {
+        "index": 6,
+        "name": "Fixing_Kneeling",
+        "channels": 195
+      },
+      {
+        "index": 7,
+        "name": "Hit_Chest",
+        "channels": 195
+      },
+      {
+        "index": 8,
+        "name": "Hit_Head",
+        "channels": 195
+      },
+      {
+        "index": 9,
+        "name": "Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 10,
+        "name": "Idle_Talking_Loop",
+        "channels": 195
+      },
+      {
+        "index": 11,
+        "name": "Idle_Torch_Loop",
+        "channels": 195
+      },
+      {
+        "index": 12,
+        "name": "Interact",
+        "channels": 195
+      },
+      {
+        "index": 13,
+        "name": "Jog_Fwd_Loop",
+        "channels": 195
+      },
+      {
+        "index": 14,
+        "name": "Jump_Land",
+        "channels": 195
+      },
+      {
+        "index": 15,
+        "name": "Jump_Loop",
+        "channels": 195
+      },
+      {
+        "index": 16,
+        "name": "Jump_Start",
+        "channels": 195
+      },
+      {
+        "index": 17,
+        "name": "PickUp_Table",
+        "channels": 195
+      },
+      {
+        "index": 18,
+        "name": "Pistol_Aim_Down",
+        "channels": 195
+      },
+      {
+        "index": 19,
+        "name": "Pistol_Aim_Neutral",
+        "channels": 195
+      },
+      {
+        "index": 20,
+        "name": "Pistol_Aim_Up",
+        "channels": 195
+      },
+      {
+        "index": 21,
+        "name": "Pistol_Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 22,
+        "name": "Pistol_Reload",
+        "channels": 195
+      },
+      {
+        "index": 23,
+        "name": "Pistol_Shoot",
+        "channels": 195
+      },
+      {
+        "index": 24,
+        "name": "Punch_Cross",
+        "channels": 195
+      },
+      {
+        "index": 25,
+        "name": "Punch_Jab",
+        "channels": 195
+      },
+      {
+        "index": 26,
+        "name": "Push_Loop",
+        "channels": 195
+      },
+      {
+        "index": 27,
+        "name": "Roll",
+        "channels": 195
+      },
+      {
+        "index": 28,
+        "name": "Sitting_Enter",
+        "channels": 195
+      },
+      {
+        "index": 29,
+        "name": "Sitting_Exit",
+        "channels": 195
+      },
+      {
+        "index": 30,
+        "name": "Sitting_Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 31,
+        "name": "Sitting_Talking_Loop",
+        "channels": 195
+      },
+      {
+        "index": 32,
+        "name": "Spell_Simple_Enter",
+        "channels": 195
+      },
+      {
+        "index": 33,
+        "name": "Spell_Simple_Exit",
+        "channels": 195
+      },
+      {
+        "index": 34,
+        "name": "Spell_Simple_Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 35,
+        "name": "Spell_Simple_Shoot",
+        "channels": 195
+      },
+      {
+        "index": 36,
+        "name": "Sprint_Loop",
+        "channels": 195
+      },
+      {
+        "index": 37,
+        "name": "Swim_Fwd_Loop",
+        "channels": 195
+      },
+      {
+        "index": 38,
+        "name": "Swim_Idle_Loop",
+        "channels": 195
+      },
+      {
+        "index": 39,
+        "name": "Sword_Attack",
+        "channels": 195
+      },
+      {
+        "index": 40,
+        "name": "Sword_Idle",
+        "channels": 195
+      },
+      {
+        "index": 41,
+        "name": "Walk_Formal_Loop",
+        "channels": 195
+      },
+      {
+        "index": 42,
+        "name": "Walk_Loop",
+        "channels": 195
+      }
+    ],
+    "jointNames": [
+      "Head",
+      "ball_l",
+      "ball_leaf_l",
+      "ball_leaf_r",
+      "ball_r",
+      "calf_l",
+      "calf_r",
+      "clavicle_l",
+      "clavicle_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "index_01_l",
+      "index_01_r",
+      "index_02_l",
+      "index_02_r",
+      "index_03_l",
+      "index_03_r",
+      "index_04_leaf_l",
+      "index_04_leaf_r",
+      "lowerarm_l",
+      "lowerarm_r",
+      "middle_01_l",
+      "middle_01_r",
+      "middle_02_l",
+      "middle_02_r",
+      "middle_03_l",
+      "middle_03_r",
+      "middle_04_leaf_l",
+      "middle_04_leaf_r",
+      "neck_01",
+      "pelvis",
+      "pinky_01_l",
+      "pinky_01_r",
+      "pinky_02_l",
+      "pinky_02_r",
+      "pinky_03_l",
+      "pinky_03_r",
+      "pinky_04_leaf_l",
+      "pinky_04_leaf_r",
+      "ring_01_l",
+      "ring_01_r",
+      "ring_02_l",
+      "ring_02_r",
+      "ring_03_l",
+      "ring_03_r",
+      "ring_04_leaf_l",
+      "ring_04_leaf_r",
+      "root",
+      "spine_01",
+      "spine_02",
+      "spine_03",
+      "thigh_l",
+      "thigh_r",
+      "thumb_01_l",
+      "thumb_01_r",
+      "thumb_02_l",
+      "thumb_02_r",
+      "thumb_03_l",
+      "thumb_03_r",
+      "thumb_04_leaf_l",
+      "thumb_04_leaf_r",
+      "upperarm_l",
+      "upperarm_r"
+    ],
+    "animationTargetNames": [
+      "Head",
+      "ball_l",
+      "ball_leaf_l",
+      "ball_leaf_r",
+      "ball_r",
+      "calf_l",
+      "calf_r",
+      "clavicle_l",
+      "clavicle_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "index_01_l",
+      "index_01_r",
+      "index_02_l",
+      "index_02_r",
+      "index_03_l",
+      "index_03_r",
+      "index_04_leaf_l",
+      "index_04_leaf_r",
+      "lowerarm_l",
+      "lowerarm_r",
+      "middle_01_l",
+      "middle_01_r",
+      "middle_02_l",
+      "middle_02_r",
+      "middle_03_l",
+      "middle_03_r",
+      "middle_04_leaf_l",
+      "middle_04_leaf_r",
+      "neck_01",
+      "pelvis",
+      "pinky_01_l",
+      "pinky_01_r",
+      "pinky_02_l",
+      "pinky_02_r",
+      "pinky_03_l",
+      "pinky_03_r",
+      "pinky_04_leaf_l",
+      "pinky_04_leaf_r",
+      "ring_01_l",
+      "ring_01_r",
+      "ring_02_l",
+      "ring_02_r",
+      "ring_03_l",
+      "ring_03_r",
+      "ring_04_leaf_l",
+      "ring_04_leaf_r",
+      "root",
+      "spine_01",
+      "spine_02",
+      "spine_03",
+      "thigh_l",
+      "thigh_r",
+      "thumb_01_l",
+      "thumb_01_r",
+      "thumb_02_l",
+      "thumb_02_r",
+      "thumb_03_l",
+      "thumb_03_r",
+      "thumb_04_leaf_l",
+      "thumb_04_leaf_r",
+      "upperarm_l",
+      "upperarm_r"
+    ]
+  },
+  "compatibility": {
+    "sharedJointNames": [
+      "Head",
+      "ball_l",
+      "ball_leaf_l",
+      "ball_leaf_r",
+      "ball_r",
+      "calf_l",
+      "calf_r",
+      "clavicle_l",
+      "clavicle_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "index_01_l",
+      "index_01_r",
+      "index_02_l",
+      "index_02_r",
+      "index_03_l",
+      "index_03_r",
+      "index_04_leaf_l",
+      "index_04_leaf_r",
+      "lowerarm_l",
+      "lowerarm_r",
+      "middle_01_l",
+      "middle_01_r",
+      "middle_02_l",
+      "middle_02_r",
+      "middle_03_l",
+      "middle_03_r",
+      "middle_04_leaf_l",
+      "middle_04_leaf_r",
+      "neck_01",
+      "pelvis",
+      "pinky_01_l",
+      "pinky_01_r",
+      "pinky_02_l",
+      "pinky_02_r",
+      "pinky_03_l",
+      "pinky_03_r",
+      "pinky_04_leaf_l",
+      "pinky_04_leaf_r",
+      "ring_01_l",
+      "ring_01_r",
+      "ring_02_l",
+      "ring_02_r",
+      "ring_03_l",
+      "ring_03_r",
+      "ring_04_leaf_l",
+      "ring_04_leaf_r",
+      "root",
+      "spine_01",
+      "spine_02",
+      "spine_03",
+      "thigh_l",
+      "thigh_r",
+      "thumb_01_l",
+      "thumb_01_r",
+      "thumb_02_l",
+      "thumb_02_r",
+      "thumb_03_l",
+      "thumb_03_r",
+      "thumb_04_leaf_l",
+      "thumb_04_leaf_r",
+      "upperarm_l",
+      "upperarm_r"
+    ],
+    "sharedJointCount": 65,
+    "motionTargetCount": 65,
+    "targetNameCoverage": 1,
+    "missingMotionTargets": [],
+    "directlyBindableByNodeName": true
+  }
+}

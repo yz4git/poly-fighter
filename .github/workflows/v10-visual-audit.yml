@@ -5,43 +5,46 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
     paths:
-      - app/page.tsx
+      - app/**
       - src/components/model-viewer-panel.tsx
-      - src/game/model-viewer.ts
-      - src/game/visual-v10.ts
-      - src/game/visual-v10-stance.ts
-      - src/game/visual-v10-polish.ts
-      - src/game/visual-blender-runtime.ts
-      - src/game/visual-blender-diagnostics.ts
-      - src/game/visual-blender-metadata.ts
-      - src/game/visual-blender-semantics.ts
-      - src/game/visual-blender-skinning.ts
-      - src/game/visual-blender-skinning-profile.ts
-      - src/game/visual-entry.ts
-      - src/game/visual-kairo-v1.ts
-      - public/models/sera-blender-runtime.glb
-      - public/models/sera-blender-runtime.metrics.json
-      - public/models/sera-v10.glb
+      - src/game/**
+      - public/models/**
       - public/sw.js
       - package.json
+      - package-lock.json
       - scripts/blender-runtime-audit-helpers.mjs
       - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs
       - scripts/run-blender-prototype-ci.sh
       - tools/blender/**
-      - tests/model-viewer.test.mjs
-      - tests/pwa-cache.test.mjs
-      - tests/visual-v9.test.ts
-      - tests/visual-kairo-v1.test.ts
-      - tests/visual-blender-skinning.test.ts
+      - tests/**
+      - .github/workflows/v10-visual-audit.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/components/model-viewer-panel.tsx
+      - src/game/**
+      - public/models/**
+      - public/sw.js
+      - package.json
+      - package-lock.json
+      - scripts/blender-runtime-audit-helpers.mjs
+      - scripts/capture-model-view-audit.mjs
+      - scripts/capture-v10-visual-audit.mjs
+      - scripts/run-blender-prototype-ci.sh
+      - tools/blender/**
+      - tests/**
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
   contents: read
+
+concurrency:
+  group: full-webgl-audit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   capture:
@@ -66,14 +69,13 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
-      - name: Run regression tests and optional Blender prototype
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            SERA_RUN_BLENDER_PROTOTYPE=1 npm test
-          else
-            npm test
-          fi
+      - name: Run static regression tests
+        run: npm run test:ci:static
+      - name: Run lint
+        run: npm run lint
+      - name: Generate Blender runtime candidate
+        if: github.event_name == 'pull_request'
+        run: SERA_RUN_BLENDER_PROTOTYPE=1 npm run blender:prototype:ci
       - name: Stage Blender runtime asset for the real game audit
         if: github.event_name == 'pull_request'
         run: |
@@ -92,16 +94,15 @@ jobs:
             test -s "$committed_metrics"
             echo "Using committed Blender runtime for audit."
           fi
-      - name: Rebuild with selected Blender runtime asset
-        if: github.event_name == 'pull_request'
+      - name: Build production preview
         run: npm run build
-      - name: Run lint
-        run: npm run lint
+      - name: Verify rendered server output
+        run: npm run test:ci:postbuild
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-server.log 2>&1 &
           echo $! > /tmp/poly-fighter-server.pid
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
               exit 0
             fi
@@ -179,6 +180,7 @@ jobs:
             artifacts/visual-audit
             artifacts/kairo-visual-audit
           if-no-files-found: error
+          retention-days: 14
       - name: Upload same-repository runtime candidate
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/upload-artifact@v4

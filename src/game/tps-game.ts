@@ -275,7 +275,7 @@ export class TpsFightGame {
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
-    this.resolveAttack(this.p1, this.p2, input.guard);
+    this.resolveAttack(this.p1, this.p2, this.p2.state === "GUARD");
     this.resolveAttack(this.p2, this.p1, this.p1.state === "GUARD");
     this.separateFighters();
     clampToArena(this.p1.position);

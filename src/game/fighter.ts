@@ -532,9 +532,12 @@ export class FighterAnimationController {
       visual.leftArm.root.rotation.z = -0.28;
       visual.rightArm.root.rotation.z = 0.28;
     } else if (state === "SIDESTEP") {
-      visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.12;
-      visual.leftLeg.root.rotation.z = 0.24;
-      visual.rightLeg.root.rotation.z = -0.24;
+      visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.10;
+      // Keep the evasive silhouette but avoid lifting both soles visibly off the
+      // floor when TPS translates the grounded fighter laterally.
+      visual.hips.position.y -= 0.045;
+      visual.leftLeg.root.rotation.z = 0.14;
+      visual.rightLeg.root.rotation.z = -0.14;
     } else if (state === "GUARD" || state === "BLOCK_STUN") {
       const head = visual.root.localToWorld(new THREE.Vector3(0, layout.headBottom + layout.headHeight * 0.52, layout.chestDepth * 0.42));
       solveArm(-1, head.clone().addScaledVector(basis.side, -scale * 0.16).addScaledVector(basis.forward, scale * 0.08), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.25));

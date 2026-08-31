@@ -305,7 +305,11 @@ export class TpsFightGame {
   private resize = (): void => {
     const width = Math.max(1, this.mount.clientWidth || window.innerWidth);
     const height = Math.max(1, this.mount.clientHeight || window.innerHeight);
-    this.camera.aspect = width / height;
+    const aspect = width / height;
+    this.camera.aspect = aspect;
+    // iPhone landscape has much less vertical room than the wide desktop audit.
+    // A slightly wider lens keeps both fighters readable without shrinking touch UI.
+    this.camera.fov = width > height && aspect < 2.4 ? 52 : 47;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   };
@@ -580,10 +584,13 @@ export class TpsFightGame {
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const closeFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
+    const compactLandscapeFactor = THREE.MathUtils.clamp((2.45 - this.camera.aspect) / 0.45, 0, 1);
     // Open a screen-space lane to the opponent at contact by widening laterally.
-    const backDistance = 4.85 - closeFactor * 0.45;
-    const shoulderOffset = 2.2 + closeFactor * 1.25;
-    const cameraHeight = 2.28 + closeFactor * 0.17;
+    // Compact iPhone landscape gets extra shoulder separation because the player
+    // silhouette otherwise covers the opponent at melee distance.
+    const backDistance = 4.85 - closeFactor * 0.45 + compactLandscapeFactor * 0.30;
+    const shoulderOffset = 2.2 + closeFactor * 1.25 + compactLandscapeFactor * (0.55 + closeFactor * 0.55);
+    const cameraHeight = 2.28 + closeFactor * 0.17 + compactLandscapeFactor * 0.04;
     this.cameraTarget.copy(this.p2.position)
       .addScaledVector(right, -0.28 * closeFactor)
       .add(new THREE.Vector3(0, 1.16 + closeFactor * 0.04, 0));

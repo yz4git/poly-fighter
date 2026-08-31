@@ -7,7 +7,6 @@ import { getVisualContactPoint, type FighterVisual } from "./visual";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const QUATERNIUS_UBC_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male.glb`;
 export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
-export const QUATERNIUS_UAL2_CORE_URL = `${BASE_PATH}/models/quaternius/ual2-fight-core.glb`;
 
 type RuntimeResources = {
   model: THREE.Group;
@@ -37,10 +36,9 @@ function loadResources(): Promise<RuntimeResources> {
   resourcesPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UBC_MODEL_URL),
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
-    loader.loadAsync(QUATERNIUS_UAL2_CORE_URL),
-  ]).then(([model, ual1, ual2]) => ({
+  ]).then(([model, ual1]) => ({
     model: model.scene,
-    clips: new Map([...ual1.animations, ...ual2.animations].map((clip) => [clip.name, clip])),
+    clips: new Map(ual1.animations.map((clip) => [clip.name, clip])),
   })).catch((error) => {
     resourcesPromise = null;
     throw error;
@@ -114,13 +112,14 @@ function solveImportedLimb(root: THREE.Object3D, mid: THREE.Object3D, end: THREE
   const rawDistance = Math.max(1e-4, toTarget.length());
   const distance = THREE.MathUtils.clamp(rawDistance, Math.abs(a - b) + 1e-4, a + b - 1e-4);
   const direction = toTarget.normalize();
-  const poleDirection = pole.clone().sub(rootPos).addScaledVector(direction, -pole.clone().sub(rootPos).dot(direction));
+  const poleVector = pole.clone().sub(rootPos);
+  const poleDirection = poleVector.clone().addScaledVector(direction, -poleVector.dot(direction));
   if (poleDirection.lengthSq() < 1e-8) poleDirection.set(0, 1, 0);
   poleDirection.normalize();
   const cosRoot = THREE.MathUtils.clamp((a * a + distance * distance - b * b) / (2 * a * distance), -1, 1);
   const along = a * cosRoot;
-  const height = Math.sqrt(Math.max(0, a * a - along * along));
-  const joint = rootPos.clone().addScaledVector(direction, along).addScaledVector(poleDirection, height);
+  const jointHeight = Math.sqrt(Math.max(0, a * a - along * along));
+  const joint = rootPos.clone().addScaledVector(direction, along).addScaledVector(poleDirection, jointHeight);
 
   const currentRootDirection = midPos.clone().sub(rootPos).normalize();
   const desiredRootDirection = joint.clone().sub(rootPos).normalize();
@@ -145,8 +144,7 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
   if (!move.visualContact || move.visualContact === "BODY") return;
   const target = getVisualContactPoint(fighter.visual, move.visualContact);
   const isFoot = move.visualContact.endsWith("FOOT");
-  const suffixes = isFoot ? ["l", "r"] as const : ["l", "r"] as const;
-  const candidates = suffixes.map((suffix) => {
+  const candidates = (["l", "r"] as const).map((suffix) => {
     const root = runtime.bones.get(isFoot ? `thigh_${suffix}` : `upperarm_${suffix}`);
     const mid = runtime.bones.get(isFoot ? `calf_${suffix}` : `lowerarm_${suffix}`);
     const end = runtime.bones.get(isFoot ? `foot_${suffix}` : `hand_${suffix}`);
@@ -168,48 +166,52 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
       return { name: move.id === "jab" ? "Punch_Jab" : "Punch_Cross", loop: false, speed: 1 / seconds };
     }
     if (move.animation === "kick") {
-      if (move.id === "dashKick") return { name: "Slide_Start", loop: false, speed: 1 / seconds };
-      return { name: "NinjaJump_Start", loop: false, speed: 1 / seconds };
+      // UAL Standard has no dedicated kick clip. Use a full-body launch/roll
+      // as anticipation, then the active-frame IK correction puts the actual
+      // imported foot onto the deterministic gameplay contact point.
+      return { name: move.id === "dashKick" ? "Roll" : "Jump_Start", loop: false, speed: 1 / seconds };
     }
-    if (move.animation === "throw") return { name: "OverhandThrow", loop: false, speed: 1 / seconds };
-    return { name: "Melee_Hook", loop: false, speed: 1 / seconds };
+    if (move.animation === "throw") return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
+    return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
   }
   switch (fighter.state) {
     case "WALK": return { name: "Walk_Loop", loop: true, speed: 1 };
     case "CROUCH": return { name: "Crouch_Idle_Loop", loop: true, speed: 1 };
-    case "GUARD": return { name: "Idle_Shield_Loop", loop: true, speed: 1 };
-    case "BLOCK_STUN": return { name: "Hit_Knockback", loop: false, speed: 1.35 };
-    case "SIDESTEP": return { name: "Slide_Loop", loop: true, speed: 1.2 };
+    case "GUARD": return { name: "Idle_Loop", loop: true, speed: 0.82 };
+    case "BLOCK_STUN": return { name: "Hit_Chest", loop: false, speed: 1.35 };
+    case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };
     case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
     case "HIT": return { name: "Hit_Chest", loop: false, speed: 1.35 };
     case "KNOCKDOWN":
     case "KO":
     case "RING_OUT": return { name: "Death01", loop: false, speed: 1 };
-    case "THROW": return { name: "OverhandThrow", loop: false, speed: 1 };
-    case "WAKEUP": return { name: "NinjaJump_Land", loop: false, speed: 1.2 };
+    case "THROW": return { name: "Punch_Cross", loop: false, speed: 1 };
+    case "WAKEUP": return { name: "Jump_Land", loop: false, speed: 1.2 };
     default: return { name: "Idle_Loop", loop: true, speed: 1 };
   }
 }
 
-function play(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
-  const desired = desiredClip(fighter);
-  const restartingAttack = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
-  runtime.lastMoveTick = fighter.moveTick;
-  if (runtime.currentClip === desired.name && !restartingAttack) return;
-  const clip = runtime.clips.get(desired.name) ?? runtime.clips.get("Idle_Loop");
+function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false): void {
+  if (runtime.currentClip === name && !restart) return;
+  const clip = runtime.clips.get(name) ?? runtime.clips.get("Idle_Loop");
   if (!clip) return;
   runtime.currentAction?.fadeOut(0.06);
   const action = runtime.mixer.clipAction(clip, runtime.model);
   action.reset();
   action.enabled = true;
-  action.setLoop(desired.loop ? THREE.LoopRepeat : THREE.LoopOnce, desired.loop ? Infinity : 1);
-  action.clampWhenFinished = !desired.loop;
-  // speed is expressed relative to roughly one-second authored actions; scale
-  // by clip duration so attacks fit the deterministic gameplay move window.
-  action.timeScale = desired.loop ? desired.speed : Math.max(0.25, clip.duration * desired.speed);
+  action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+  action.clampWhenFinished = !loop;
+  action.timeScale = loop ? speed : Math.max(0.25, clip.duration * speed);
   action.fadeIn(0.06).play();
-  runtime.currentClip = desired.name;
+  runtime.currentClip = name;
   runtime.currentAction = action;
+}
+
+function advance(runtime: QuaterniusRuntime, timeSeconds: number): void {
+  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
+  runtime.lastTime = timeSeconds;
+  runtime.mixer.update(delta);
+  runtime.model.updateMatrixWorld(true);
 }
 
 export function installQuaterniusModelSkin(visual: FighterVisual, primary: number): void {
@@ -249,13 +251,20 @@ export function installQuaterniusModelSkin(visual: FighterVisual, primary: numbe
 export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: number): void {
   const runtime = runtimes.get(fighter.visual.root);
   if (!runtime) return;
-  play(runtime, fighter);
-  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
-  runtime.lastTime = timeSeconds;
-  runtime.mixer.update(delta);
-  runtime.model.updateMatrixWorld(true);
+  const desired = desiredClip(fighter);
+  const restartingAttack = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
+  runtime.lastMoveTick = fighter.moveTick;
+  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack);
+  advance(runtime, timeSeconds);
   attackContactCorrection(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
+}
+
+export function updateQuaterniusModelPreview(visual: FighterVisual, timeSeconds: number): void {
+  const runtime = runtimes.get(visual.root);
+  if (!runtime) return;
+  playClip(runtime, "Idle_Loop", true, 0.8);
+  advance(runtime, timeSeconds);
 }
 
 export function disposeQuaterniusModelSkin(visual: FighterVisual): void {

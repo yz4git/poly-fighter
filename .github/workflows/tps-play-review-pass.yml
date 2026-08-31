@@ -24,6 +24,18 @@ jobs:
         with:
           node-version: 22.13.0
           cache: npm
+      - name: Protect nested audit template literals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-tps-play-review-pass.mjs')
+          source = path.read_text()
+          needle = 'import { readFile, writeFile } from "node:fs/promises";\n'
+          replacement = '''import { readFile, writeFile } from "node:fs/promises";\n\nconst outputDir = '${outputDir}';\nconst sessionId = '${sessionId}';\nconst gameLookup = '${gameLookup}';\nconst iphone = { toJSON: () => '${JSON.stringify(iphone)}' };\n'''
+          if needle not in source:
+              raise SystemExit('apply script import marker not found')
+          path.write_text(source.replace(needle, replacement, 1))
+          PY
       - name: Apply TPS review improvements
         run: node scripts/apply-tps-play-review-pass.mjs
       - name: Install dependencies
@@ -36,8 +48,8 @@ jobs:
         run: npm run lint
       - name: Commit reviewed TPS implementation
         run: |
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "No changes to commit"
+          if [ -z "$(git diff -- src/game/tps-game.ts app/page.tsx app/globals.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml)" ]; then
+            echo "No product changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"

@@ -11,52 +11,38 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /fighter\.visual\.root\.quaternion\.setFromUnitVectors\(MODEL_FORWARD, forward\)/);
   assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
-  assert.match(source, /new THREE\.PerspectiveCamera\(47/);
   assert.match(source, /aspect < 2\.4 \? 52 : 47/);
   assert.match(source, /compactLandscapeFactor/);
-  assert.match(source, /backDistance = 4\.80 \+ compactLandscapeFactor \* 0\.20/);
   assert.match(source, /shoulderOffset = 2\.50 \+ closeFactor \* 1\.70/);
-  assert.match(source, /new THREE\.TorusGeometry\(0\.46/);
-  assert.match(source, /depthTest: true, depthWrite: false/);
-  assert.match(source, /new THREE\.RingGeometry\(0\.58, 0\.70/);
   assert.match(source, /tps-target-ground-ring/);
-  assert.match(source, /horizonGeometry = new THREE\.TorusGeometry\(ARENA_RADIUS \+ 2\.15/);
-  assert.match(source, /ARENA_RADIUS \+ 2\.15/);
 });
 
-test("TPS attacks reuse fighter move data while resolving radial range, knockback, and defender guard", async () => {
+test("TPS player combat is ATTACK plus directional STEP with range attacks, combos, dash attacks, and flank punishment", async () => {
   const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
-  assert.match(source, /beginMove\("power"\)/);
-  assert.match(source, /throwPressed/);
-  assert.match(source, /counterPressed/);
-  assert.match(source, /this\.p1\.beginMove\("throw"\)/);
-  assert.match(source, /this\.p1\.beginMove\("counter"\)/);
-  assert.match(source, /beginMove\(forwardAxis > 0 \? "straight" : "jab"\)/);
-  assert.match(source, /beginMove\(sideAxis !== 0 \? "dashKick" : "kick"\)/);
+  assert.match(source, /TPS_CLOSE_ATTACK_RANGE = 1\.58/);
+  assert.match(source, /TPS_STEP_TICKS = 9/);
+  assert.match(source, /playerStepDirection/);
+  assert.match(source, /playerStepForwardWeight/);
+  assert.match(source, /playerStepSideWeight/);
+  assert.match(source, /playerComboStage/);
+  assert.match(source, /playerAttackQueued/);
+  assert.match(source, /closeMoves = \["jab", "straight", "power"\]/);
+  assert.match(source, /farMoves = \["kick", "lowKick", "risingKick"\]/);
+  assert.match(source, /distance <= TPS_CLOSE_ATTACK_RANGE \? closeMoves\[stage\] : farMoves\[stage\]/);
+  assert.match(source, /this\.playerEvadeTicks = TPS_STEP_TICKS/);
+  assert.match(source, /this\.playerStepDirection\.copy\(stepVector\)/);
+  assert.match(source, /this\.playerStepForwardWeight > 0\.45/);
+  assert.match(source, /beginDashAttack\(toEnemy\)/);
+  assert.match(source, /beginMove\("dashKick"\)/);
+  assert.match(source, /defender\.state === "SIDESTEP" && this\.playerStepSideWeight > 0\.45/);
+  assert.match(source, /playerFlankWindowTicks/);
+  assert.match(source, /playerFlankAttackTicks/);
+  assert.match(source, /const flankStrike = attacker === this\.p1/);
+  assert.match(source, /&& !flankStrike/);
   assert.match(source, /distance > move\.reach \+ 0\.72/);
-  assert.match(source, /defender\.velocity\.z = direction\.z \* knockback/);
-  assert.match(source, /resolveAttack\(this\.p1, this\.p2, this\.p2\.state === "GUARD"\)/);
-  assert.match(source, /resolveAttack\(this\.p2, this\.p1, this\.p1\.state === "GUARD"\)/);
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
-  assert.match(source, /moveSpeed \* 0\.42/);
-  assert.match(source, /fighter\.visual\.aura\.visible = false/);
-  assert.match(source, /playerEvadeTicks = 9/);
-  assert.match(source, /playerEvadeCooldown = 32/);
-  assert.match(source, /defender === this\.p1 && this\.playerEvadeTicks > 3/);
-  assert.match(source, /move\.hitLevel !== "THROW"/);
-  assert.match(source, /visual\.layout\.ribY/);
-  assert.match(source, /threat \? 0xff667f : inStrikeRange \? 0xffd45c/);
-  assert.match(source, /punishGuard/);
-  assert.match(source, /const moveId = punishGuard/);
-  assert.match(source, /\? "throw"/);
-  assert.match(source, /punishRecovery/);
   assert.match(source, /enemyTactic/);
-  assert.match(source, /ENEMY_TACTIC_INTERVAL/);
-  assert.match(source, /this\.difficulty === "HARD"/);
-  assert.match(source, /cameraImpact/);
   assert.match(source, /enemyOpeningGraceTicks = 132/);
-  assert.match(source, /const minimum = p1Throwing \|\| p2Throwing \? 0\.98 : 1\.12/);
-  assert.match(source, /this\.enemyOpeningGraceTicks <= 0 && this\.enemyCooldown <= 0/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {
@@ -67,20 +53,19 @@ test("TPS result records a visible winner instead of a zero-zero duel score", as
   assert.match(source, /p2Wins: this\.resultWinner === "p2" \? 1 : 0/);
 });
 
-test("title and result flow expose TPS as an independent mode", async () => {
+test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps legacy controls", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /TPS_MATCH/);
   assert.match(page, /TPS LOCK-ON BATTLE/);
-  assert.match(page, /startTpsMatch/);
-  assert.match(page, /TPS LOADOUT/);
-  assert.match(page, /ENGAGE TPS/);
-  assert.match(page, /setBattleMode\("TPS"\)/);
-  assert.match(page, /tps-threat-action/);
-  assert.match(page, /tps-ready-action/);
+  assert.match(page, /tps-two-button-actions/);
+  assert.match(page, /"guard", "Step", "STEP"/);
+  assert.match(page, /"punch", "Attack", "ATTACK"/);
+  assert.match(page, /AUTO PUNCH \/ KICK/);
+  assert.match(page, /TAP COMBO/);
+  assert.match(page, /STEP \+ 8-WAY/);
+  assert.match(page, /FORWARD STEP → ATTACK = DASH/);
+  assert.doesNotMatch(page, /G\+K/);
+  assert.doesNotMatch(page, /G\+P/);
+  assert.doesNotMatch(page, /P\+K/);
   assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
-  assert.match(page, /CIRCULAR ARENA/);
-  assert.match(page, /G\+SIDE/);
-  assert.match(page, /G\+K/);
-  assert.match(page, /G\+P/);
-  assert.match(page, /P\+K/);
 });

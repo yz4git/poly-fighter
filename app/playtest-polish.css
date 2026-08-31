@@ -251,3 +251,59 @@
   .tps-badge { top: max(59px, calc(env(safe-area-inset-top) + 51px)); font-size: 8px; }
   .tps-input-hint { font-size: 8px; }
 }
+
+
+/* TPS two-button combat controls */
+.tps-two-button-actions {
+  gap: clamp(10px, 2vw, 16px);
+  align-items: center;
+}
+.tps-two-button-actions .touch-action {
+  position: relative;
+  inset: auto;
+  clip-path: polygon(8% 0, 92% 0, 100% 20%, 100% 80%, 92% 100%, 8% 100%, 0 80%, 0 20%);
+  border-radius: 18px;
+  letter-spacing: .075em;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 7px rgba(0,0,0,.65);
+}
+.tps-two-button-actions .tps-step-action {
+  width: clamp(76px, 11vw, 96px);
+  height: clamp(64px, 9vw, 78px);
+  color: #bdeeff;
+  background: linear-gradient(145deg, rgba(14, 61, 91, .88), rgba(6, 26, 47, .9));
+  border-color: rgba(126, 219, 255, .78);
+  font-size: clamp(12px, 1.65vw, 17px);
+}
+.tps-two-button-actions .tps-attack-action {
+  width: clamp(100px, 14vw, 122px);
+  height: clamp(74px, 10vw, 88px);
+  color: #fff7f8;
+  background: linear-gradient(145deg, rgba(202, 30, 62, .92), rgba(93, 10, 31, .94));
+  border-color: rgba(255, 132, 151, .92);
+  box-shadow: 0 8px 22px rgba(70, 0, 18, .28), inset 0 0 22px rgba(255, 119, 137, .09);
+  font-size: clamp(12px, 1.7vw, 18px);
+}
+.tps-two-button-actions .tps-attack-action:active,
+.tps-two-button-actions .tps-step-action:active {
+  transform: scale(.93);
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .tps-two-button-actions { gap: 9px; transform: translateY(-2px); }
+  .tps-two-button-actions .tps-step-action {
+    width: clamp(66px, 18vh, 78px);
+    height: clamp(54px, 15vh, 64px);
+    font-size: clamp(10px, 3.2vh, 13px);
+  }
+  .tps-two-button-actions .tps-attack-action {
+    width: clamp(82px, 22vh, 96px);
+    height: clamp(60px, 17vh, 72px);
+    font-size: clamp(10px, 3.3vh, 14px);
+  }
+}
+@media (orientation: landscape) and (max-height: 430px) {
+  .tps-two-button-actions .tps-step-action { width: 68px; height: 52px; }
+  .tps-two-button-actions .tps-attack-action { width: 84px; height: 60px; }
+}

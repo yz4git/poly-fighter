@@ -359,6 +359,143 @@ try {
   if (throwProbe.moveId !== 'throw' || !(throwProbe.p2Health < 100)) throw new Error(`TPS G+K throw failed: ${JSON.stringify(throwProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-throw.png`);
 
+  const comboProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    game.effects.update(2);
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); if (!['HIT', 'KNOCKDOWN', 'KO'].includes(game.p2.state)) game.p2.state = 'IDLE'; };
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.78);
+    game.p2.position.set(0, 0, -0.42);
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    const moves = [];
+    const tap = (owner) => { game.press('punch', owner); game.step(); game.release('punch', owner); };
+    tap('tps-combo-1');
+    if (game.p1.currentMove?.id) moves.push(game.p1.currentMove.id);
+    let queued2 = false;
+    let queued3 = false;
+    for (let index = 0; index < 150 && moves.length < 3; index += 1) {
+      const current = game.p1.currentMove?.id ?? null;
+      if (!queued2 && current === moves[0] && game.p1.moveTick >= 4) { tap('tps-combo-2'); queued2 = true; continue; }
+      if (queued2 && moves.length === 1 && current && current !== moves[0]) moves.push(current);
+      if (!queued3 && moves.length === 2 && current === moves[1] && game.p1.moveTick >= 4) { tap('tps-combo-3'); queued3 = true; continue; }
+      if (moves.length === 2 && current && current !== moves[1]) moves.push(current);
+      game.step();
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { moves, p2Health: game.p2.health, comboStage: game.playerComboStage };
+  `);
+  if (comboProbe.moves.join(',') !== 'jab,straight,power') throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-combo.png`);
+
+  const dashAttackProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 1.8);
+    game.p2.position.set(0, 0, -0.2);
+    game.playerEvadeTicks = 0;
+    game.playerEvadeCooldown = 0;
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.press('up', 'tps-dash-forward');
+    game.press('guard', 'tps-dash-step');
+    game.step();
+    game.step();
+    game.press('punch', 'tps-dash-attack');
+    game.step();
+    const moveId = game.p1.currentMove?.id ?? null;
+    game.release('punch', 'tps-dash-attack');
+    game.release('guard', 'tps-dash-step');
+    game.release('up', 'tps-dash-forward');
+    let steps = 3;
+    while (steps < 60 && game.p2.health === 100) { game.step(); steps += 1; }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { moveId, steps, p2Health: game.p2.health };
+  `);
+  if (dashAttackProbe.moveId !== 'dashKick' || !(dashAttackProbe.p2Health < 100)) throw new Error(`TPS forward STEP + ATTACK dash failed: ${JSON.stringify(dashAttackProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-dash-attack.png`);
+
+  const flankProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.78);
+    game.p2.position.set(0, 0, -0.42);
+    game.playerEvadeTicks = 0;
+    game.playerEvadeCooldown = 0;
+    game.playerFlankWindowTicks = 0;
+    game.playerFlankAttackTicks = 0;
+    game.p2.beginMove('straight');
+    game.updateEnemy = () => {
+      if (game.p2.state === 'ATTACK') game.p2.advanceAttack();
+      game.p2.updatePhysics(1 / 60);
+    };
+    game.press('right', 'tps-flank-side');
+    game.press('guard', 'tps-flank-step');
+    for (let index = 0; index < 12; index += 1) game.step();
+    game.release('guard', 'tps-flank-step');
+    game.release('right', 'tps-flank-side');
+    const healthAfterEvade = game.p1.health;
+    game.p2.currentMove = null;
+    game.p2.moveTick = 0;
+    game.p2.velocity.set(0, 0, 0);
+    game.p2.state = 'GUARD';
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); if (!['HIT', 'KNOCKDOWN', 'KO'].includes(game.p2.state)) game.p2.state = 'GUARD'; game.p2.updatePhysics(1 / 60); };
+    game.press('punch', 'tps-flank-attack');
+    game.step();
+    const moveId = game.p1.currentMove?.id ?? null;
+    game.release('punch', 'tps-flank-attack');
+    let steps = 1;
+    while (steps < 60 && game.p2.health === 100) { game.step(); steps += 1; }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { healthAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks };
+  `);
+  if (flankProbe.healthAfterEvade !== 100) throw new Error(`TPS lateral STEP failed to evade strike: ${JSON.stringify(flankProbe)}`);
+  if (!(flankProbe.p2Health < 100) || flankProbe.p2State === 'BLOCK_STUN') throw new Error(`TPS flank attack did not beat guard: ${JSON.stringify(flankProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-flank.png`);
+
   await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -379,7 +516,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

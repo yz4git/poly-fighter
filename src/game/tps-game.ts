@@ -27,6 +27,11 @@ const ARENA_RADIUS = 6.8;
 const FIXED_STEP = 1 / 60;
 const ROUND_TICKS = 99 * 60;
 const TPS_STRIKE_RANGE = 2.12;
+const TPS_CLOSE_ATTACK_RANGE = 1.58;
+const TPS_STEP_TICKS = 9;
+const TPS_STEP_COOLDOWN_TICKS = 14;
+const TPS_COMBO_GRACE_TICKS = 34;
+const TPS_FLANK_WINDOW_TICKS = 24;
 const ENEMY_TACTIC_INTERVAL = 72;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
@@ -176,9 +181,19 @@ export class TpsFightGame {
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
+  // `guard` remains the internal STEP input so the shared input layer and keyboard mapping stay compatible.
+  // The TPS UI exposes only ATTACK + STEP.
   private playerEvadeTicks = 0;
   private playerEvadeCooldown = 0;
   private playerEvadeSign = 0;
+  private readonly playerStepDirection = new THREE.Vector3();
+  private playerStepForwardWeight = 0;
+  private playerStepSideWeight = 0;
+  private playerComboStage = 0;
+  private playerComboGraceTicks = 0;
+  private playerAttackQueued = false;
+  private playerFlankWindowTicks = 0;
+  private playerFlankAttackTicks = 0;
   private simulationTicks = 0;
   private cameraImpact = 0;
   private enemyTactic: EnemyTactic = "ORBIT";
@@ -372,40 +387,102 @@ export class TpsFightGame {
 
   private updatePlayer(input: InputFrame): void {
     this.p1.setInput(input);
-    if (this.advanceLockedState(this.p1)) return;
+    const attackPressed = this.p1.justPressed("punch");
+    const stepPressed = this.p1.justPressed("guard");
+    const legacyKickPressed = this.p1.justPressed("kick");
+
+    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;
+    if (this.playerComboGraceTicks > 0) this.playerComboGraceTicks -= 1;
+    else if (this.p1.state !== "ATTACK") this.playerComboStage = 0;
+    if (this.playerFlankWindowTicks > 0) this.playerFlankWindowTicks -= 1;
+    if (this.playerFlankAttackTicks > 0) this.playerFlankAttackTicks -= 1;
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
     const forwardAxis = (input.up ? 1 : 0) - (input.down ? 1 : 0);
     const sideAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    const move = toEnemy.multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
-
+    const move = toEnemy.clone().multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
     const moveSpeed = this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
-    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;
-    const evadePressed = input.guard && sideAxis !== 0 && (
-      this.p1.justPressed("guard") || this.p1.justPressed("left") || this.p1.justPressed("right")
-    );
-    if (evadePressed && this.playerEvadeCooldown <= 0) {
-      this.playerEvadeTicks = 9;
-      this.playerEvadeCooldown = 32;
-      this.playerEvadeSign = sideAxis > 0 ? 1 : -1;
+
+    // Keep the old keyboard-only G+K throw reachable for regression/debugging,
+    // but it is deliberately absent from the TPS touch UI. The player-facing
+    // control scheme is ATTACK + STEP only.
+    const legacyThrowPressed = input.guard && input.kick && (stepPressed || legacyKickPressed);
+    if (legacyThrowPressed && this.p1.canAct()) {
+      this.playerEvadeTicks = 0;
+      this.playerAttackQueued = false;
+      this.playerComboStage = 0;
+      this.playerComboGraceTicks = 0;
+      this.p1.beginMove("throw");
+      this.p1.updatePhysics(FIXED_STEP);
+      return;
     }
+
+    // ATTACK taps during recovery are buffered. Once the current move finishes,
+    // the next context-sensitive strike starts immediately, giving repeated taps
+    // a reliable three-hit combo without requiring frame-perfect timing.
+    if (this.p1.state === "ATTACK") {
+      if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
+      this.p1.advanceAttack();
+      this.p1.updatePhysics(FIXED_STEP);
+      if (this.p1.state !== "ATTACK") {
+        if (this.playerAttackQueued && this.playerComboStage < 3 && this.p1.canAct()) {
+          this.playerAttackQueued = false;
+          this.beginContextAttack();
+        } else {
+          this.playerAttackQueued = false;
+          if (this.playerComboStage >= 3) {
+            this.playerComboStage = 0;
+            this.playerComboGraceTicks = 0;
+          }
+        }
+      }
+      return;
+    }
+
+    if (this.advanceLockedState(this.p1)) {
+      this.playerEvadeTicks = 0;
+      this.playerAttackQueued = false;
+      this.playerComboStage = 0;
+      this.playerComboGraceTicks = 0;
+      this.playerFlankAttackTicks = 0;
+      return;
+    }
+
+    if (stepPressed && this.playerEvadeCooldown <= 0) {
+      const stepVector = move.lengthSq() > 0.001
+        ? move.clone().normalize()
+        : toEnemy.clone().multiplyScalar(-1);
+      this.playerStepDirection.copy(stepVector);
+      this.playerStepForwardWeight = stepVector.dot(toEnemy);
+      this.playerStepSideWeight = Math.abs(stepVector.dot(right));
+      this.playerEvadeSign = sideAxis === 0 ? 0 : sideAxis > 0 ? 1 : -1;
+      this.playerEvadeTicks = TPS_STEP_TICKS;
+      this.playerEvadeCooldown = TPS_STEP_COOLDOWN_TICKS;
+      if (this.playerStepSideWeight > 0.45) {
+        // The window lasts beyond the movement itself so a successful sidestep
+        // naturally flows into a flank punish rather than demanding a same-frame tap.
+        this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
+      }
+    }
+
     if (this.playerEvadeTicks > 0) {
+      if (attackPressed && this.playerStepForwardWeight > 0.45) {
+        this.playerEvadeTicks = 0;
+        this.playerFlankWindowTicks = 0;
+        this.beginDashAttack(toEnemy);
+        this.p1.updatePhysics(FIXED_STEP);
+        return;
+      }
+      const stepMultiplier = this.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;
       this.playerEvadeTicks -= 1;
-      this.p1.position.addScaledVector(right, FIXED_STEP * moveSpeed * 2.35 * this.playerEvadeSign);
+      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);
       this.p1.state = "SIDESTEP";
       this.p1.updatePhysics(FIXED_STEP);
       return;
     }
-    if (input.guard) {
-      // TPS defense should not root the player in place. Guard-step movement is
-      // deliberately slow enough that offense can still corner or chase it.
-      if (move.lengthSq() > 0.001) {
-        move.normalize();
-        this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * 0.42);
-      }
-      this.p1.state = "GUARD";
-    } else if (move.lengthSq() > 0.001) {
+
+    if (move.lengthSq() > 0.001) {
       move.normalize();
       this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed);
       this.p1.state = "WALK";
@@ -413,18 +490,38 @@ export class TpsFightGame {
       this.p1.state = "IDLE";
     }
 
-    const punchPressed = this.p1.justPressed("punch");
-    const kickPressed = this.p1.justPressed("kick");
-    const guardPressed = this.p1.justPressed("guard");
-    const throwPressed = input.guard && input.kick && (guardPressed || kickPressed);
-    const counterPressed = input.guard && input.punch && (guardPressed || punchPressed);
-    if (throwPressed) this.p1.beginMove("throw");
-    else if (counterPressed) this.p1.beginMove("counter");
-    else if (input.punch && input.kick && (punchPressed || kickPressed)) this.p1.beginMove("power");
-    else if (punchPressed) this.p1.beginMove(forwardAxis > 0 ? "straight" : "jab");
-    else if (kickPressed) this.p1.beginMove(sideAxis !== 0 ? "dashKick" : "kick");
-
+    if (attackPressed) this.beginContextAttack();
     this.p1.updatePhysics(FIXED_STEP);
+  }
+
+  private beginContextAttack(): boolean {
+    if (!this.p1.canAct()) return false;
+    const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+    const stage = Math.min(2, this.playerComboStage);
+    const closeMoves = ["jab", "straight", "power"] as const;
+    const farMoves = ["kick", "lowKick", "risingKick"] as const;
+    const moveId = distance <= TPS_CLOSE_ATTACK_RANGE ? closeMoves[stage] : farMoves[stage];
+    const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
+    if (!this.p1.beginMove(moveId)) return false;
+    this.playerComboStage = stage + 1;
+    this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
+    if (flankStrike) {
+      this.playerFlankAttackTicks = 28;
+      this.playerFlankWindowTicks = 0;
+    }
+    return true;
+  }
+
+  private beginDashAttack(toEnemy: THREE.Vector3): boolean {
+    this.playerAttackQueued = false;
+    this.playerComboStage = 0;
+    this.playerComboGraceTicks = 0;
+    this.playerFlankAttackTicks = 0;
+    if (!this.p1.beginMove("dashKick")) return false;
+    const burstSpeed = this.p1.definition.archetype === "SPEED" ? 7.4 : 6.8;
+    this.p1.velocity.x = toEnemy.x * burstSpeed;
+    this.p1.velocity.z = toEnemy.z * burstSpeed;
+    return true;
   }
 
   private updateEnemy(): void {
@@ -519,15 +616,15 @@ export class TpsFightGame {
   private resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return;
-    // The opening frames of a guard-side quickstep evade strikes, while throws
-    // still catch the movement. This gives TPS lateral movement a real timing
-    // purpose without changing the shared deterministic move definitions.
-    if (defender === this.p1 && this.playerEvadeTicks > 3 && move.hitLevel !== "THROW") return;
+    // A lateral STEP is the dedicated strike-avoidance action. Back/forward STEP
+    // rely on displacement, while throws can still catch lateral movement.
+    if (defender === this.p1 && defender.state === "SIDESTEP" && this.playerStepSideWeight > 0.45 && move.hitLevel !== "THROW") return;
     const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
     if (distance > move.reach + 0.72) return;
 
     attacker.hitTargets.add(defender.id);
-    const blocked = defenderGuarding && move.hitLevel !== "THROW";
+    const flankStrike = attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";
+    const blocked = defenderGuarding && move.hitLevel !== "THROW" && !flankStrike;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
     impactPosition.y = move.hitLevel === "LOW" ? 0.55 : 1.35;
@@ -677,6 +774,14 @@ export class TpsFightGame {
     this.playerEvadeTicks = 0;
     this.playerEvadeCooldown = 0;
     this.playerEvadeSign = 0;
+    this.playerStepDirection.set(0, 0, 0);
+    this.playerStepForwardWeight = 0;
+    this.playerStepSideWeight = 0;
+    this.playerComboStage = 0;
+    this.playerComboGraceTicks = 0;
+    this.playerAttackQueued = false;
+    this.playerFlankWindowTicks = 0;
+    this.playerFlankAttackTicks = 0;
     this.simulationTicks = 0;
     this.cameraImpact = 0;
     this.timerTicks = ROUND_TICKS;
@@ -710,13 +815,21 @@ export class TpsFightGame {
       p2Name: this.p2.definition.name,
       message: this.finished
         ? "BATTLE COMPLETE"
-        : this.enemyOpeningGraceTicks > 0
-          ? "READ THE TARGET"
-          : this.p2.state === "ATTACK"
-          ? "INCOMING"
-          : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
-            ? "STRIKE RANGE"
-            : "TARGET LOCKED",
+        : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"
+          ? "DASH ATTACK"
+          : this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45
+            ? "EVADE STEP"
+            : this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45
+              ? "FLANK OPEN"
+              : this.p1.state === "ATTACK" && this.playerComboStage > 1
+                ? `COMBO ${this.playerComboStage}`
+                : this.enemyOpeningGraceTicks > 0
+                  ? "READ THE TARGET"
+                  : this.p2.state === "ATTACK"
+                    ? "INCOMING"
+                    : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
+                      ? "STRIKE RANGE"
+                      : "TARGET LOCKED",
       p1State: this.p1.state,
       p2State: this.p2.state,
     };

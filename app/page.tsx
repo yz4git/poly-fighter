@@ -429,13 +429,22 @@ export default function Home() {
           <button type="button" className={`pause-button ${battleMode === "TPS" ? "tps-pause-button" : ""}`} aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
-            <div className="action-buttons">
-              {pressableAction(gameRef, "guard", "Guard", "G", "guard " + (tpsIncoming ? "tps-threat-action" : ""))}
-              {pressableAction(gameRef, "punch", "Punch", "P", "punch " + (tpsStrikeRange ? "tps-ready-action" : ""))}
-              {pressableAction(gameRef, "kick", "Kick", "K", "kick " + (tpsStrikeRange ? "tps-ready-action" : ""))}
+            <div className={`action-buttons ${battleMode === "TPS" ? "tps-two-button-actions" : ""}`}>
+              {battleMode === "TPS" ? (
+                <>
+                  {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : ""))}
+                  {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsStrikeRange ? "tps-ready-action" : ""))}
+                </>
+              ) : (
+                <>
+                  {pressableAction(gameRef, "guard", "Guard", "G", "guard")}
+                  {pressableAction(gameRef, "punch", "Punch", "P", "punch")}
+                  {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
+                </>
+              )}
             </div>
           </section>
-          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>G+SIDE</b> QUICKSTEP <span>•</span> <b>G+K</b> THROW <span>•</span> <b>G+P</b> COUNTER <span>•</span> <b>P+K</b> POWER</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
+          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>STEP + 8-WAY</b> EVADE / SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
         </>
       )}
 

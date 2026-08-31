@@ -48,12 +48,13 @@ jobs:
         run: npm run lint
       - name: Commit reviewed TPS implementation
         run: |
-          if [ -z "$(git diff -- src/game/tps-game.ts app/page.tsx app/globals.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml)" ]; then
+          git checkout -- .github/workflows/tps-visual-audit.yml
+          if [ -z "$(git diff -- src/game/tps-game.ts app/page.tsx app/globals.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs)" ]; then
             echo "No product changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/game/tps-game.ts app/page.tsx app/globals.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml
+          git add src/game/tps-game.ts app/page.tsx app/globals.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
           git commit -m "Improve TPS lock-on battle from play review"
           git push origin HEAD:main

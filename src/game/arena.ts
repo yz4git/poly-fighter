@@ -153,6 +153,7 @@ export class Arena {
         new THREE.Vector3(tower.x, tower.h + 0.22, tower.z),
       ).scale.y = 0.7;
     }
+
     const gate = new THREE.Group();
     gate.name = "central-portal";
     const pillarGeometry = new THREE.BoxGeometry(0.42, 4.8, 0.42);
@@ -162,18 +163,62 @@ export class Arena {
     addMesh(gate, pillarGeometry, pale, "portal-pillar-left", new THREE.Vector3(-2.25, 2.05, -5.2));
     addMesh(gate, pillarGeometry, pale, "portal-pillar-right", new THREE.Vector3(2.25, 2.05, -5.2));
     addMesh(gate, beamGeometry, red, "portal-beam", new THREE.Vector3(0, 4.3, -5.2));
+
+    // The original portal ring was rotated 90 degrees around Y, so the match
+    // camera saw it almost edge-on.  Keep the rings in the XY plane, facing the
+    // camera, and layer a dim core + cyan outer halo for a strong focal point.
+    const portalCoreGeometry = new THREE.CircleGeometry(1.16, 6);
+    const portalCoreMaterial = new THREE.MeshBasicMaterial({
+      color: 0x07101d,
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+    });
     const portalGeometry = new THREE.RingGeometry(1.2, 1.34, 6);
-    const portalMaterial = new THREE.MeshBasicMaterial({ color: 0xff405d, transparent: true, opacity: 0.78 });
+    const portalMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff405d,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    });
+    const outerPortalGeometry = new THREE.RingGeometry(1.54, 1.62, 6);
+    const outerPortalMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5ce8ff,
+      transparent: true,
+      opacity: 0.50,
+      depthWrite: false,
+    });
+    this.disposables.add(portalCoreGeometry);
+    this.disposables.add(portalCoreMaterial);
     this.disposables.add(portalGeometry);
     this.disposables.add(portalMaterial);
+    this.disposables.add(outerPortalGeometry);
+    this.disposables.add(outerPortalMaterial);
+
+    addMesh(
+      gate,
+      portalCoreGeometry,
+      portalCoreMaterial,
+      "portal-core",
+      new THREE.Vector3(0, 2.55, -5.08),
+    );
     const portal = addMesh(
       gate,
       portalGeometry,
       portalMaterial,
       "portal-ring",
-      new THREE.Vector3(0, 2.55, -5.0),
+      new THREE.Vector3(0, 2.55, -5.02),
     );
-    portal.rotation.y = Math.PI / 2;
+    portal.rotation.z = Math.PI / 6;
+    const outerPortal = addMesh(
+      gate,
+      outerPortalGeometry,
+      outerPortalMaterial,
+      "portal-outer-halo",
+      new THREE.Vector3(0, 2.55, -5.05),
+    );
+    outerPortal.rotation.z = Math.PI / 6;
+
     this.group.add(architecture, gate);
   }
 

@@ -1,0 +1,162 @@
+/*
+ * Visual/playability polish from the 2026-08-31 real-WebGL playtest.
+ * Keep these overrides separate from globals.css so the base Sites styling
+ * remains easy to compare against the iPhone-landscape tuning.
+ */
+
+.fight-hud {
+  isolation: isolate;
+}
+
+.hud-name strong {
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-readout {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .26), inset 0 0 22px rgba(72, 184, 255, .04);
+}
+
+.health-track {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+}
+
+.virtual-pad,
+.action-buttons .touch-action {
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .fight-hud {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(24px, calc(env(safe-area-inset-left) + 10px));
+    right: max(24px, calc(env(safe-area-inset-right) + 10px));
+    grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr);
+    gap: clamp(8px, 1.5vw, 14px);
+  }
+
+  .hud-name {
+    min-height: 19px;
+    margin-bottom: 3px;
+  }
+
+  .hud-name span {
+    display: none;
+  }
+
+  .hud-name strong {
+    max-width: 100%;
+    font-size: clamp(15px, 4.4vh, 20px);
+    line-height: 1;
+    letter-spacing: .045em;
+  }
+
+  .hud-player:first-child .hud-name {
+    justify-content: flex-start;
+  }
+
+  .right-player .hud-name {
+    justify-content: flex-end;
+  }
+
+  .health-track {
+    height: 11px;
+  }
+
+  .win-pips {
+    margin-top: 4px;
+  }
+
+  .win-pips i {
+    width: 15px;
+    height: 4px;
+  }
+
+  .round-readout {
+    padding: 4px 6px 6px;
+  }
+
+  .round-readout span {
+    font-size: 6px;
+  }
+
+  .round-readout b {
+    font-size: 25px;
+  }
+
+  .round-readout small {
+    min-height: 7px;
+    font-size: 6px;
+  }
+
+  /* The tiny production tagline was competing with the actual fight HUD. */
+  .match-badge {
+    display: none;
+  }
+
+  .touch-controls {
+    bottom: max(13px, calc(env(safe-area-inset-bottom) + 7px));
+    left: max(28px, calc(env(safe-area-inset-left) + 14px));
+    right: max(28px, calc(env(safe-area-inset-right) + 14px));
+  }
+
+  .virtual-pad {
+    width: clamp(112px, 34vh, 136px);
+    opacity: .91;
+    box-shadow: 0 7px 20px rgba(0, 0, 0, .25), inset 0 0 0 5px rgba(6, 19, 37, .40);
+  }
+
+  .virtual-pad-knob {
+    width: clamp(40px, 12vh, 48px);
+  }
+
+  .action-buttons {
+    gap: clamp(8px, 2vw, 12px);
+    transform: translateY(-2px);
+  }
+
+  .action-buttons .touch-action {
+    width: clamp(52px, 15vh, 62px);
+    height: clamp(52px, 15vh, 62px);
+    font-size: clamp(19px, 6vh, 25px);
+  }
+
+  .pause-button {
+    top: max(9px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: 30px;
+    height: 30px;
+    opacity: .82;
+  }
+
+  .scanlines {
+    opacity: .09;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .fight-hud {
+    grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .hud-name strong {
+    font-size: 15px;
+  }
+
+  .round-readout b {
+    font-size: 22px;
+  }
+
+  .virtual-pad {
+    width: clamp(106px, 31vh, 122px);
+  }
+
+  .action-buttons .touch-action {
+    width: clamp(48px, 14vh, 56px);
+    height: clamp(48px, 14vh, 56px);
+  }
+}

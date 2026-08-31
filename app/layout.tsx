@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./playtest-polish.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

@@ -6,11 +6,11 @@ import { CombatSystem } from "./combat";
 import { EffectsManager } from "./effects";
 import {
   CpuController,
-  FighterAnimationController,
   FighterController,
   FighterRuntime,
   type CpuDifficulty,
 } from "./fighter";
+import { PresentationAnimationController } from "./presentation-animation";
 import { InputSystem } from "./input";
 import { FightHUD } from "./hud";
 import { RoundManager } from "./round";
@@ -36,7 +36,7 @@ export class PolyFightGame {
   readonly round = new RoundManager();
   readonly combat = new CombatSystem();
   readonly controller = new FighterController();
-  readonly animation = new FighterAnimationController();
+  readonly animation = new PresentationAnimationController();
   readonly cpu: CpuController;
   readonly p1: FighterRuntime;
   readonly p2: FighterRuntime;

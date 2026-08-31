@@ -350,62 +350,65 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
 }
 
 
-// Neutral ready stances must keep an elbow bend. The deterministic fist targets
-// can sit near full arm extension (especially on KAIRO), which pulls the UBC
-// shoulder skin inward even after clavicle distribution. Clamp only neutral/
-// walk/crouch targets; guard and active attacks keep their authored contact reach.
-const MAX_IMPORTED_NEUTRAL_REACH = 0.76;
+// Imported UBC neutral/guard poses use UBC shoulder space, not the hidden
+// procedural fighter's fist end-effectors. Reusing those legacy targets pulled
+// the imported arms through the chest. Build a compact fighting guard from the
+// actual imported shoulder position and keep both hands explicitly in front of
+// the torso. Active attacks still use deterministic gameplay contact targets.
+const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.55;
+const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.85;
 
-function clampImportedArmTarget(
+function importedReadyArmPose(
+  fighter: FighterRuntime,
+  suffix: "l" | "r",
   upperArm: THREE.Object3D,
-  forearm: THREE.Object3D,
-  hand: THREE.Object3D,
-  target: THREE.Vector3,
-  reachFraction: number,
-): THREE.Vector3 {
+  guard: boolean,
+): { target: THREE.Vector3; pole: THREE.Vector3 } {
   upperArm.updateWorldMatrix(true, true);
-  const rootPos = upperArm.getWorldPosition(new THREE.Vector3());
-  const midPos = forearm.getWorldPosition(new THREE.Vector3());
-  const endPos = hand.getWorldPosition(new THREE.Vector3());
-  const armLength = rootPos.distanceTo(midPos) + midPos.distanceTo(endPos);
-  const delta = target.clone().sub(rootPos);
-  const maxReach = armLength * THREE.MathUtils.clamp(reachFraction, 0.55, 0.98);
-  if (delta.length() > maxReach) delta.setLength(maxReach);
-  return rootPos.add(delta);
+  const shoulderWorld = upperArm.getWorldPosition(new THREE.Vector3());
+  const shoulderLocal = fighter.visual.root.worldToLocal(shoulderWorld.clone());
+  const side = suffix === "l" ? 1 : -1;
+  const layout = fighter.visual.layout;
+
+  const targetLocal = shoulderLocal.clone();
+  // A little inward gives a fighting stance, but never enough to cross the torso.
+  targetLocal.x -= side * layout.shoulderWidth * (guard ? 0.10 : 0.14);
+  targetLocal.y += guard ? 0.055 : -0.035;
+  targetLocal.z += layout.chestDepth * (guard ? IMPORTED_GUARD_FORWARD_CLEARANCE : IMPORTED_NEUTRAL_FORWARD_CLEARANCE);
+
+  // Keep the elbow outside the rib cage and slightly behind the fist.
+  const poleLocal = shoulderLocal.clone();
+  poleLocal.x += side * layout.shoulderWidth * 0.72;
+  poleLocal.y += guard ? 0.015 : -0.075;
+  poleLocal.z += layout.chestDepth * (guard ? 1.25 : 1.05);
+
+  return {
+    target: fighter.visual.root.localToWorld(targetLocal),
+    pole: fighter.visual.root.localToWorld(poleLocal),
+  };
 }
 
 function neutralPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
   if (fighter.state !== "IDLE" && fighter.state !== "WALK" && fighter.state !== "CROUCH") return;
-  const chains = [
-    { suffix: "l" as const, contact: "LEFT_FIST" as const, poleSide: 1 },
-    { suffix: "r" as const, contact: "RIGHT_FIST" as const, poleSide: -1 },
-  ];
-  for (const chain of chains) {
-    const root = runtime.bones.get(`upperarm_${chain.suffix}`);
-    const mid = runtime.bones.get(`lowerarm_${chain.suffix}`);
-    const end = runtime.bones.get(`hand_${chain.suffix}`);
+  for (const suffix of ["l", "r"] as const) {
+    const root = runtime.bones.get(`upperarm_${suffix}`);
+    const mid = runtime.bones.get(`lowerarm_${suffix}`);
+    const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
-    const rawTarget = getVisualContactPoint(fighter.visual, chain.contact);
-    const target = clampImportedArmTarget(root, mid, end, rawTarget, MAX_IMPORTED_NEUTRAL_REACH);
-    const pole = fighter.visual.root.localToWorld(new THREE.Vector3(chain.poleSide * 0.60, 0.72, 0.30));
-    solveImportedArm(runtime, chain.suffix, root, mid, end, target, pole, 0.28);
+    const pose = importedReadyArmPose(fighter, suffix, root, false);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.18);
   }
 }
 
 function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
   if (fighter.state !== "GUARD") return;
-  const chains = [
-    { suffix: "l" as const, contact: "LEFT_FIST" as const, poleSide: 1 },
-    { suffix: "r" as const, contact: "RIGHT_FIST" as const, poleSide: -1 },
-  ];
-  for (const chain of chains) {
-    const root = runtime.bones.get(`upperarm_${chain.suffix}`);
-    const mid = runtime.bones.get(`lowerarm_${chain.suffix}`);
-    const end = runtime.bones.get(`hand_${chain.suffix}`);
+  for (const suffix of ["l", "r"] as const) {
+    const root = runtime.bones.get(`upperarm_${suffix}`);
+    const mid = runtime.bones.get(`lowerarm_${suffix}`);
+    const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
-    const target = getVisualContactPoint(fighter.visual, chain.contact);
-    const pole = fighter.visual.root.localToWorld(new THREE.Vector3(chain.poleSide * 0.66, 0.82, 0.34));
-    solveImportedArm(runtime, chain.suffix, root, mid, end, target, pole, 0.36);
+    const pose = importedReadyArmPose(fighter, suffix, root, true);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.24);
   }
 }
 

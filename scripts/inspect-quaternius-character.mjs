@@ -48,6 +48,13 @@ function summarize(file, gltf) {
   };
 }
 
+function modelLabel(file) {
+  const lower = file.toLowerCase();
+  if (lower.includes("female")) return "Quaternius Universal Base Characters — Superhero Female FullBody";
+  if (lower.includes("male")) return "Quaternius Universal Base Characters — Superhero Male FullBody";
+  return `Quaternius Universal Base Characters — ${file}`;
+}
+
 const [modelPath, motionPath, outputPath] = process.argv.slice(2);
 if (!modelPath || !motionPath || !outputPath) {
   throw new Error("usage: node inspect-quaternius-character.mjs <model.glb> <motion.glb> <report.json>");
@@ -63,7 +70,7 @@ const coverage = motion.animationTargetNames.length > 0 ? shared.length / motion
 
 const report = {
   source: {
-    model: "Quaternius Universal Base Characters — Superhero Male FullBody",
+    model: modelLabel(model.file),
     animations: "Quaternius Universal Animation Library",
     license: "CC0-1.0",
   },
@@ -80,4 +87,4 @@ const report = {
 };
 
 await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
-console.log(JSON.stringify(report.compatibility, null, 2));
+console.log(JSON.stringify({ model: report.source.model, ...report.compatibility }, null, 2));

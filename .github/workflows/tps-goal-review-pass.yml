@@ -1,0 +1,51 @@
+name: TPS visual gameplay review pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/apply-tps-goal-review-pass.mjs
+      - .github/workflows/tps-goal-review-pass.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tps-goal-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review-pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply TPS review improvements
+        run: node scripts/apply-tps-goal-review-pass.mjs
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: PWA startup regressions
+        run: npm run test:pwa
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Publish validated TPS review pass
+        run: |
+          if [ -z "$(git status --porcelain src/game/tps-game.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs docs/TPS_PLAYTEST.md)" ]; then
+            echo "TPS review pass already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs docs/TPS_PLAYTEST.md
+          git commit -m "Improve TPS playability from visual review"
+          git push origin HEAD:main

@@ -172,9 +172,13 @@ prototype.updateVisual = function updateVisual(
   const game = extended(this as unknown as TpsFightGame);
   if (fighter !== game.p2) return;
 
-  // The core animation still supplies the pose. Replace only its final root
-  // yaw so the enemy visibly turns toward a lateral STEP over several ticks.
+  // The core animation still supplies the pose. Replace only its final root yaw
+  // so the enemy visibly turns toward a lateral STEP over several ticks. A new
+  // round/rematch is the one exception: it always starts correctly squared up.
   const forward = enemyVisualForward(game);
+  if (game.simulationTicks === 0) {
+    forward.copy(horizontalDirection(game.p2.position, game.p1.position));
+  }
   fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);
   fighter.visual.root.updateMatrixWorld(true);
 };

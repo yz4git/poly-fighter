@@ -89,16 +89,18 @@ async function readPadState(sessionId) {
   `);
 }
 
-function pointerActions(x, y, { down = false, up = false, duration = 0 } = {}) {
-  const actions = [{ type: "pointerMove", duration, x: Math.round(x), y: Math.round(y), origin: "viewport" }];
-  if (down) actions.push({ type: "pointerDown", button: 0 });
-  if (up) actions.push({ type: "pointerUp", button: 0 });
+function heldDragActions(cx, cy, tx, ty) {
   return {
     actions: [{
       type: "pointer",
       id: "touch-safety-probe",
       parameters: { pointerType: "mouse" },
-      actions,
+      actions: [
+        { type: "pointerMove", duration: 0, x: Math.round(cx), y: Math.round(cy), origin: "viewport" },
+        { type: "pointerDown", button: 0 },
+        { type: "pointerMove", duration: 140, x: Math.round(tx), y: Math.round(ty), origin: "viewport" },
+        { type: "pause", duration: 80 },
+      ],
     }],
   };
 }
@@ -145,11 +147,13 @@ try {
   const cy = y + height * 0.5;
 
   // Reproduce the failure mode: hold a direction, then lose browser focus before
-  // the control receives its normal pointerup. The safety layer must synthesize
-  // the terminal cancel and clear both React tracker state and game input owners.
-  await command(`/session/${sessionId}/actions`, "POST", pointerActions(cx, cy, { down: true }));
-  await command(`/session/${sessionId}/actions`, "POST", pointerActions(cx + width * 0.34, cy, { duration: 80 }));
-  await delay(80);
+  // the control receives its normal pointerup. Keep pointerDown + drag in one W3C
+  // action sequence so Chrome preserves the pressed button throughout the move.
+  await command(
+    `/session/${sessionId}/actions`,
+    "POST",
+    heldDragActions(cx, cy, cx + width * 0.34, cy),
+  );
   const heldRight = await readPadState(sessionId);
   if (heldRight?.direction !== "RIGHT" || !heldRight?.frame?.right) {
     throw new Error(`Virtual pad did not enter RIGHT before interruption: ${JSON.stringify(heldRight)}`);
@@ -167,16 +171,20 @@ try {
   await command(`/session/${sessionId}/actions`, "DELETE");
 
   // A stale VirtualPadTracker pointer used to make the next touch a no-op. Prove
-  // a fresh gesture is accepted immediately after forced recovery, then verify
-  // the normal release path also returns to neutral.
-  await command(`/session/${sessionId}/actions`, "POST", pointerActions(cx, cy, { down: true }));
-  await command(`/session/${sessionId}/actions`, "POST", pointerActions(cx - width * 0.34, cy, { duration: 80 }));
-  await delay(80);
+  // a fresh gesture is accepted immediately after forced recovery.
+  await command(
+    `/session/${sessionId}/actions`,
+    "POST",
+    heldDragActions(cx, cy, cx - width * 0.34, cy),
+  );
   const heldLeft = await readPadState(sessionId);
   if (heldLeft?.direction !== "LEFT" || !heldLeft?.frame?.left) {
     throw new Error(`Virtual pad did not accept a fresh LEFT gesture after recovery: ${JSON.stringify(heldLeft)}`);
   }
-  await command(`/session/${sessionId}/actions`, "POST", pointerActions(cx - width * 0.34, cy, { up: true }));
+
+  // Releasing the WebDriver input source emits the normal pointerup path. It must
+  // leave both the knob state and all directional game inputs neutral.
+  await command(`/session/${sessionId}/actions`, "DELETE");
   await delay(80);
   const afterNormalRelease = await readPadState(sessionId);
   const finalFrame = afterNormalRelease?.frame ?? {};

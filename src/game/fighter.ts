@@ -12,6 +12,7 @@ import {
   type FootPlantMode,
 } from "./visual";
 import { attackHitboxCenter, fighterBasis, fighterRootQuaternion, orientBoneForward, solveTwoBoneIK } from "./rig";
+import { motionClipDuration, quaterniusMotionDelta, retargetQuaterniusPoint, sampleQuaterniusMotion } from "./quaternius-motion";
 import type {
   FighterDefinition,
   FighterState,
@@ -504,12 +505,18 @@ export class FighterAnimationController {
 
     if (state === "WALK") {
       const stride = Math.sin(timeSeconds * 12) * 0.24;
+      const walkDuration = motionClipDuration("Walk_Loop");
+      const walkPhase = (timeSeconds % walkDuration) / walkDuration;
+      const walkSample = sampleQuaterniusMotion("Walk_Loop", walkPhase, true);
+      const walkChest = quaterniusMotionDelta("Walk_Loop", walkPhase, "chest", true);
       visual.hips.rotation.y = -stride * 0.10;
-      visual.hips.position.x = Math.sin(timeSeconds * 6) * 0.008;
+      visual.hips.position.x = Math.sin(timeSeconds * 6) * 0.008 + walkSample.hipsDelta[0] * 0.08;
+      visual.hips.position.y += walkSample.hipsDelta[1] * 0.16;
       visual.leftArm.root.rotation.z = -stride * 0.7;
       visual.rightArm.root.rotation.z = stride * 0.7;
-      visual.rig.bones.spineLower.rotation.y = -stride * 0.12;
-      visual.rig.bones.spineUpper.rotation.y = stride * 0.16;
+      visual.rig.bones.spineLower.rotation.y = -stride * 0.12 + walkChest[0] * 0.65;
+      visual.rig.bones.spineUpper.rotation.y = stride * 0.16 - walkChest[0] * 0.50;
+      visual.rig.bones.spineUpper.rotation.x += -walkChest[2] * 0.28;
       solveLegToSole(-1, getWalkFootTarget(visual, "left", timeSeconds), legPole(-1));
       solveLegToSole(1, getWalkFootTarget(visual, "right", timeSeconds), legPole(1));
     } else if (state === "CROUCH") {
@@ -542,11 +549,34 @@ export class FighterAnimationController {
       if (move.animation === "punch") {
         const punchSide: -1 | 1 = move.visualContact === "LEFT_FIST" ? -1 : 1;
         const punchPrefix = punchSide < 0 ? "left" : "right";
+        const sourceClip = move.id === "jab" ? "Punch_Jab" : "Punch_Cross";
+        const sourceSide: -1 | 1 = sourceClip === "Punch_Jab" ? -1 : 1;
+        const mirrorMotion = sourceSide !== punchSide;
+        const totalMoveTicks = Math.max(1, move.startup + move.active + move.recovery - 1);
+        const motionPhase = THREE.MathUtils.clamp(fighter.moveTick / totalMoveTicks, 0, 1);
+        const motionSample = sampleQuaterniusMotion(sourceClip, motionPhase);
+        const sourceActiveHand = sourceSide < 0 ? motionSample.leftHand : motionSample.rightHand;
+        const sourceOffHand = sourceSide < 0 ? motionSample.rightHand : motionSample.leftHand;
+        visual.root.updateMatrixWorld(true);
+        const hipsWorld = visual.rig.bones.hips.getWorldPosition(new THREE.Vector3());
+        const motionTarget = retargetQuaterniusPoint(sourceActiveHand, hipsWorld, basis, scale, mirrorMotion);
         const bindFist = getVisualContactPoint(visual, punchSide < 0 ? "LEFT_FIST" : "RIGHT_FIST");
-        const target = bindFist.lerp(combatTarget, targetBlend);
-        visual.hips.rotation.y = -snap * 0.12;
-        visual.rig.bones.spineLower.rotation.y = -snap * 0.15;
-        visual.rig.bones.spineUpper.rotation.y = snap * 0.22;
+        const authoredTarget = bindFist.clone().lerp(motionTarget, 0.74);
+        const activeStart = move.startup;
+        const activeEnd = move.startup + move.active;
+        const contactBlend = fighter.moveTick < activeStart
+          ? THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 3), activeStart)
+          : fighter.moveTick < activeEnd
+            ? 1
+            : 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd, activeEnd + 4);
+        const target = authoredTarget.lerp(combatTarget, THREE.MathUtils.clamp(contactBlend, 0, 1));
+        const sourceChest = quaterniusMotionDelta(sourceClip, motionPhase, "chest");
+        const sourceLateral = (mirrorMotion ? -sourceChest[0] : sourceChest[0]);
+        visual.hips.rotation.y = -snap * 0.12 + sourceLateral * 0.72;
+        visual.hips.position.y += motionSample.hipsDelta[1] * 0.10;
+        visual.rig.bones.spineLower.rotation.y = -snap * 0.15 + sourceLateral * 0.72;
+        visual.rig.bones.spineUpper.rotation.y = snap * 0.22 - sourceLateral * 0.44;
+        visual.rig.bones.spineUpper.rotation.x += -sourceChest[2] * 0.32;
         visual.rig.bones.chest.rotation.z = -snap * 0.06;
         visual.leftLeg.root.rotation.z = 0.12;
         visual.rightLeg.root.rotation.z = -0.20;
@@ -557,7 +587,10 @@ export class FighterAnimationController {
         const recoverySide = (punchSide * -1) as -1 | 1;
         const recoveryX = recoverySide * 0.16;
         const recoveryPrefix = recoverySide < 0 ? "left" : "right";
-        solveArm(recoverySide, visual.root.localToWorld(new THREE.Vector3(recoveryX, layout.shoulderY - 0.07, 0.18)), visual.rig.bones[`${recoveryPrefix}Shoulder`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, recoverySide * scale * 0.20));
+        const fallbackOffTarget = visual.root.localToWorld(new THREE.Vector3(recoveryX, layout.shoulderY - 0.07, 0.18));
+        const motionOffTarget = retargetQuaterniusPoint(sourceOffHand, hipsWorld, basis, scale, mirrorMotion);
+        const offTarget = fallbackOffTarget.lerp(motionOffTarget, 0.58);
+        solveArm(recoverySide, offTarget, visual.rig.bones[`${recoveryPrefix}Shoulder`].getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, recoverySide * scale * 0.20));
       } else if (move.animation === "kick") {
         const kickSide: -1 | 1 = move.visualContact === "LEFT_FOOT" ? -1 : 1;
         const kickPrefix = kickSide < 0 ? "left" : "right";
@@ -590,15 +623,33 @@ export class FighterAnimationController {
       }
       visual.head.rotation.z = (windup - 0.5) * 0.12;
     } else if (state === "HIT") {
-      visual.rig.bones.spineUpper.rotation.z = -0.18;
-      visual.head.rotation.z = 0.18;
+      const hitPhase = THREE.MathUtils.clamp(fighter.stateMachine.stateTicks / 22, 0, 1);
+      const hitSample = sampleQuaterniusMotion("Hit_Chest", hitPhase);
+      const hitHead = quaterniusMotionDelta("Hit_Chest", hitPhase, "head");
+      visual.rig.bones.spineUpper.rotation.z = -0.18 + hitHead[0] * 1.35;
+      visual.rig.bones.spineUpper.rotation.x += -hitHead[2] * 1.20;
+      visual.head.rotation.z = 0.18 + hitHead[0] * 1.45;
       visual.leftArm.root.rotation.z = -0.42;
       visual.rightArm.root.rotation.z = 0.42;
+      visual.root.updateMatrixWorld(true);
+      const hitHipsWorld = visual.rig.bones.hips.getWorldPosition(new THREE.Vector3());
+      const leftCurrent = getVisualContactPoint(visual, "LEFT_FIST");
+      const rightCurrent = getVisualContactPoint(visual, "RIGHT_FIST");
+      const leftSource = retargetQuaterniusPoint(hitSample.leftHand, hitHipsWorld, basis, scale);
+      const rightSource = retargetQuaterniusPoint(hitSample.rightHand, hitHipsWorld, basis, scale);
+      solveArm(-1, leftCurrent.lerp(leftSource, 0.42), visual.rig.bones.leftShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, -scale * 0.22));
+      solveArm(1, rightCurrent.lerp(rightSource, 0.42), visual.rig.bones.rightShoulder.getWorldPosition(new THREE.Vector3()).addScaledVector(basis.side, scale * 0.22));
+      solvePlantedFeet();
     } else if (state === "KNOCKDOWN" || state === "THROW" || state === "KO" || state === "RING_OUT") {
+      const deathPhase = THREE.MathUtils.clamp(fighter.stateMachine.stateTicks / 72, 0, 1);
+      const deathSample = sampleQuaterniusMotion("Death01", deathPhase);
+      const deathHead = quaterniusMotionDelta("Death01", deathPhase, "head");
       visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
       visual.root.rotateZ(fighter.facing * THREE.MathUtils.lerp(0, 1.35, Math.min(1, fighter.stateMachine.stateTicks / 22)));
-      visual.rig.bones.spineUpper.rotation.z = 0.20;
-      visual.head.rotation.z = 0.16;
+      visual.hips.position.y += Math.min(0, deathSample.hipsDelta[1]) * 0.10;
+      visual.rig.bones.spineUpper.rotation.z = 0.20 + deathHead[0] * 0.50;
+      visual.rig.bones.spineUpper.rotation.x += -deathHead[2] * 0.35;
+      visual.head.rotation.z = 0.16 + deathHead[0] * 0.65;
       visual.leftLeg.root.rotation.z = -0.5;
       visual.rightLeg.root.rotation.z = 0.5;
       visual.leftArm.root.rotation.z = -0.65;
@@ -608,7 +659,13 @@ export class FighterAnimationController {
       visual.root.rotateZ(fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22)));
       solvePlantedFeet();
     } else {
-      visual.torso.rotation.y = Math.sin(timeSeconds * 2.4) * 0.018;
+      const idleDuration = motionClipDuration("Idle_Loop");
+      const idlePhase = (timeSeconds % idleDuration) / idleDuration;
+      const idleSample = sampleQuaterniusMotion("Idle_Loop", idlePhase, true);
+      const idleChest = quaterniusMotionDelta("Idle_Loop", idlePhase, "chest", true);
+      visual.hips.position.y += idleSample.hipsDelta[1] * 0.20;
+      visual.torso.rotation.y = Math.sin(timeSeconds * 2.4) * 0.018 + idleChest[0] * 0.75;
+      visual.rig.bones.spineUpper.rotation.x += -idleChest[2] * 0.55;
       solvePlantedFeet();
     }
     for (const [index, hair] of visual.ponytailMasses.entries()) {

@@ -1,0 +1,31 @@
+name: Inspect Quaternius motion library
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/inspect-quaternius-motion-library.mjs
+      - .github/workflows/quaternius-motion-inspect.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Inspect CC0 Quaternius animation library
+        run: node scripts/inspect-quaternius-motion-library.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quaternius-motion-inspection
+          path: artifacts/quaternius-motion-inspection.json
+          if-no-files-found: error
+          retention-days: 1

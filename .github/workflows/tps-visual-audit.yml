@@ -1,9 +1,9 @@
 name: POLY FIGHTER TPS step spacing implementation
 
 on:
-  push:
+  pull_request:
     branches:
-      - chatgpt/tps-step-spacing-v1
+      - main
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
       - name: Implement step distance, turn lag, and CPU spacing
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
 
           path = Path('src/game/tps-game.ts')
@@ -34,7 +34,7 @@ jobs:
               global text
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f'expected exactly one match, got {count}: {old[:90]!r}')
+                  raise SystemExit(f'expected exactly one match, got {count}: {old[:100]!r}')
               text = text.replace(old, new, 1)
 
           one(
@@ -49,7 +49,6 @@ jobs:
               '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);',
               '      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier * TPS_STEP_DISTANCE_SCALE);'
           )
-
           one('''    const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
     const distance = this.p2.position.distanceTo(this.p1.position);
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
@@ -65,9 +64,9 @@ jobs:
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
     const movement = new THREE.Vector3();
 
-    // Preserve the positional reward from a lateral STEP instead of snapping the
-    // CPU body to face the player every tick. Neutral tracking remains responsive,
-    // while lateral burst tracking deliberately lags behind.
+    // Lateral STEP should create a real angle instead of being erased by an
+    // instant lock-on snap. Neutral tracking stays responsive; side-step tracking
+    // deliberately lags, and attacks wait until the torso has turned back enough.
     const sideStepTracking = this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45;
     const trackingRate = sideStepTracking ? ENEMY_SIDE_STEP_TRACK_RATE : ENEMY_TRACK_RATE;
     if (this.enemyVisualForward.lengthSq() < 1e-6) this.enemyVisualForward.copy(towardPlayer);
@@ -75,8 +74,8 @@ jobs:
     const enemyFacingAlignment = THREE.MathUtils.clamp(this.enemyVisualForward.dot(towardPlayer), -1, 1);
 
     // Hold a readable combat interval instead of perpetually walking toward zero
-    // distance. A dead zone stops micro-corrections, and ORBIT is pulsed so the
-    // CPU has visible planted/idle beats rather than constant locomotion.
+    // distance. The dead zone removes micro-corrections, and ORBIT only moves in
+    // short bursts so the CPU visibly plants between repositioning beats.
     const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.72 : this.enemyTactic === "BAIT" ? 2.55 : 2.08;
     const distanceError = distance - desiredDistance;
     if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(towardPlayer);
@@ -86,7 +85,6 @@ jobs:
       && this.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
     if (orbitActive) movement.addScaledVector(tangent, this.enemyOrbitSign * 0.58);
 ''')
-
           one(
               '    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {',
               '    } else if (this.enemyOpeningGraceTicks <= 0\n      && this.enemyCooldown <= 0\n      && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)\n      && enemyFacingAlignment >= ENEMY_ATTACK_ALIGNMENT) {'
@@ -120,13 +118,13 @@ jobs:
           PY
       - name: Validate implementation
         run: npm ci --no-audit --no-fund && npm run test:ci:tps && npm run lint && npm run build
-      - name: Restore workflow files and commit implementation
+      - name: Restore workflows and publish implementation branch
         shell: bash
         run: |
-          git checkout origin/main -- .github/workflows/tps-visual-audit.yml
+          git checkout origin/main -- .github/workflows/tps-visual-audit.yml .github/workflows/tps-audit-ghost-capture-fix.yml
           rm -f .github/workflows/tps-step-spacing-autopatch.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/game/tps-game.ts tests/tps-mode.test.ts .github/workflows/tps-visual-audit.yml .github/workflows/tps-step-spacing-autopatch.yml
+          git add src/game/tps-game.ts tests/tps-mode.test.ts .github/workflows/tps-visual-audit.yml .github/workflows/tps-audit-ghost-capture-fix.yml .github/workflows/tps-step-spacing-autopatch.yml
           git commit -m "Double TPS steps and improve enemy spacing"
           git push origin HEAD:chatgpt/tps-step-spacing-v1

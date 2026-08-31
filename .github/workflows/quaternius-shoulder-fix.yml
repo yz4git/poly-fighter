@@ -30,8 +30,10 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Apply shoulder distribution fix
         run: node scripts/fix-quaternius-shoulder.mjs
-      - name: Run shoulder and combat regressions
-        run: npx vitest run tests/quaternius-shoulder.test.ts tests/quaternius-model-skin.test.ts tests/quaternius-motion.test.ts tests/tps-mode.test.ts tests/fight-rules.test.ts
+      - name: Run shoulder regression
+        run: node --import tsx --test tests/quaternius-shoulder.test.ts
+      - name: Run TPS combat regressions
+        run: npm run test:ci:tps
       - name: Lint
         run: npm run lint
       - name: Production build

@@ -12,10 +12,10 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
   assert.match(source, /new THREE\.PerspectiveCamera\(47/);
-  assert.match(source, /aspect < 2\.4 \? 52 : 47/);
+  assert.match(source, /aspect < 2\.4 \? 54 : 47/);
   assert.match(source, /compactLandscapeFactor/);
-  assert.match(source, /backDistance = 4\.85 - closeFactor \* 0\.45/);
-  assert.match(source, /shoulderOffset = 2\.2 \+ closeFactor \* 1\.25/);
+  assert.match(source, /backDistance = 5\.05 \+ closeFactor \* 0\.72/);
+  assert.match(source, /shoulderOffset = 2\.08 \+ closeFactor \* 1\.08/);
   assert.match(source, /new THREE\.TorusGeometry\(0\.46/);
   assert.match(source, /depthTest: true, depthWrite: false/);
   assert.match(source, /new THREE\.RingGeometry\(0\.58, 0\.70/);
@@ -55,6 +55,8 @@ test("TPS attacks reuse fighter move data while resolving radial range, knockbac
   assert.match(source, /this\.difficulty === "HARD"/);
   assert.match(source, /cameraImpact/);
   assert.match(source, /enemyOpeningGraceTicks = 132/);
+  assert.match(source, /const minimum = p1Throwing \|\| p2Throwing \? 0\.98 : 1\.12/);
+  assert.match(source, /lerp\(this\.p1\.position, closeFactor \* 0\.16\)/);
   assert.match(source, /this\.enemyOpeningGraceTicks <= 0 && this\.enemyCooldown <= 0/);
 });
 

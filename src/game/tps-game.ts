@@ -321,7 +321,7 @@ export class TpsFightGame {
     this.camera.aspect = aspect;
     // iPhone landscape has much less vertical room than the wide desktop audit.
     // A slightly wider lens keeps both fighters readable without shrinking touch UI.
-    this.camera.fov = width > height && aspect < 2.4 ? 52 : 47;
+    this.camera.fov = width > height && aspect < 2.4 ? 54 : 47;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   };
@@ -573,7 +573,11 @@ export class TpsFightGame {
   private separateFighters(): void {
     const delta = new THREE.Vector3(this.p2.position.x - this.p1.position.x, 0, this.p2.position.z - this.p1.position.z);
     const distance = delta.length();
-    const minimum = 0.92;
+    const p1Throwing = this.p1.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p1.state);
+    const p2Throwing = this.p2.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p2.state);
+    // Preserve throw contact, but keep normal strikes from collapsing both silhouettes
+    // into the same screen-space column on iPhone landscape.
+    const minimum = p1Throwing || p2Throwing ? 0.98 : 1.12;
     if (distance >= minimum || distance < 1e-5) return;
     const correction = delta.normalize().multiplyScalar((minimum - distance) * 0.5);
     this.p1.position.addScaledVector(correction, -1);
@@ -602,17 +606,21 @@ export class TpsFightGame {
     // Open a screen-space lane to the opponent at contact by widening laterally.
     // Compact iPhone landscape gets extra shoulder separation because the player
     // silhouette otherwise covers the opponent at melee distance.
-    const backDistance = 4.85 - closeFactor * 0.45 + compactLandscapeFactor * 0.30;
-    const shoulderOffset = 2.2 + closeFactor * 1.25 + compactLandscapeFactor * (0.55 + closeFactor * 0.55);
-    const cameraHeight = 2.28 + closeFactor * 0.17 + compactLandscapeFactor * 0.04;
+    // Pull back as the fighters close instead of moving the shoulder camera inward.
+    // This preserves both silhouettes during punch/throw scrambles and gives iPhone
+    // landscape enough vertical room for the HUD and touch controls.
+    const backDistance = 5.05 + closeFactor * 0.72 + compactLandscapeFactor * 0.34;
+    const shoulderOffset = 2.08 + closeFactor * 1.08 + compactLandscapeFactor * (0.46 + closeFactor * 0.38);
+    const cameraHeight = 2.30 + closeFactor * 0.22 + compactLandscapeFactor * 0.05;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, -0.28 * closeFactor)
-      .add(new THREE.Vector3(0, 1.16 + closeFactor * 0.04, 0));
+      .lerp(this.p1.position, closeFactor * 0.16)
+      .addScaledVector(right, -0.20 * closeFactor)
+      .add(new THREE.Vector3(0, 1.18 + closeFactor * 0.05, 0));
     this.cameraDesired.copy(this.p1.position)
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset)
       .add(new THREE.Vector3(0, cameraHeight, 0));
-    ease(this.camera.position, this.cameraDesired, 12.2, delta);
+    ease(this.camera.position, this.cameraDesired, 10.8, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
       this.cameraImpact *= Math.exp(-10 * delta);
@@ -678,9 +686,9 @@ export class TpsFightGame {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     this.camera.position.copy(this.p1.position)
-      .addScaledVector(forward, -4.85)
-      .addScaledVector(right, 2.2)
-      .add(new THREE.Vector3(0, 2.28, 0));
+      .addScaledVector(forward, -5.05)
+      .addScaledVector(right, 2.08)
+      .add(new THREE.Vector3(0, 2.30, 0));
     this.updateCamera(1);
     this.updateLockOn();
   }

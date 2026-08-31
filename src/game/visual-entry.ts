@@ -3,8 +3,18 @@ import type { FighterDefinition } from "./types";
 import { createKairoReconstructedVisual } from "./visual-kairo-v1";
 import { createFemaleBlenderRuntimeVisual } from "./visual-blender-runtime";
 import { applyV11ReferencePose } from "./visual-v11-pose";
-import { disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset } from "./visual";
+import {
+  disposeFighterVisual as disposeBaseFighterVisual,
+  getSoleContactPoint,
+  getVisualContactPoint,
+  getWalkFootTarget,
+  releaseFootPlants,
+  updateFootPlants,
+  visualGroundOffset,
+} from "./visual";
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
+import type { FighterModelId } from "./model-skins";
+import { disposeQuaterniusModelSkin, installQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
 function repairSeraWinding(visual: FighterVisual): void {
   const geometry = visual.bodyMesh.geometry;
@@ -39,7 +49,7 @@ function repairSeraWinding(visual: FighterVisual): void {
   visual.root.userData.v11WindingRepair = { checkedGroups: geometry.groups.length, reversedGroups, reversedTriangles };
 }
 
-export function createFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality = "NORMAL"): FighterVisual {
+function createOriginalFighterVisual(definition: FighterDefinition, quality: FighterVisualQuality): FighterVisual {
   if (definition.archetype === "SPEED") {
     const visual = createFemaleBlenderRuntimeVisual(definition, quality);
     repairSeraWinding(visual);
@@ -48,5 +58,21 @@ export function createFighterVisual(definition: FighterDefinition, quality: Figh
   return createKairoReconstructedVisual(definition, quality);
 }
 
-export { disposeFighterVisual, getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset };
+export function createFighterVisual(
+  definition: FighterDefinition,
+  quality: FighterVisualQuality = "NORMAL",
+  modelId: FighterModelId = "ORIGINAL",
+): FighterVisual {
+  const visual = createOriginalFighterVisual(definition, quality);
+  visual.root.userData.modelSkin = modelId;
+  if (modelId === "QUATERNIUS_UBC") installQuaterniusModelSkin(visual, definition.colors.primary);
+  return visual;
+}
+
+export function disposeFighterVisual(visual: FighterVisual): void {
+  disposeQuaterniusModelSkin(visual);
+  disposeBaseFighterVisual(visual);
+}
+
+export { getSoleContactPoint, getVisualContactPoint, getWalkFootTarget, releaseFootPlants, updateFootPlants, visualGroundOffset };
 export type { FighterVisual, FighterVisualQuality, FootPlantMode };

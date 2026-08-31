@@ -185,8 +185,19 @@ try {
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify(afterPunch)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
 
-  await execute(sessionId, `${gameLookup} const game = findGame(); game.p1.position.set(9, 0, 0); return true;`);
-  await delay(80);
+  await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    // Advance one explicit fixed step so the boundary assertion measures the
+    // gameplay clamp, not a race between a direct test write and requestAnimationFrame.
+    game.finished = false;
+    game.p1.currentMove = null;
+    game.p1.moveTick = 0;
+    game.p1.state = 'IDLE';
+    game.p1.velocity.set(0, 0, 0);
+    game.p1.position.set(9, 0, 0);
+    game.step();
+    return true;
+  `);
   const afterBoundary = await state(sessionId);
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);

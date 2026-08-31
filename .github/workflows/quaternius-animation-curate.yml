@@ -1,0 +1,58 @@
+name: Curate lightweight Quaternius fight clips
+
+on:
+  push:
+    paths:
+      - ".github/workflows/quaternius-animation-curate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install glTF Transform core
+        run: npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
+
+      - name: Curate fight clips
+        run: |
+          set -euxo pipefail
+          node scripts/curate-quaternius-animations.mjs \
+            public/models/quaternius/universal-animation-library.glb \
+            public/models/quaternius/ual-fight-core.glb \
+            Idle_Loop,Walk_Loop,Crouch_Idle_Loop,Jump_Start,Jump_Loop,Jump_Land,Punch_Jab,Punch_Cross,Hit_Chest,Hit_Head,Death01,Roll
+          node scripts/curate-quaternius-animations.mjs \
+            public/models/quaternius/universal-animation-library-2.glb \
+            public/models/quaternius/ual2-fight-core.glb \
+            Melee_Hook,Hit_Knockback,Idle_Shield_Loop,OverhandThrow,Slide_Start,Slide_Loop,Slide_Exit,NinjaJump_Start,NinjaJump_Idle_Loop,NinjaJump_Land
+          ls -lh public/models/quaternius/*.glb
+
+      - name: Remove uncurated runtime copies
+        run: |
+          rm public/models/quaternius/universal-animation-library.glb
+          rm public/models/quaternius/universal-animation-library-2.glb
+
+      - name: Publish curated assets
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A public/models/quaternius
+          if git diff --cached --quiet; then
+            echo "Curated assets already current"
+            exit 0
+          fi
+          git commit -m "Curate Quaternius runtime fight clips"
+          git push origin HEAD:main

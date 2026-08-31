@@ -129,6 +129,7 @@ export class TpsFightGame {
   private timerTicks = ROUND_TICKS;
   private enemyCooldown = 48;
   private finished = false;
+  private resultWinner: "p1" | "p2" | "draw" | null = null;
   private lastHudTick = -1;
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
@@ -427,11 +428,14 @@ export class TpsFightGame {
   private updateCamera(delta: number): void {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    this.cameraTarget.copy(this.p1.position).addScaledVector(forward, 1.7).add(new THREE.Vector3(0, 1.16, 0));
+    // A true over-the-shoulder composition: keep the locked opponent near the
+    // center while the player occupies the lower-left third instead of hiding
+    // the target directly behind their torso.
+    this.cameraTarget.copy(this.p2.position).add(new THREE.Vector3(0, 1.22, 0));
     this.cameraDesired.copy(this.p1.position)
-      .addScaledVector(forward, -4.75)
-      .addScaledVector(right, 0.58)
-      .add(new THREE.Vector3(0, 2.65, 0));
+      .addScaledVector(forward, -5.35)
+      .addScaledVector(right, 1.62)
+      .add(new THREE.Vector3(0, 2.42, 0));
     ease(this.camera.position, this.cameraDesired, 9.5, delta);
     this.camera.lookAt(this.cameraTarget);
   }
@@ -452,6 +456,8 @@ export class TpsFightGame {
     this.finished = true;
     this.input.clear();
     const winner = this.p1.health === this.p2.health ? "draw" : this.p1.health > this.p2.health ? "p1" : "p2";
+    this.resultWinner = winner;
+    this.publishHud(true);
     this.audio.ko();
     window.setTimeout(() => this.options.onResult?.(winner), 520);
   }
@@ -461,10 +467,15 @@ export class TpsFightGame {
     this.p2.resetForRound(0, -2.2, -1);
     this.enemyCooldown = 52;
     this.timerTicks = ROUND_TICKS;
+    this.resultWinner = null;
     this.updateVisual(this.p1, this.p2, 0);
     this.updateVisual(this.p2, this.p1, 0.23);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
-    this.camera.position.copy(this.p1.position).addScaledVector(forward, -4.75).add(new THREE.Vector3(0.6, 2.65, 0));
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    this.camera.position.copy(this.p1.position)
+      .addScaledVector(forward, -5.35)
+      .addScaledVector(right, 1.62)
+      .add(new THREE.Vector3(0, 2.42, 0));
     this.updateCamera(1);
     this.updateLockOn();
   }
@@ -479,8 +490,8 @@ export class TpsFightGame {
       timer: Math.ceil(this.timerTicks / 60),
       p1Health: this.p1.health,
       p2Health: this.p2.health,
-      p1Wins: 0,
-      p2Wins: 0,
+      p1Wins: this.resultWinner === "p1" ? 1 : 0,
+      p2Wins: this.resultWinner === "p2" ? 1 : 0,
       p1Name: this.p1.definition.name,
       p2Name: this.p2.definition.name,
       message: this.finished ? "BATTLE COMPLETE" : "TARGET LOCKED",

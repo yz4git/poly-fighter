@@ -89,6 +89,11 @@ export class FighterRuntime {
   }
 
   setInput(next: InputFrame): void {
+    // A neutral fighter cannot legitimately still be frozen from a previous
+    // contact. Clearing that stale value makes rematches, scripted audits, and
+    // any external hard reset immediately responsive without affecting real
+    // hitstop, whose attacker remains in ATTACK and defender remains in stun.
+    if (this.hitStop > 0 && this.state === "IDLE" && !this.currentMove) this.hitStop = 0;
     this.previousInput = this.input;
     this.input = cloneInput(next);
     this.inputBuffer.push(this.input);
@@ -401,9 +406,6 @@ export class FighterAnimationController {
     const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
     const scale = visual.root.scale.x;
 
-    // Gameplay Y is the ground-contact coordinate.  The visual root carries
-    // the authored boot sole to that plane; this keeps the rig and the
-    // deterministic fighter position in separate, explicit spaces.
     visual.root.position.set(
       fighter.position.x,
       fighter.position.y + visualGroundOffset(visual),
@@ -412,8 +414,6 @@ export class FighterAnimationController {
     visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
     visual.root.updateMatrixWorld(true);
 
-    // Reset bind offsets before each solve.  The action state selects a pose;
-    // it never owns vertical physics or the model's coordinate convention.
     visual.hips.position.set(0, layout.hipsY + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006), 0);
     visual.hips.rotation.set(0, 0, 0);
     visual.rig.bones.spineLower.position.y = layout.pelvisTopY - layout.hipsY;
@@ -444,9 +444,6 @@ export class FighterAnimationController {
 
     const solveArm = (side: -1 | 1, target: THREE.Vector3, pole: THREE.Vector3): void => {
       const prefix = side < 0 ? "left" : "right";
-      // The hand bone origin is at the wrist; the visible fist is offset
-      // along local -Y and a small local +Z knuckle offset. Solve the wrist
-      // for the visible contact point, not for an invisible joint center.
       const ikTarget = target.clone()
         .addScaledVector(basis.up, layout.handLength * 0.48 * scale)
         .addScaledVector(basis.forward, -0.030 * scale);
@@ -533,8 +530,6 @@ export class FighterAnimationController {
       visual.rightArm.root.rotation.z = 0.28;
     } else if (state === "SIDESTEP") {
       visual.torso.rotation.y = Math.sin(timeSeconds * 16) * 0.10;
-      // Keep the evasive silhouette but avoid lifting both soles visibly off the
-      // floor when TPS translates the grounded fighter laterally.
       visual.hips.position.y -= 0.045;
       visual.leftLeg.root.rotation.z = 0.14;
       visual.rightLeg.root.rotation.z = -0.14;
@@ -692,7 +687,6 @@ export class CpuController {
     this.decisionTicks -= 1;
     if (this.decisionTicks > 0) {
       const output = cloneInput(this.current);
-      // A CPU jump is a one-tick edge, while approach/retreat remains held.
       if (output.up) {
         output.up = false;
         this.current.up = false;

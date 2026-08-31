@@ -335,7 +335,7 @@ export default function Home() {
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH" || screen === "RESULT";
   const tpsIncoming = battleMode === "TPS" && hud?.message === "INCOMING";
-  const tpsStrikeRange = battleMode === "TPS" && hud?.message === "STRIKE RANGE";
+  const tpsStrikeRange = battleMode === "TPS" && ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
 
@@ -444,7 +444,7 @@ export default function Home() {
               )}
             </div>
           </section>
-          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>STEP + 8-WAY</b> EVADE / SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
+          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
         </>
       )}
 

@@ -29,9 +29,10 @@ const ROUND_TICKS = 99 * 60;
 const TPS_STRIKE_RANGE = 2.12;
 const TPS_CLOSE_ATTACK_RANGE = 1.58;
 const TPS_STEP_TICKS = 9;
-const TPS_STEP_COOLDOWN_TICKS = 14;
+const TPS_STEP_COOLDOWN_TICKS = 18;
 const TPS_COMBO_GRACE_TICKS = 34;
-const TPS_FLANK_WINDOW_TICKS = 24;
+const TPS_FLANK_WINDOW_TICKS = 30;
+const TPS_PERFECT_EVADE_TICKS = 18;
 const ENEMY_TACTIC_INTERVAL = 72;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
@@ -194,6 +195,8 @@ export class TpsFightGame {
   private playerAttackQueued = false;
   private playerFlankWindowTicks = 0;
   private playerFlankAttackTicks = 0;
+  private playerPerfectEvadeTicks = 0;
+  private playerStepThreatTicks = 0;
   private simulationTicks = 0;
   private cameraImpact = 0;
   private enemyTactic: EnemyTactic = "ORBIT";
@@ -396,6 +399,8 @@ export class TpsFightGame {
     else if (this.p1.state !== "ATTACK") this.playerComboStage = 0;
     if (this.playerFlankWindowTicks > 0) this.playerFlankWindowTicks -= 1;
     if (this.playerFlankAttackTicks > 0) this.playerFlankAttackTicks -= 1;
+    if (this.playerPerfectEvadeTicks > 0) this.playerPerfectEvadeTicks -= 1;
+    if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
@@ -423,15 +428,18 @@ export class TpsFightGame {
     // a reliable three-hit combo without requiring frame-perfect timing.
     if (this.p1.state === "ATTACK") {
       if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
+      // A repeated ATTACK only chains if the previous strike actually reached the target.
+      // This keeps mash-friendly hit confirms while making whiffs meaningfully punishable.
+      const comboConfirmed = this.p1.hitTargets.has(this.p2.id);
       this.p1.advanceAttack();
       this.p1.updatePhysics(FIXED_STEP);
       if (this.p1.state !== "ATTACK") {
-        if (this.playerAttackQueued && this.playerComboStage < 3 && this.p1.canAct()) {
+        if (this.playerAttackQueued && this.playerComboStage < 3 && comboConfirmed && this.p1.canAct()) {
           this.playerAttackQueued = false;
           this.beginContextAttack();
         } else {
           this.playerAttackQueued = false;
-          if (this.playerComboStage >= 3) {
+          if (!comboConfirmed || this.playerComboStage >= 3) {
             this.playerComboStage = 0;
             this.playerComboGraceTicks = 0;
           }
@@ -459,10 +467,27 @@ export class TpsFightGame {
       this.playerEvadeSign = sideAxis === 0 ? 0 : sideAxis > 0 ? 1 : -1;
       this.playerEvadeTicks = TPS_STEP_TICKS;
       this.playerEvadeCooldown = TPS_STEP_COOLDOWN_TICKS;
-      if (this.playerStepSideWeight > 0.45) {
-        // The window lasts beyond the movement itself so a successful sidestep
-        // naturally flows into a flank punish rather than demanding a same-frame tap.
+      // A side STEP by itself is only movement. Flank advantage is awarded later,
+      // inside resolveAttack, when an in-range enemy strike is actually evaded.
+      this.playerFlankWindowTicks = 0;
+      this.playerPerfectEvadeTicks = 0;
+      const incomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
+      const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+      const incomingFrames = incomingMove ? incomingMove.startup + incomingMove.active - this.p2.moveTick : 0;
+      const reactiveSideStep = Boolean(
+        this.playerStepSideWeight > 0.45
+        && incomingMove
+        && incomingMove.hitLevel !== "THROW"
+        && incomingFrames > 0
+        && incomingDistance <= incomingMove.reach + 0.9
+      );
+      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
+      if (reactiveSideStep) {
+        // The opponent has already committed to an in-range strike. The lateral
+        // STEP is therefore an earned read even if its burst movement exits the
+        // eventual contact radius before the move reaches its active frames.
         this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
+        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS;
       }
     }
 
@@ -474,7 +499,13 @@ export class TpsFightGame {
         this.p1.updatePhysics(FIXED_STEP);
         return;
       }
-      const stepMultiplier = this.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;
+      const baseStepMultiplier = this.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;
+      const directionalStepBonus = this.playerStepForwardWeight < -0.45
+        ? 0.48
+        : this.playerStepForwardWeight > 0.45
+          ? -0.16
+          : 0.08;
+      const stepMultiplier = baseStepMultiplier + directionalStepBonus;
       this.playerEvadeTicks -= 1;
       this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);
       this.p1.state = "SIDESTEP";
@@ -616,9 +647,21 @@ export class TpsFightGame {
   private resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return;
-    // A lateral STEP is the dedicated strike-avoidance action. Back/forward STEP
-    // rely on displacement, while throws can still catch lateral movement.
-    if (defender === this.p1 && defender.state === "SIDESTEP" && this.playerStepSideWeight > 0.45 && move.hitLevel !== "THROW") return;
+    const trackedSideEvade = defender === this.p1
+      && attacker === this.p2
+      && this.playerStepThreatTicks > 0
+      && this.playerStepSideWeight > 0.45
+      && move.hitLevel !== "THROW";
+    // A correctly-read side STEP owns the incoming strike. When that strike
+    // becomes active it cannot snap back onto the player, even after the burst
+    // has already carried the player outside the original contact lane.
+    if (trackedSideEvade) {
+      attacker.hitTargets.add(defender.id);
+      this.playerStepThreatTicks = 0;
+      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
+      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS);
+      return;
+    }
     const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
     if (distance > move.reach + 0.72) return;
 
@@ -700,6 +743,12 @@ export class TpsFightGame {
     const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const closeFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
     const compactLandscapeFactor = THREE.MathUtils.clamp((2.45 - this.camera.aspect) / 0.45, 0, 1);
+    const flankCameraFactor = THREE.MathUtils.clamp(
+      Math.max(this.playerPerfectEvadeTicks, this.playerFlankWindowTicks, this.playerFlankAttackTicks) / TPS_FLANK_WINDOW_TICKS,
+      0,
+      1,
+    );
+    const flankLaneShift = this.playerEvadeSign * flankCameraFactor * 0.56;
     // Open a screen-space lane to the opponent at contact by widening laterally.
     // Compact iPhone landscape gets extra shoulder separation because the player
     // silhouette otherwise covers the opponent at melee distance.
@@ -712,11 +761,11 @@ export class TpsFightGame {
     const shoulderOffset = 2.50 + closeFactor * 1.70 + compactLandscapeFactor * (0.55 + closeFactor * 0.50);
     const cameraHeight = 2.32 + closeFactor * 0.18 + compactLandscapeFactor * 0.04;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, -0.30 * closeFactor)
+      .addScaledVector(right, -0.30 * closeFactor - flankLaneShift)
       .add(new THREE.Vector3(0, 1.18 + closeFactor * 0.04, 0));
     this.cameraDesired.copy(this.p1.position)
       .addScaledVector(forward, -backDistance)
-      .addScaledVector(right, shoulderOffset)
+      .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
       .add(new THREE.Vector3(0, cameraHeight, 0));
     ease(this.camera.position, this.cameraDesired, 11.6, delta);
     if (this.cameraImpact > 0.001) {
@@ -734,7 +783,8 @@ export class TpsFightGame {
     const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const threat = this.p2.state === "ATTACK";
     const inStrikeRange = distance < TPS_STRIKE_RANGE;
-    const lockColor = threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;
+    const perfectEvade = this.playerPerfectEvadeTicks > 0;
+    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;
     this.lockRing.material.color.setHex(lockColor);
     this.lockStem.material.color.setHex(lockColor);
     this.targetGroundRing.material.color.setHex(lockColor);
@@ -782,6 +832,8 @@ export class TpsFightGame {
     this.playerAttackQueued = false;
     this.playerFlankWindowTicks = 0;
     this.playerFlankAttackTicks = 0;
+    this.playerPerfectEvadeTicks = 0;
+    this.playerStepThreatTicks = 0;
     this.simulationTicks = 0;
     this.cameraImpact = 0;
     this.timerTicks = ROUND_TICKS;
@@ -817,8 +869,10 @@ export class TpsFightGame {
         ? "BATTLE COMPLETE"
         : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"
           ? "DASH ATTACK"
+          : this.playerPerfectEvadeTicks > 0
+            ? "PERFECT STEP"
           : this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45
-            ? "EVADE STEP"
+            ? "SIDE STEP"
             : this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45
               ? "FLANK OPEN"
               : this.p1.state === "ATTACK" && this.playerComboStage > 1

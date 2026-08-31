@@ -248,10 +248,11 @@ try {
     for (let index = 0; index < 18; index += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { start, end: { x: game.p1.position.x, z: game.p1.position.z }, state: game.p1.state };
+    return { start, end: { x: game.p1.position.x, z: game.p1.position.z }, state: game.p1.state, flankWindowTicks: game.playerFlankWindowTicks };
   `);
   const quickstepTravel = Math.hypot(quickstepProbe.end.x - quickstepProbe.start.x, quickstepProbe.end.z - quickstepProbe.start.z);
   if (quickstepTravel < 0.45) throw new Error(`TPS quickstep travel too small: ${JSON.stringify({ quickstepProbe, quickstepTravel })}`);
+  if (quickstepProbe.flankWindowTicks !== 0) throw new Error(`TPS neutral lateral STEP incorrectly granted free flank advantage: ${JSON.stringify(quickstepProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-quickstep.png`);
 
   const punchProbe = await execute(sessionId, `${gameLookup}
@@ -403,6 +404,53 @@ try {
   if (comboProbe.moves.join(',') !== 'jab,straight,power') throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-combo.png`);
 
+
+  const whiffComboProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 3.1);
+    game.p2.position.set(0, 0, -2.1);
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
+    game.press('punch', 'tps-whiff-1');
+    game.step();
+    game.release('punch', 'tps-whiff-1');
+    const firstMove = game.p1.currentMove?.id ?? null;
+    let queued = false;
+    let chainedMove = null;
+    for (let index = 0; index < 150; index += 1) {
+      if (!queued && game.p1.state === 'ATTACK' && game.p1.moveTick >= 4) {
+        game.press('punch', 'tps-whiff-2');
+        game.step();
+        game.release('punch', 'tps-whiff-2');
+        queued = true;
+      } else {
+        game.step();
+      }
+      const current = game.p1.currentMove?.id ?? null;
+      if (current && firstMove && current !== firstMove) { chainedMove = current; break; }
+      if (queued && game.p1.state !== 'ATTACK') break;
+    }
+    return { firstMove, chainedMove, comboStage: game.playerComboStage, p2Health: game.p2.health };
+  `);
+  if (whiffComboProbe.chainedMove !== null || whiffComboProbe.comboStage !== 0 || whiffComboProbe.p2Health !== 100) {
+    throw new Error(`TPS whiff incorrectly continued ATTACK combo: ${JSON.stringify(whiffComboProbe)}`);
+  }
+
   const dashAttackProbe = await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -472,10 +520,12 @@ try {
     };
     game.press('right', 'tps-flank-side');
     game.press('guard', 'tps-flank-step');
-    for (let index = 0; index < 12; index += 1) game.step();
+    for (let index = 0; index < 9; index += 1) game.step();
     game.release('guard', 'tps-flank-step');
     game.release('right', 'tps-flank-side');
     const healthAfterEvade = game.p1.health;
+    const perfectAfterEvade = game.playerPerfectEvadeTicks;
+    const flankWindowAfterEvade = game.playerFlankWindowTicks;
     game.p2.currentMove = null;
     game.p2.moveTick = 0;
     game.p2.velocity.set(0, 0, 0);
@@ -487,13 +537,23 @@ try {
     game.release('punch', 'tps-flank-attack');
     let steps = 1;
     while (steps < 60 && game.p2.health === 100) { game.step(); steps += 1; }
-    game.updateCamera(1 / 60);
+    for (let index = 0; index < 16; index += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { healthAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks };
+    const canvas = game.renderer.domElement;
+    const playerScreen = game.p1.position.clone();
+    const enemyScreen = game.p2.position.clone();
+    playerScreen.y = 1.2;
+    enemyScreen.y = 1.2;
+    playerScreen.project(game.camera);
+    enemyScreen.project(game.camera);
+    const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
+    return { healthAfterEvade, perfectAfterEvade, flankWindowAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks, screenSeparation };
   `);
   if (flankProbe.healthAfterEvade !== 100) throw new Error(`TPS lateral STEP failed to evade strike: ${JSON.stringify(flankProbe)}`);
+  if (!(flankProbe.perfectAfterEvade > 0) || !(flankProbe.flankWindowAfterEvade > 0)) throw new Error(`TPS successful lateral dodge did not award PERFECT STEP: ${JSON.stringify(flankProbe)}`);
   if (!(flankProbe.p2Health < 100) || flankProbe.p2State === 'BLOCK_STUN') throw new Error(`TPS flank attack did not beat guard: ${JSON.stringify(flankProbe)}`);
+  if (!(flankProbe.screenSeparation >= 75)) throw new Error(`TPS flank camera still lets the player obscure the target: ${JSON.stringify(flankProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-flank.png`);
 
   await execute(sessionId, `${gameLookup}
@@ -516,7 +576,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
+  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

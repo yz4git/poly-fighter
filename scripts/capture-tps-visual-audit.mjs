@@ -141,19 +141,24 @@ try {
   initial = await state(sessionId);
   await screenshot(sessionId, `${outputDir}/tps-idle.png`);
 
-  // Capture an iPhone-landscape-sized CSS viewport as a permanent UI regression
-  // target. Chrome's headless outer window is taller than its content viewport,
-  // so 573px yields roughly a 430px gameplay canvas.
-  await command(`/session/${sessionId}/window/rect`, "POST", { width: 932, height: 573, x: 0, y: 0 });
-  await delay(260);
+  // Capture a deterministic iPhone-landscape CSS viewport. Window-rect resizing
+  // is runner/decoration dependent in headless Chrome, so drive the CSS viewport
+  // directly through Chrome DevTools device metrics instead.
+  await command(`/session/${sessionId}/goog/cdp/execute`, "POST", {
+    cmd: "Emulation.setDeviceMetricsOverride",
+    params: { width: 932, height: 430, deviceScaleFactor: 1, mobile: false },
+  });
+  await delay(300);
   const iphone = await state(sessionId);
-  if (!(iphone?.canvasWidth >= 800 && iphone?.canvasHeight >= 340 && iphone?.canvasHeight <= 480)) {
+  if (!(iphone?.canvasWidth >= 900 && iphone?.canvasWidth <= 950 && iphone?.canvasHeight >= 400 && iphone?.canvasHeight <= 450)) {
     throw new Error(`TPS iPhone viewport probe is outside the expected range: "${JSON.stringify(iphone)}"`);
   }
   await screenshot(sessionId, `${outputDir}/tps-iphone-idle.png`);
-  await command(`/session/${sessionId}/window/rect`, "POST", { width: 1536, height: 706, x: 0, y: 0 });
-  await delay(260);
-
+  await command(`/session/${sessionId}/goog/cdp/execute`, "POST", {
+    cmd: "Emulation.clearDeviceMetricsOverride",
+    params: {},
+  });
+  await delay(300);
   // Real-time input probes stay on requestAnimationFrame so they audit the same
   // continuous movement/camera path a player uses in the browser.
   await execute(sessionId, `${gameLookup} const game = findGame(); game.press('right', 'tps-audit-move'); return true;`);

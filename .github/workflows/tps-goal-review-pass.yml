@@ -4,8 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - scripts/apply-tps-goal-review-pass.mjs
-      - scripts/run-tps-goal-review-pass.mjs
+      - scripts/apply-tps-goal-review-pass.py
       - .github/workflows/tps-goal-review-pass.yml
   workflow_dispatch:
 
@@ -30,7 +29,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Apply TPS review improvements
-        run: node scripts/run-tps-goal-review-pass.mjs
+        run: python3 scripts/apply-tps-goal-review-pass.py
       - name: TPS regression suite
         run: npm run test:ci:tps
       - name: PWA startup regressions

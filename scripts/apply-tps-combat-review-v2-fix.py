@@ -41,15 +41,16 @@ p.write_text(text)
 
 p = Path("tests/tps-mode.test.ts")
 text = p.read_text()
-old = '  assert.match(page, /STEP \\+ 8-WAY/);\n'
-if old not in text:
-    raise SystemExit("legacy STEP + 8-WAY assertion not found")
-text = text.replace(old, '', 1)
-old = '  assert.match(source, /defender\\.state === "SIDESTEP" && this\\.playerStepSideWeight > 0\\.45/);\n'
-if old not in text:
-    raise SystemExit("legacy direct SIDESTEP assertion not found")
-text = text.replace(old, '', 1)
-text = text.replace('  assert.match(source, /PERFECT STEP/);', '  assert.match(source, /PERFECT STEP/);\n  assert.match(source, /SIDE STEP/);\n  assert.match(source, /playerStepThreatTicks/);\n  assert.match(source, /const reactiveSideStep = Boolean/);\n  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n  assert.match(source, /TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n  assert.match(source, /const trackedSideEvade/);', 1)
+for old, label in [
+    ('  assert.match(page, /STEP \\+ 8-WAY/);\n', "legacy STEP + 8-WAY assertion"),
+    ('  assert.match(source, /defender\\.state === "SIDESTEP" && this\\.playerStepSideWeight > 0\\.45/);\n', "legacy direct SIDESTEP assertion"),
+    ('  assert.match(source, /this\\.playerFlankWindowTicks = TPS_FLANK_WINDOW_TICKS/);\n', "legacy fixed flank-window assertion"),
+    ('  assert.doesNotMatch(source, /this\\.playerFlankWindowTicks = TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n', "legacy no-reactive-flank assertion"),
+]:
+    if old not in text:
+        raise SystemExit(f"{label} not found")
+    text = text.replace(old, '', 1)
+text = text.replace('  assert.match(source, /PERFECT STEP/);', '  assert.match(source, /PERFECT STEP/);\n  assert.match(source, /SIDE STEP/);\n  assert.match(source, /playerStepThreatTicks/);\n  assert.match(source, /const reactiveSideStep = Boolean/);\n  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n  assert.match(source, /TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n  assert.match(source, /Math\\.max\\(this\\.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS\\)/);\n  assert.match(source, /const trackedSideEvade/);', 1)
 p.write_text(text)
 
 # The flank probe releases side input at the authored STEP end. Capture the earned
@@ -73,4 +74,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 p.write_text(text)
 
-print("Updated TPS v2 with reliable reactive-step rewards, current assertions, and WebGL timing.")
+print("Updated TPS v2 with reliable reactive-step rewards and aligned acceptance tests.")

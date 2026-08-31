@@ -12,9 +12,14 @@ export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
+type MotionResources = {
+  source: THREE.Group;
+  clips: THREE.AnimationClip[];
+};
+
 type RuntimeResources = {
   model: THREE.Group;
-  clips: Map<string, THREE.AnimationClip>;
+  motion: MotionResources;
   bodyType: QuaterniusBodyType;
   modelUrl: string;
 };
@@ -37,7 +42,7 @@ type QuaterniusRuntime = {
 const runtimes = new WeakMap<THREE.Group, QuaterniusRuntime>();
 const installTokens = new WeakMap<THREE.Group, object>();
 const modelPromises = new Map<QuaterniusBodyType, Promise<THREE.Group>>();
-let clipsPromise: Promise<Map<string, THREE.AnimationClip>> | null = null;
+let motionPromise: Promise<MotionResources> | null = null;
 
 export function quaterniusBodyTypeForDefinition(definition: FighterDefinition): QuaterniusBodyType {
   return definition.archetype === "SPEED" ? "FEMALE" : "MALE";
@@ -59,25 +64,102 @@ function loadModel(bodyType: QuaterniusBodyType): Promise<THREE.Group> {
   return promise;
 }
 
-function loadClips(): Promise<Map<string, THREE.AnimationClip>> {
-  if (clipsPromise) return clipsPromise;
-  clipsPromise = new GLTFLoader().loadAsync(QUATERNIUS_UAL_CORE_URL).then((gltf) =>
-    new Map(gltf.animations.map((clip) => [clip.name, clip])),
-  ).catch((error) => {
-    clipsPromise = null;
+function loadMotion(): Promise<MotionResources> {
+  if (motionPromise) return motionPromise;
+  motionPromise = new GLTFLoader().loadAsync(QUATERNIUS_UAL_CORE_URL).then((gltf) => ({
+    source: gltf.scene,
+    clips: gltf.animations,
+  })).catch((error) => {
+    motionPromise = null;
     throw error;
   });
-  return clipsPromise;
+  return motionPromise;
 }
 
 function loadResources(bodyType: QuaterniusBodyType): Promise<RuntimeResources> {
   const modelUrl = quaterniusModelUrlForBodyType(bodyType);
-  return Promise.all([loadModel(bodyType), loadClips()]).then(([model, clips]) => ({
+  return Promise.all([loadModel(bodyType), loadMotion()]).then(([model, motion]) => ({
     model,
-    clips,
+    motion,
     bodyType,
     modelUrl,
   }));
+}
+
+function nodeMap(root: THREE.Object3D): Map<string, THREE.Object3D> {
+  const result = new Map<string, THREE.Object3D>();
+  root.traverse((object) => {
+    if (object.name) result.set(object.name, object);
+  });
+  return result;
+}
+
+/**
+ * UAL and UBC share 65/65 joint names, but some releases use different local
+ * rest rotations. Directly binding the absolute UAL quaternions therefore
+ * creates an A/T-pose bias. Retarget each rotation as:
+ * targetRest * inverse(sourceRest) * sourceAnimated.
+ *
+ * Bone positions/scales stay authored by the target model so limb lengths do
+ * not collapse. Only pelvis Y delta is retained; gameplay owns world X/Z.
+ */
+function retargetMotionClips(
+  sourceRoot: THREE.Object3D,
+  targetRoot: THREE.Object3D,
+  clips: readonly THREE.AnimationClip[],
+): Map<string, THREE.AnimationClip> {
+  const sourceNodes = nodeMap(sourceRoot);
+  const targetNodes = nodeMap(targetRoot);
+  const result = new Map<string, THREE.AnimationClip>();
+  const sourceAnimated = new THREE.Quaternion();
+  const sourceRestInverse = new THREE.Quaternion();
+  const targetAnimated = new THREE.Quaternion();
+
+  for (const clip of clips) {
+    const tracks: THREE.KeyframeTrack[] = [];
+    for (const track of clip.tracks) {
+      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+      const nodeName = parsed.nodeName;
+      const propertyName = parsed.propertyName;
+      if (!nodeName || !propertyName) continue;
+      const sourceNode = sourceNodes.get(nodeName);
+      const targetNode = targetNodes.get(nodeName);
+      if (!sourceNode || !targetNode) continue;
+
+      if (propertyName === "quaternion" && track.values.length % 4 === 0) {
+        const values = new Float32Array(track.values.length);
+        sourceRestInverse.copy(sourceNode.quaternion).invert();
+        for (let offset = 0; offset < track.values.length; offset += 4) {
+          sourceAnimated.fromArray(track.values, offset).normalize();
+          targetAnimated.copy(targetNode.quaternion)
+            .multiply(sourceRestInverse)
+            .multiply(sourceAnimated)
+            .normalize();
+          targetAnimated.toArray(values, offset);
+        }
+        const next = new THREE.QuaternionKeyframeTrack(track.name, track.times, values);
+        next.setInterpolation(track.getInterpolation());
+        tracks.push(next);
+        continue;
+      }
+
+      if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
+        const values = new Float32Array(track.values.length);
+        for (let offset = 0; offset < track.values.length; offset += 3) {
+          values[offset] = targetNode.position.x;
+          values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
+          values[offset + 2] = targetNode.position.z;
+        }
+        const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
+        next.setInterpolation(track.getInterpolation());
+        tracks.push(next);
+      }
+    }
+    const retargeted = new THREE.AnimationClip(clip.name, clip.duration, tracks, clip.blendMode);
+    retargeted.optimize();
+    result.set(retargeted.name, retargeted);
+  }
+  return result;
 }
 
 function styleMaterial(material: THREE.Material, definition: FighterDefinition): THREE.Material {
@@ -91,9 +173,6 @@ function styleMaterial(material: THREE.Material, definition: FighterDefinition):
   const skin = new THREE.Color(definition.colors.skin);
   const hair = new THREE.Color(definition.colors.hair);
 
-  // The runtime GLBs are intentionally textureless. Material names are used
-  // only as a best-effort semantic hint; unknown materials become the fighter's
-  // primary suit color rather than reverting to a white mannequin.
   next.map = null;
   next.normalMap = null;
   next.roughnessMap = null;
@@ -146,18 +225,11 @@ function cloneAndStyleModel(
   const host = new THREE.Group();
   host.name = `quaternius-ubc-${bodyType.toLowerCase()}-runtime`;
   host.scale.setScalar(1 / height);
-  // Existing POLY FIGHTER visuals use normalized 0..1 body height inside a
-  // root that applies the final world scale. Keep the imported model in that
-  // same space so gameplay position/facing remains owned by the canonical root.
   model.position.set(-center.x, -sourceBounds.min.y, -center.z);
   host.add(model);
   visual.root.add(host);
 
-  const bones = new Map<string, THREE.Object3D>();
-  model.traverse((object) => {
-    if (object.name) bones.set(object.name, object);
-  });
-  return { host, model, bones, ownedMaterials };
+  return { host, model, bones: nodeMap(model), ownedMaterials };
 }
 
 function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaternion): void {
@@ -232,9 +304,6 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
       return { name: move.id === "jab" ? "Punch_Jab" : "Punch_Cross", loop: false, speed: 1 / seconds };
     }
     if (move.animation === "kick") {
-      // UAL Standard has no dedicated kick clip. Use a full-body launch/roll
-      // as anticipation, then the active-frame IK correction puts the actual
-      // imported foot onto the deterministic gameplay contact point.
       return { name: move.id === "dashKick" ? "Roll" : "Jump_Start", loop: false, speed: 1 / seconds };
     }
     if (move.animation === "throw") return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
@@ -292,10 +361,11 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
   void loadResources(bodyType).then((resources) => {
     if (installTokens.get(visual.root) !== token) return;
     const styled = cloneAndStyleModel(resources.model, visual, definition, bodyType);
+    const retargetedClips = retargetMotionClips(resources.motion.source, styled.model, resources.motion.clips);
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
-      clips: resources.clips,
+      clips: retargetedClips,
       currentClip: "",
       currentAction: null,
       lastTime: 0,
@@ -304,14 +374,13 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       modelUrl: resources.modelUrl,
     };
     runtimes.set(visual.root, runtime);
-    // Keep the canonical rig alive for deterministic hitboxes/IK, but hide its
-    // original render meshes only after the imported model is fully installed.
     for (const mesh of visual.allMeshes) {
       if (mesh !== visual.aura) mesh.visible = false;
     }
     visual.root.userData.quaterniusModelState = "ready";
     visual.root.userData.quaterniusModelAsset = modelUrl;
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
+    visual.root.userData.quaterniusRetargetMode = "rest-delta";
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

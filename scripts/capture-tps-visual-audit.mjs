@@ -204,6 +204,12 @@ try {
     game.playerEvadeSign = 0;
     game.p1.position.set(0, 0, 1.4);
     game.p2.position.set(0, 0, -0.3);
+    // The real-time strafe probe above can leave FighterRuntime.input on RIGHT
+    // even after InputSystem.clear(). Reset the runtime frame too, otherwise the
+    // deterministic quickstep probe can lose the justPressed edge and look flaky.
+    const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+    game.p1.input = { ...neutral };
+    game.p1.previousInput = { ...neutral };
     const start = { x: game.p1.position.x, z: game.p1.position.z };
     game.press('guard', 'tps-audit-evade-g');
     game.press('right', 'tps-audit-evade-side');

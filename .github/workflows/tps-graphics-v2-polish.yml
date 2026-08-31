@@ -29,29 +29,29 @@ jobs:
           path = Path('src/game/tps-graphics.ts')
           text = path.read_text()
 
-          replacements = {
-            'private readonly attackTrailGeometry = new THREE.TorusGeometry(0.72, 0.034, 6, 36, Math.PI * 0.78);':
-              'private readonly attackTrailGeometry = new THREE.TorusGeometry(0.56, 0.022, 6, 32, Math.PI * 0.64);',
-            'trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.42);':
-              'trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.3);',
-            'ghost.material.opacity = Math.max(0, (1 - progress) * 0.15);':
-              'ghost.material.opacity = Math.max(0, (1 - progress) * 0.19);',
-            'trail.mesh.position.copy(attacker.position).addScaledVector(forward, kick ? 0.68 : 0.56);\n      trail.mesh.position.y = kick ? 0.83 : 1.28;':
-              'const contactSide = move.visualContact === "LEFT_FIST" || move.visualContact === "LEFT_FOOT" ? -1 : move.visualContact === "RIGHT_FIST" || move.visualContact === "RIGHT_FOOT" ? 1 : 0;\n      trail.mesh.position.copy(attacker.position)\n        .addScaledVector(forward, kick ? 0.76 : 0.72)\n        .addScaledVector(right, contactSide * (kick ? 0.22 : 0.28));\n      trail.mesh.position.y = kick ? 0.78 : 1.42;',
-            'trail.mesh.scale.set(kick ? 1.26 : 0.88, kick ? 0.92 : 0.7, 1);':
-              'trail.mesh.scale.set(kick ? 1.18 : 0.82, kick ? 0.82 : 0.6, 1);',
-            'trail.mesh.material.opacity = active ? 0.42 : 0.24;':
-              'trail.mesh.material.opacity = active ? 0.3 : 0.16;',
-            'ghost.life = 0.19;':
-              'ghost.life = 0.26;',
-            'ghost.group.position.copy(fighter.position);\n      ghost.group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);':
-              'const right = new THREE.Vector3(-forward.z, 0, forward.x);\n      const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 0;\n      ghost.group.position.copy(fighter.position).addScaledVector(right, -sideSign * 0.46);\n      ghost.group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);',
-            'ghost.material.opacity = 0.15;':
-              'ghost.material.opacity = 0.19;',
-          }
-          for old, new in replacements.items():
+          replacements = [
+            ('private readonly attackTrailGeometry = new THREE.TorusGeometry(0.72, 0.034, 6, 36, Math.PI * 0.78);',
+             'private readonly attackTrailGeometry = new THREE.TorusGeometry(0.56, 0.022, 6, 32, Math.PI * 0.64);'),
+            ('trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.42);',
+             'trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.3);'),
+            ('ghost.material.opacity = Math.max(0, (1 - progress) * 0.15);',
+             'ghost.material.opacity = Math.max(0, (1 - progress) * 0.19);'),
+            ('    trail.mesh.position.copy(attacker.position).addScaledVector(forward, kick ? 0.68 : 0.56);',
+             '    const contactSide = move.visualContact === "LEFT_FIST" || move.visualContact === "LEFT_FOOT" ? -1 : move.visualContact === "RIGHT_FIST" || move.visualContact === "RIGHT_FOOT" ? 1 : 0;\n    trail.mesh.position.copy(attacker.position)\n      .addScaledVector(forward, kick ? 0.76 : 0.72)\n      .addScaledVector(right, contactSide * (kick ? 0.22 : 0.28));'),
+            ('    trail.mesh.position.y = kick ? 0.83 : 1.28;',
+             '    trail.mesh.position.y = kick ? 0.78 : 1.42;'),
+            ('    trail.mesh.scale.set(kick ? 1.26 : 0.88, kick ? 0.92 : 0.7, 1);',
+             '    trail.mesh.scale.set(kick ? 1.18 : 0.82, kick ? 0.82 : 0.6, 1);'),
+            ('    trail.mesh.material.opacity = active ? 0.42 : 0.24;',
+             '    trail.mesh.material.opacity = active ? 0.3 : 0.16;'),
+            ('    ghost.life = 0.19;', '    ghost.life = 0.26;'),
+            ('    ghost.group.position.copy(fighter.position);',
+             '    const right = new THREE.Vector3(-forward.z, 0, forward.x);\n    const sideSign = fighter.input.right ? 1 : fighter.input.left ? -1 : 0;\n    ghost.group.position.copy(fighter.position).addScaledVector(right, -sideSign * 0.46);'),
+            ('    ghost.material.opacity = 0.15;', '    ghost.material.opacity = 0.19;'),
+          ]
+          for old, new in replacements:
               if old not in text:
-                  raise SystemExit(f'missing polish anchor: {old[:80]}')
+                  raise SystemExit(f'missing polish anchor: {old}')
               text = text.replace(old, new, 1)
           path.write_text(text)
           PY

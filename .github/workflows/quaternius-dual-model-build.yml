@@ -1,0 +1,95 @@
+name: Build lightweight Quaternius fighter models
+
+on:
+  push:
+    paths:
+      - ".github/workflows/quaternius-dual-model-build.yml"
+      - "scripts/build-quaternius-flat-model.mjs"
+      - "scripts/inspect-quaternius-character.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install glTF Transform
+        run: npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
+
+      - name: Fetch pinned CC0 male and female base characters
+        run: |
+          set -euxo pipefail
+          mkdir -p .tmp-quaternius public/models/quaternius docs
+          PIN=57c0855a6622d4654fe32e9208efb820051164e3
+          ROOT="https://raw.githubusercontent.com/aaroohhiiii/ggj/$PIN/Universal%20Base%20Characters%5BStandard%5D/Base%20Characters/Godot%20-%20UE"
+          curl -L --fail --retry 3 "$ROOT/Superhero_Male_FullBody.gltf" -o .tmp-quaternius/Superhero_Male_FullBody.gltf
+          curl -L --fail --retry 3 "$ROOT/Superhero_Male_FullBody.bin" -o .tmp-quaternius/Superhero_Male_FullBody.bin
+          curl -L --fail --retry 3 "$ROOT/Superhero_Female_FullBody.gltf" -o .tmp-quaternius/Superhero_Female_FullBody.gltf
+          curl -L --fail --retry 3 "$ROOT/Superhero_Female_FullBody.bin" -o .tmp-quaternius/Superhero_Female_FullBody.bin
+          test "$(git hash-object .tmp-quaternius/Superhero_Male_FullBody.gltf)" = "7e4b5b57dca66cced9127b25a6f111a0919da00a"
+          test "$(git hash-object .tmp-quaternius/Superhero_Male_FullBody.bin)" = "54309de6c6ccad823a8ced11056f4013b197b1c6"
+          test "$(git hash-object .tmp-quaternius/Superhero_Female_FullBody.gltf)" = "804aa3d3bbbd1977d31ec25c7dbf9a00705be49d"
+          test "$(git hash-object .tmp-quaternius/Superhero_Female_FullBody.bin)" = "6e6507c85a4993e97d31f187b4d0715af300400d"
+
+      - name: Convert to textureless flat-shaded GLB
+        run: |
+          set -euxo pipefail
+          node scripts/build-quaternius-flat-model.mjs \
+            .tmp-quaternius/Superhero_Male_FullBody.gltf \
+            public/models/quaternius/ubc-superhero-male-flat.glb
+          node scripts/build-quaternius-flat-model.mjs \
+            .tmp-quaternius/Superhero_Female_FullBody.gltf \
+            public/models/quaternius/ubc-superhero-female-flat.glb
+          ls -lh public/models/quaternius/ubc-superhero-*-flat.glb
+          test "$(stat -c%s public/models/quaternius/ubc-superhero-male-flat.glb)" -lt 2000000
+          test "$(stat -c%s public/models/quaternius/ubc-superhero-female-flat.glb)" -lt 2000000
+
+      - name: Verify Universal Animation Library compatibility
+        run: |
+          set -euxo pipefail
+          node scripts/inspect-quaternius-character.mjs \
+            public/models/quaternius/ubc-superhero-male-flat.glb \
+            public/models/quaternius/ual-fight-core.glb \
+            docs/quaternius-male-flat-report.json
+          node scripts/inspect-quaternius-character.mjs \
+            public/models/quaternius/ubc-superhero-female-flat.glb \
+            public/models/quaternius/ual-fight-core.glb \
+            docs/quaternius-female-flat-report.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          for (const file of ['docs/quaternius-male-flat-report.json', 'docs/quaternius-female-flat-report.json']) {
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (report.model.textures !== 0) throw new Error(`${file}: textures were not removed`);
+            if (report.compatibility.targetNameCoverage !== 1) throw new Error(`${file}: motion rig coverage is not 100%`);
+            if (report.compatibility.missingMotionTargets.length !== 0) throw new Error(`${file}: missing motion targets`);
+          }
+          NODE
+
+      - name: Publish validated runtime models
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            public/models/quaternius/ubc-superhero-male-flat.glb \
+            public/models/quaternius/ubc-superhero-female-flat.glb \
+            docs/quaternius-male-flat-report.json \
+            docs/quaternius-female-flat-report.json
+          if git diff --cached --quiet; then
+            echo "Runtime models already current"
+            exit 0
+          fi
+          git commit -m "Add lightweight Quaternius male and female fighter models"
+          git push origin HEAD:main

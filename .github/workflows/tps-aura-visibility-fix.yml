@@ -1,0 +1,61 @@
+name: Apply TPS aura readability fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/tps-aura-visibility-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Disable close-camera aura only in TPS
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          tps = Path('src/game/tps-game.ts')
+          source = tps.read_text()
+          old = '''    this.animation.update(fighter, opponent, time);\n    const forward = horizontalDirection(fighter.position, opponent.position);'''
+          new = '''    this.animation.update(fighter, opponent, time);\n    // The shared 1v1 attack aura is intentionally large and reads well from\n    // the side camera, but in shoulder-view TPS it becomes a full-screen\n    // translucent slab at contact. Keep particles/flash impacts and suppress\n    // only that presentation aura in this mode.\n    fighter.visual.aura.visible = false;\n    const forward = horizontalDirection(fighter.position, opponent.position);'''
+          if old not in source:
+              raise SystemExit('TPS updateVisual marker not found')
+          tps.write_text(source.replace(old, new, 1))
+
+          test = Path('tests/tps-mode.test.ts')
+          source = test.read_text()
+          marker = '''  assert.match(source, /moveSpeed \\* 0\\.42/);'''
+          replacement = '''  assert.match(source, /moveSpeed \\* 0\\.42/);\n  assert.match(source, /fighter\\.visual\\.aura\\.visible = false/);'''
+          if marker not in source:
+              raise SystemExit('TPS test marker not found')
+          test.write_text(source.replace(marker, replacement, 1))
+          PY
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:rules
+      - run: npm run build
+      - run: npm run lint
+      - name: Commit TPS readability fix
+        run: |
+          if [ -z "$(git diff -- src/game/tps-game.ts tests/tps-mode.test.ts)" ]; then
+            echo "No product changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game.ts tests/tps-mode.test.ts
+          git commit -m "Keep TPS attack impacts readable"
+          git push origin HEAD:main

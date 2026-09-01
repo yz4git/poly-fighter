@@ -114,7 +114,15 @@ jobs:
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json
           cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
+      - name: Preserve server log
+        if: always()
+        run: |
+          mkdir -p artifacts/tps-visual-audit
+          if [ -f /tmp/poly-fighter-tps-server.log ]; then
+            cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
+          fi
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poly-fighter-tps-webgl-audit
           path: artifacts/tps-visual-audit

@@ -1,1 +1,0 @@
-Motion Readability v2 is validated only when the TPS WebGL audit captures active poses for all authored attacks and records MOTION_READABILITY_V2 with OPPONENT_WEIGHTED_IK. See docs/MOTION_READABILITY_V2.md for the playcheck findings and implementation rationale.

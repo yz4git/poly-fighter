@@ -1,0 +1,44 @@
+name: Apply arm and fist playtest fix
+
+on:
+  push:
+    branches:
+      - fix/arm-fist-playtest-20260901
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[arm-fist-auto]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/arm-fist-playtest-20260901
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply source fix
+        run: python3 scripts/apply-arm-fist-playtest-fix.py
+      - run: npm ci --no-audit --no-fund
+      - name: Run TPS regression suite
+        run: npm run test:ci:tps
+      - name: Run lint
+        run: npm run lint
+      - name: Build production preview
+        run: npm run build
+      - name: Commit verified fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/visual-quaternius-runtime.ts src/game/quaternius-graphics-polish.ts tests/quaternius-model-skin.test.ts scripts/capture-motion-readability-audit.mjs
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+            exit 0
+          fi
+          git commit -m "Fix imported forearms and restore fist silhouettes [arm-fist-auto]"
+          git push origin HEAD:fix/arm-fist-playtest-20260901

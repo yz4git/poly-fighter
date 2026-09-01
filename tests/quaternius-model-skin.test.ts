@@ -6,6 +6,7 @@ import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS } from "../src/game/mod
 import {
   QUATERNIUS_OUTFIT_SKIN_ID,
   quaterniusOutfitToneForBoneName,
+  quaterniusShouldTintScalp,
 } from "../src/game/quaternius-outfit-skin";
 import {
   QUATERNIUS_UBC_FEMALE_MODEL_URL,
@@ -103,10 +104,16 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
   assert.match(polish, /ubc-sera-ponytail-lower/);
 });
 
-test("weighted UBC outfit skin maps face to skin and the remaining rig to clothing", async () => {
-  assert.equal(QUATERNIUS_OUTFIT_SKIN_ID, "QUATERNIUS_OUTFIT_SKIN_V2_MATERIAL_AWARE_VERTEX_COLOR");
+test("weighted UBC outfit skin keeps the face skin-coloured while tinting exposed upper scalp as hair", async () => {
+  assert.equal(QUATERNIUS_OUTFIT_SKIN_ID, "QUATERNIUS_OUTFIT_SKIN_V3_SCALP_HAIR_VERTEX_COLOR");
   assert.equal(quaterniusOutfitToneForBoneName("Head", "POWER"), "SKIN");
   assert.equal(quaterniusOutfitToneForBoneName("neck_01", "SPEED"), "SKIN");
+
+  assert.equal(quaterniusShouldTintScalp(0.44, 1.0, "POWER"), false);
+  assert.equal(quaterniusShouldTintScalp(0.8, 0.67, "POWER"), false);
+  assert.equal(quaterniusShouldTintScalp(0.8, 0.68, "POWER"), true);
+  assert.equal(quaterniusShouldTintScalp(0.8, 0.65, "SPEED"), false);
+  assert.equal(quaterniusShouldTintScalp(0.8, 0.66, "SPEED"), true);
 
   assert.equal(quaterniusOutfitToneForBoneName("spine_03", "POWER"), "LIGHT");
   assert.equal(quaterniusOutfitToneForBoneName("spine_02", "POWER"), "PRIMARY");
@@ -129,6 +136,10 @@ test("weighted UBC outfit skin maps face to skin and the remaining rig to clothi
   assert.match(outfitSkin, /material\.vertexColors = true/);
   assert.match(outfitSkin, /skinIndex/);
   assert.match(outfitSkin, /skinWeight/);
+  assert.match(outfitSkin, /headWeightAt/);
+  assert.match(outfitSkin, /palette\.hair/);
+  assert.match(outfitSkin, /hairVertices/);
+  assert.match(outfitSkin, /scalpHairRatio/);
   assert.match(outfitSkin, /clothingRatio/);
   assert.match(outfitSkin, /shouldKeepAuthoredMaterial\(mesh, material\)/);
   assert.match(outfitSkin, /quaterniusOutfitSkinMaterialCount/);

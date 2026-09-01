@@ -8,18 +8,19 @@ import type { FighterVisual } from "./visual";
  * The base character already owns a proven SkinnedMesh and 65-joint UAL-compatible
  * rig. Rebinding a second full costume mesh at runtime would duplicate skinning
  * work and invite rest-pose mismatch. Instead, use the existing vertex weights as
- * semantic body regions: head/neck remain skin while torso, arms and legs receive
- * garment vertex colours. Authored hair/eye materials opt out per material group,
- * so a multi-material body mesh can still be dressed without repainting the face.
- * Thin bind-delta panels in quaternius-graphics-polish add the visible jacket,
- * seams and guards without replacing the animated body surface.
+ * semantic body regions: face/neck remain skin while torso, arms and legs receive
+ * garment vertex colours. The upper Head-weighted scalp is tinted with the fighter
+ * hair colour so gaps between authored hair pieces never expose skin-coloured hair.
+ * Authored hair/eye materials still opt out per material group, so a multi-material
+ * body mesh can be dressed without repainting those authored details.
  */
-export const QUATERNIUS_OUTFIT_SKIN_ID = "QUATERNIUS_OUTFIT_SKIN_V2_MATERIAL_AWARE_VERTEX_COLOR";
+export const QUATERNIUS_OUTFIT_SKIN_ID = "QUATERNIUS_OUTFIT_SKIN_V3_SCALP_HAIR_VERTEX_COLOR";
 
 type OutfitTone = "SKIN" | "LIGHT" | "PRIMARY" | "DARK";
 
 interface OutfitPalette {
   skin: THREE.Color;
+  hair: THREE.Color;
   light: THREE.Color;
   primary: THREE.Color;
   dark: THREE.Color;
@@ -76,12 +77,29 @@ export function quaterniusOutfitToneForBoneName(
   return "DARK";
 }
 
+/**
+ * UBC has no separate scalp bone: the face and scalp are both weighted to Head.
+ * Use the upper portion of the Head-weighted vertex range as an under-hair region.
+ * POWER keeps a slightly higher hairline; SPEED gets a little more crown coverage
+ * to sit cleanly under SERA's fringe and ponytail.
+ */
+export function quaterniusShouldTintScalp(
+  headWeight: number,
+  normalizedHeadHeight: number,
+  archetype: FighterDefinition["archetype"],
+): boolean {
+  if (headWeight < 0.45) return false;
+  const hairline = archetype === "POWER" ? 0.68 : 0.66;
+  return normalizedHeadHeight >= hairline;
+}
+
 function outfitPalette(definition: FighterDefinition): OutfitPalette {
   const primary = new THREE.Color(definition.colors.primary);
   const secondary = new THREE.Color(definition.colors.secondary);
   if (definition.archetype === "POWER") {
     return {
       skin: new THREE.Color(definition.colors.skin),
+      hair: new THREE.Color(definition.colors.hair),
       light: new THREE.Color(0xf0f1ef).lerp(primary, 0.10),
       primary: primary.clone().offsetHSL(0, 0.025, 0.01),
       dark: secondary.clone().lerp(new THREE.Color(0x20242d), 0.20),
@@ -89,6 +107,7 @@ function outfitPalette(definition: FighterDefinition): OutfitPalette {
   }
   return {
     skin: new THREE.Color(definition.colors.skin),
+    hair: new THREE.Color(definition.colors.hair),
     light: new THREE.Color(0xf1f7fb).lerp(primary, 0.13),
     primary: primary.clone().offsetHSL(0, 0.02, 0.015),
     dark: secondary.clone().lerp(new THREE.Color(0x1c2430), 0.22),
@@ -116,6 +135,23 @@ function skinWeightAt(attribute: THREE.BufferAttribute | THREE.InterleavedBuffer
   if (slot === 1) return attribute.getY(vertex);
   if (slot === 2) return attribute.getZ(vertex);
   return attribute.getW(vertex);
+}
+
+function headWeightAt(
+  mesh: THREE.SkinnedMesh,
+  skinIndex: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  skinWeight: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  vertex: number,
+): number {
+  let total = 0;
+  for (let slot = 0; slot < 4; slot += 1) {
+    const weight = Math.max(0, skinWeightAt(skinWeight, vertex, slot));
+    if (weight <= 1e-5) continue;
+    const boneIndex = skinIndexAt(skinIndex, vertex, slot);
+    const boneName = normalizedBoneName(mesh.skeleton.bones[boneIndex]?.name ?? "");
+    if (boneName === "head" || boneName.startsWith("head_")) total += weight;
+  }
+  return total;
 }
 
 function authoredMaterialTag(mesh: THREE.Mesh, material: THREE.Material): string {
@@ -150,7 +186,7 @@ function prepareOutfitMaterial(mesh: THREE.Mesh, material: THREE.Material): bool
 function applyWeightedOutfitColors(
   mesh: THREE.SkinnedMesh,
   definition: FighterDefinition,
-): { vertices: number; skinVertices: number; clothingVertices: number; outfitMaterials: number } | null {
+): { vertices: number; skinVertices: number; hairVertices: number; clothingVertices: number; outfitMaterials: number } | null {
   const geometry = mesh.geometry;
   const position = geometry.getAttribute("position");
   const skinIndex = geometry.getAttribute("skinIndex");
@@ -166,8 +202,25 @@ function applyWeightedOutfitColors(
 
   const palette = outfitPalette(definition);
   const colors = new Float32Array(position.count * 3);
+  const headWeights = new Float32Array(position.count);
   const blended = new THREE.Color();
+  let headMinY = Number.POSITIVE_INFINITY;
+  let headMaxY = Number.NEGATIVE_INFINITY;
+
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const weight = headWeightAt(mesh, skinIndex, skinWeight, vertex);
+    headWeights[vertex] = weight;
+    if (weight < 0.35) continue;
+    const y = position.getY(vertex);
+    headMinY = Math.min(headMinY, y);
+    headMaxY = Math.max(headMaxY, y);
+  }
+  const headRange = Number.isFinite(headMinY) && Number.isFinite(headMaxY)
+    ? Math.max(1e-5, headMaxY - headMinY)
+    : 0;
+
   let skinVertices = 0;
+  let hairVertices = 0;
   let clothingVertices = 0;
 
   for (let vertex = 0; vertex < position.count; vertex += 1) {
@@ -195,11 +248,22 @@ function applyWeightedOutfitColors(
       blended.copy(palette.dark);
     }
 
+    const normalizedHeadHeight = headRange > 0
+      ? THREE.MathUtils.clamp((position.getY(vertex) - headMinY) / headRange, 0, 1)
+      : 0;
+    const scalpHair = quaterniusShouldTintScalp(
+      headWeights[vertex],
+      normalizedHeadHeight,
+      definition.archetype,
+    );
+    if (scalpHair) blended.copy(palette.hair);
+
     const offset = vertex * 3;
     colors[offset] = blended.r;
     colors[offset + 1] = blended.g;
     colors[offset + 2] = blended.b;
-    if (skinWeightTotal >= 0.5) skinVertices += 1;
+    if (scalpHair) hairVertices += 1;
+    else if (skinWeightTotal >= 0.5) skinVertices += 1;
     else clothingVertices += 1;
   }
 
@@ -207,7 +271,7 @@ function applyWeightedOutfitColors(
   geometry.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   mesh.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   mesh.userData.quaterniusOutfitMaterialCount = outfitMaterials;
-  return { vertices: position.count, skinVertices, clothingVertices, outfitMaterials };
+  return { vertices: position.count, skinVertices, hairVertices, clothingVertices, outfitMaterials };
 }
 
 function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinition): boolean {
@@ -223,6 +287,7 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   let outfitMaterials = 0;
   let recoloredVertices = 0;
   let skinVertices = 0;
+  let hairVertices = 0;
   let clothingVertices = 0;
   host.traverse((object) => {
     const mesh = object as THREE.SkinnedMesh;
@@ -233,6 +298,7 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
     outfitMaterials += result.outfitMaterials;
     recoloredVertices += result.vertices;
     skinVertices += result.skinVertices;
+    hairVertices += result.hairVertices;
     clothingVertices += result.clothingVertices;
   });
 
@@ -244,8 +310,10 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   visual.root.userData.quaterniusOutfitSkinVertices = recoloredVertices;
   visual.root.userData.quaterniusOutfitSkinCoverage = {
     skinVertices,
+    hairVertices,
     clothingVertices,
-    clothingRatio: clothingVertices / Math.max(1, skinVertices + clothingVertices),
+    clothingRatio: clothingVertices / Math.max(1, skinVertices + hairVertices + clothingVertices),
+    scalpHairRatio: hairVertices / Math.max(1, skinVertices + hairVertices),
   };
   return true;
 }

@@ -4,10 +4,12 @@ import test from "node:test";
 import { FIGHTER_DEFINITIONS, MOVE_ORDER } from "../src/game/definitions";
 import {
   MOTION_EXPANSION_PROFILE,
+  chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
   motionClipForMove,
   motionSpecForMove,
   reactionKindForMove,
+  tpsComboLinkWindow,
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
@@ -129,7 +131,11 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
 
-  assert.match(source, /const runtime = ensureRuntime\(fighter\);\s*if \(!EXPANDED_STATES\.has\(fighter\.state\)\) return false;/);
+  assert.match(source, /const runtime = ensureRuntime\(fighter\);/);
+  assert.match(source, /TAIL_NEUTRAL_STATES/);
+  assert.match(source, /motionExpansionTailKind/);
+  assert.match(source, /COMBO_LINK_BLEND_SECONDS = 0\.075/);
+  assert.match(source, /currentPhase = "SETTLE"/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
   assert.match(source, /PROCEDURAL_URL/);
@@ -182,6 +188,33 @@ test("TPS combo graph branches without adding input buttons", () => {
     [0, 1, 2].map((stage) => tpsComboMoveForRoute("PERFECT", stage, sera)),
     ["counter", "straight", "risingKick"],
   );
+});
+
+test("TPS authored combo links wait for recovery settle and branch inside cancelWindow", () => {
+  const kairo = FIGHTER_DEFINITIONS.red;
+  const jab = kairo.moves.jab;
+  const power = kairo.moves.power;
+  const jabWindow = tpsComboLinkWindow(jab);
+  const powerWindow = tpsComboLinkWindow(power);
+
+  assert.ok(jabWindow.queueStart < jabWindow.linkStart);
+  assert.ok(jabWindow.linkStart > jab.startup + jab.active);
+  assert.ok(jabWindow.linkEnd < jab.startup + jab.active + jab.recovery);
+  assert.ok(jabWindow.linkEnd - jabWindow.linkStart + 1 <= jab.cancelWindow);
+  assert.ok(powerWindow.linkStart > power.startup + power.active);
+
+  assert.equal(chooseTpsComboContinuationRoute({
+    currentRoute: "CLOSE_A", distance: 1.2, forward: false, back: false, side: true,
+  }), "CLOSE_B");
+  assert.equal(chooseTpsComboContinuationRoute({
+    currentRoute: "CLOSE_B", distance: 1.2, forward: true, back: false, side: false,
+  }), "CLOSE_A");
+  assert.equal(chooseTpsComboContinuationRoute({
+    currentRoute: "CLOSE_A", distance: 2.0, forward: true, back: false, side: false,
+  }), "FAR");
+  assert.equal(chooseTpsComboContinuationRoute({
+    currentRoute: "PERFECT", distance: 2.0, forward: false, back: true, side: false,
+  }), "PERFECT");
 });
 
 test("left/right contact assignments make adjacent punches visibly alternate limbs", () => {

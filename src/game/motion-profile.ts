@@ -29,6 +29,12 @@ export type MoveMotionSpec = {
 
 export type TpsComboRoute = "CLOSE_A" | "CLOSE_B" | "FAR" | "FLANK" | "PERFECT";
 
+export type TpsComboLinkWindow = {
+  queueStart: number;
+  linkStart: number;
+  linkEnd: number;
+};
+
 /**
  * Runtime-authoritative motion mapping.
  *
@@ -139,6 +145,49 @@ export function chooseTpsComboRoute(input: {
   if (input.flank) return "FLANK";
   if (input.distance > 1.58) return "FAR";
   return input.variationSeed % 2 === 0 ? "CLOSE_A" : "CLOSE_B";
+}
+
+/**
+ * A combo link is deliberately narrower than the whole recovery period.
+ * ATTACK may be buffered shortly before recovery, but the actual branch only
+ * fires after a small visible settle beat and before the authored cancel window
+ * closes. Gameplay therefore stays responsive without visually snapping from
+ * impact directly into the next startup.
+ */
+export function tpsComboLinkWindow(move: MoveDefinition): TpsComboLinkWindow {
+  const recoveryStart = move.startup + move.active;
+  const recoveryTicks = Math.max(1, move.recovery);
+  const usableRecovery = Math.max(1, recoveryTicks - 2);
+  const authoredWindow = Math.max(1, Math.min(usableRecovery, move.cancelWindow));
+  const settleTicks = Math.max(1, Math.min(usableRecovery, Math.round(recoveryTicks * 0.22)));
+  const linkStart = recoveryStart + settleTicks;
+  const linkEnd = Math.min(recoveryStart + recoveryTicks - 1, linkStart + authoredWindow - 1);
+  return {
+    queueStart: Math.max(move.startup, recoveryStart - 2),
+    linkStart,
+    linkEnd,
+  };
+}
+
+/**
+ * Direction held with the buffered ATTACK chooses the continuation at the link
+ * point. Earned PERFECT/FLANK routes stay locked; ordinary strings may change
+ * between pressure and angle routes, while knockback naturally promotes a FAR
+ * continuation. No extra input button is required.
+ */
+export function chooseTpsComboContinuationRoute(input: {
+  currentRoute: TpsComboRoute;
+  distance: number;
+  forward: boolean;
+  back: boolean;
+  side: boolean;
+}): TpsComboRoute {
+  if (input.currentRoute === "PERFECT" || input.currentRoute === "FLANK") return input.currentRoute;
+  if (input.distance > 1.72) return "FAR";
+  if (input.side || input.back) return "CLOSE_B";
+  if (input.forward) return "CLOSE_A";
+  if (input.currentRoute === "FAR") return "CLOSE_A";
+  return input.currentRoute;
 }
 
 export function tpsComboMoveForRoute(

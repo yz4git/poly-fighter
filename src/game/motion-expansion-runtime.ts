@@ -70,7 +70,13 @@ const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
 };
 
 type SourcePack = { source: THREE.Group; clips: THREE.AnimationClip[] };
-type MotionPhase = "STARTUP" | "ACTIVE" | "RECOVERY" | "REACTION" | "AIR" | "DOWN" | "EVASION";
+type MotionPhase = "STARTUP" | "ACTIVE" | "RECOVERY" | "REACTION" | "AIR" | "DOWN" | "EVASION" | "SETTLE";
+type MotionTail = {
+  kind: "ATTACK" | "REACTION" | "BLOCK";
+  holdUntil: number;
+  endAt: number;
+  blending: boolean;
+};
 type ExpansionRuntime = {
   model: THREE.Group;
   mixer: THREE.AnimationMixer;
@@ -82,6 +88,11 @@ type ExpansionRuntime = {
   lastTime: number;
   lastMoveTick: number;
   lastReactionSerial: number;
+  lastGameplayState: FighterRuntime["state"];
+  lastAttackPower: number;
+  lastReactionTier: 1 | 2 | 3;
+  lastComboLinkSerial: number;
+  tail: MotionTail | null;
   ready: boolean;
   loading: boolean;
 };
@@ -211,6 +222,11 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     lastTime: 0,
     lastMoveTick: -1,
     lastReactionSerial: -1,
+    lastGameplayState: fighter.state,
+    lastAttackPower: 1,
+    lastReactionTier: 1,
+    lastComboLinkSerial: 0,
+    tail: null,
     ready: false,
     loading: true,
   };
@@ -325,12 +341,20 @@ function desiredMotion(fighter: FighterRuntime): DesiredMotion {
   return { name: "Idle_Loop", loop: true, speed: 1, phase: "REACTION" };
 }
 
-function playClip(runtime: ExpansionRuntime, requested: string, loop: boolean, speed: number, restart: boolean): void {
+function playClip(
+  runtime: ExpansionRuntime,
+  requested: string,
+  loop: boolean,
+  speed: number,
+  restart: boolean,
+  blendOverride?: number,
+): void {
   const name = resolveClip(runtime, requested);
   if (runtime.currentClip === name && !restart) return;
   const clip = runtime.clips.get(name);
   if (!clip) return;
-  const blend = name.startsWith("Hit_") || name === "Death01" || name === "Idle_Shield_Break" ? 0.025 : 0.045;
+  const defaultBlend = name.startsWith("Hit_") || name === "Death01" || name === "Idle_Shield_Break" ? 0.025 : 0.045;
+  const blend = blendOverride ?? defaultBlend;
   runtime.currentAction?.fadeOut(blend);
   const action = runtime.mixer.clipAction(clip, runtime.model);
   action.reset();
@@ -569,6 +593,36 @@ function airborneAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): voi
   addRotation(runtime, "thigh_r", 0.18, 0, 0.04, 1);
 }
 
+const TAIL_NEUTRAL_STATES = new Set<FighterRuntime["state"]>(["IDLE", "WALK", "CROUCH"]);
+const COMBO_LINK_BLEND_SECONDS = 0.075;
+
+function attackTailTiming(power: number): { hold: number; blend: number } {
+  if (power >= 1.55) return { hold: 0.075, blend: 0.135 };
+  if (power >= 1.05) return { hold: 0.055, blend: 0.115 };
+  return { hold: 0.038, blend: 0.090 };
+}
+
+function reactionTailTiming(tier: 1 | 2 | 3, blocked: boolean): { hold: number; blend: number } {
+  if (blocked) return { hold: 0.040, blend: 0.095 };
+  if (tier === 3) return { hold: 0.095, blend: 0.175 };
+  if (tier === 2) return { hold: 0.070, blend: 0.145 };
+  return { hold: 0.050, blend: 0.115 };
+}
+
+function beginTail(
+  runtime: ExpansionRuntime,
+  kind: MotionTail["kind"],
+  timeSeconds: number,
+  timing: { hold: number; blend: number },
+): void {
+  runtime.tail = {
+    kind,
+    holdUntil: timeSeconds + timing.hold,
+    endAt: timeSeconds + timing.hold + timing.blend,
+    blending: false,
+  };
+}
+
 /**
  * Returns true when the expanded runtime owns the current pose. Neutral/guard
  * states intentionally return false so the older audited UBC ready-pose layer
@@ -576,21 +630,89 @@ function airborneAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): voi
  * the FIRST attack no longer falls back while the animation GLBs are loading.
  */
 export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: FighterRuntime, timeSeconds: number): boolean {
-  motionReactionFor(fighter);
+  const reaction = motionReactionFor(fighter);
   const runtime = ensureRuntime(fighter);
-  if (!EXPANDED_STATES.has(fighter.state)) return false;
   if (!runtime?.ready) return false;
 
-  const reaction = motionReactionFor(fighter);
+  const previousState = runtime.lastGameplayState;
+  const tailNeutral = TAIL_NEUTRAL_STATES.has(fighter.state);
+
+  if (fighter.state === "ATTACK" && fighter.currentMove) {
+    runtime.lastAttackPower = fighter.currentMove.power;
+    runtime.tail = null;
+  } else if (fighter.state === "HIT" || fighter.state === "BLOCK_STUN") {
+    runtime.lastReactionTier = reaction.tier;
+    runtime.tail = null;
+  } else if (tailNeutral && !runtime.tail) {
+    if (previousState === "ATTACK") {
+      beginTail(runtime, "ATTACK", timeSeconds, attackTailTiming(runtime.lastAttackPower));
+    } else if (previousState === "HIT" || previousState === "BLOCK_STUN") {
+      beginTail(
+        runtime,
+        previousState === "BLOCK_STUN" ? "BLOCK" : "REACTION",
+        timeSeconds,
+        reactionTailTiming(runtime.lastReactionTier, previousState === "BLOCK_STUN"),
+      );
+    }
+  } else if (!tailNeutral && !EXPANDED_STATES.has(fighter.state)) {
+    runtime.tail = null;
+  }
+  runtime.lastGameplayState = fighter.state;
+
+  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
+  runtime.lastTime = timeSeconds;
+
+  // Presentation-only settle: gameplay is already free to move/act, but the
+  // rendered body is allowed to finish and briefly hold the final strike/recoil
+  // pose before a slower return to ready stance. Any new combat state cancels
+  // this tail immediately, so responsiveness is unchanged.
+  if (runtime.tail && tailNeutral) {
+    const tail = runtime.tail;
+    if (timeSeconds >= tail.endAt) {
+      runtime.tail = null;
+      runtime.currentPhase = "SETTLE";
+      playClip(runtime, "Idle_Loop", true, 1, false, 0.070);
+      runtime.mixer.update(delta);
+      runtime.model.updateMatrixWorld(true);
+      fighter.visual.root.userData.motionExpansionTailKind = null;
+      fighter.visual.root.userData.motionExpansionTailRemaining = 0;
+      return true;
+    }
+    if (timeSeconds >= tail.holdUntil && !tail.blending) {
+      tail.blending = true;
+      playClip(runtime, "Idle_Loop", true, 1, false, Math.max(0.080, tail.endAt - tail.holdUntil));
+    }
+    runtime.currentPhase = "SETTLE";
+    runtime.mixer.update(delta);
+    runtime.model.updateMatrixWorld(true);
+    fighter.visual.root.userData.motionExpansionCurrentClip = runtime.currentClip;
+    fighter.visual.root.userData.motionExpansionCurrentMove = null;
+    fighter.visual.root.userData.motionExpansionPhase = runtime.currentPhase;
+    fighter.visual.root.userData.motionExpansionTailKind = tail.kind;
+    fighter.visual.root.userData.motionExpansionTailRemaining = Math.max(0, tail.endAt - timeSeconds);
+    fighter.visual.root.userData.motionExpansionContactMode = "OPPONENT_WEIGHTED_IK";
+    return true;
+  }
+
+  if (!EXPANDED_STATES.has(fighter.state)) return false;
+
   const desired = desiredMotion(fighter);
   const restartedMove = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
   const restartedReaction = reaction.serial !== runtime.lastReactionSerial && fighter.state !== "ATTACK";
+  const comboLinkSerial = Number(fighter.visual.root.userData.tpsComboLinkSerial ?? 0);
+  const comboLinked = restartedMove && comboLinkSerial > runtime.lastComboLinkSerial;
+  if (comboLinkSerial > runtime.lastComboLinkSerial) runtime.lastComboLinkSerial = comboLinkSerial;
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = reaction.serial;
   runtime.currentPhase = desired.phase;
-  playClip(runtime, desired.name, desired.loop, desired.speed, restartedMove || restartedReaction);
-  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
-  runtime.lastTime = timeSeconds;
+  playClip(
+    runtime,
+    desired.name,
+    desired.loop,
+    desired.speed,
+    restartedMove || restartedReaction,
+    comboLinked ? COMBO_LINK_BLEND_SECONDS : undefined,
+  );
   runtime.mixer.update(delta);
   runtime.model.updateMatrixWorld(true);
   attackSilhouette(runtime, fighter);
@@ -603,6 +725,9 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionCurrentClip = runtime.currentClip;
   fighter.visual.root.userData.motionExpansionCurrentMove = fighter.currentMove?.id ?? null;
   fighter.visual.root.userData.motionExpansionPhase = runtime.currentPhase;
+  fighter.visual.root.userData.motionExpansionTailKind = null;
+  fighter.visual.root.userData.motionExpansionTailRemaining = 0;
+  fighter.visual.root.userData.motionExpansionComboBlendSeconds = comboLinked ? COMBO_LINK_BLEND_SECONDS : 0;
   fighter.visual.root.userData.motionExpansionContactMode = "OPPONENT_WEIGHTED_IK";
   return true;
 }

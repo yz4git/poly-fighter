@@ -5,6 +5,7 @@ on:
     branches: [feature/fun-director-cpu-20260901]
     paths:
       - scripts/apply-fun-director-cpu.py
+      - scripts/apply-fun-director-cpu-v2.py
 
 permissions:
   contents: write
@@ -22,7 +23,12 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - name: Apply CPU director implementation
-        run: python3 scripts/apply-fun-director-cpu.py
+        run: |
+          if [ -f scripts/apply-fun-director-cpu-v2.py ]; then
+            python3 scripts/apply-fun-director-cpu-v2.py
+          else
+            python3 scripts/apply-fun-director-cpu.py
+          fi
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Run TPS rules

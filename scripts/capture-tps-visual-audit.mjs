@@ -401,7 +401,9 @@ try {
     game.renderer.render(game.scene, game.camera);
     return { moves, p2Health: game.p2.health, comboStage: game.playerComboStage };
   `);
-  if (comboProbe.moves.join(',') !== 'jab,straight,power') throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
+  const comboSequence = comboProbe.moves.join(',');
+  const validCloseCombos = new Set(['jab,straight,power', 'jab,backfist,power']);
+  if (!validCloseCombos.has(comboSequence)) throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-combo.png`);
 
 

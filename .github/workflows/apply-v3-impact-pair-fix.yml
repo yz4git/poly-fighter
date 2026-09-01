@@ -1,5 +1,6 @@
 name: Apply V3 impact pair fix
 
+# Temporary feature-branch implementation runner.
 on:
   push:
     branches: [feat/procedural-fight-v3-20260902]

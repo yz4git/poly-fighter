@@ -53,9 +53,9 @@ jobs:
           import { NodeIO } from '@gltf-transform/core';
           import { readFile } from 'node:fs/promises';
           const required = [
-            'PF_Jab_L','PF_Cross_R','PF_Backfist_R','PF_BodyBlow_L','PF_Power_R',
+            'PF_Jab_L','PF_Cross_R','PF_Backfist_R','PF_Backfist_L','PF_BodyBlow_L','PF_BodyBlow_R','PF_Power_R',
             'PF_FrontKick_R','PF_LowKick_L','PF_RisingKick_R','PF_DashKick_R',
-            'PF_Throw','PF_Counter_R','PF_HitHeavy','PF_Launch','PF_DownBack','PF_Wakeup',
+            'PF_Throw','PF_Counter_R','PF_Counter_L','PF_HitHeavy','PF_Launch','PF_DownBack','PF_Wakeup',
             'PF_GuardBreak','PF_Sidestep_L','PF_Sidestep_R','PF_KickRecover','PF_HeavyRecover',
           ];
           const io = new NodeIO();

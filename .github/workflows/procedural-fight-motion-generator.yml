@@ -1,5 +1,6 @@
 name: Generate procedural fight motions
 
+# Source changes intentionally regenerate and publish the deterministic motion pack.
 on:
   workflow_dispatch:
   push:

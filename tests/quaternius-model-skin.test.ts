@@ -54,7 +54,7 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.doesNotMatch(runtime, /ubc-superhero-male\.glb[`\"]/);
   assert.match(runtime, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
   assert.match(runtime, /retargetMotionClips/);
-  assert.match(runtime, /quaterniusRetargetMode = "rest-delta"/);
+  assert.match(runtime, /quaterniusRetargetMode = "rest-delta-separated-sources"/);
   assert.match(runtime, /function neutralPoseCorrection/);
   assert.match(runtime, /neutralPoseCorrection\(runtime, fighter\)/);
   assert.match(runtime, /function guardPoseCorrection/);
@@ -64,7 +64,12 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
   assert.match(runtime, /loadAsync\(QUATERNIUS_UAL_CORE_URL\)/);
   assert.match(runtime, /loadAsync\(QUATERNIUS_PROCEDURAL_CORE_URL\)/);
-  assert.match(runtime, /clips: \[\.\.\.base\.animations, \.\.\.procedural\.animations\]/);
+  assert.match(runtime, /base: \{ source: base\.scene, clips: base\.animations \}/);
+  assert.match(runtime, /procedural: \{ source: procedural\.scene, clips: procedural\.animations \}/);
+  assert.match(runtime, /retargetMotionClips\(resources\.motion\.base\.source/);
+  assert.match(runtime, /resources\.motion\.procedural\.source/);
+  assert.match(runtime, /new Map<string, THREE\.AnimationClip>\(\[\.\.\.baseClips, \.\.\.proceduralClips\]\)/);
+  assert.match(runtime, /quaterniusProceduralClipCount = proceduralClips\.size/);
   assert.match(runtime, /PF_Jab_L/);
   assert.match(runtime, /PF_Power_R/);
   assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);

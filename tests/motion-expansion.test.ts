@@ -8,13 +8,15 @@ import {
   chooseTpsComboRoute,
   motionClipForMove,
   motionSpecForMove,
+  motionPlantFootForMove,
+  motionDnaForFighter,
   reactionKindForMove,
   tpsComboLinkWindow,
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
 test("Procedural Fight v3 maps every authored move to pose-graph motion and reaction data", () => {
-  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
+  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 23);
   assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V3");
@@ -96,7 +98,7 @@ test("procedural v3 generator contains pose graph, support-foot authoring, COM a
     assert.ok(entry.contactU >= 0 && entry.contactU <= 1, `${entry.name} invalid contactU`);
     if (entry.maxPlanarRootShift > 0.001) planarClips += 1;
   }
-  assert.ok(planarClips >= 12, `only ${planarClips} v2 clips contain planar root motion`);
+  assert.ok(planarClips >= 12, `only ${planarClips} v3 clips contain planar root motion`);
 });
 
 test("v3 mappings retain generated recovery clips and authored support feet", () => {
@@ -140,6 +142,14 @@ test("side-sensitive punches select the clip that matches each fighter's authore
   assert.equal(motionSpecForMove(sera.moves.bodyBlow).clip, "PF_BodyBlow_R");
   assert.equal(motionSpecForMove(kairo.moves.counter).clip, "PF_Counter_L");
   assert.equal(motionSpecForMove(sera.moves.counter).clip, "PF_Counter_L");
+  assert.equal(motionPlantFootForMove(kairo.moves.backfist), "LEFT");
+  assert.equal(motionPlantFootForMove(sera.moves.backfist), "RIGHT");
+  assert.equal(motionPlantFootForMove(kairo.moves.bodyBlow), "RIGHT");
+  assert.equal(motionPlantFootForMove(sera.moves.bodyBlow), "LEFT");
+  assert.equal(motionPlantFootForMove(kairo.moves.counter), "RIGHT");
+  assert.equal(motionPlantFootForMove(sera.moves.counter), "RIGHT");
+  assert.equal(motionDnaForFighter(kairo).id, "KAIRO_POWER");
+  assert.equal(motionDnaForFighter(sera).id, "SERA_SPEED");
 });
 
 test("motion runtime uses bounded procedural center-of-mass motion and generated guard/evasion states", async () => {

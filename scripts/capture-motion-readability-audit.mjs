@@ -387,6 +387,11 @@ try {
         strikePoint,
         targetHealth: game.p2.health,
         balanceVersion: root.userData.motionExpansionBalanceVersion ?? null,
+        poseGraph: root.userData.motionExpansionPoseGraph ?? null,
+        footLockPolicy: root.userData.motionExpansionFootLockPolicy ?? null,
+        footLockError: root.userData.motionExpansionFootLockError ?? null,
+        comPolicy: root.userData.motionExpansionComPolicy ?? null,
+        motionDna: root.userData.motionExpansionMotionDna ?? null,
       };
     `, [moveId]);
     if (result?.error) throw new Error(`Motion pose failed for ${moveId}: ${JSON.stringify(result)}`);
@@ -409,12 +414,64 @@ try {
     if (result.fistMeshCount < 2) {
       throw new Error(`User-facing fist silhouette missing during ${moveId}: ${JSON.stringify(result)}`);
     }
-    if (result.contactMode !== "OPPONENT_WEIGHTED_IK") {
-      throw new Error(`Motion ${moveId} did not use opponent-weighted strike targeting: ${JSON.stringify(result)}`);
+    if (result.contactMode !== "V3_FULL_BODY_TARGET_IK") {
+      throw new Error(`Motion ${moveId} did not use V3 full-body target IK: ${JSON.stringify(result)}`);
     }
-    if (result.balanceVersion !== "FULL_BODY_BALANCE_V3") {
-      throw new Error(`Motion ${moveId} did not publish the full-body balance contract: ${JSON.stringify(result)}`);
+    if (result.balanceVersion !== "FULL_BODY_SOLVER_V3") {
+      throw new Error(`Motion ${moveId} did not publish the V3 full-body solver contract: ${JSON.stringify(result)}`);
     }
+    if (result.poseGraph !== "9_POSE_GRAPH" || result.comPolicy !== "PLANT_WEIGHTED_BOUNDED_COM") {
+      throw new Error(`Motion ${moveId} did not publish Pose Graph / COM V3 contracts: ${JSON.stringify(result)}`);
+    }
+    if (result.motionDna !== "KAIRO_POWER") {
+      throw new Error(`KAIRO motion DNA was not active for ${moveId}: ${JSON.stringify(result)}`);
+    }
+    if (moveId !== "dashKick") {
+      if (result.footLockPolicy !== "WORLD_SPACE_SUPPORT_FOOT_IK" || !Number.isFinite(result.footLockError) || result.footLockError > 0.025) {
+        throw new Error(`Motion ${moveId} support foot lock drifted: ${JSON.stringify(result)}`);
+      }
+    }
+  }
+
+  const impactPair = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.finished = false;
+    game.input.clear();
+    game.p1.position.set(0, 0, 0.54);
+    game.p2.position.set(0, 0, -0.42);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    if (!game.p1.beginMove('power')) return { error: 'power-not-found' };
+    let auditTime = performance.now() / 1000;
+    let hit = false;
+    for (let step = 0; step < 70; step += 1) {
+      game.step();
+      auditTime += 1 / 60;
+      if (game.p2.state === 'HIT' && (game.p1.hitStop > 0 || game.p2.hitStop > 0)) {
+        game.updateVisual(game.p1, game.p2, auditTime);
+        game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        hit = true;
+        break;
+      }
+      if (game.p1.state !== 'ATTACK') break;
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return {
+      hit,
+      attackerRole: game.p1.visual.root.userData.motionExpansionImpactPairRole ?? null,
+      victimRole: game.p2.visual.root.userData.motionExpansionImpactPairRole ?? null,
+      attackerDna: game.p1.visual.root.userData.motionExpansionMotionDna ?? null,
+      victimHealth: game.p2.health,
+    };
+  `);
+  await screenshot(sessionId, `${outputDir}/tps-motion-impact-pair.png`);
+  if (!impactPair?.hit || impactPair.attackerRole !== "ATTACKER" || impactPair.victimRole !== "VICTIM") {
+    throw new Error(`V3 impact-pair pose contract failed: ${JSON.stringify(impactPair)}`);
   }
 
   const torsoPostures = Object.fromEntries(
@@ -466,6 +523,7 @@ try {
     pairDistances,
     torsoPostures,
     kickHeights: { lowY, kickY, risingY },
+    impactPair,
     moves: results,
   };
   await writeFile(`${outputDir}/motion-readability.json`, JSON.stringify(diagnostics, null, 2));

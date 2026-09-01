@@ -39,10 +39,10 @@ export type TpsComboLinkWindow = {
 /**
  * Runtime-authoritative motion mapping.
  *
- * Procedural Fight v2 keeps opponent-weighted contact correction intentionally
- * small and moves more of the visible mechanics into generated clips. Generated
- * attacks now include anticipation/impact/settle cadence and center-of-mass
- * motion; heavy attacks and kicks also use generated recovery clips.
+ * Procedural Fight v3 is pose-first: authored timing profiles drive a nine-pose
+ * graph while runtime support-foot locking, bounded COM solve and target-aware
+ * full-body IK preserve believable force transfer. Motion DNA differentiates
+ * KAIRO's weight from SERA's lateral speed without changing frame data.
  */
 export type MotionTimingProfile = {
   load: number; hold: number; launch: number; pre: number;
@@ -104,7 +104,7 @@ const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = 
 };
 
 export const MOTION_EXPANSION_PROFILE = {
-  version: "MOTION_READABILITY_V2",
+  version: "MOTION_QUALITY_V3",
   proceduralVersion: "PROCEDURAL_FIGHT_V3",
   primaryLibraryClips: 12,
   secondaryLibraryClips: 23,
@@ -156,6 +156,11 @@ export function motionTimingForMove(move: MoveDefinition): MotionTimingProfile {
 }
 
 export function motionPlantFootForMove(move: MoveDefinition): MoveMotionSpec["plantFoot"] {
+  // Handed variants must mirror their support foot as well as their clip. The
+  // support leg stays opposite the striking arm for these rotational punches.
+  if (move.id === "backfist" || move.id === "bodyBlow" || move.id === "counter") {
+    return move.visualContact?.startsWith("LEFT") ? "RIGHT" : "LEFT";
+  }
   return motionSpecForMove(move).plantFoot;
 }
 

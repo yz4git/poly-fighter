@@ -13,9 +13,14 @@ export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/pr
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
-type MotionResources = {
+type MotionClipSource = {
   source: THREE.Group;
   clips: THREE.AnimationClip[];
+};
+
+type MotionResources = {
+  base: MotionClipSource;
+  procedural: MotionClipSource;
 };
 
 type RuntimeResources = {
@@ -72,10 +77,11 @@ function loadMotion(): Promise<MotionResources> {
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
   ]).then(([base, procedural]) => ({
-    // Keep canonical UAL locomotion/state clips and layer Procedural Fight v2
-    // combat clips into the same visible fighter runtime.
-    source: base.scene,
-    clips: [...base.animations, ...procedural.animations],
+    // Retarget each pack against the hierarchy it was authored from. PF v2 is
+    // generated from UAL, but keeping its own loaded scene here avoids losing
+    // animation bindings when the two GLBs differ in node identity/layout.
+    base: { source: base.scene, clips: base.animations },
+    procedural: { source: procedural.scene, clips: procedural.animations },
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -506,7 +512,16 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
   void loadResources(bodyType).then((resources) => {
     if (installTokens.get(visual.root) !== token) return;
     const styled = cloneAndStyleModel(resources.model, visual, definition, bodyType);
-    const retargetedClips = retargetMotionClips(resources.motion.source, styled.model, resources.motion.clips);
+    const baseClips = retargetMotionClips(resources.motion.base.source, styled.model, resources.motion.base.clips);
+    const proceduralClips = retargetMotionClips(
+      resources.motion.procedural.source,
+      styled.model,
+      resources.motion.procedural.clips,
+    );
+    if (!proceduralClips.has("PF_Jab_L") || !proceduralClips.has("PF_Power_R")) {
+      throw new Error(`Procedural Fight v2 clips missing after retarget: ${[...proceduralClips.keys()].join(",")}`);
+    }
+    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips]);
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
@@ -525,7 +540,8 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusModelState = "ready";
     visual.root.userData.quaterniusModelAsset = modelUrl;
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
-    visual.root.userData.quaterniusRetargetMode = "rest-delta";
+    visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
+    visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

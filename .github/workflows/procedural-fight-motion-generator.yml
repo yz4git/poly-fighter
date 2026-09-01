@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - scripts/generate-procedural-fight-motions.mjs
+      - scripts/generate-procedural-fight-motions-v2.mjs
       - .github/workflows/procedural-fight-motion-generator.yml
       - public/models/quaternius/ual-fight-core.glb
 
@@ -36,17 +37,17 @@ jobs:
           npm ci --no-audit --no-fund
           npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
 
-      - name: Generate deterministic fight motion pack
+      - name: Generate deterministic fight motion pack v2
         run: |
           set -euxo pipefail
-          node scripts/generate-procedural-fight-motions.mjs \
+          node scripts/generate-procedural-fight-motions-v2.mjs \
             public/models/quaternius/ual-fight-core.glb \
             public/models/quaternius/procedural-fight-core.glb \
             public/models/quaternius/procedural-fight-core.metrics.json
           test -s public/models/quaternius/procedural-fight-core.glb
           test -s public/models/quaternius/procedural-fight-core.metrics.json
 
-      - name: Verify generated clip inventory
+      - name: Verify generated v2 clip inventory and motion contract
         run: |
           node --input-type=module <<'NODE'
           import { NodeIO } from '@gltf-transform/core';
@@ -55,6 +56,7 @@ jobs:
             'PF_Jab_L','PF_Cross_R','PF_Backfist_R','PF_BodyBlow_L','PF_Power_R',
             'PF_FrontKick_R','PF_LowKick_L','PF_RisingKick_R','PF_DashKick_R',
             'PF_Throw','PF_Counter_R','PF_HitHeavy','PF_Launch','PF_DownBack','PF_Wakeup',
+            'PF_GuardBreak','PF_Sidestep_L','PF_Sidestep_R','PF_KickRecover','PF_HeavyRecover',
           ];
           const io = new NodeIO();
           const doc = await io.read('public/models/quaternius/procedural-fight-core.glb');
@@ -64,11 +66,15 @@ jobs:
           }
           if (names.length !== required.length) throw new Error(`unexpected procedural clip count ${names.length}`);
           const metrics = JSON.parse(await readFile('public/models/quaternius/procedural-fight-core.metrics.json', 'utf8'));
-          if (metrics.version !== 'PROCEDURAL_FIGHT_V1') throw new Error(`unexpected generator version ${metrics.version}`);
+          if (metrics.version !== 'PROCEDURAL_FIGHT_V2') throw new Error(`unexpected generator version ${metrics.version}`);
+          if (metrics.rootMotionPolicy !== 'ADDITIVE_COM_RETURN_TO_BIND') throw new Error(`unexpected root policy ${metrics.rootMotionPolicy}`);
           if (metrics.metrics.some((entry) => entry.missingAnimated.length)) {
-            throw new Error(`modifier bones absent from base animation: ${JSON.stringify(metrics.metrics.filter((entry) => entry.missingAnimated.length))}`);
+            throw new Error(`modifier paths absent from base animation: ${JSON.stringify(metrics.metrics.filter((entry) => entry.missingAnimated.length))}`);
           }
-          console.log(JSON.stringify({ names, bytes: (await import('node:fs/promises')).stat('public/models/quaternius/procedural-fight-core.glb').then((s) => s.size) }, null, 2));
+          if (metrics.metrics.filter((entry) => entry.maxPlanarRootShift > 0.001).length < 12) {
+            throw new Error('v2 expected planar center-of-mass movement on most clips');
+          }
+          console.log(JSON.stringify({ names, rootMotionPolicy: metrics.rootMotionPolicy }, null, 2));
           NODE
 
       - name: Publish generated pack to current branch
@@ -81,5 +87,6 @@ jobs:
             echo "Procedural motion pack already current"
             exit 0
           fi
-          git commit -m "Generate procedural fight motion pack"
+          git commit -m "Generate procedural fight motion pack v2"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"

@@ -209,7 +209,7 @@ try {
       if (!game) return null;
       const root = game.p1.visual.root;
       return {
-        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 15,
+        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 20,
         clips: root.userData.motionExpansionClipCount ?? 0,
         version: root.userData.motionExpansionVersion ?? null,
         proceduralVersion: root.userData.motionExpansionProceduralVersion ?? null,
@@ -221,7 +221,7 @@ try {
     if (preload?.ready) break;
     await delay(100);
   }
-  if (!preload?.ready || preload.version !== "MOTION_READABILITY_V2" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V1") {
+  if (!preload?.ready || preload.version !== "MOTION_READABILITY_V2" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V2") {
     throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
   }
 

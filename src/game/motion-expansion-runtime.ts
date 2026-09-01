@@ -44,6 +44,11 @@ const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
   PF_Launch: "NinjaJump_Start",
   PF_DownBack: "Death01",
   PF_Wakeup: "LayToIdle",
+  PF_GuardBreak: "Idle_Shield_Break",
+  PF_Sidestep_L: "Slide_Start",
+  PF_Sidestep_R: "Slide_Start",
+  PF_KickRecover: "NinjaJump_Land",
+  PF_HeavyRecover: "Melee_Hook_Rec",
   Melee_Hook: "Punch_Cross",
   Melee_Hook_Rec: "Punch_Cross",
   Hit_Knockback: "Hit_Chest",
@@ -152,10 +157,17 @@ function retargetPack(pack: SourcePack, targetRoot: THREE.Object3D): Map<string,
 
       if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
         const values = new Float32Array(track.values.length);
+        const preserveProceduralPlanarRoot = clip.name.startsWith("PF_");
         for (let offset = 0; offset < track.values.length; offset += 3) {
-          values[offset] = targetNode.position.x;
+          const planarX = preserveProceduralPlanarRoot
+            ? THREE.MathUtils.clamp(track.values[offset] - sourceNode.position.x, -0.09, 0.09)
+            : 0;
+          const planarZ = preserveProceduralPlanarRoot
+            ? THREE.MathUtils.clamp(track.values[offset + 2] - sourceNode.position.z, -0.09, 0.09)
+            : 0;
+          values[offset] = targetNode.position.x + planarX;
           values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
-          values[offset + 2] = targetNode.position.z;
+          values[offset + 2] = targetNode.position.z + planarZ;
         }
         const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
         next.setInterpolation(track.getInterpolation());
@@ -200,9 +212,13 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
     fighter.visual.root.userData.motionExpansionClipCount = runtime.clips.size;
     fighter.visual.root.userData.motionExpansionHasUAL2 = runtime.clips.has("Melee_Hook");
-    fighter.visual.root.userData.motionExpansionHasProcedural = runtime.clips.has("PF_Jab_L") && runtime.clips.has("PF_RisingKick_R");
+    fighter.visual.root.userData.motionExpansionHasProcedural = runtime.clips.has("PF_Jab_L")
+      && runtime.clips.has("PF_RisingKick_R")
+      && runtime.clips.has("PF_GuardBreak")
+      && runtime.clips.has("PF_KickRecover");
     fighter.visual.root.userData.motionExpansionProceduralClipCount = Array.from(runtime.clips.keys()).filter((name) => name.startsWith("PF_")).length;
-    fighter.visual.root.userData.motionExpansionProceduralVersion = "PROCEDURAL_FIGHT_V1";
+    fighter.visual.root.userData.motionExpansionProceduralVersion = "PROCEDURAL_FIGHT_V2";
+    fighter.visual.root.userData.motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y";
     fighter.visual.root.userData.motionExpansionLoading = false;
   }).catch((error: unknown) => {
     runtime.loading = false;
@@ -273,7 +289,7 @@ function desiredMotion(fighter: FighterRuntime): DesiredMotion {
   if (fighter.state === "HIT") {
     return { name: motionClipForReaction(reaction.kind === "NONE" ? "BODY" : reaction.kind), loop: false, speed: 2.25 - reaction.tier * 0.20, phase: "REACTION" };
   }
-  if (fighter.state === "BLOCK_STUN") return { name: "Idle_Shield_Break", loop: false, speed: 1.75, phase: "REACTION" };
+  if (fighter.state === "BLOCK_STUN") return { name: "PF_GuardBreak", loop: false, speed: 1.75, phase: "REACTION" };
   if (["KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(fighter.state)) {
     if (!fighter.grounded) {
       if (fighter.velocity.y > 0.5) {
@@ -284,7 +300,10 @@ function desiredMotion(fighter: FighterRuntime): DesiredMotion {
     return { name: "PF_DownBack", loop: false, speed: fighter.health <= 0 ? 0.78 : 0.96, phase: "DOWN" };
   }
   if (fighter.state === "WAKEUP") return { name: "PF_Wakeup", loop: false, speed: 1.05, phase: "DOWN" };
-  if (fighter.state === "SIDESTEP") return { name: "Slide_Start", loop: false, speed: 1.65, phase: "EVASION" };
+  if (fighter.state === "SIDESTEP") {
+    const clip = fighter.position.z < 0 ? "PF_Sidestep_L" : "PF_Sidestep_R";
+    return { name: clip, loop: false, speed: 1.65, phase: "EVASION" };
+  }
   if (fighter.state === "JUMP") return { name: "NinjaJump_Idle_Loop", loop: true, speed: 0.95, phase: "AIR" };
   return { name: "Idle_Loop", loop: true, speed: 1, phase: "REACTION" };
 }

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
 
-export const QUATERNIUS_OUTFIT_SKIN_ID = "QUATERNIUS_OUTFIT_SKIN_V1_WEIGHTED_VERTEX_COLOR";
+export const QUATERNIUS_OUTFIT_SKIN_ID = "QUATERNIUS_OUTFIT_SKIN_V2_MATERIAL_AWARE_VERTEX_COLOR";
 
 type OutfitTone = "SKIN" | "LIGHT" | "PRIMARY" | "DARK";
 
@@ -24,7 +24,6 @@ export function quaterniusOutfitToneForBoneName(
   const name = normalizedBoneName(rawName);
 
   if (name === "head" || name.startsWith("neck")) return "SKIN";
-
   if (name.startsWith("spine_03") || name.startsWith("clavicle")) return "LIGHT";
 
   if (archetype === "POWER") {
@@ -107,13 +106,12 @@ function skinWeightAt(attribute: THREE.BufferAttribute | THREE.InterleavedBuffer
   return attribute.getW(vertex);
 }
 
-function meshTag(mesh: THREE.Mesh): string {
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  return `${mesh.name} ${materials.map((material) => material.name).join(" ")}`.toLowerCase();
+function authoredMaterialTag(mesh: THREE.Mesh, material: THREE.Material): string {
+  return `${mesh.name} ${material.name}`.toLowerCase();
 }
 
-function shouldKeepAuthoredMaterial(mesh: THREE.Mesh): boolean {
-  const tag = meshTag(mesh);
+function shouldKeepAuthoredMaterial(mesh: THREE.Mesh, material: THREE.Material): boolean {
+  const tag = authoredMaterialTag(mesh, material);
   return tag.includes("hair")
     || tag.includes("eye")
     || tag.includes("iris")
@@ -123,8 +121,9 @@ function shouldKeepAuthoredMaterial(mesh: THREE.Mesh): boolean {
     || tag.includes("mouth");
 }
 
-function prepareOutfitMaterial(material: THREE.Material): void {
-  if (!(material instanceof THREE.MeshStandardMaterial)) return;
+function prepareOutfitMaterial(mesh: THREE.Mesh, material: THREE.Material): boolean {
+  if (shouldKeepAuthoredMaterial(mesh, material)) return false;
+  if (!(material instanceof THREE.MeshStandardMaterial)) return false;
   material.vertexColors = true;
   material.color.set(0xffffff);
   material.flatShading = true;
@@ -133,17 +132,25 @@ function prepareOutfitMaterial(material: THREE.Material): void {
   material.envMapIntensity = 1.10;
   material.dithering = true;
   material.needsUpdate = true;
+  return true;
 }
 
 function applyWeightedOutfitColors(
   mesh: THREE.SkinnedMesh,
   definition: FighterDefinition,
-): { vertices: number; skinVertices: number; clothingVertices: number } | null {
+): { vertices: number; skinVertices: number; clothingVertices: number; outfitMaterials: number } | null {
   const geometry = mesh.geometry;
   const position = geometry.getAttribute("position");
   const skinIndex = geometry.getAttribute("skinIndex");
   const skinWeight = geometry.getAttribute("skinWeight");
   if (!position || !skinIndex || !skinWeight || position.count === 0) return null;
+
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const outfitMaterials = materials.reduce(
+    (count, material) => count + (prepareOutfitMaterial(mesh, material) ? 1 : 0),
+    0,
+  );
+  if (outfitMaterials === 0) return null;
 
   const palette = outfitPalette(definition);
   const colors = new Float32Array(position.count * 3);
@@ -161,12 +168,20 @@ function applyWeightedOutfitColors(
       const boneIndex = skinIndexAt(skinIndex, vertex, slot);
       const boneName = mesh.skeleton.bones[boneIndex]?.name ?? "root";
       const tone = quaterniusOutfitToneForBoneName(boneName, definition.archetype);
-      blended.addScaledVector(colorForTone(palette, tone), weight);
+      const toneColor = colorForTone(palette, tone);
+      blended.r += toneColor.r * weight;
+      blended.g += toneColor.g * weight;
+      blended.b += toneColor.b * weight;
       totalWeight += weight;
       if (tone === "SKIN") skinWeightTotal += weight;
     }
-    if (totalWeight > 1e-5) blended.multiplyScalar(1 / totalWeight);
-    else blended.copy(palette.dark);
+    if (totalWeight > 1e-5) {
+      blended.r /= totalWeight;
+      blended.g /= totalWeight;
+      blended.b /= totalWeight;
+    } else {
+      blended.copy(palette.dark);
+    }
 
     const offset = vertex * 3;
     colors[offset] = blended.r;
@@ -178,10 +193,9 @@ function applyWeightedOutfitColors(
 
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  materials.forEach(prepareOutfitMaterial);
   mesh.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
-  return { vertices: position.count, skinVertices, clothingVertices };
+  mesh.userData.quaterniusOutfitMaterialCount = outfitMaterials;
+  return { vertices: position.count, skinVertices, clothingVertices, outfitMaterials };
 }
 
 function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinition): boolean {
@@ -194,24 +208,27 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   if (host.userData.quaterniusOutfitSkin === QUATERNIUS_OUTFIT_SKIN_ID) return true;
 
   let bodyMeshes = 0;
+  let outfitMaterials = 0;
   let recoloredVertices = 0;
   let skinVertices = 0;
   let clothingVertices = 0;
   host.traverse((object) => {
     const mesh = object as THREE.SkinnedMesh;
-    if (!mesh.isSkinnedMesh || shouldKeepAuthoredMaterial(mesh)) return;
+    if (!mesh.isSkinnedMesh) return;
     const result = applyWeightedOutfitColors(mesh, definition);
     if (!result) return;
     bodyMeshes += 1;
+    outfitMaterials += result.outfitMaterials;
     recoloredVertices += result.vertices;
     skinVertices += result.skinVertices;
     clothingVertices += result.clothingVertices;
   });
 
-  if (bodyMeshes === 0 || recoloredVertices === 0) return false;
+  if (bodyMeshes === 0 || outfitMaterials === 0 || recoloredVertices === 0) return false;
   host.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkinBodyMeshes = bodyMeshes;
+  visual.root.userData.quaterniusOutfitSkinMaterialCount = outfitMaterials;
   visual.root.userData.quaterniusOutfitSkinVertices = recoloredVertices;
   visual.root.userData.quaterniusOutfitSkinCoverage = {
     skinVertices,

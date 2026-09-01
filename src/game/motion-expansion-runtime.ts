@@ -113,10 +113,21 @@ function loadSourcePacks(): Promise<SourcePack[]> {
 }
 
 function findImportedModel(fighter: FighterRuntime): THREE.Group | null {
-  const host = fighter.visual.root.children.find((child) => child.name.startsWith("quaternius-ubc-"));
+  const host = fighter.visual.root.children.find((child) =>
+    child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
+  );
   if (!host) return null;
-  const model = host.children.find((child) => child.type === "Group" || child.children.length > 0);
-  return (model ?? host.children[0] ?? null) as THREE.Group | null;
+  const model = (host.children.find((child) => child.type === "Group" || child.children.length > 0)
+    ?? host.children[0]
+    ?? null) as THREE.Group | null;
+  if (!model) return null;
+  // Motion Expansion is not a hidden proxy rig: it drives the exact imported
+  // Quaternius model that is rendered to the player. Keep this explicit so
+  // audits cannot confuse the baseline idle mixer with the active combat mixer.
+  fighter.visual.root.userData.motionExpansionTargetHost = host.name;
+  fighter.visual.root.userData.motionExpansionTargetModelName = model.name || model.type;
+  fighter.visual.root.userData.motionExpansionTargetsVisibleQuaternius = true;
+  return model;
 }
 
 function retargetPack(pack: SourcePack, targetRoot: THREE.Object3D): Map<string, THREE.AnimationClip> {

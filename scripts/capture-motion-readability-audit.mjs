@@ -263,7 +263,7 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-'));
+    const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
@@ -325,7 +325,7 @@ try {
       game.updateLockOn();
       game.renderer.render(game.scene, game.camera);
       const root = game.p1.visual.root;
-      const importedHost = root.children.find((child) => child.name?.startsWith('quaternius-ubc-'));
+      const importedHost = root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
       let fistMeshCount = 0;
       root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
       const points = bonePoints(game.p1);
@@ -343,7 +343,10 @@ try {
         moveTick: game.p1.moveTick,
         state: game.p1.state,
         clip: root.userData.motionExpansionCurrentClip ?? null,
-        visibleClip: importedHost?.userData?.quaterniusCurrentClip ?? null,
+        baselineClip: importedHost?.userData?.quaterniusCurrentClip ?? null,
+        visibleTarget: root.userData.motionExpansionTargetsVisibleQuaternius === true,
+        targetHost: root.userData.motionExpansionTargetHost ?? null,
+        targetModelName: root.userData.motionExpansionTargetModelName ?? null,
         fistMeshCount,
         phase: root.userData.motionExpansionPhase ?? null,
         contactMode: root.userData.motionExpansionContactMode ?? null,
@@ -367,8 +370,8 @@ try {
     if (result.clip !== expected) {
       throw new Error(`Motion ${moveId} resolved to ${result.clip}, expected ${expected}: ${JSON.stringify(result)}`);
     }
-    if (result.visibleClip !== expected) {
-      throw new Error(`User-facing Quaternius motion ${moveId} resolved to ${result.visibleClip}, expected ${expected}: ${JSON.stringify(result)}`);
+    if (!result.visibleTarget || typeof result.targetHost !== "string" || !result.targetHost.endsWith("-runtime")) {
+      throw new Error(`Motion Expansion is not driving the rendered Quaternius model during ${moveId}: ${JSON.stringify(result)}`);
     }
     if (result.fistMeshCount < 2) {
       throw new Error(`User-facing fist silhouette missing during ${moveId}: ${JSON.stringify(result)}`);

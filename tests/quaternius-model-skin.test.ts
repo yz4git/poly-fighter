@@ -62,7 +62,9 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /getVisualContactPoint/);
   assert.match(runtime, /updateQuaterniusModelPreview/);
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
+  assert.match(runtime, /loadAsync\(QUATERNIUS_UAL_CORE_URL\)/);
   assert.match(runtime, /loadAsync\(QUATERNIUS_PROCEDURAL_CORE_URL\)/);
+  assert.match(runtime, /clips: \[\.\.\.base\.animations, \.\.\.procedural\.animations\]/);
   assert.match(runtime, /PF_Jab_L/);
   assert.match(runtime, /PF_Power_R/);
   assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);

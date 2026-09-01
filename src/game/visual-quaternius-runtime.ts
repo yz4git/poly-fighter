@@ -67,9 +67,15 @@ function loadModel(bodyType: QuaterniusBodyType): Promise<THREE.Group> {
 
 function loadMotion(): Promise<MotionResources> {
   if (motionPromise) return motionPromise;
-  motionPromise = new GLTFLoader().loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL).then((gltf) => ({
-    source: gltf.scene,
-    clips: gltf.animations,
+  const loader = new GLTFLoader();
+  motionPromise = Promise.all([
+    loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
+    loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
+  ]).then(([base, procedural]) => ({
+    // Keep canonical UAL locomotion/state clips and layer Procedural Fight v2
+    // combat clips into the same visible fighter runtime.
+    source: base.scene,
+    clips: [...base.animations, ...procedural.animations],
   })).catch((error) => {
     motionPromise = null;
     throw error;

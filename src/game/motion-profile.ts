@@ -39,17 +39,21 @@ export type TpsComboRoute = "CLOSE_A" | "CLOSE_B" | "FAR" | "FLANK" | "PERFECT";
  * runtime adds a move-specific strike trajectory on top of it.
  */
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
-  jab: { clip: "Punch_Jab", style: "JAB", speedScale: 1.08, contactBlend: 0.42 },
-  straight: { clip: "Punch_Cross", style: "CROSS", speedScale: 1.02, contactBlend: 0.48 },
-  backfist: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.50 },
-  bodyBlow: { clip: "Shield_OneShot", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.58 },
-  power: { clip: "Sword_Regular_C", style: "HEAVY", speedScale: 0.92, contactBlend: 0.62 },
+  // Upper-body strikes intentionally use a restrained contact blend. The source
+  // clip carries the readable silhouette; IK only nudges the limb toward the
+  // opponent instead of burying the fist in the target and visually merging the
+  // two fighters at contact.
+  jab: { clip: "Punch_Jab", style: "JAB", speedScale: 1.08, contactBlend: 0.30 },
+  straight: { clip: "Punch_Cross", style: "CROSS", speedScale: 1.02, contactBlend: 0.36 },
+  backfist: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.42 },
+  bodyBlow: { clip: "Shield_OneShot", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.40 },
+  power: { clip: "Sword_Regular_C", style: "HEAVY", speedScale: 0.92, contactBlend: 0.48 },
   kick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.78 },
   lowKick: { clip: "Slide_Start", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82 },
   risingKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.86 },
   dashKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90 },
   throw: { clip: "OverhandThrow", style: "THROW", speedScale: 0.92, contactBlend: 0.35 },
-  counter: { clip: "Punch_Cross", style: "COUNTER", speedScale: 1.08, contactBlend: 0.54 },
+  counter: { clip: "Punch_Cross", style: "COUNTER", speedScale: 1.08, contactBlend: 0.40 },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {

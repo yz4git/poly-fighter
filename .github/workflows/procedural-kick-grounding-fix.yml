@@ -1,0 +1,41 @@
+name: Ground procedural standing kicks
+
+on:
+  push:
+    branches:
+      - chatgpt/procedural-fight-motion-generator-v1
+    paths:
+      - .github/workflows/procedural-kick-grounding-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/procedural-fight-motion-generator-v1
+          fetch-depth: 0
+      - name: Use grounded base motion for standing kicks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/generate-procedural-fight-motions.mjs')
+          text = p.read_text()
+          for name in ['PF_FrontKick_R', 'PF_LowKick_L', 'PF_RisingKick_R']:
+              marker = f'name: "{name}",\n    base: "Jump_Start",'
+              replacement = f'name: "{name}",\n    base: "Idle_Loop",'
+              if marker not in text:
+                  raise SystemExit(f'expected kick spec not found: {name}')
+              text = text.replace(marker, replacement, 1)
+          p.write_text(text)
+          PY
+      - name: Commit generator tuning
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/generate-procedural-fight-motions.mjs
+          git commit -m "Ground standing procedural kick bases"
+          git push origin HEAD:chatgpt/procedural-fight-motion-generator-v1

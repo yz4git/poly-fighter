@@ -158,17 +158,17 @@ function poseDistance(a, b) {
 }
 
 const expectedClips = {
-  jab: "Punch_Jab",
-  straight: "Punch_Cross",
-  bodyBlow: "Shield_OneShot",
-  backfist: "Melee_Hook",
-  power: "Sword_Regular_C",
-  kick: "NinjaJump_Start",
-  lowKick: "Slide_Start",
-  risingKick: "NinjaJump_Start",
-  dashKick: "NinjaJump_Start",
-  throw: "OverhandThrow",
-  counter: "Punch_Cross",
+  jab: "PF_Jab_L",
+  straight: "PF_Cross_R",
+  bodyBlow: "PF_BodyBlow_L",
+  backfist: "PF_Backfist_R",
+  power: "PF_Power_R",
+  kick: "PF_FrontKick_R",
+  lowKick: "PF_LowKick_L",
+  risingKick: "PF_RisingKick_R",
+  dashKick: "PF_DashKick_R",
+  throw: "PF_Throw",
+  counter: "PF_Counter_R",
 };
 
 const moves = Object.keys(expectedClips);
@@ -209,16 +209,19 @@ try {
       if (!game) return null;
       const root = game.p1.visual.root;
       return {
-        ready: root.userData.motionExpansionClipCount >= 30,
+        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 15,
         clips: root.userData.motionExpansionClipCount ?? 0,
         version: root.userData.motionExpansionVersion ?? null,
+        proceduralVersion: root.userData.motionExpansionProceduralVersion ?? null,
+        proceduralClips: root.userData.motionExpansionProceduralClipCount ?? 0,
+        procedural: root.userData.motionExpansionHasProcedural ?? false,
         loading: root.userData.motionExpansionLoading ?? null,
       };
     `);
     if (preload?.ready) break;
     await delay(100);
   }
-  if (!preload?.ready || preload.version !== "MOTION_READABILITY_V2") {
+  if (!preload?.ready || preload.version !== "MOTION_READABILITY_V2" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V1") {
     throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
   }
 

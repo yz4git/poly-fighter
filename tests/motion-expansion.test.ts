@@ -11,13 +11,15 @@ import {
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Motion Readability v2 maps every authored move to explicit motion and reaction data", () => {
+test("Procedural Fight v1 maps every authored move to generated motion and reaction data", () => {
   assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 20);
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V1");
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 15);
   assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
   assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "Idle_Shield_Break");
-  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "LayToIdle");
+  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "PF_Wakeup");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -43,13 +45,17 @@ test("readability mappings separate body momentum and strike phases instead of r
   const rising = motionSpecForMove(kairo.moves.risingKick);
   const dash = motionSpecForMove(kairo.moves.dashKick);
 
-  assert.equal(jab.clip, "Punch_Jab");
-  assert.equal(backfist.clip, "Melee_Hook");
+  assert.equal(jab.clip, "PF_Jab_L");
+  assert.equal(backfist.clip, "PF_Backfist_R");
   assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");
-  assert.equal(body.clip, "Shield_OneShot");
-  assert.equal(power.clip, "Sword_Regular_C");
+  assert.equal(body.clip, "PF_BodyBlow_L");
+  assert.equal(power.clip, "PF_Power_R");
   assert.notEqual(body.clip, backfist.clip);
   assert.notEqual(power.clip, backfist.clip);
+  assert.equal(kick.clip, "PF_FrontKick_R");
+  assert.equal(low.clip, "PF_LowKick_L");
+  assert.equal(rising.clip, "PF_RisingKick_R");
+  assert.equal(dash.clip, "PF_DashKick_R");
   assert.equal(kick.recoveryClip, "NinjaJump_Land");
   assert.equal(low.recoveryClip, "Slide_Exit");
   assert.equal(rising.recoveryClip, "NinjaJump_Land");
@@ -64,6 +70,8 @@ test("motion runtime preloads in neutral and biases imported strikes toward the 
   assert.match(source, /const runtime = ensureRuntime\(fighter\);\s*if \(!EXPANDED_STATES\.has\(fighter\.state\)\) return false;/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
+  assert.match(source, /PROCEDURAL_URL/);
+  assert.match(source, /motionExpansionHasProcedural/);
   assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
   assert.doesNotMatch(source, /getVisualContactPoint/);
   assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);

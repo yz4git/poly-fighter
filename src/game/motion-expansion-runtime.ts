@@ -637,9 +637,12 @@ function fullBodyStrikeSolve(runtime: ExpansionRuntime, fighter: FighterRuntime,
   addRotation(runtime, guard, -0.025, strikeLeft ? -0.035 : 0.035, strikeLeft ? 0.045 : -0.045, dna.guardDiscipline * w);
 }
 
+const IMPACT_PAIR_REACTION_STATES = new Set<FighterRuntime["state"]>(["HIT", "KNOCKDOWN", "THROW", "KO", "RING_OUT"]);
+
 function impactPairAccent(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): "ATTACKER" | "VICTIM" | null {
-  const attacker = fighter.state === "ATTACK" && Boolean(fighter.currentMove) && opponent.state === "HIT" && (fighter.hitStop > 0 || opponent.hitStop > 0);
-  const victim = fighter.state === "HIT" && opponent.state === "ATTACK" && Boolean(opponent.currentMove) && (fighter.hitStop > 0 || opponent.hitStop > 0);
+  const frozenImpact = fighter.hitStop > 0 || opponent.hitStop > 0;
+  const attacker = fighter.state === "ATTACK" && Boolean(fighter.currentMove) && IMPACT_PAIR_REACTION_STATES.has(opponent.state) && frozenImpact;
+  const victim = IMPACT_PAIR_REACTION_STATES.has(fighter.state) && opponent.state === "ATTACK" && Boolean(opponent.currentMove) && frozenImpact;
   if (!attacker && !victim) return null;
   const side = attacker ? strikeSide(fighter) : -strikeSide(opponent);
   if (attacker) {

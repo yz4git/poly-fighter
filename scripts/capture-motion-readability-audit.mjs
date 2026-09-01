@@ -450,7 +450,7 @@ try {
     for (let step = 0; step < 70; step += 1) {
       game.step();
       auditTime += 1 / 60;
-      if (game.p2.state === 'HIT' && (game.p1.hitStop > 0 || game.p2.hitStop > 0)) {
+      if (['HIT', 'KNOCKDOWN', 'THROW', 'KO', 'RING_OUT'].includes(game.p2.state) && (game.p1.hitStop > 0 || game.p2.hitStop > 0)) {
         game.updateVisual(game.p1, game.p2, auditTime);
         game.updateVisual(game.p2, game.p1, auditTime + 0.007);
         hit = true;
@@ -467,6 +467,7 @@ try {
       victimRole: game.p2.visual.root.userData.motionExpansionImpactPairRole ?? null,
       attackerDna: game.p1.visual.root.userData.motionExpansionMotionDna ?? null,
       victimHealth: game.p2.health,
+      victimState: game.p2.state,
     };
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-impact-pair.png`);

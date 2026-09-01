@@ -172,6 +172,8 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /solveCenterOfMass/);
   assert.match(source, /fullBodyStrikeSolve/);
   assert.match(source, /impactPairAccent/);
+  assert.match(source, /IMPACT_PAIR_REACTION_STATES/);
+  assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);
   assert.match(source, /applyMotionDna/);
   assert.match(source, /motionExpansionFootLockError/);
   assert.match(source, /PROCEDURAL_URL/);

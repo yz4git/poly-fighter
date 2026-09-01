@@ -65,6 +65,7 @@ test("procedural v2 generator artifact contains 23 clips, handed variants, root 
   assert.match(source, /PF_GuardBreak/);
   assert.match(source, /PF_Sidestep_L/);
   assert.match(source, /PF_KickRecover/);
+  assert.match(source, /FULL_BODY_BALANCE_V3/);
   assert.match(source, /sampleCurve/);
   assert.equal(metrics.version, "PROCEDURAL_FIGHT_V2");
   assert.equal(metrics.generatedClipCount, 23);
@@ -138,6 +139,8 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /comboLinkState === "LINKED"/);
   assert.match(source, /comboLinkSerial !== runtime\.lastComboLinkSerial/);
   assert.match(source, /currentPhase = "SETTLE"/);
+  assert.match(source, /FULL_BODY_BALANCE_VERSION = "FULL_BODY_BALANCE_V3"/);
+  assert.match(source, /motionExpansionBalanceVersion = FULL_BODY_BALANCE_VERSION/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
   assert.match(source, /PROCEDURAL_URL/);

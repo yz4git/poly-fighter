@@ -161,6 +161,26 @@ function poseDistance(a, b) {
   return keys.reduce((sum, key) => sum + distance(a.points[key], b.points[key]), 0);
 }
 
+function torsoPosture(points, neutralPoints) {
+  if (!points?.pelvis || !points?.upperArmL || !points?.upperArmR || !neutralPoints?.pelvis || !neutralPoints?.upperArmL || !neutralPoints?.upperArmR) return null;
+  const midpoint = (p) => ({
+    x: (p.upperArmL.x + p.upperArmR.x) * 0.5,
+    y: (p.upperArmL.y + p.upperArmR.y) * 0.5,
+    z: (p.upperArmL.z + p.upperArmR.z) * 0.5,
+  });
+  const shoulder = midpoint(points);
+  const neutralShoulder = midpoint(neutralPoints);
+  const vertical = Math.abs(shoulder.y - points.pelvis.y);
+  const neutralVertical = Math.abs(neutralShoulder.y - neutralPoints.pelvis.y);
+  const horizontal = Math.hypot(shoulder.x - points.pelvis.x, shoulder.z - points.pelvis.z);
+  return {
+    horizontal,
+    vertical,
+    leanRatio: vertical > 1e-5 ? horizontal / vertical : 99,
+    heightRetention: neutralVertical > 1e-5 ? vertical / neutralVertical : 0,
+  };
+}
+
 const expectedClips = {
   jab: "PF_Jab_L",
   straight: "PF_Cross_R",
@@ -354,6 +374,7 @@ try {
         points,
         strikePoint,
         targetHealth: game.p2.health,
+        balanceVersion: root.userData.motionExpansionBalanceVersion ?? null,
       };
     `, [moveId]);
     if (result?.error) throw new Error(`Motion pose failed for ${moveId}: ${JSON.stringify(result)}`);
@@ -379,6 +400,23 @@ try {
     if (result.contactMode !== "OPPONENT_WEIGHTED_IK") {
       throw new Error(`Motion ${moveId} did not use opponent-weighted strike targeting: ${JSON.stringify(result)}`);
     }
+    if (result.balanceVersion !== "FULL_BODY_BALANCE_V3") {
+      throw new Error(`Motion ${moveId} did not publish the full-body balance contract: ${JSON.stringify(result)}`);
+    }
+  }
+
+  const torsoPostures = Object.fromEntries(
+    Object.entries(results).map(([moveId, result]) => [moveId, torsoPosture(result.points, neutral.points)]),
+  );
+  for (const moveId of ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "throw", "counter"]) {
+    const posture = torsoPostures[moveId];
+    if (!posture || posture.leanRatio > 0.58 || posture.heightRetention < 0.62) {
+      throw new Error(`Motion ${moveId} collapses the torso chain: ${JSON.stringify(posture)}`);
+    }
+  }
+  const dashPosture = torsoPostures.dashKick;
+  if (!dashPosture || dashPosture.leanRatio > 0.95 || dashPosture.heightRetention < 0.38) {
+    throw new Error(`Dash kick folds the body instead of driving through the target: ${JSON.stringify(dashPosture)}`);
   }
 
   const distinctPairs = [
@@ -414,6 +452,7 @@ try {
     neutral,
     allMovesActive: Object.values(results).every((result) => result.phase === "ACTIVE"),
     pairDistances,
+    torsoPostures,
     kickHeights: { lowY, kickY, risingY },
     moves: results,
   };

@@ -177,7 +177,7 @@
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.0239
+      "maxVerticalRootShift": 0.01991
     },
     {
       "name": "PF_BodyBlow_R",
@@ -207,7 +207,7 @@
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.0239
+      "maxVerticalRootShift": 0.01991
     },
     {
       "name": "PF_Power_R",
@@ -240,8 +240,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.08605,
-      "maxVerticalRootShift": 0.02151
+      "maxPlanarRootShift": 0.07916,
+      "maxVerticalRootShift": 0.01613
     },
     {
       "name": "PF_FrontKick_R",
@@ -270,8 +270,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03913,
-      "maxVerticalRootShift": 0.03962
+      "maxPlanarRootShift": 0.0374,
+      "maxVerticalRootShift": 0.03367
     },
     {
       "name": "PF_LowKick_L",
@@ -302,8 +302,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03692,
-      "maxVerticalRootShift": 0.04488
+      "maxPlanarRootShift": 0.03587,
+      "maxVerticalRootShift": 0.0359
     },
     {
       "name": "PF_RisingKick_R",
@@ -333,7 +333,7 @@
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.02997,
-      "maxVerticalRootShift": 0.03917
+      "maxVerticalRootShift": 0.03329
     },
     {
       "name": "PF_DashKick_R",
@@ -366,8 +366,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0734,
-      "maxVerticalRootShift": 0.02959
+      "maxPlanarRootShift": 0.06655,
+      "maxVerticalRootShift": 0.02258
     },
     {
       "name": "PF_Throw",
@@ -398,8 +398,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0443,
-      "maxVerticalRootShift": 0.02794
+      "maxPlanarRootShift": 0.04045,
+      "maxVerticalRootShift": 0.01796
     },
     {
       "name": "PF_Counter_R",
@@ -426,8 +426,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04123,
-      "maxVerticalRootShift": 0.0149
+      "maxPlanarRootShift": 0.03965,
+      "maxVerticalRootShift": 0.01391
     },
     {
       "name": "PF_Counter_L",
@@ -454,8 +454,8 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04123,
-      "maxVerticalRootShift": 0.0149
+      "maxPlanarRootShift": 0.03965,
+      "maxVerticalRootShift": 0.01391
     },
     {
       "name": "PF_HitHeavy",

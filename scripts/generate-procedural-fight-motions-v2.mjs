@@ -13,7 +13,6 @@ const DEG = Math.PI / 180;
 const R = (x = 0, y = 0, z = 0) => [x * DEG, y * DEG, z * DEG];
 const T = (x = 0, y = 0, z = 0) => [x, y, z];
 const K = (u, xyz) => ({ u, xyz });
-const S = (v, n = 1) => v * n;
 
 /**
  * Procedural Fight Motion Generator v2
@@ -82,19 +81,19 @@ function makeCurves(spec) {
 
   switch (spec.style) {
     case "JAB":
-      torso(10, 3, -2); rootDrive(0.030, 0.010, 0.012);
+      torso(10, 1, -2); rootDrive(0.030, 0.010, 0.012);
       bones.clavicle_l = [K(0, R()), K(anticipate, R(0, 0, -10)), K(impact, R(0, 0, 15)), K(settle, R(0, 0, 7)), K(1, R())];
       bones.upperarm_l = [K(0, R()), K(anticipate, R(10, -9, -11)), K(impact, R(-14, 16, 10)), K(settle, R(-6, 7, 4)), K(1, R())];
       break;
     case "CROSS":
-      torso(18, 4, 2); rootDrive(0.050, 0.018, 0.014);
+      torso(18, 1, 2); rootDrive(0.050, 0.018, 0.014);
       bones.spine_01 = bones.pelvis;
       bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 12)), K(impact, R(0, 0, -18)), K(settle, R(0, 0, -8)), K(1, R())];
       bones.upperarm_r = [K(0, R()), K(anticipate, R(11, 11, 13)), K(impact, R(-17, -21, -13)), K(settle, R(-7, -9, -6)), K(1, R())];
       break;
     case "HOOK": {
       const arm = s < 0 ? "l" : "r";
-      torso(17, 1, 2); rootDrive(0.040, -0.010, 0.012);
+      torso(17, 0, 2); rootDrive(0.040, -0.010, 0.012);
       bones.spine_01 = bones.pelvis;
       bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(9, -9 * s, 15 * s)), K(impact, R(-14, 19 * s, -14 * s)), K(settle, R(-6, 8 * s, -6 * s)), K(1, R())];
       bones[`lowerarm_${arm}`] = [K(0, R()), K(anticipate, R(0, 16 * s, 7 * s)), K(impact, R(0, -24 * s, -6 * s)), K(settle, R(0, -8 * s, -2 * s)), K(1, R())];
@@ -102,14 +101,14 @@ function makeCurves(spec) {
     }
     case "BODY": {
       const arm = s < 0 ? "l" : "r";
-      torso(11, 11, -2); rootDrive(0.044, 0.010, 0.024);
+      torso(11, 5, -2); rootDrive(0.044, 0.010, 0.020);
       bones.spine_01 = bones.pelvis;
       bones[`clavicle_${arm}`] = [K(0, R()), K(anticipate, R(0, 0, 8 * s)), K(impact, R(0, 0, -13 * s)), K(1, R())];
       bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(11, 9 * s, 10 * s)), K(impact, R(-16, -15 * s, -10 * s)), K(settle, R(-6, -6 * s, -4 * s)), K(1, R())];
       break;
     }
     case "HEAVY":
-      torso(20, 6, 2); rootDrive(0.085, 0.014, 0.024);
+      torso(20, 1, 2); rootDrive(0.078, 0.014, 0.018);
       bones.spine_01 = bones.pelvis;
       bones.neck_01 = [K(0, R()), K(anticipate, R(0, -3 * s, 0)), K(impact, R(1, 5 * s, 0)), K(1, R())];
       bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 11)), K(impact, R(0, 0, -16)), K(1, R())];
@@ -118,13 +117,13 @@ function makeCurves(spec) {
       break;
     case "COUNTER": {
       const arm = s < 0 ? "l" : "r";
-      torso(14, 2, 1); rootDrive(0.050, 0.010, 0.015);
+      torso(14, 0, 1); rootDrive(0.048, 0.010, 0.014);
       bones[`clavicle_${arm}`] = [K(0, R()), K(anticipate, R(0, 0, 10 * s)), K(impact, R(0, 0, -15 * s)), K(1, R())];
       bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(10, 9 * s, 12 * s)), K(impact, R(-16, -18 * s, -11 * s)), K(settle, R(-6, -7 * s, -4 * s)), K(1, R())];
       break;
     }
     case "THROW":
-      torso(16, 15, 0); rootDrive(0.046, 0, 0.028);
+      torso(16, 5, 0); rootDrive(0.042, 0, 0.018);
       bones.upperarm_l = [K(0, R()), K(anticipate, R(-12, 18, -20)), K(impact, R(-28, 6, -10)), K(1, R())];
       bones.upperarm_r = [K(0, R()), K(anticipate, R(-12, -18, 20)), K(impact, R(-28, -6, 10)), K(1, R())];
       bones.lowerarm_l = [K(0, R()), K(anticipate, R(0, 15, 18)), K(impact, R(0, 4, 8)), K(1, R())];
@@ -135,8 +134,8 @@ function makeCurves(spec) {
     case "DASH_KICK": {
       const rising = spec.style === "RISING_KICK";
       const dash = spec.style === "DASH_KICK";
-      torso(6, rising ? -15 : dash ? -18 : -11, -2);
-      rootDrive(dash ? 0.075 : rising ? 0.030 : 0.045, 0, dash ? 0.018 : 0.040, rising ? 0.022 : dash ? 0.034 : 0.006);
+      torso(6, rising ? -8 : dash ? -5 : -6, -2);
+      rootDrive(dash ? 0.068 : rising ? 0.030 : 0.043, 0, dash ? 0.014 : 0.034, rising ? 0.018 : dash ? 0.026 : 0.006);
       bones.thigh_r = [K(0, R()), K(anticipate, R(24, 0, 0)), K(Math.max(anticipate + 0.08, impact - 0.18), R(-30, 0, 0)), K(impact, R(rising ? -104 : dash ? -84 : -74, 0, 0)), K(settle, R(-38, 0, 0)), K(1, R())];
       bones.calf_r = [K(0, R()), K(Math.max(anticipate + 0.08, impact - 0.18), R(56, 0, 0)), K(impact, R(rising ? 2 : 7, 0, 0)), K(settle, R(28, 0, 0)), K(1, R())];
       bones.foot_r = [K(0, R()), K(impact, R(rising ? 18 : 10, 0, 0)), K(1, R())];
@@ -147,7 +146,7 @@ function makeCurves(spec) {
       break;
     }
     case "LOW_KICK":
-      torso(21, 4, 8); rootDrive(0.032, 0.022, 0.045);
+      torso(21, 2, 7); rootDrive(0.032, 0.020, 0.036);
       bones.thigh_r = [K(0, R()), K(impact, R(-12, 0, 0)), K(1, R())];
       bones.thigh_l = [K(0, R()), K(anticipate, R(18, -8, 0)), K(Math.max(anticipate + 0.08, impact - 0.17), R(-14, 15, -5)), K(impact, R(-50, 34, -11)), K(settle, R(-20, 12, -4)), K(1, R())];
       bones.calf_l = [K(0, R()), K(Math.max(anticipate + 0.08, impact - 0.17), R(50, 0, 0)), K(impact, R(12, 0, 0)), K(settle, R(28, 0, 0)), K(1, R())];
@@ -202,9 +201,10 @@ function makeCurves(spec) {
     case "KICK_RECOVER":
     case "HEAVY_RECOVER": {
       const heavy = spec.style === "HEAVY_RECOVER";
-      bones.pelvis = [K(0, R(-6, heavy ? -10 : 0, 0)), K(0.30, R(heavy ? 10 : 8, heavy ? 6 : 0, 0)), K(0.62, R(3, heavy ? 2 : 0, 0)), K(1, R())];
-      bones.spine_02 = [K(0, R(heavy ? -12 : -10, heavy ? -12 : 0, 0)), K(0.30, R(heavy ? 12 : 9, heavy ? 7 : 0, 0)), K(0.62, R(4, heavy ? 2 : 0, 0)), K(1, R())];
-      bones.spine_03 = [K(0, R(heavy ? -17 : -15, heavy ? -15 : 0, 0)), K(0.30, R(heavy ? 15 : 12, heavy ? 9 : 0, 0)), K(0.62, R(5, heavy ? 3 : 0, 0)), K(1, R())];
+      // FULL_BODY_BALANCE_V3: recovery carries momentum without folding at the waist.
+      bones.pelvis = [K(0, R(-2, heavy ? -7 : 0, 0)), K(0.30, R(heavy ? 5 : 4, heavy ? 4 : 0, 0)), K(0.62, R(2, heavy ? 1 : 0, 0)), K(1, R())];
+      bones.spine_02 = [K(0, R(heavy ? -5 : -4, heavy ? -8 : 0, 0)), K(0.30, R(heavy ? 6 : 5, heavy ? 5 : 0, 0)), K(0.62, R(2, heavy ? 1 : 0, 0)), K(1, R())];
+      bones.spine_03 = [K(0, R(heavy ? -7 : -6, heavy ? -10 : 0, 0)), K(0.30, R(heavy ? 7 : 6, heavy ? 6 : 0, 0)), K(0.62, R(3, heavy ? 2 : 0, 0)), K(1, R())];
       bones.thigh_l = [K(0, R(-8, 0, 0)), K(0.30, R(9, 0, 0)), K(1, R())];
       bones.thigh_r = [K(0, R(-12, 0, 0)), K(0.30, R(11, 0, 0)), K(1, R())];
       pelvisMove = [K(0, T(0, heavy ? -0.012 : 0.010, heavy ? 0.022 : 0.016)), K(0.30, T(0, -0.034, 0.006)), K(0.62, T(0, -0.016, 0)), K(1, T())];

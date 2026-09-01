@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -62,5 +62,7 @@ jobs:
             echo "Curated assets already current"
             exit 0
           fi
-          git commit -m "Optimize Quaternius runtime fight clips"
-          git push origin HEAD:main
+          git commit -m "Curate expanded Quaternius fight motions"
+          # This workflow is branch-safe so development branches can generate the
+          # pinned binary pack without ever writing directly to main.
+          git push origin "HEAD:${GITHUB_REF_NAME}"

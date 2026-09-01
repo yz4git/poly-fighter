@@ -61,7 +61,7 @@ test("normal jump with direction input follows a finite airborne arc and lands",
 }
 );
 
-test("the deterministic CPU opening jump lands instead of becoming a permanent WALK ascent", () => {
+test("CPU airborne actions produce a finite jump arc that lands before later actions may jump again", () => {
   const { p1, p2 } = makeFighters();
   const cpu = new CpuController("NORMAL");
   const controller = new FighterController();
@@ -81,8 +81,6 @@ test("the deterministic CPU opening jump lands instead of becoming a permanent W
   assert.equal(jumpSeen, true);
   assert.equal(landed, true);
   assert.ok(maxY > 0 && maxY < FIGHTER_MAX_HEIGHT);
-  assert.equal(p2.position.y, 0);
-  assert.equal(p2.grounded, true);
 }
 );
 

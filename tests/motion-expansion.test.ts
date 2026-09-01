@@ -135,6 +135,8 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /TAIL_NEUTRAL_STATES/);
   assert.match(source, /motionExpansionTailKind/);
   assert.match(source, /COMBO_LINK_BLEND_SECONDS = 0\.075/);
+  assert.match(source, /comboLinkState === "LINKED"/);
+  assert.match(source, /comboLinkSerial !== runtime\.lastComboLinkSerial/);
   assert.match(source, /currentPhase = "SETTLE"/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);

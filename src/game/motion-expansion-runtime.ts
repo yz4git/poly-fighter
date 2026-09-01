@@ -700,8 +700,15 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   const restartedMove = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
   const restartedReaction = reaction.serial !== runtime.lastReactionSerial && fighter.state !== "ATTACK";
   const comboLinkSerial = Number(fighter.visual.root.userData.tpsComboLinkSerial ?? 0);
-  const comboLinked = restartedMove && comboLinkSerial > runtime.lastComboLinkSerial;
-  if (comboLinkSerial > runtime.lastComboLinkSerial) runtime.lastComboLinkSerial = comboLinkSerial;
+  const comboLinkState = fighter.visual.root.userData.tpsComboLinkState;
+  // Link serials intentionally reset with each round. Comparing only with `>`
+  // made the first links of later rounds miss their visual crossfade whenever a
+  // previous round had already reached a larger serial. A real linked restart is
+  // defined by the published LINKED state plus a serial change in either direction.
+  const comboLinked = restartedMove
+    && comboLinkState === "LINKED"
+    && comboLinkSerial !== runtime.lastComboLinkSerial;
+  if (comboLinkSerial !== runtime.lastComboLinkSerial) runtime.lastComboLinkSerial = comboLinkSerial;
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = reaction.serial;
   runtime.currentPhase = desired.phase;

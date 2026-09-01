@@ -25,7 +25,11 @@ jobs:
           cache: npm
 
       - name: Apply motion intent fixes
-        run: python3 scripts/apply-motion-intent-pass.py
+        run: |
+          python3 scripts/apply-motion-intent-pass.py
+          # Workflow files are updated separately through the GitHub connector.
+          # The Actions token may write contents but cannot mutate workflows.
+          git checkout -- .github/workflows/procedural-fight-motion-generator.yml .github/workflows/tps-visual-audit.yml
 
       - name: Install dependencies
         run: |
@@ -65,8 +69,6 @@ jobs:
             src/game/motion-profile.ts \
             src/game/motion-expansion-runtime.ts \
             tests/motion-expansion.test.ts \
-            .github/workflows/procedural-fight-motion-generator.yml \
-            .github/workflows/tps-visual-audit.yml \
             public/models/quaternius/procedural-fight-core.glb \
             public/models/quaternius/procedural-fight-core.metrics.json
           if git diff --cached --quiet; then

@@ -132,4 +132,5 @@ test("weighted UBC outfit skin maps face to skin and the remaining rig to clothi
   assert.match(outfitSkin, /clothingRatio/);
   assert.match(outfitSkin, /shouldKeepAuthoredMaterial\(mesh, material\)/);
   assert.match(outfitSkin, /quaterniusOutfitSkinMaterialCount/);
+  assert.doesNotMatch(outfitSkin, /if \(!mesh\.isSkinnedMesh \|\| shouldKeepAuthoredMaterial\(mesh\)\) return/);
 });

@@ -1,0 +1,77 @@
+name: Apply visible motion audit contract fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-visible-motion-audit-contract.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/arm-fist-playtest-20260901
+          fetch-depth: 0
+      - name: Patch visible motion target contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'{label} anchor missing in {path}')
+              p.write_text(s.replace(old, new, 1))
+
+          replace_once(
+              'src/game/motion-expansion-runtime.ts',
+              '''function findImportedModel(fighter: FighterRuntime): THREE.Group | null {\n  const host = fighter.visual.root.children.find((child) => child.name.startsWith("quaternius-ubc-"));\n  if (!host) return null;\n  const model = host.children.find((child) => child.type === "Group" || child.children.length > 0);\n  return (model ?? host.children[0] ?? null) as THREE.Group | null;\n}\n''',
+              '''function findImportedModel(fighter: FighterRuntime): THREE.Group | null {\n  const host = fighter.visual.root.children.find((child) =>\n    child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),\n  );\n  if (!host) return null;\n  const model = (host.children.find((child) => child.type === "Group" || child.children.length > 0)\n    ?? host.children[0]\n    ?? null) as THREE.Group | null;\n  if (!model) return null;\n  // Motion Expansion is not a hidden proxy rig: it drives the exact imported\n  // Quaternius model that is rendered to the player. Keep this explicit so\n  // audits cannot confuse the baseline idle mixer with the active combat mixer.\n  fighter.visual.root.userData.motionExpansionTargetHost = host.name;\n  fighter.visual.root.userData.motionExpansionTargetModelName = model.name || model.type;\n  fighter.visual.root.userData.motionExpansionTargetsVisibleQuaternius = true;\n  return model;\n}\n''',
+              'findImportedModel',
+          )
+
+          p = Path('scripts/capture-motion-readability-audit.mjs')
+          s = p.read_text()
+          s = s.replace(
+              "const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-'));",
+              "const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));",
+              1,
+          )
+          old = '''      const importedHost = root.children.find((child) => child.name?.startsWith('quaternius-ubc-'));\n      let fistMeshCount = 0;\n'''
+          new = '''      const importedHost = root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));\n      let fistMeshCount = 0;\n'''
+          if old not in s:
+              raise SystemExit('audit host anchor missing')
+          s = s.replace(old, new, 1)
+          old = '''        clip: root.userData.motionExpansionCurrentClip ?? null,\n        visibleClip: importedHost?.userData?.quaterniusCurrentClip ?? null,\n        fistMeshCount,\n'''
+          new = '''        clip: root.userData.motionExpansionCurrentClip ?? null,\n        baselineClip: importedHost?.userData?.quaterniusCurrentClip ?? null,\n        visibleTarget: root.userData.motionExpansionTargetsVisibleQuaternius === true,\n        targetHost: root.userData.motionExpansionTargetHost ?? null,\n        targetModelName: root.userData.motionExpansionTargetModelName ?? null,\n        fistMeshCount,\n'''
+          if old not in s:
+              raise SystemExit('audit return anchor missing')
+          s = s.replace(old, new, 1)
+          old = '''    if (result.visibleClip !== expected) {\n      throw new Error(`User-facing Quaternius motion ${moveId} resolved to ${result.visibleClip}, expected ${expected}: ${JSON.stringify(result)}`);\n    }\n'''
+          new = '''    if (!result.visibleTarget || typeof result.targetHost !== "string" || !result.targetHost.endsWith("-runtime")) {\n      throw new Error(`Motion Expansion is not driving the rendered Quaternius model during ${moveId}: ${JSON.stringify(result)}`);\n    }\n'''
+          if old not in s:
+              raise SystemExit('audit visible assertion anchor missing')
+          p.write_text(s.replace(old, new, 1))
+
+          replace_once(
+              'tests/motion-expansion.test.ts',
+              '''  assert.match(source, /motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y"/);\n  assert.match(source, /styleTarget\\(opponent, spec\\.style, side\\)/);\n''',
+              '''  assert.match(source, /motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y"/);\n  assert.match(source, /child\\.name\\.startsWith\\("quaternius-ubc-"\\) && child\\.name\\.endsWith\\("-runtime"\\)/);\n  assert.match(source, /motionExpansionTargetsVisibleQuaternius = true/);\n  assert.match(source, /motionExpansionTargetHost = host\\.name/);\n  assert.match(source, /styleTarget\\(opponent, spec\\.style, side\\)/);\n''',
+              'motion expansion visible target test',
+          )
+          PY
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/motion-expansion-runtime.ts scripts/capture-motion-readability-audit.mjs tests/motion-expansion.test.ts
+          git commit -m "Audit Procedural Fight on the rendered Quaternius model"
+          git push origin HEAD:fix/arm-fist-playtest-20260901

@@ -129,6 +129,9 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /PF_Sidestep_L/);
   assert.match(source, /PF_Sidestep_R/);
   assert.match(source, /motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y"/);
+  assert.match(source, /child\.name\.startsWith\("quaternius-ubc-"\) && child\.name\.endsWith\("-runtime"\)/);
+  assert.match(source, /motionExpansionTargetsVisibleQuaternius = true/);
+  assert.match(source, /motionExpansionTargetHost = host\.name/);
   assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
   assert.doesNotMatch(source, /getVisualContactPoint/);
   assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);

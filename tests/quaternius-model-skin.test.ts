@@ -11,6 +11,7 @@ import {
 import {
   QUATERNIUS_UBC_FEMALE_MODEL_URL,
   QUATERNIUS_UBC_MALE_MODEL_URL,
+  QUATERNIUS_PROCEDURAL_CORE_URL,
   QUATERNIUS_UAL_CORE_URL,
   quaterniusBodyTypeForDefinition,
   quaterniusModelUrlForBodyType,
@@ -44,6 +45,7 @@ test("KAIRO uses male UBC and SERA uses female UBC", () => {
   assert.match(QUATERNIUS_UBC_MALE_MODEL_URL, /ubc-superhero-male-flat\.glb$/);
   assert.match(QUATERNIUS_UBC_FEMALE_MODEL_URL, /ubc-superhero-female-flat\.glb$/);
   assert.match(QUATERNIUS_UAL_CORE_URL, /ual-fight-core\.glb$/);
+  assert.match(QUATERNIUS_PROCEDURAL_CORE_URL, /procedural-fight-core\.glb$/);
 });
 
 test("Quaternius runtime retargets rest-pose deltas and preserves canonical combat poses", async () => {
@@ -52,7 +54,7 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.doesNotMatch(runtime, /ubc-superhero-male\.glb[`\"]/);
   assert.match(runtime, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
   assert.match(runtime, /retargetMotionClips/);
-  assert.match(runtime, /quaterniusRetargetMode = "rest-delta"/);
+  assert.match(runtime, /quaterniusRetargetMode = "rest-delta-separated-sources"/);
   assert.match(runtime, /function neutralPoseCorrection/);
   assert.match(runtime, /neutralPoseCorrection\(runtime, fighter\)/);
   assert.match(runtime, /function guardPoseCorrection/);
@@ -60,6 +62,18 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /getVisualContactPoint/);
   assert.match(runtime, /updateQuaterniusModelPreview/);
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
+  assert.match(runtime, /loadAsync\(QUATERNIUS_UAL_CORE_URL\)/);
+  assert.match(runtime, /loadAsync\(QUATERNIUS_PROCEDURAL_CORE_URL\)/);
+  assert.match(runtime, /base: \{ source: base\.scene, clips: base\.animations \}/);
+  assert.match(runtime, /procedural: \{ source: procedural\.scene, clips: procedural\.animations \}/);
+  assert.match(runtime, /retargetMotionClips\(resources\.motion\.base\.source/);
+  assert.match(runtime, /resources\.motion\.procedural\.source/);
+  assert.match(runtime, /new Map<string, THREE\.AnimationClip>\(\[\.\.\.baseClips, \.\.\.proceduralClips\]\)/);
+  assert.match(runtime, /quaterniusProceduralClipCount = proceduralClips\.size/);
+  assert.match(runtime, /PF_Jab_L/);
+  assert.match(runtime, /PF_Power_R/);
+  assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);
+  assert.doesNotMatch(runtime, /poleLocal\.y \+= guard \? 0\.015 : -0\.075/);
 });
 
 test("Quaternius hero graphics use fitted cloth panels and bind-delta followers", async () => {
@@ -94,6 +108,11 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
   }
 
   assert.match(polish, /ubc-kairo-left-gauntlet/);
+  assert.match(polish, /function fistGeometry/);
+  assert.match(polish, /ubc-kairo-left-fist/);
+  assert.match(polish, /ubc-kairo-right-fist/);
+  assert.match(polish, /ubc-sera-left-fist/);
+  assert.match(polish, /ubc-sera-right-fist/);
   assert.match(polish, /ubc-kairo-left-shin-guard/);
   assert.match(polish, /new THREE\.CylinderGeometry\(0\.034, 0\.041, 0\.108/);
   assert.match(polish, /ubc-sera-left-forearm-guard/);

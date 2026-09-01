@@ -138,6 +138,10 @@ const resetAndPose = `
     return {
       pelvis: point(get('pelvis')),
       head: point(get('head')),
+      upperArmL: point(get('upperarm_l')),
+      upperArmR: point(get('upperarm_r')),
+      elbowL: point(get('lowerarm_l')),
+      elbowR: point(get('lowerarm_r')),
       handL: point(get('hand_l')),
       handR: point(get('hand_r')),
       footL: point(get('foot_l')),
@@ -241,6 +245,45 @@ try {
   `);
   if (!freeze) throw new Error("Could not freeze TPS game for deterministic motion audit");
 
+  const neutral = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.p1.position.set(0, 0, 0.74);
+    game.p2.position.set(0, 0, -0.48);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    let auditTime = performance.now() / 1000;
+    for (let step = 0; step < 8; step += 1) {
+      auditTime += 1 / 60;
+      game.updateVisual(game.p1, game.p2, auditTime);
+      game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+    let fistMeshCount = 0;
+    game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
+    return {
+      points: bonePoints(game.p1),
+      visibleClip: host?.userData?.quaterniusCurrentClip ?? null,
+      fistMeshCount,
+    };
+  `);
+  await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
+  if (!neutral?.points) throw new Error(`Neutral imported arm points missing: ${JSON.stringify(neutral)}`);
+  for (const side of ['L', 'R']) {
+    const elbow = neutral.points[`elbow${side}`];
+    const hand = neutral.points[`hand${side}`];
+    if (!elbow || !hand) throw new Error(`Neutral ${side} arm chain missing: ${JSON.stringify(neutral)}`);
+    if (hand.y < elbow.y - 0.055) {
+      throw new Error(`Neutral ${side} forearm hangs below the elbow: ${JSON.stringify({ elbow, hand, neutral })}`);
+    }
+  }
+  if (neutral.fistMeshCount < 2) throw new Error(`Readable fist geometry missing: ${JSON.stringify(neutral)}`);
+
   const results = {};
   for (const moveId of moves) {
     const result = await execute(sessionId, `${gameLookup}${resetAndPose}
@@ -282,6 +325,9 @@ try {
       game.updateLockOn();
       game.renderer.render(game.scene, game.camera);
       const root = game.p1.visual.root;
+      const importedHost = root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+      let fistMeshCount = 0;
+      root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
       const points = bonePoints(game.p1);
       const contact = move.visualContact ?? null;
       const strikePoint = !points ? null
@@ -297,6 +343,11 @@ try {
         moveTick: game.p1.moveTick,
         state: game.p1.state,
         clip: root.userData.motionExpansionCurrentClip ?? null,
+        baselineClip: importedHost?.userData?.quaterniusCurrentClip ?? null,
+        visibleTarget: root.userData.motionExpansionTargetsVisibleQuaternius === true,
+        targetHost: root.userData.motionExpansionTargetHost ?? null,
+        targetModelName: root.userData.motionExpansionTargetModelName ?? null,
+        fistMeshCount,
         phase: root.userData.motionExpansionPhase ?? null,
         contactMode: root.userData.motionExpansionContactMode ?? null,
         contact,
@@ -318,6 +369,12 @@ try {
     }
     if (result.clip !== expected) {
       throw new Error(`Motion ${moveId} resolved to ${result.clip}, expected ${expected}: ${JSON.stringify(result)}`);
+    }
+    if (!result.visibleTarget || typeof result.targetHost !== "string" || !result.targetHost.endsWith("-runtime")) {
+      throw new Error(`Motion Expansion is not driving the rendered Quaternius model during ${moveId}: ${JSON.stringify(result)}`);
+    }
+    if (result.fistMeshCount < 2) {
+      throw new Error(`User-facing fist silhouette missing during ${moveId}: ${JSON.stringify(result)}`);
     }
     if (result.contactMode !== "OPPONENT_WEIGHTED_IK") {
       throw new Error(`Motion ${moveId} did not use opponent-weighted strike targeting: ${JSON.stringify(result)}`);
@@ -354,6 +411,7 @@ try {
 
   const diagnostics = {
     preload,
+    neutral,
     allMovesActive: Object.values(results).every((result) => result.phase === "ACTIVE"),
     pairDistances,
     kickHeights: { lowY, kickY, risingY },

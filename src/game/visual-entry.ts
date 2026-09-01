@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import { applyCharacterGraphicsPolish } from "./character-graphics-polish";
+import { scheduleQuaterniusCharacterGraphicsV2 } from "./quaternius-character-graphics-v2";
 import { scheduleQuaterniusGraphicsPolish } from "./quaternius-graphics-polish";
 import { scheduleQuaterniusOutfitSkin } from "./quaternius-outfit-skin";
 import { createKairoReconstructedVisual } from "./visual-kairo-v1";
@@ -74,6 +75,7 @@ export function createFighterVisual(
   });
   if (modelId === "QUATERNIUS_UBC") {
     scheduleQuaterniusGraphicsPolish(polished, definition);
+    scheduleQuaterniusCharacterGraphicsV2(polished, definition);
     scheduleQuaterniusOutfitSkin(polished, definition);
   }
   return polished;

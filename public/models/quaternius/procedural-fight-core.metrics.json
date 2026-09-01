@@ -1,5 +1,5 @@
 {
-  "version": "PROCEDURAL_FIGHT_V2",
+  "version": "PROCEDURAL_FIGHT_V3",
   "source": "public/models/quaternius/ual-fight-core.glb",
   "output": "public/models/quaternius/procedural-fight-core.glb",
   "generatedClipCount": 23,
@@ -28,126 +28,263 @@
     "PF_Throw",
     "PF_Wakeup"
   ],
-  "rootMotionPolicy": "ADDITIVE_COM_RETURN_TO_BIND",
-  "timingPolicy": "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE",
+  "rootMotionPolicy": "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK",
+  "timingPolicy": "MOVE_SPECIFIC_9_POSE_TIMING",
+  "poseGraph": [
+    "STANCE",
+    "LOAD",
+    "ANTICIPATION_HOLD",
+    "LAUNCH",
+    "PRE_CONTACT",
+    "IMPACT",
+    "OVERTRAVEL",
+    "RECOIL",
+    "SETTLE"
+  ],
+  "motionDna": {
+    "POWER": {
+      "id": "KAIRO_POWER",
+      "hipLead": 1.18,
+      "chestFollow": 1.1,
+      "recoil": 1.14,
+      "lateral": 0.82,
+      "guardDiscipline": 1
+    },
+    "SPEED": {
+      "id": "SERA_SPEED",
+      "hipLead": 1.04,
+      "chestFollow": 0.94,
+      "recoil": 0.82,
+      "lateral": 1.22,
+      "guardDiscipline": 0.92
+    }
+  },
   "metrics": [
     {
       "name": "PF_Jab_L",
       "base": "Punch_Jab",
       "family": "punch",
       "style": "JAB",
-      "contactU": 0.66,
+      "contactU": 0.61,
       "plantFoot": "RIGHT",
       "duration": 0.8666666746139526,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.1,
+        "hold": 0.16,
+        "launch": 0.26,
+        "pre": 0.48,
+        "impact": 0.61,
+        "over": 0.67,
+        "recoil": 0.76,
+        "settle": 0.88
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_r",
         "clavicle_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_r",
         "upperarm_l"
       ],
       "modifiedPaths": [
+        "calf_r:rotation",
         "clavicle_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03158,
-      "maxVerticalRootShift": 0.01195
+      "maxPlanarRootShift": 0.03401,
+      "maxVerticalRootShift": 0.00935
     },
     {
       "name": "PF_Cross_R",
       "base": "Punch_Cross",
       "family": "punch",
       "style": "CROSS",
-      "contactU": 0.69,
+      "contactU": 0.68,
       "plantFoot": "LEFT",
       "duration": 1,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.21,
+        "launch": 0.32,
+        "pre": 0.55,
+        "impact": 0.68,
+        "over": 0.75,
+        "recoil": 0.84,
+        "settle": 0.93
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "clavicle_r",
+        "foot_l",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "clavicle_r:rotation",
+        "foot_l:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.05262,
-      "maxVerticalRootShift": 0.01322
+      "maxPlanarRootShift": 0.05716,
+      "maxVerticalRootShift": 0.01159
     },
     {
       "name": "PF_Backfist_R",
       "base": "Punch_Cross",
       "family": "punch",
       "style": "HOOK",
-      "contactU": 0.62,
+      "contactU": 0.64,
       "plantFoot": "LEFT",
       "duration": 1,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.14,
+        "hold": 0.27,
+        "launch": 0.38,
+        "pre": 0.54,
+        "impact": 0.64,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "foot_l",
         "lowerarm_r",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "foot_l:rotation",
         "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0407,
-      "maxVerticalRootShift": 0.01192
+      "maxPlanarRootShift": 0.04446,
+      "maxVerticalRootShift": 0.01111
     },
     {
       "name": "PF_Backfist_L",
       "base": "Punch_Cross",
       "family": "punch",
       "style": "HOOK",
-      "contactU": 0.62,
+      "contactU": 0.64,
       "plantFoot": "RIGHT",
       "duration": 1,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.14,
+        "hold": 0.27,
+        "launch": 0.38,
+        "pre": 0.54,
+        "impact": 0.64,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_r",
+        "foot_r",
         "lowerarm_l",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_r",
         "upperarm_l"
       ],
       "modifiedPaths": [
+        "calf_r:rotation",
+        "foot_r:rotation",
         "lowerarm_l:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0407,
-      "maxVerticalRootShift": 0.01192
+      "maxPlanarRootShift": 0.04446,
+      "maxVerticalRootShift": 0.01111
     },
     {
       "name": "PF_BodyBlow_L",
@@ -157,27 +294,54 @@
       "contactU": 0.7,
       "plantFoot": "RIGHT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.16,
+        "hold": 0.29,
+        "launch": 0.41,
+        "pre": 0.58,
+        "impact": 0.7,
+        "over": 0.77,
+        "recoil": 0.87,
+        "settle": 0.95
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_r",
         "clavicle_l",
+        "foot_r",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_r",
         "upperarm_l"
       ],
       "modifiedPaths": [
+        "calf_r:rotation",
         "clavicle_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.05134,
-      "maxVerticalRootShift": 0.01738
+      "maxPlanarRootShift": 0.05544,
+      "maxVerticalRootShift": 0.01461
     },
     {
       "name": "PF_BodyBlow_R",
@@ -187,27 +351,54 @@
       "contactU": 0.7,
       "plantFoot": "LEFT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.16,
+        "hold": 0.29,
+        "launch": 0.41,
+        "pre": 0.58,
+        "impact": 0.7,
+        "over": 0.77,
+        "recoil": 0.87,
+        "settle": 0.95
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "clavicle_r",
+        "foot_l",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "clavicle_r:rotation",
+        "foot_l:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.05134,
-      "maxVerticalRootShift": 0.01738
+      "maxPlanarRootShift": 0.05544,
+      "maxVerticalRootShift": 0.01461
     },
     {
       "name": "PF_Power_R",
@@ -217,19 +408,45 @@
       "contactU": 0.73,
       "plantFoot": "LEFT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.17,
+        "hold": 0.34,
+        "launch": 0.47,
+        "pre": 0.63,
+        "impact": 0.73,
+        "over": 0.81,
+        "recoil": 0.9,
+        "settle": 0.97
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "clavicle_r",
+        "foot_l",
         "lowerarm_r",
         "neck_01",
         "pelvis",
         "spine_01",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "clavicle_r:rotation",
+        "foot_l:rotation",
         "lowerarm_r:rotation",
         "neck_01:rotation",
         "pelvis:rotation",
@@ -237,11 +454,12 @@
         "spine_01:rotation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.08345,
-      "maxVerticalRootShift": 0.01525
+      "maxPlanarRootShift": 0.08998,
+      "maxVerticalRootShift": 0.01206
     },
     {
       "name": "PF_FrontKick_R",
@@ -251,27 +469,54 @@
       "contactU": 0.64,
       "plantFoot": "LEFT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.13,
+        "hold": 0.25,
+        "launch": 0.37,
+        "pre": 0.52,
+        "impact": 0.64,
+        "over": 0.72,
+        "recoil": 0.83,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "calf_r",
+        "foot_l",
         "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "calf_r:rotation",
+        "foot_l:rotation",
         "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0374,
-      "maxVerticalRootShift": 0.03367
+      "maxPlanarRootShift": 0.04631,
+      "maxVerticalRootShift": 0.03299
     },
     {
       "name": "PF_LowKick_L",
@@ -281,10 +526,33 @@
       "contactU": 0.67,
       "plantFoot": "RIGHT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.15,
+        "hold": 0.28,
+        "launch": 0.4,
+        "pre": 0.55,
+        "impact": 0.67,
+        "over": 0.76,
+        "recoil": 0.87,
+        "settle": 0.95
+      },
       "channels": 195,
       "modifiedBones": [
         "calf_l",
+        "calf_r",
         "foot_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
@@ -293,7 +561,9 @@
       ],
       "modifiedPaths": [
         "calf_l:rotation",
+        "calf_r:rotation",
         "foot_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
@@ -302,8 +572,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03587,
-      "maxVerticalRootShift": 0.0359
+      "maxPlanarRootShift": 0.04044,
+      "maxVerticalRootShift": 0.036
     },
     {
       "name": "PF_RisingKick_R",
@@ -313,27 +583,54 @@
       "contactU": 0.69,
       "plantFoot": "LEFT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.17,
+        "hold": 0.3,
+        "launch": 0.42,
+        "pre": 0.58,
+        "impact": 0.69,
+        "over": 0.78,
+        "recoil": 0.88,
+        "settle": 0.96
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "calf_r",
+        "foot_l",
         "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "calf_r:rotation",
+        "foot_l:rotation",
         "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.02997,
-      "maxVerticalRootShift": 0.03329
+      "maxPlanarRootShift": 0.03237,
+      "maxVerticalRootShift": 0.02907
     },
     {
       "name": "PF_DashKick_R",
@@ -343,6 +640,27 @@
       "contactU": 0.66,
       "plantFoot": "AIR",
       "duration": 1.3333333730697632,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.08,
+        "hold": 0.16,
+        "launch": 0.27,
+        "pre": 0.49,
+        "impact": 0.66,
+        "over": 0.73,
+        "recoil": 0.82,
+        "settle": 0.92
+      },
       "channels": 195,
       "modifiedBones": [
         "calf_l",
@@ -366,8 +684,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.06655,
-      "maxVerticalRootShift": 0.02258
+      "maxPlanarRootShift": 0.0708,
+      "maxVerticalRootShift": 0.02147
     },
     {
       "name": "PF_Throw",
@@ -377,29 +695,62 @@
       "contactU": 0.58,
       "plantFoot": "BOTH",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.13,
+        "hold": 0.26,
+        "launch": 0.39,
+        "pre": 0.51,
+        "impact": 0.58,
+        "over": 0.66,
+        "recoil": 0.8,
+        "settle": 0.93
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "lowerarm_l",
         "lowerarm_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_l",
+        "thigh_r",
         "upperarm_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "lowerarm_l:rotation",
         "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04593,
-      "maxVerticalRootShift": 0.01594
+      "maxPlanarRootShift": 0.046,
+      "maxVerticalRootShift": 0.01382
     },
     {
       "name": "PF_Counter_R",
@@ -409,25 +760,52 @@
       "contactU": 0.55,
       "plantFoot": "LEFT",
       "duration": 1,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.06,
+        "hold": 0.12,
+        "launch": 0.22,
+        "pre": 0.42,
+        "impact": 0.55,
+        "over": 0.63,
+        "recoil": 0.75,
+        "settle": 0.88
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
         "clavicle_r",
+        "foot_l",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
         "clavicle_r:rotation",
+        "foot_l:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03965,
-      "maxVerticalRootShift": 0.01391
+      "maxPlanarRootShift": 0.05269,
+      "maxVerticalRootShift": 0.0104
     },
     {
       "name": "PF_Counter_L",
@@ -437,49 +815,109 @@
       "contactU": 0.55,
       "plantFoot": "RIGHT",
       "duration": 1,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.06,
+        "hold": 0.12,
+        "launch": 0.22,
+        "pre": 0.42,
+        "impact": 0.55,
+        "over": 0.63,
+        "recoil": 0.75,
+        "settle": 0.88
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_r",
         "clavicle_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_r",
         "upperarm_l"
       ],
       "modifiedPaths": [
+        "calf_r:rotation",
         "clavicle_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03965,
-      "maxVerticalRootShift": 0.01391
+      "maxPlanarRootShift": 0.05269,
+      "maxVerticalRootShift": 0.0104
     },
     {
       "name": "PF_HitHeavy",
       "base": "Hit_Chest",
       "family": "reaction",
       "style": "HIT_HEAVY",
-      "contactU": 0.18,
+      "contactU": 0.66,
       "plantFoot": "BOTH",
       "duration": 0.3333333432674408,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "neck_01",
         "pelvis",
         "spine_01",
         "spine_02",
-        "spine_03"
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "neck_01:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
-        "spine_03:rotation"
+        "spine_03:rotation",
+        "thigh_l:rotation",
+        "thigh_r:rotation"
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.02981,
@@ -490,9 +928,30 @@
       "base": "Hit_Chest",
       "family": "reaction",
       "style": "LAUNCH",
-      "contactU": 0.2,
+      "contactU": 0.66,
       "plantFoot": "AIR",
       "duration": 0.3333333432674408,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
         "pelvis",
@@ -520,9 +979,30 @@
       "base": "Death01",
       "family": "reaction",
       "style": "DOWN",
-      "contactU": 0.35,
+      "contactU": 0.66,
       "plantFoot": "AIR",
       "duration": 2.4000000953674316,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
         "pelvis",
@@ -544,22 +1024,55 @@
       "base": "Jump_Land",
       "family": "recovery",
       "style": "WAKEUP",
-      "contactU": 0.7,
+      "contactU": 0.66,
       "plantFoot": "BOTH",
       "duration": 1.2666666507720947,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "pelvis",
         "spine_01",
         "spine_02",
-        "spine_03"
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_01:rotation",
         "spine_02:rotation",
-        "spine_03:rotation"
+        "spine_03:rotation",
+        "thigh_l:rotation",
+        "thigh_r:rotation"
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.00996,
@@ -570,22 +1083,55 @@
       "base": "Hit_Chest",
       "family": "reaction",
       "style": "GUARD_BREAK",
-      "contactU": 0.22,
+      "contactU": 0.66,
       "plantFoot": "BOTH",
       "duration": 0.3333333432674408,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
+        "thigh_l",
+        "thigh_r",
         "upperarm_l",
         "upperarm_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
+        "thigh_l:rotation",
+        "thigh_r:rotation",
         "upperarm_l:rotation",
         "upperarm_r:rotation"
       ],
@@ -598,11 +1144,34 @@
       "base": "Idle_Loop",
       "family": "evasion",
       "style": "SIDESTEP",
-      "contactU": 0.5,
+      "contactU": 0.66,
       "plantFoot": "RIGHT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_r",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
@@ -610,6 +1179,8 @@
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_r:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
@@ -626,11 +1197,34 @@
       "base": "Idle_Loop",
       "family": "evasion",
       "style": "SIDESTEP",
-      "contactU": 0.5,
+      "contactU": 0.66,
       "plantFoot": "LEFT",
       "duration": 2.5,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "foot_l",
         "pelvis",
         "spine_02",
         "spine_03",
@@ -638,6 +1232,8 @@
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "foot_l:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
@@ -654,11 +1250,36 @@
       "base": "Jump_Land",
       "family": "recovery",
       "style": "KICK_RECOVER",
-      "contactU": 0.6,
+      "contactU": 0.66,
       "plantFoot": "BOTH",
       "duration": 1.2666666507720947,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
@@ -666,6 +1287,10 @@
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
@@ -682,11 +1307,36 @@
       "base": "Jump_Land",
       "family": "recovery",
       "style": "HEAVY_RECOVER",
-      "contactU": 0.62,
+      "contactU": 0.66,
       "plantFoot": "BOTH",
       "duration": 1.2666666507720947,
+      "poseGraphNodes": [
+        "STANCE",
+        "LOAD",
+        "ANTICIPATION_HOLD",
+        "LAUNCH",
+        "PRE_CONTACT",
+        "IMPACT",
+        "OVERTRAVEL",
+        "RECOIL",
+        "SETTLE"
+      ],
+      "timingProfile": {
+        "load": 0.12,
+        "hold": 0.22,
+        "launch": 0.34,
+        "pre": 0.53,
+        "impact": 0.66,
+        "over": 0.74,
+        "recoil": 0.84,
+        "settle": 0.94
+      },
       "channels": 195,
       "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "foot_l",
+        "foot_r",
         "pelvis",
         "spine_02",
         "spine_03",
@@ -694,6 +1344,10 @@
         "thigh_r"
       ],
       "modifiedPaths": [
+        "calf_l:rotation",
+        "calf_r:rotation",
+        "foot_l:rotation",
+        "foot_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",

@@ -13,11 +13,11 @@ import {
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Procedural Fight v2 maps every authored move to generated motion and reaction data", () => {
+test("Procedural Fight v3 maps every authored move to pose-graph motion and reaction data", () => {
   assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 23);
-  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V2");
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V3");
   assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 23);
   assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
   assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "PF_GuardBreak");
@@ -25,7 +25,8 @@ test("Procedural Fight v2 maps every authored move to generated motion and react
   assert.equal(MOTION_EXPANSION_PROFILE.sideStepLeftClip, "PF_Sidestep_L");
   assert.equal(MOTION_EXPANSION_PROFILE.kickRecoveryClip, "PF_KickRecover");
   assert.equal(MOTION_EXPANSION_PROFILE.heavyRecoveryClip, "PF_HeavyRecover");
-  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "ADDITIVE_COM_RETURN_TO_BIND");
+  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");
+  assert.equal(MOTION_EXPANSION_PROFILE.timingPolicy, "MOVE_SPECIFIC_9_POSE_TIMING");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -40,8 +41,8 @@ test("Procedural Fight v2 maps every authored move to generated motion and react
   }
 });
 
-test("procedural v2 generator artifact contains 23 clips, handed variants, root motion and deterministic timing metadata", async () => {
-  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions-v2.mjs", import.meta.url), "utf8");
+test("procedural v3 generator contains pose graph, support-foot authoring, COM and move-specific timing", async () => {
+  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions-v3.mjs", import.meta.url), "utf8");
   const metrics = JSON.parse(
     await readFile(new URL("../public/models/quaternius/procedural-fight-core.metrics.json", import.meta.url), "utf8"),
   ) as {
@@ -60,7 +61,11 @@ test("procedural v2 generator artifact contains 23 clips, handed variants, root 
     }>;
   };
 
-  assert.match(source, /PROCEDURAL_FIGHT_V2/);
+  assert.match(source, /PROCEDURAL_FIGHT_V3/);
+  assert.match(source, /POSE_GRAPH_NODES/);
+  assert.match(source, /MOVE_TIMINGS/);
+  assert.match(source, /authorSupportLeg/);
+  assert.match(source, /MOTION_DNA/);
   assert.match(source, /ANTICIPATION/);
   assert.match(source, /PF_GuardBreak/);
   assert.match(source, /PF_Sidestep_L/);
@@ -70,11 +75,14 @@ test("procedural v2 generator artifact contains 23 clips, handed variants, root 
   assert.match(source, /PF_Throw.*, base: "Idle_Loop"/);
   assert.match(source, /PF_BodyBlow_L.*, base: "Idle_Loop"/);
   assert.match(source, /sampleCurve/);
-  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V2");
+  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V3");
   assert.equal(metrics.generatedClipCount, 23);
   assert.equal(metrics.clips.length, 23);
-  assert.equal(metrics.rootMotionPolicy, "ADDITIVE_COM_RETURN_TO_BIND");
-  assert.equal(metrics.timingPolicy, "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE");
+  assert.equal(metrics.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");
+  assert.equal(metrics.timingPolicy, "MOVE_SPECIFIC_9_POSE_TIMING");
+  assert.equal(metrics.poseGraph.length, 9);
+  assert.equal(metrics.motionDna.POWER.id, "KAIRO_POWER");
+  assert.equal(metrics.motionDna.SPEED.id, "SERA_SPEED");
   for (const required of [
     "PF_Jab_L", "PF_Backfist_L", "PF_BodyBlow_R", "PF_Counter_L", "PF_LowKick_L", "PF_DownBack", "PF_GuardBreak",
     "PF_Sidestep_L", "PF_Sidestep_R", "PF_KickRecover", "PF_HeavyRecover",
@@ -91,7 +99,7 @@ test("procedural v2 generator artifact contains 23 clips, handed variants, root 
   assert.ok(planarClips >= 12, `only ${planarClips} v2 clips contain planar root motion`);
 });
 
-test("v2 readability mappings use generated recovery clips instead of generic library recovery", () => {
+test("v3 mappings retain generated recovery clips and authored support feet", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const jab = motionSpecForMove(kairo.moves.jab);
   const backfist = motionSpecForMove(kairo.moves.backfist);
@@ -118,6 +126,9 @@ test("v2 readability mappings use generated recovery clips instead of generic li
   assert.equal(rising.recoveryClip, "PF_KickRecover");
   assert.equal(dash.recoveryClip, "PF_KickRecover");
   assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);
+  assert.equal(jab.plantFoot, "RIGHT");
+  assert.equal(power.plantFoot, "LEFT");
+  assert.equal(dash.plantFoot, "AIR");
 });
 
 test("side-sensitive punches select the clip that matches each fighter's authored contact hand", () => {
@@ -142,18 +153,25 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /comboLinkState === "LINKED"/);
   assert.match(source, /comboLinkSerial !== runtime\.lastComboLinkSerial/);
   assert.match(source, /currentPhase = "SETTLE"/);
-  assert.match(source, /FULL_BODY_BALANCE_VERSION = "FULL_BODY_BALANCE_V3"/);
+  assert.match(source, /FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3"/);
   assert.match(source, /motionExpansionBalanceVersion = FULL_BODY_BALANCE_VERSION/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
-  assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
+  assert.match(source, /motionExpansionContactMode = "V3_FULL_BODY_TARGET_IK"/);
+  assert.match(source, /captureFootLocks/);
+  assert.match(source, /solveFootLock/);
+  assert.match(source, /solveCenterOfMass/);
+  assert.match(source, /fullBodyStrikeSolve/);
+  assert.match(source, /impactPairAccent/);
+  assert.match(source, /applyMotionDna/);
+  assert.match(source, /motionExpansionFootLockError/);
   assert.match(source, /PROCEDURAL_URL/);
-  assert.match(source, /PROCEDURAL_FIGHT_V2/);
+  assert.match(source, /PROCEDURAL_FIGHT_V3/);
   assert.match(source, /preserveProceduralPlanarRoot/);
   assert.match(source, /THREE\.MathUtils\.clamp\(track\.values\[offset\] - sourceNode\.position\.x, -0\.09, 0\.09\)/);
   assert.match(source, /PF_GuardBreak/);
   assert.match(source, /PF_Sidestep_L/);
   assert.match(source, /PF_Sidestep_R/);
-  assert.match(source, /motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y"/);
+  assert.match(source, /motionExpansionRootMotionPolicy = "V3_COM_FOOT_LOCK_FULL_BODY_IK"/);
   assert.match(source, /child\.name\.startsWith\("quaternius-ubc-"\) && child\.name\.endsWith\("-runtime"\)/);
   assert.match(source, /motionExpansionTargetsVisibleQuaternius = true/);
   assert.match(source, /motionExpansionTargetHost = host\.name/);

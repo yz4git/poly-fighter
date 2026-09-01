@@ -257,7 +257,7 @@ try {
     if (preload?.ready) break;
     await delay(100);
   }
-  if (!preload?.ready || preload.version !== "MOTION_READABILITY_V2" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V2") {
+  if (!preload?.ready || preload.version !== "MOTION_QUALITY_V3" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V3") {
     throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
   }
 

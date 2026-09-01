@@ -6,6 +6,9 @@ import {
   motionClipForReaction,
   motionRecoveryClipForMove,
   motionSpecForMove,
+  motionTimingForMove,
+  motionPlantFootForMove,
+  motionDnaForFighter,
   type MotionStyle,
 } from "./motion-profile";
 import { motionReactionFor } from "./motion-reaction";
@@ -93,12 +96,15 @@ type ExpansionRuntime = {
   lastReactionTier: 1 | 2 | 3;
   lastComboLinkSerial: number;
   tail: MotionTail | null;
+  footLock: FootLockState | null;
   ready: boolean;
   loading: boolean;
 };
 
 type DesiredMotion = { name: string; loop: boolean; speed: number; phase: MotionPhase };
-type AttackWeights = { drive: number; impact: number; phase: "STARTUP" | "ACTIVE" | "RECOVERY"; progress: number };
+type AttackWeights = { drive: number; impact: number; phase: "STARTUP" | "ACTIVE" | "RECOVERY"; progress: number; poseU: number };
+
+type FootLockState = { moveId: string; left: THREE.Vector3 | null; right: THREE.Vector3 | null };
 
 const runtimes = new WeakMap<THREE.Group, ExpansionRuntime>();
 let sourcePromise: Promise<SourcePack[]> | null = null;
@@ -227,11 +233,12 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     lastReactionTier: 1,
     lastComboLinkSerial: 0,
     tail: null,
+    footLock: null,
     ready: false,
     loading: true,
   };
   runtimes.set(fighter.visual.root, runtime);
-  fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
+  fighter.visual.root.userData.motionExpansionVersion = "MOTION_QUALITY_V3";
   fighter.visual.root.userData.motionExpansionLoading = true;
   void loadSourcePacks().then((packs) => {
     for (const pack of packs) {
@@ -239,7 +246,7 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     }
     runtime.ready = runtime.clips.size > 0;
     runtime.loading = false;
-    fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
+    fighter.visual.root.userData.motionExpansionVersion = "MOTION_QUALITY_V3";
     fighter.visual.root.userData.motionExpansionClipCount = runtime.clips.size;
     fighter.visual.root.userData.motionExpansionHasUAL2 = runtime.clips.has("Melee_Hook");
     fighter.visual.root.userData.motionExpansionHasProcedural = runtime.clips.has("PF_Jab_L")
@@ -250,8 +257,8 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
       && runtime.clips.has("PF_GuardBreak")
       && runtime.clips.has("PF_KickRecover");
     fighter.visual.root.userData.motionExpansionProceduralClipCount = Array.from(runtime.clips.keys()).filter((name) => name.startsWith("PF_")).length;
-    fighter.visual.root.userData.motionExpansionProceduralVersion = "PROCEDURAL_FIGHT_V2";
-    fighter.visual.root.userData.motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y";
+    fighter.visual.root.userData.motionExpansionProceduralVersion = "PROCEDURAL_FIGHT_V3";
+    fighter.visual.root.userData.motionExpansionRootMotionPolicy = "V3_COM_FOOT_LOCK_FULL_BODY_IK";
     fighter.visual.root.userData.motionExpansionLoading = false;
   }).catch((error: unknown) => {
     runtime.loading = false;
@@ -275,33 +282,27 @@ function smooth01(value: number): number {
 
 function attackWeights(fighter: FighterRuntime): AttackWeights {
   const move = fighter.currentMove;
-  if (!move) return { drive: 0, impact: 0, phase: "RECOVERY", progress: 1 };
+  if (!move) return { drive: 0, impact: 0, phase: "RECOVERY", progress: 1, poseU: 1 };
   const tick = Math.max(0, fighter.moveTick);
+  const total = Math.max(1, move.startup + move.active + move.recovery);
+  const poseU = THREE.MathUtils.clamp(tick / total, 0, 1);
+  const timing = motionTimingForMove(move);
+  const launchDrive = smooth01((poseU - timing.launch) / Math.max(0.001, timing.impact - timing.launch));
+  const recoilDrive = 1 - smooth01((poseU - timing.over) / Math.max(0.001, timing.settle - timing.over));
+  const drive = THREE.MathUtils.clamp(launchDrive * recoilDrive, 0, 1);
+  const impactIn = smooth01((poseU - timing.pre) / Math.max(0.001, timing.impact - timing.pre));
+  const impactOut = 1 - smooth01((poseU - timing.impact) / Math.max(0.001, timing.recoil - timing.impact));
+  const impact = THREE.MathUtils.clamp(impactIn * impactOut, 0, 1);
   if (tick < move.startup) {
     const progress = tick / Math.max(1, move.startup);
-    return {
-      drive: smooth01(progress),
-      impact: smooth01((progress - 0.68) / 0.32) * 0.22,
-      phase: "STARTUP",
-      progress,
-    };
+    return { drive, impact: Math.min(impact, 0.28), phase: "STARTUP", progress, poseU };
   }
   if (tick < move.startup + move.active) {
     const progress = (tick - move.startup) / Math.max(1, move.active);
-    return {
-      drive: 1,
-      impact: 0.76 + Math.sin(progress * Math.PI) * 0.24,
-      phase: "ACTIVE",
-      progress,
-    };
+    return { drive: Math.max(0.72, drive), impact: Math.max(0.68, impact), phase: "ACTIVE", progress, poseU };
   }
   const progress = (tick - move.startup - move.active) / Math.max(1, move.recovery);
-  return {
-    drive: 1 - smooth01(progress),
-    impact: 0,
-    phase: "RECOVERY",
-    progress,
-  };
+  return { drive, impact: impact * 0.35, phase: "RECOVERY", progress, poseU };
 }
 
 function desiredMotion(fighter: FighterRuntime): DesiredMotion {
@@ -452,7 +453,7 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
   }
 }
 
-const FULL_BODY_BALANCE_VERSION = "FULL_BODY_BALANCE_V3";
+const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -547,6 +548,128 @@ function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, op
     foot ? 0.24 : 0.32,
   ));
   solveLimb(root, mid, end, solvedTarget, pole);
+}
+
+function captureFootLocks(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move) {
+    runtime.footLock = null;
+    return;
+  }
+  const plant = motionPlantFootForMove(move);
+  if (plant === "AIR") {
+    runtime.footLock = null;
+    return;
+  }
+  if (runtime.footLock?.moveId === move.id) return;
+  runtime.model.updateMatrixWorld(true);
+  const leftFoot = runtime.bones.get("foot_l");
+  const rightFoot = runtime.bones.get("foot_r");
+  runtime.footLock = {
+    moveId: move.id,
+    left: (plant === "LEFT" || plant === "BOTH") && leftFoot ? leftFoot.getWorldPosition(new THREE.Vector3()) : null,
+    right: (plant === "RIGHT" || plant === "BOTH") && rightFoot ? rightFoot.getWorldPosition(new THREE.Vector3()) : null,
+  };
+}
+
+function solveCenterOfMass(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move) return;
+  const pelvis = runtime.bones.get("pelvis");
+  if (!pelvis) return;
+  const weights = attackWeights(fighter);
+  const dna = motionDnaForFighter(fighter.definition);
+  const plant = motionPlantFootForMove(move);
+  const support = plant === "LEFT" ? -1 : plant === "RIGHT" ? 1 : 0;
+  const opponentLocal = runtime.model.worldToLocal(opponent.visual.root.getWorldPosition(new THREE.Vector3()).clone());
+  const aimLateral = THREE.MathUtils.clamp(opponentLocal.x, -0.5, 0.5);
+  const load = 1 - weights.drive;
+  const forward = (0.008 + move.power * 0.006) * weights.drive;
+  const lateral = support * 0.008 * dna.lateral * weights.drive + aimLateral * 0.010 * weights.drive;
+  pelvis.position.x += THREE.MathUtils.clamp(lateral, -0.026, 0.026);
+  pelvis.position.z += THREE.MathUtils.clamp(forward - load * 0.004, -0.012, 0.032);
+  pelvis.position.y -= Math.min(0.016, (move.power * 0.003 + 0.002) * (0.4 + weights.drive));
+}
+
+function solveFootLock(runtime: ExpansionRuntime, fighter: FighterRuntime): number {
+  const lock = runtime.footLock;
+  const move = fighter.currentMove;
+  if (!lock || fighter.state !== "ATTACK" || !move) return 0;
+  const timing = motionTimingForMove(move);
+  const weights = attackWeights(fighter);
+  const release = smooth01((weights.poseU - timing.recoil) / Math.max(0.001, 1 - timing.recoil));
+  let maxError = 0;
+  const solve = (suffix: "l" | "r", target: THREE.Vector3 | null, side: number) => {
+    if (!target) return;
+    const thigh = runtime.bones.get(`thigh_${suffix}`);
+    const calf = runtime.bones.get(`calf_${suffix}`);
+    const foot = runtime.bones.get(`foot_${suffix}`);
+    if (!thigh || !calf || !foot) return;
+    const current = foot.getWorldPosition(new THREE.Vector3());
+    const blended = target.clone().lerp(current, release);
+    const pole = fighter.visual.root.localToWorld(new THREE.Vector3(side * 0.30, 0.50, 0.18));
+    solveLimb(thigh, calf, foot, blended, pole);
+    runtime.model.updateMatrixWorld(true);
+    maxError = Math.max(maxError, foot.getWorldPosition(new THREE.Vector3()).distanceTo(blended));
+  };
+  solve("l", lock.left, -1);
+  solve("r", lock.right, 1);
+  return maxError;
+}
+
+function fullBodyStrikeSolve(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move) return;
+  const spec = motionSpecForMove(move);
+  const weights = attackWeights(fighter);
+  const dna = motionDnaForFighter(fighter.definition);
+  const target = styleTarget(opponent, spec.style, strikeSide(fighter));
+  const local = runtime.model.worldToLocal(target.clone());
+  const aimYaw = THREE.MathUtils.clamp(Math.atan2(local.x, Math.max(0.05, Math.abs(local.z))), -0.34, 0.34);
+  const aimPitch = THREE.MathUtils.clamp(Math.atan2(local.y - 0.85, Math.max(0.35, Math.abs(local.z))), -0.12, 0.12);
+  const w = weights.drive;
+  addRotation(runtime, "pelvis", aimPitch * 0.08, aimYaw * 0.34 * dna.hipLead, 0, w);
+  addRotation(runtime, "spine_02", aimPitch * 0.18, aimYaw * 0.39 * dna.chestFollow, 0, w);
+  addRotation(runtime, "spine_03", aimPitch * 0.28, aimYaw * 0.27 * dna.chestFollow, 0, w);
+  // The non-striking hand stays home instead of drifting with the source clip.
+  const strikeLeft = move.visualContact?.startsWith("LEFT") === true;
+  const guard = strikeLeft ? "upperarm_r" : "upperarm_l";
+  addRotation(runtime, guard, -0.025, strikeLeft ? -0.035 : 0.035, strikeLeft ? 0.045 : -0.045, dna.guardDiscipline * w);
+}
+
+function impactPairAccent(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): "ATTACKER" | "VICTIM" | null {
+  const attacker = fighter.state === "ATTACK" && Boolean(fighter.currentMove) && opponent.state === "HIT" && (fighter.hitStop > 0 || opponent.hitStop > 0);
+  const victim = fighter.state === "HIT" && opponent.state === "ATTACK" && Boolean(opponent.currentMove) && (fighter.hitStop > 0 || opponent.hitStop > 0);
+  if (!attacker && !victim) return null;
+  const side = attacker ? strikeSide(fighter) : -strikeSide(opponent);
+  if (attacker) {
+    const power = fighter.currentMove?.power ?? 1;
+    addRotation(runtime, "pelvis", 0, side * 0.025 * power, 0, 1);
+    addRotation(runtime, "spine_02", 0, side * 0.045 * power, side * 0.012, 1);
+    addRotation(runtime, "spine_03", 0, side * 0.055 * power, side * 0.018, 1);
+    return "ATTACKER";
+  }
+  addRotation(runtime, "pelvis", 0.018, -side * 0.035, side * 0.045, 1);
+  addRotation(runtime, "spine_02", 0.045, -side * 0.055, side * 0.070, 1);
+  addRotation(runtime, "spine_03", 0.060, -side * 0.070, side * 0.090, 1);
+  addRotation(runtime, "head", 0.018, -side * 0.055, side * 0.080, 1);
+  return "VICTIM";
+}
+
+function applyMotionDna(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  if (fighter.state !== "ATTACK" || !fighter.currentMove) return;
+  const dna = motionDnaForFighter(fighter.definition);
+  const weights = attackWeights(fighter);
+  const side = strikeSide(fighter);
+  if (dna.id === "KAIRO_POWER") {
+    addRotation(runtime, "pelvis", 0, side * 0.035 * dna.hipLead, 0, weights.drive);
+    addRotation(runtime, "spine_02", 0, side * 0.025 * dna.chestFollow, 0, weights.drive);
+    if (weights.phase === "RECOVERY") addRotation(runtime, "spine_03", 0.020 * dna.recoil, -side * 0.020, 0, 1 - weights.drive);
+  } else {
+    addRotation(runtime, "pelvis", 0, side * 0.018, -side * 0.030 * dna.lateral, weights.drive);
+    addRotation(runtime, "spine_03", -0.018, side * 0.018, -side * 0.025 * dna.lateral, weights.drive);
+    if (weights.phase === "RECOVERY") addRotation(runtime, "pelvis", -0.012, -side * 0.025, side * 0.018, 1 - weights.drive);
+  }
 }
 
 function reactionAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
@@ -726,11 +849,18 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   );
   runtime.mixer.update(delta);
   runtime.model.updateMatrixWorld(true);
+  captureFootLocks(runtime, fighter);
+  solveCenterOfMass(runtime, fighter, opponent);
   attackSilhouette(runtime, fighter);
+  fullBodyStrikeSolve(runtime, fighter, opponent);
+  applyMotionDna(runtime, fighter);
   reactionAccent(runtime, fighter);
   airborneAccent(runtime, fighter);
+  const impactPairRole = impactPairAccent(runtime, fighter, opponent);
   runtime.model.updateMatrixWorld(true);
   strikeTrajectory(runtime, fighter, opponent);
+  runtime.model.updateMatrixWorld(true);
+  const footLockError = solveFootLock(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
 
   fighter.visual.root.userData.motionExpansionCurrentClip = runtime.currentClip;
@@ -739,7 +869,13 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionTailKind = null;
   fighter.visual.root.userData.motionExpansionTailRemaining = 0;
   fighter.visual.root.userData.motionExpansionComboBlendSeconds = comboLinked ? COMBO_LINK_BLEND_SECONDS : 0;
-  fighter.visual.root.userData.motionExpansionContactMode = "OPPONENT_WEIGHTED_IK";
+  fighter.visual.root.userData.motionExpansionContactMode = "V3_FULL_BODY_TARGET_IK";
+  fighter.visual.root.userData.motionExpansionFootLockPolicy = "WORLD_SPACE_SUPPORT_FOOT_IK";
+  fighter.visual.root.userData.motionExpansionFootLockError = footLockError;
+  fighter.visual.root.userData.motionExpansionComPolicy = "PLANT_WEIGHTED_BOUNDED_COM";
+  fighter.visual.root.userData.motionExpansionImpactPairRole = impactPairRole;
+  fighter.visual.root.userData.motionExpansionMotionDna = motionDnaForFighter(fighter.definition).id;
+  fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";
   return true;
 }
 

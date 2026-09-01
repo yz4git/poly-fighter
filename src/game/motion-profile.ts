@@ -25,6 +25,7 @@ export type MoveMotionSpec = {
   style: MotionStyle;
   speedScale: number;
   contactBlend: number;
+  plantFoot: "LEFT" | "RIGHT" | "BOTH" | "AIR";
 };
 
 export type TpsComboRoute = "CLOSE_A" | "CLOSE_B" | "FAR" | "FLANK" | "PERFECT";
@@ -43,18 +44,51 @@ export type TpsComboLinkWindow = {
  * attacks now include anticipation/impact/settle cadence and center-of-mass
  * motion; heavy attacks and kicks also use generated recovery clips.
  */
+export type MotionTimingProfile = {
+  load: number; hold: number; launch: number; pre: number;
+  impact: number; over: number; recoil: number; settle: number;
+};
+
+export type MotionDna = {
+  id: "KAIRO_POWER" | "SERA_SPEED";
+  hipLead: number;
+  chestFollow: number;
+  recoil: number;
+  lateral: number;
+  guardDiscipline: number;
+};
+
+const MOVE_TIMINGS: Readonly<Record<string, MotionTimingProfile>> = {
+  jab:        { load: .10, hold: .16, launch: .26, pre: .48, impact: .61, over: .67, recoil: .76, settle: .88 },
+  straight:   { load: .12, hold: .21, launch: .32, pre: .55, impact: .68, over: .75, recoil: .84, settle: .93 },
+  backfist:   { load: .14, hold: .27, launch: .38, pre: .54, impact: .64, over: .74, recoil: .84, settle: .94 },
+  bodyBlow:   { load: .16, hold: .29, launch: .41, pre: .58, impact: .70, over: .77, recoil: .87, settle: .95 },
+  power:      { load: .17, hold: .34, launch: .47, pre: .63, impact: .73, over: .81, recoil: .90, settle: .97 },
+  kick:       { load: .13, hold: .25, launch: .37, pre: .52, impact: .64, over: .72, recoil: .83, settle: .94 },
+  lowKick:    { load: .15, hold: .28, launch: .40, pre: .55, impact: .67, over: .76, recoil: .87, settle: .95 },
+  risingKick: { load: .17, hold: .30, launch: .42, pre: .58, impact: .69, over: .78, recoil: .88, settle: .96 },
+  dashKick:   { load: .08, hold: .16, launch: .27, pre: .49, impact: .66, over: .73, recoil: .82, settle: .92 },
+  throw:      { load: .13, hold: .26, launch: .39, pre: .51, impact: .58, over: .66, recoil: .80, settle: .93 },
+  counter:    { load: .06, hold: .12, launch: .22, pre: .42, impact: .55, over: .63, recoil: .75, settle: .88 },
+};
+
+const MOTION_DNA: Readonly<Record<FighterDefinition["archetype"], MotionDna>> = {
+  POWER: { id: "KAIRO_POWER", hipLead: 1.18, chestFollow: 1.10, recoil: 1.14, lateral: 0.82, guardDiscipline: 1.00 },
+  SPEED: { id: "SERA_SPEED", hipLead: 1.04, chestFollow: 0.94, recoil: 0.82, lateral: 1.22, guardDiscipline: 0.92 },
+};
+
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
-  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24 },
-  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28 },
-  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31 },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31 },
-  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36 },
-  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.62 },
-  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.66 },
-  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.70 },
-  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.74 },
-  throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28 },
-  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29 },
+  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24, plantFoot: "RIGHT" },
+  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28, plantFoot: "LEFT" },
+  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31, plantFoot: "RIGHT" },
+  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },
+  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.62, plantFoot: "LEFT" },
+  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.66, plantFoot: "RIGHT" },
+  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.70, plantFoot: "LEFT" },
+  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.74, plantFoot: "AIR" },
+  throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28, plantFoot: "BOTH" },
+  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29, plantFoot: "RIGHT" },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {
@@ -71,7 +105,7 @@ const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = 
 
 export const MOTION_EXPANSION_PROFILE = {
   version: "MOTION_READABILITY_V2",
-  proceduralVersion: "PROCEDURAL_FIGHT_V2",
+  proceduralVersion: "PROCEDURAL_FIGHT_V3",
   primaryLibraryClips: 12,
   secondaryLibraryClips: 23,
   proceduralLibraryClips: 23,
@@ -85,8 +119,8 @@ export const MOTION_EXPANSION_PROFILE = {
   sideStepLeftClip: "PF_Sidestep_L",
   kickRecoveryClip: "PF_KickRecover",
   heavyRecoveryClip: "PF_HeavyRecover",
-  rootMotionPolicy: "ADDITIVE_COM_RETURN_TO_BIND",
-  timingPolicy: "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE",
+  rootMotionPolicy: "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK",
+  timingPolicy: "MOVE_SPECIFIC_9_POSE_TIMING",
 } as const;
 
 function handedClipForMove(move: MoveDefinition, fallback: string): string {
@@ -105,6 +139,7 @@ export function motionSpecForMove(move: MoveDefinition): MoveMotionSpec {
     style: move.animation === "kick" ? "FRONT_KICK" : "CROSS",
     speedScale: 1,
     contactBlend: 0.5,
+    plantFoot: move.animation === "kick" ? "LEFT" : "RIGHT",
   };
 }
 
@@ -114,6 +149,18 @@ export function motionClipForMove(move: MoveDefinition): string {
 
 export function motionRecoveryClipForMove(move: MoveDefinition): string | null {
   return motionSpecForMove(move).recoveryClip ?? null;
+}
+
+export function motionTimingForMove(move: MoveDefinition): MotionTimingProfile {
+  return MOVE_TIMINGS[move.id] ?? MOVE_TIMINGS.straight;
+}
+
+export function motionPlantFootForMove(move: MoveDefinition): MoveMotionSpec["plantFoot"] {
+  return motionSpecForMove(move).plantFoot;
+}
+
+export function motionDnaForFighter(definition: FighterDefinition): MotionDna {
+  return MOTION_DNA[definition.archetype];
 }
 
 export function motionClipForReaction(kind: ReactionKind): string {

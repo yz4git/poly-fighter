@@ -88,7 +88,21 @@ async function state(sessionId) {
       canvasHeight: canvas?.height ?? 0,
       p1: p1 ? { x: p1.x, y: p1.y, z: p1.z, health: game.p1.health, state: game.p1.state } : null,
       p2: p2 ? { x: p2.x, y: p2.y, z: p2.z, health: game.p2.health, state: game.p2.state } : null,
-      camera: game ? { x: game.camera.position.x, y: game.camera.position.y, z: game.camera.position.z } : null,
+      cpuDirector: game?.p2?.visual?.root?.userData ? {
+        policy: game.p2.visual.root.userData.tpsCpuDirectorPolicy ?? null,
+        intent: game.p2.visual.root.userData.tpsCpuDirectorIntent ?? null,
+        reason: game.p2.visual.root.userData.tpsCpuDirectorReason ?? null,
+        move: game.p2.visual.root.userData.tpsCpuDirectorMove ?? null,
+        telegraphTicks: game.p2.visual.root.userData.tpsCpuDirectorTelegraphTicks ?? 0,
+        comebackMercy: game.p2.visual.root.userData.tpsCpuDirectorComebackMercy ?? 0,
+        pressure: game.p2.visual.root.userData.tpsCpuDirectorPressure ?? 0,
+      } : null,
+      camera: game ? {
+        x: game.camera.position.x, y: game.camera.position.y, z: game.camera.position.z,
+        closeReadabilityFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,
+        shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,
+        targetHeight: game.camera.userData.tpsTargetHeight ?? 0,
+      } : null,
     };
   `);
 }
@@ -162,6 +176,20 @@ try {
     params: {},
   });
   await delay(300);
+
+  let directorSample = null;
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    directorSample = await state(sessionId);
+    if (directorSample?.cpuDirector?.policy === 'FUN_DIRECTOR_V1'
+      && directorSample.cpuDirector.reason
+      && directorSample.cpuDirector.reason !== 'opening-read-window') break;
+    await delay(100);
+  }
+  if (directorSample?.cpuDirector?.policy !== 'FUN_DIRECTOR_V1' || !directorSample?.cpuDirector?.reason || directorSample.cpuDirector.reason === 'opening-read-window') {
+    throw new Error(`TPS live CPU never entered FUN_DIRECTOR_V1 decision-making: ${JSON.stringify(directorSample)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-cpu-director.png`);
+
   // The screenshots above intentionally exercise the live tactical CPU. From this
   // point onward isolate locomotion so a CPU hit cannot invalidate the input probe.
   // Keep requestAnimationFrame active: only enemy decision-making is frozen.
@@ -310,7 +338,7 @@ try {
   `);
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
-  if (!(punchProbe?.screenSeparation >= 55)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
+  if (!(punchProbe?.screenSeparation >= 72)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
   if (!punchProbe?.targetGroundRing) throw new Error(`TPS target ground ring was not present: ${JSON.stringify(punchProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
   await execute(sessionId, `${gameLookup}
@@ -578,7 +606,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

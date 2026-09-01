@@ -21,7 +21,10 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
   assert.match(source, /aspect < 2\.4 \? 52 : 47/);
   assert.match(source, /compactLandscapeFactor/);
-  assert.match(source, /shoulderOffset = 2\.50 \+ closeFactor \* 1\.70/);
+  assert.match(source, /TPS_CAMERA_CLOSE_SHOULDER_BONUS = 1\.95/);
+  assert.match(source, /TPS_CAMERA_CLOSE_BACK_BONUS = 0\.24/);
+  assert.match(source, /TPS_CAMERA_CLOSE_TARGET_LIFT = 0\.14/);
+  assert.match(source, /tpsCloseReadabilityFactor/);
   assert.match(source, /tps-target-ground-ring/);
 });
 
@@ -75,6 +78,21 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /enemyVisualForward/);
   assert.match(source, /desiredDistance = game\.enemyTactic === "PRESSURE"/);
   assert.match(source, /game\.p2\.state = "IDLE"/);
+});
+
+test("TPS enemy decisions use the shared player-fun director without losing circular movement", async () => {
+  const source = await readTpsSource();
+  assert.match(source, /new CpuFunDirector\(this\.difficulty, 47\)/);
+  assert.match(source, /this\.enemyFunDirector\.observe\(situation\(\)\)/);
+  assert.match(source, /this\.enemyFunDirector\.decide\(situation\(\)\)/);
+  assert.match(source, /tpsCpuDirectorPolicy = "FUN_DIRECTOR_V1"/);
+  assert.match(source, /tpsCpuDirectorReason/);
+  assert.match(source, /tpsCpuDirectorComebackMercy/);
+  assert.match(source, /tpsCpuDirectorTelegraphTicks/);
+  assert.match(source, /directorIntent === "APPROACH"/);
+  assert.match(source, /directorIntent === "RETREAT"/);
+  assert.match(source, /directorIntent === "SIDESTEP"/);
+  assert.match(source, /game\.p2\.currentMove\.id !== directorMove/);
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {

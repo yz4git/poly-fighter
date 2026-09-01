@@ -52,6 +52,10 @@ test("TPS exhilaration pass adds fast confirms, cinematic finishers and bounded 
   assert.ok(TPS_HYPE_PROFILE.heavyKnockbackScale <= 1.5);
   assert.ok(TPS_HYPE_PROFILE.maxShockRings <= 12);
   assert.ok(TPS_HYPE_PROFILE.maxBurstSpokes <= 4);
+  assert.equal(TPS_HYPE_PROFILE.heavyImpactRingCount, 3);
+  assert.ok(TPS_HYPE_PROFILE.mediumImpactRingCount <= 2);
+  assert.ok(TPS_HYPE_PROFILE.impactRingExpansion <= 2.2);
+  assert.ok(TPS_HYPE_PROFILE.heavyBurstScale <= 0.64);
   assert.ok(TPS_HYPE_PROFILE.heavyImpactFovPunch >= -8.5);
   assert.ok(TPS_HYPE_PROFILE.perfectStepFovRush <= 5);
 });

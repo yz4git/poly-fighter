@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { AudioManager } from "./audio";
 import { EffectsManager } from "./effects";
 import { FighterRuntime, type CpuDifficulty } from "./fighter";
+import { CpuFunDirector, isAttackIntent, type CpuActorSnapshot, type CpuDecision, type CpuIntent, type CpuSituation } from "./cpu-director";
 import { FixedStepClock } from "./fixed";
 import { InputSystem } from "./input";
 import { PresentationAnimationController } from "./presentation-animation";
@@ -34,12 +35,44 @@ const TPS_COMBO_GRACE_TICKS = 34;
 const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const ENEMY_TACTIC_INTERVAL = 72;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 1.95;
+const TPS_CAMERA_CLOSE_BACK_BONUS = 0.24;
+const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
   return result.lengthSq() > 1e-8 ? result.normalize() : new THREE.Vector3(1, 0, 0);
+}
+
+const TPS_CPU_ATTACK_MOVES: Partial<Record<CpuIntent, string>> = {
+  JAB: "jab",
+  STRAIGHT: "straight",
+  BACKFIST: "backfist",
+  BODY_BLOW: "bodyBlow",
+  POWER: "power",
+  KICK: "kick",
+  LOW_KICK: "lowKick",
+  RISING_KICK: "risingKick",
+  DASH_KICK: "dashKick",
+  THROW: "throw",
+  COUNTER: "counter",
+};
+
+function cpuActorSnapshot(fighter: FighterRuntime): CpuActorSnapshot {
+  return {
+    health: fighter.health,
+    guardDamage: fighter.guardDamage,
+    state: fighter.state,
+    moveId: fighter.currentMove?.id ?? null,
+    movePower: fighter.currentMove?.power ?? 0,
+    isActive: fighter.isActive(),
+    grounded: fighter.grounded,
+    x: fighter.position.x,
+    z: fighter.position.z,
+    facing: fighter.facing,
+  };
 }
 
 function clampToArena(position: THREE.Vector3, margin = 0.72): void {
@@ -202,6 +235,11 @@ export class TpsFightGame {
   private enemyTactic: EnemyTactic = "ORBIT";
   private enemyTacticTicks = 0;
   private enemyOrbitSign = 1;
+  private enemyFunDirector: CpuFunDirector;
+  private enemyDirectorDecision: CpuDecision | null = null;
+  private enemyDirectorHoldTicks = 0;
+  private enemyDirectorTelegraphTicks = 0;
+  private enemyDirectorPendingMove: string | null = null;
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
     this.mount = mount;
@@ -260,6 +298,7 @@ export class TpsFightGame {
     this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality, options.p1Model ?? "ORIGINAL"));
     this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
+    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
 
     const lockGeometry = new THREE.TorusGeometry(0.46, 0.022, 8, 48);
     const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.96, depthTest: true, depthWrite: false });
@@ -557,9 +596,22 @@ export class TpsFightGame {
 
   private updateEnemy(): void {
     this.p2.setInput(EMPTY_INPUT);
+    const liveDistance = Math.hypot(
+      this.p1.position.x - this.p2.position.x,
+      this.p1.position.z - this.p2.position.z,
+    );
+    const situation = (): CpuSituation => ({
+      self: cpuActorSnapshot(this.p2),
+      opponent: cpuActorSnapshot(this.p1),
+      distance: Math.hypot(
+        this.p1.position.x - this.p2.position.x,
+        this.p1.position.z - this.p2.position.z,
+      ),
+    });
+    this.enemyFunDirector.observe(situation());
     if (this.advanceLockedState(this.p2)) return;
 
-    this.enemyCooldown -= 1;
+    this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.enemyTacticTicks -= 1;
     if (this.enemyTacticTicks <= 0) {
@@ -572,58 +624,132 @@ export class TpsFightGame {
     }
 
     const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
-    const distance = this.p2.position.distanceTo(this.p1.position);
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
-    const movement = new THREE.Vector3();
-    const desiredDistance = this.enemyTactic === "PRESSURE" ? 1.48 : this.enemyTactic === "BAIT" ? 2.25 : 1.82;
-    const orbitStrength = this.enemyTactic === "ORBIT" ? 0.66 : this.enemyTactic === "BAIT" ? 0.34 : 0.22;
+    const rootData = this.p2.visual.root.userData;
 
-    if (distance > desiredDistance + 0.18) movement.add(towardPlayer);
-    else if (distance < desiredDistance - 0.24) movement.addScaledVector(towardPlayer, -1);
-    movement.addScaledVector(tangent, this.enemyOrbitSign * orbitStrength);
+    const publishDecision = (decision: CpuDecision, moveId: string | null = null): void => {
+      rootData.tpsCpuDirectorPolicy = "FUN_DIRECTOR_V1";
+      rootData.tpsCpuDirectorIntent = decision.intent;
+      rootData.tpsCpuDirectorReason = decision.reason;
+      rootData.tpsCpuDirectorComebackMercy = decision.comebackMercy;
+      rootData.tpsCpuDirectorPressure = decision.pressure;
+      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+      rootData.tpsCpuDirectorMove = moveId;
+    };
 
-    const playerThreat = this.p1.state === "ATTACK" && this.p1.currentMove && distance < this.p1.currentMove.reach + 0.9;
-    const playerGuarding = this.p1.state === "GUARD";
-    const reactionLead = this.difficulty === "HARD" ? 4 : this.difficulty === "NORMAL" ? 2 : 0;
-    const guardGate = this.difficulty === "EASY" ? 0.55 : this.difficulty === "HARD" ? -0.6 : -0.1;
-    const shouldGuard = Boolean(
-      playerThreat
-      && this.p1.moveTick >= Math.max(0, (this.p1.currentMove?.startup ?? 8) - reactionLead)
-      && Math.sin(this.simulationTicks * 0.41) > guardGate
-    );
-
-    if (shouldGuard) {
-      this.p2.state = "GUARD";
-    } else if (this.enemyOpeningGraceTicks <= 0 && this.enemyCooldown <= 0 && distance < (this.enemyTactic === "BAIT" ? 1.82 : 2.12)) {
-      const selector = (Math.floor(this.simulationTicks / 17) + (this.enemyTactic === "PRESSURE" ? 1 : 0)) % 5;
-      const punishGuard = playerGuarding && distance < 1.42;
-      const punishRecovery = this.difficulty !== "EASY"
-        && this.p1.state === "ATTACK"
-        && Boolean(this.p1.currentMove)
-        && this.p1.moveTick > (this.p1.currentMove?.startup ?? 0) + (this.p1.currentMove?.active ?? 0);
-      const moveId = punishGuard
-        ? "throw"
-        : punishRecovery
-          ? "straight"
-          : selector === 0
-            ? "power"
-            : selector <= 2
-              ? "jab"
-              : "kick";
-      this.p2.beginMove(moveId);
-      const difficultyScale = this.difficulty === "HARD" ? 0.72 : this.difficulty === "EASY" ? 1.3 : 1;
-      const baseCooldown = moveId === "throw" ? 72 : moveId === "power" ? 92 : moveId === "straight" ? 64 : 58;
-      this.enemyCooldown = Math.round(baseCooldown * difficultyScale);
-    } else if (movement.lengthSq() > 0.001) {
-      movement.normalize();
+    const moveEnemy = (intent: CpuIntent): void => {
+      if (intent === "GUARD") {
+        this.p2.state = "GUARD";
+        return;
+      }
+      if (intent === "WAIT") {
+        this.p2.state = "IDLE";
+        return;
+      }
+      const movement = new THREE.Vector3();
+      if (intent === "APPROACH") movement.copy(towardPlayer);
+      else if (intent === "RETREAT") movement.copy(towardPlayer).multiplyScalar(-1);
+      else if (intent === "SIDESTEP" || intent === "JUMP") movement.copy(tangent).multiplyScalar(this.enemyOrbitSign);
+      if (movement.lengthSq() <= 1e-6) {
+        this.p2.state = "IDLE";
+        return;
+      }
       const baseSpeed = this.p2.definition.archetype === "SPEED" ? 3.45 : 2.95;
       const difficultySpeed = this.difficulty === "HARD" ? 1.08 : this.difficulty === "EASY" ? 0.9 : 1;
-      this.p2.position.addScaledVector(movement, FIXED_STEP * baseSpeed * difficultySpeed);
+      this.p2.position.addScaledVector(movement.normalize(), FIXED_STEP * baseSpeed * difficultySpeed);
       this.p2.state = "WALK";
-    } else {
-      this.p2.state = "IDLE";
+    };
+
+    const beginDirectorMove = (moveId: string, intent: CpuIntent): boolean => {
+      const began = this.p2.beginMove(moveId);
+      if (!began) return false;
+      rootData.tpsCpuDirectorMove = moveId;
+      rootData.tpsCpuDirectorIntent = intent;
+      rootData.tpsCpuDirectorTelegraphTicks = 0;
+      if (moveId === "dashKick") {
+        const burstSpeed = this.p2.definition.archetype === "SPEED" ? 5.0 : 4.45;
+        this.p2.velocity.x = towardPlayer.x * burstSpeed;
+        this.p2.velocity.z = towardPlayer.z * burstSpeed;
+      }
+      // Mirror the shared director's two neutral post-attack input frames. The
+      // hold begins only after ATTACK unlocks, so it creates a real punish/read beat.
+      this.enemyDirectorHoldTicks = 2;
+      this.enemyCooldown = Math.max(this.enemyCooldown, 2);
+      return true;
+    };
+
+    if (this.enemyDirectorPendingMove) {
+      if (this.enemyDirectorTelegraphTicks > 0) {
+        this.enemyDirectorTelegraphTicks -= 1;
+        rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+        const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
+        this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent) ? "GUARD" : "IDLE";
+        this.p2.updatePhysics(FIXED_STEP);
+        return;
+      }
+      const moveId = this.enemyDirectorPendingMove;
+      const intent = this.enemyDirectorDecision?.intent ?? "JAB";
+      this.enemyDirectorPendingMove = null;
+      if (beginDirectorMove(moveId, intent)) {
+        this.p2.updatePhysics(FIXED_STEP);
+        return;
+      }
     }
 
+    // Keep the title-card/read window non-hostile. It still moves so the enemy
+    // feels alive, but no decision is remembered as an attack before play begins.
+    if (this.enemyOpeningGraceTicks > 0) {
+      const openingIntent: CpuIntent = liveDistance > 2.35 ? "APPROACH" : "SIDESTEP";
+      const openingDecision: CpuDecision = {
+        intent: openingIntent,
+        holdTicks: 1,
+        telegraphTicks: 0,
+        reason: "opening-read-window",
+        comebackMercy: 0,
+        pressure: 0,
+      };
+      publishDecision(openingDecision);
+      moveEnemy(openingIntent);
+      this.p2.updatePhysics(FIXED_STEP);
+      return;
+    }
+
+    if (this.enemyDirectorDecision && this.enemyDirectorHoldTicks > 0) {
+      const heldIntent = isAttackIntent(this.enemyDirectorDecision.intent) ? "WAIT" : this.enemyDirectorDecision.intent;
+      this.enemyDirectorHoldTicks -= 1;
+      publishDecision(this.enemyDirectorDecision, isAttackIntent(this.enemyDirectorDecision.intent) ? rootData.tpsCpuDirectorMove ?? null : null);
+      moveEnemy(heldIntent);
+      this.p2.updatePhysics(FIXED_STEP);
+      if (this.enemyDirectorHoldTicks <= 0) this.enemyDirectorDecision = null;
+      return;
+    }
+
+    let decision = this.enemyFunDirector.decide(situation());
+    // TPS is a grounded lock-on mode. Translate the shared neutral hop into an
+    // orbital beat rather than introducing camera-hostile bunny hopping.
+    if (decision.intent === "JUMP") decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-as-orbit` };
+    this.enemyDirectorDecision = decision;
+    publishDecision(decision);
+
+    if (isAttackIntent(decision.intent)) {
+      const moveId = TPS_CPU_ATTACK_MOVES[decision.intent] ?? null;
+      if (moveId) {
+        rootData.tpsCpuDirectorMove = moveId;
+        if (decision.telegraphTicks > 0) {
+          this.enemyDirectorPendingMove = moveId;
+          this.enemyDirectorTelegraphTicks = decision.telegraphTicks;
+          rootData.tpsCpuDirectorTelegraphTicks = decision.telegraphTicks;
+          this.p2.state = ["POWER", "THROW", "COUNTER"].includes(decision.intent) ? "GUARD" : "IDLE";
+        } else {
+          beginDirectorMove(moveId, decision.intent);
+        }
+        this.p2.updatePhysics(FIXED_STEP);
+        return;
+      }
+    }
+
+    this.enemyDirectorHoldTicks = Math.max(1, decision.holdTicks - 1);
+    moveEnemy(decision.intent);
     this.p2.updatePhysics(FIXED_STEP);
   }
 
@@ -757,12 +883,17 @@ export class TpsFightGame {
     // landscape enough vertical room for the HUD and touch controls.
     // Keep a modest extra pullback at contact, but preserve the strong lateral
     // shoulder angle that keeps both fighter centers separated on iPhone.
-    const backDistance = 4.80 + compactLandscapeFactor * 0.20;
-    const shoulderOffset = 2.50 + closeFactor * 1.70 + compactLandscapeFactor * (0.55 + closeFactor * 0.50);
-    const cameraHeight = 2.32 + closeFactor * 0.18 + compactLandscapeFactor * 0.04;
+    const backDistance = 4.88 + closeFactor * TPS_CAMERA_CLOSE_BACK_BONUS + compactLandscapeFactor * 0.24;
+    const shoulderOffset = 2.50 + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
+      + compactLandscapeFactor * (0.62 + closeFactor * 0.62);
+    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06;
+    const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, -0.30 * closeFactor - flankLaneShift)
-      .add(new THREE.Vector3(0, 1.18 + closeFactor * 0.04, 0));
+      .addScaledVector(right, -0.34 * closeFactor - flankLaneShift)
+      .add(new THREE.Vector3(0, targetHeight, 0));
+    this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
+    this.camera.userData.tpsShoulderOffset = shoulderOffset;
+    this.camera.userData.tpsTargetHeight = targetHeight;
     this.cameraDesired.copy(this.p1.position)
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
@@ -821,6 +952,11 @@ export class TpsFightGame {
     this.enemyTactic = "ORBIT";
     this.enemyTacticTicks = 0;
     this.enemyOrbitSign = 1;
+    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
+    this.enemyDirectorDecision = null;
+    this.enemyDirectorHoldTicks = 0;
+    this.enemyDirectorTelegraphTicks = 0;
+    this.enemyDirectorPendingMove = null;
     this.playerEvadeTicks = 0;
     this.playerEvadeCooldown = 0;
     this.playerEvadeSign = 0;

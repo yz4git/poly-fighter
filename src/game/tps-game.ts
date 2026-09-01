@@ -273,7 +273,8 @@ prototype.updateEnemy = function updateEnemy(): void {
   // Broaden the CPU's visible vocabulary without changing its tactical timing.
   // Core still decides *when* and whether the choice was a light punch/kick;
   // this layer deterministically chooses a related body motion for that slot.
-  if (startedAttack && game.p2.currentMove && ["jab", "straight", "kick"].includes(game.p2.currentMove.id)) {
+  const directorMove = game.p2.visual.root.userData.tpsCpuDirectorMove as string | null | undefined;
+  if (startedAttack && game.p2.currentMove && game.p2.currentMove.id !== directorMove && ["jab", "straight", "kick"].includes(game.p2.currentMove.id)) {
     const distance = Math.hypot(
       game.p1.position.x - game.p2.position.x,
       game.p1.position.z - game.p2.position.z,
@@ -310,14 +311,20 @@ prototype.updateEnemy = function updateEnemy(): void {
       : 2.08;
   const distanceError = distance - desiredDistance;
   const movement = new THREE.Vector3();
+  const directorIntent = game.p2.visual.root.userData.tpsCpuDirectorIntent as string | undefined;
 
-  if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(currentToward);
-  else if (distanceError < -ENEMY_SPACING_DEAD_ZONE) movement.addScaledVector(currentToward, -1);
+  if (directorIntent === "APPROACH") movement.add(currentToward);
+  else if (directorIntent === "RETREAT") movement.addScaledVector(currentToward, -1);
+  else if (directorIntent === "SIDESTEP" || directorIntent === "JUMP") movement.addScaledVector(tangent, game.enemyOrbitSign);
+  else {
+    if (distanceError > ENEMY_SPACING_DEAD_ZONE) movement.add(currentToward);
+    else if (distanceError < -ENEMY_SPACING_DEAD_ZONE) movement.addScaledVector(currentToward, -1);
 
-  const orbitActive = game.enemyTactic === "ORBIT"
-    && Math.abs(distanceError) <= 0.82
-    && game.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
-  if (orbitActive) movement.addScaledVector(tangent, game.enemyOrbitSign * 0.58);
+    const orbitActive = game.enemyTactic === "ORBIT"
+      && Math.abs(distanceError) <= 0.82
+      && game.simulationTicks % ENEMY_TACTIC_INTERVAL < ENEMY_ORBIT_ACTIVE_TICKS;
+    if (orbitActive) movement.addScaledVector(tangent, game.enemyOrbitSign * 0.58);
+  }
 
   game.p2.position.copy(beforePosition);
   if (movement.lengthSq() <= 1e-6) {

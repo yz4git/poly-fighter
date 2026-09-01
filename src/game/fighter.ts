@@ -20,6 +20,7 @@ import type {
   MoveDefinition,
 } from "./types";
 import { EMPTY_INPUT, cloneInput } from "./types";
+import { CpuFunDirector, buildCpuInputPlan, type CpuInputStep, type CpuSituation } from "./cpu-director";
 
 export const FIGHTER_GROUND_Y = 0;
 export const FIGHTER_GRAVITY = 18;
@@ -677,59 +678,74 @@ export class FighterAnimationController {
 export type CpuDifficulty = "EASY" | "NORMAL" | "HARD";
 
 export class CpuController {
-  private decisionTicks = 0;
-  private current: InputFrame = cloneInput(EMPTY_INPUT);
-  private seed = 17;
+  private readonly director: CpuFunDirector;
+  private plan: CpuInputStep[] = [];
+  private stepTicks = 0;
+  private step: CpuInputStep | null = null;
 
-  constructor(private readonly difficulty: CpuDifficulty = "NORMAL") {}
+  constructor(private readonly difficulty: CpuDifficulty = "NORMAL") {
+    this.director = new CpuFunDirector(difficulty, 17);
+  }
+
+  private situation(fighter: FighterRuntime, opponent: FighterRuntime): CpuSituation {
+    const snapshot = (subject: FighterRuntime, other: FighterRuntime) => ({
+      health: subject.health,
+      guardDamage: subject.guardDamage,
+      state: subject.state,
+      moveId: subject.currentMove?.id ?? null,
+      movePower: subject.currentMove?.power ?? 0,
+      isActive: subject.isActive(),
+      grounded: subject.grounded,
+      x: subject.position.x,
+      z: subject.position.z,
+      facing: other.position.x >= subject.position.x ? 1 : -1,
+    });
+    return {
+      self: snapshot(fighter, opponent),
+      opponent: snapshot(opponent, fighter),
+      distance: opponent.position.distanceTo(fighter.position),
+    };
+  }
+
+  private nextPlanFrame(): InputFrame {
+    if (!this.step || this.stepTicks <= 0) {
+      this.step = this.plan.shift() ?? null;
+      this.stepTicks = this.step?.ticks ?? 0;
+    }
+    if (!this.step) return cloneInput(EMPTY_INPUT);
+    this.stepTicks -= 1;
+    const frame = cloneInput(this.step.frame);
+    if (this.stepTicks <= 0) this.step = null;
+    return frame;
+  }
+
+  private clearPlan(): void {
+    this.plan = [];
+    this.step = null;
+    this.stepTicks = 0;
+  }
 
   update(fighter: FighterRuntime, opponent: FighterRuntime): InputFrame {
-    this.decisionTicks -= 1;
-    if (this.decisionTicks > 0) {
-      const output = cloneInput(this.current);
-      if (output.up) {
-        output.up = false;
-        this.current.up = false;
-      }
-      return output;
+    const situation = this.situation(fighter, opponent);
+    this.director.observe(situation);
+    fighter.visual.root.userData.cpuDirectorVersion = "FUN_DIRECTOR_V1";
+    fighter.visual.root.userData.cpuDirectorDifficulty = this.difficulty;
+
+    if (!fighter.canAct()) {
+      this.clearPlan();
+      return cloneInput(EMPTY_INPUT);
     }
-    this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff;
-    const random = this.seed / 0x7fffffff;
-    const distance = opponent.position.distanceTo(fighter.position);
-    const towardRight = opponent.position.x > fighter.position.x;
-    const toward = towardRight ? "right" : "left";
-    const away = towardRight ? "left" : "right";
-    const next: InputFrame = cloneInput(EMPTY_INPUT);
-    const reaction = this.difficulty === "HARD" ? 0.82 : this.difficulty === "NORMAL" ? 0.58 : 0.32;
-    const threat = opponent.state === "ATTACK" && opponent.isActive();
-    if (threat && random < reaction && distance < 2.55) {
-      next.guard = true;
-      if (random > 0.76) next.down = true;
-      this.decisionTicks = this.difficulty === "HARD" ? 10 : 16;
-    } else if (distance > 2.35) {
-      next[toward] = true;
-      if (random > 0.72) next.up = true;
-      this.decisionTicks = this.difficulty === "HARD" ? 12 : 18;
-    } else if (random < 0.14 && this.difficulty !== "EASY") {
-      next[away] = true;
-      next.guard = true;
-      this.decisionTicks = 13;
-    } else if (random < 0.22) {
-      next.kick = true;
-      if (random > 0.16) next.down = true;
-      this.decisionTicks = 8;
-    } else if (random < 0.39) {
-      next.punch = true;
-      this.decisionTicks = 7;
-    } else if (random < 0.48) {
-      next.kick = true;
-      next.guard = true;
-      this.decisionTicks = 8;
-    } else {
-      next.guard = random > 0.55;
-      this.decisionTicks = 9;
+
+    if (!this.step && this.plan.length === 0) {
+      const decision = this.director.decide(situation);
+      const facing = opponent.position.x >= fighter.position.x ? 1 : -1;
+      this.plan = buildCpuInputPlan(decision, facing);
+      fighter.visual.root.userData.cpuDirectorIntent = decision.intent;
+      fighter.visual.root.userData.cpuDirectorReason = decision.reason;
+      fighter.visual.root.userData.cpuDirectorComebackMercy = decision.comebackMercy;
+      fighter.visual.root.userData.cpuDirectorPressure = decision.pressure;
     }
-    this.current = next;
-    return next;
+
+    return this.nextPlanFrame();
   }
 }

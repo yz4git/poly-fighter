@@ -5,6 +5,7 @@ on:
     branches: [fix/full-body-motion-balance-20260902]
     paths:
       - scripts/apply-full-body-motion-balance.py
+      - .github/workflows/apply-full-body-motion-balance.yml
 
 permissions:
   contents: write

@@ -11,17 +11,21 @@ test("imported arm swing is shared through the clavicle", () => {
   assert.ok(source.includes("solveImportedArm(runtime, chain.suffix"));
 });
 
-test("imported neutral and guard hands stay in front of the torso", () => {
+test("imported neutral and guard hands stay forward with elbows on a lateral shoulder-height plane", () => {
   assert.ok(source.includes("function importedReadyArmPose("));
-  assert.ok(source.includes("IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.55"));
-  assert.ok(source.includes("IMPORTED_GUARD_FORWARD_CLEARANCE = 1.85"));
+  assert.ok(source.includes("IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.72"));
+  assert.ok(source.includes("IMPORTED_GUARD_FORWARD_CLEARANCE = 1.98"));
+  assert.ok(source.includes("IMPORTED_NEUTRAL_HAND_LIFT = 0.035"));
+  assert.ok(source.includes("IMPORTED_GUARD_HAND_LIFT = 0.082"));
   assert.ok(source.includes("targetLocal.z += layout.chestDepth"));
-  assert.ok(source.includes("poleLocal.x += side * layout.shoulderWidth * 0.72"));
+  assert.ok(source.includes("poleLocal.x += side * layout.shoulderWidth * (guard ? 0.86 : 0.82)"));
+  assert.ok(source.includes("poleLocal.y += guard ? 0.010 : 0.0"));
+  assert.equal(source.includes("poleLocal.y += guard ? 0.015 : -0.075"), false);
 });
 
 test("neutral and guard corrections no longer reuse legacy fist targets", () => {
   const neutralStart = source.indexOf("function neutralPoseCorrection");
-  const desiredStart = source.indexOf("function desiredClip", neutralStart);
+  const desiredStart = source.indexOf("const PROCEDURAL_ATTACK_CLIPS", neutralStart);
   const readyBlock = source.slice(neutralStart, desiredStart);
   assert.equal(readyBlock.includes("getVisualContactPoint"), false);
   assert.ok(readyBlock.includes("importedReadyArmPose(fighter, suffix, root, false)"));

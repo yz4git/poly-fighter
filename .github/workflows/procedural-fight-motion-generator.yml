@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/generate-procedural-fight-motions.mjs
       - scripts/generate-procedural-fight-motions-v2.mjs
+      - scripts/generate-procedural-fight-motions-v3.mjs
       - .github/workflows/procedural-fight-motion-generator.yml
       - public/models/quaternius/ual-fight-core.glb
 
@@ -37,17 +38,17 @@ jobs:
           npm ci --no-audit --no-fund
           npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
 
-      - name: Generate deterministic fight motion pack v2
+      - name: Generate deterministic fight motion pack v3
         run: |
           set -euxo pipefail
-          node scripts/generate-procedural-fight-motions-v2.mjs \
+          node scripts/generate-procedural-fight-motions-v3.mjs \
             public/models/quaternius/ual-fight-core.glb \
             public/models/quaternius/procedural-fight-core.glb \
             public/models/quaternius/procedural-fight-core.metrics.json
           test -s public/models/quaternius/procedural-fight-core.glb
           test -s public/models/quaternius/procedural-fight-core.metrics.json
 
-      - name: Verify generated v2 clip inventory and motion contract
+      - name: Verify generated v3 clip inventory and motion contract
         run: |
           node --input-type=module <<'NODE'
           import { NodeIO } from '@gltf-transform/core';
@@ -66,15 +67,20 @@ jobs:
           }
           if (names.length !== required.length) throw new Error(`unexpected procedural clip count ${names.length}`);
           const metrics = JSON.parse(await readFile('public/models/quaternius/procedural-fight-core.metrics.json', 'utf8'));
-          if (metrics.version !== 'PROCEDURAL_FIGHT_V2') throw new Error(`unexpected generator version ${metrics.version}`);
-          if (metrics.rootMotionPolicy !== 'ADDITIVE_COM_RETURN_TO_BIND') throw new Error(`unexpected root policy ${metrics.rootMotionPolicy}`);
+          if (metrics.version !== 'PROCEDURAL_FIGHT_V3') throw new Error(`unexpected generator version ${metrics.version}`);
+          if (metrics.rootMotionPolicy !== 'POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK') throw new Error(`unexpected root policy ${metrics.rootMotionPolicy}`);
+          if (metrics.timingPolicy !== 'MOVE_SPECIFIC_9_POSE_TIMING') throw new Error(`unexpected timing policy ${metrics.timingPolicy}`);
+          if (!Array.isArray(metrics.poseGraph) || metrics.poseGraph.length !== 9) throw new Error('v3 pose graph contract missing');
+          if (metrics.motionDna?.POWER?.id !== 'KAIRO_POWER' || metrics.motionDna?.SPEED?.id !== 'SERA_SPEED') {
+            throw new Error(`v3 motion DNA contract missing: ${JSON.stringify(metrics.motionDna)}`);
+          }
           if (metrics.metrics.some((entry) => entry.missingAnimated.length)) {
             throw new Error(`modifier paths absent from base animation: ${JSON.stringify(metrics.metrics.filter((entry) => entry.missingAnimated.length))}`);
           }
           if (metrics.metrics.filter((entry) => entry.maxPlanarRootShift > 0.001).length < 12) {
-            throw new Error('v2 expected planar center-of-mass movement on most clips');
+            throw new Error('v3 expected planar center-of-mass movement on most clips');
           }
-          console.log(JSON.stringify({ names, rootMotionPolicy: metrics.rootMotionPolicy }, null, 2));
+          console.log(JSON.stringify({ names, rootMotionPolicy: metrics.rootMotionPolicy, timingPolicy: metrics.timingPolicy, poseGraph: metrics.poseGraph, motionDna: metrics.motionDna }, null, 2));
           NODE
 
       - name: Publish generated pack to current branch
@@ -87,6 +93,6 @@ jobs:
             echo "Procedural motion pack already current"
             exit 0
           fi
-          git commit -m "Generate procedural fight motion pack v2"
+          git commit -m "Generate procedural fight motion pack v3"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"

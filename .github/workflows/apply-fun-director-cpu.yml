@@ -1,0 +1,44 @@
+name: Apply fun director CPU
+
+on:
+  push:
+    branches: [feature/fun-director-cpu-20260901]
+    paths:
+      - scripts/apply-fun-director-cpu.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/fun-director-cpu-20260901
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply CPU director implementation
+        run: python3 scripts/apply-fun-director-cpu.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run TPS rules
+        run: npm run test:rules:tps
+      - name: Run lint
+        run: npm run lint
+      - name: Build production
+        run: npm run build
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/cpu-director.ts src/game/fighter.ts tests/cpu-director.test.ts package.json
+          if git diff --cached --quiet; then
+            echo "No implementation changes"
+          else
+            git commit -m "Implement player-fun CPU director"
+            git push origin HEAD:feature/fun-director-cpu-20260901
+          fi

@@ -29,6 +29,10 @@ POLY FIGHTER now generates a lightweight combat-only GLB inside GitHub Actions i
 - PF_DownBack
 - PF_Wakeup
 
+## Grounding rule
+
+Standing kicks use `Idle_Loop` as their continuity scaffold so the support leg stays grounded while the generated pelvis, spine and striking-leg curves define the attack. `PF_DashKick_R` intentionally keeps `Jump_Start` because it is a committed airborne entry. This separation prevents ordinary front, low and rising kicks from inheriting jump lift while preserving an aerial silhouette for the dash kick.
+
 ## Design rule
 
 The generator uses authored source movement as a continuity scaffold but generates POLY FIGHTER-specific body mechanics on top. This is deliberate: fully synthetic T-pose-to-strike animation is cheap to generate but tends to lose weight transfer and foot continuity. The procedural-remix approach keeps a stable human motion baseline while making attack anticipation, hip/torso rotation, strike height and recovery data-driven and reproducible.

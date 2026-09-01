@@ -42,6 +42,12 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /TPS_STEP_DISTANCE_SCALE - 1/);
   assert.match(source, /playerComboStage/);
   assert.match(source, /playerAttackQueued/);
+  assert.match(source, /tpsComboLinkWindow\(activeMove\)/);
+  assert.match(source, /chooseTpsComboContinuationRoute/);
+  assert.match(source, /tpsComboLinkState = "BUFFERED"/);
+  assert.match(source, /tpsComboLinkState = "LINKED"/);
+  assert.match(source, /tpsComboLinkBlendSeconds = 0\.075/);
+  assert.match(source, /__comboQueuedBranch/);
   assert.match(source, /const comboConfirmed = this\.p1\.hitTargets\.has\(this\.p2\.id\)/);
   assert.match(source, /!comboConfirmed \|\| this\.playerComboStage >= 3/);
   assert.match(source, /closeMoves = \["jab", "straight", "power"\]/);

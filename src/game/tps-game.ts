@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
 import {
+  chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
+  tpsComboLinkWindow,
   tpsComboMoveForRoute,
   type TpsComboRoute,
 } from "./motion-profile";
@@ -50,6 +52,8 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __hypeDirector?: TpsHypeDirector;
   __comboRoute?: TpsComboRoute;
   __comboRouteSeed?: number;
+  __comboLinkSerial?: number;
+  __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
 };
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -175,31 +179,89 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   const rawAttackPressed = input.punch && !game.p1.input.punch;
   const activeMove = game.p1.currentMove;
 
-  // Confirmed hits can cancel most of recovery after a tiny authored beat. This
-  // turns the old "tap, wait, tap" rhythm into an arcade-style rush while still
-  // refusing to chain whiffs. The next strike stays on the route chosen at the
-  // opening hit, so the three body motions read as one intentional combination.
+  // Capture direction together with the ATTACK tap. Early taps are allowed to
+  // buffer, but the continuation only fires inside the move's authored
+  // cancelWindow. This preserves a visible follow-through beat before the next
+  // startup and makes direction-based branches deterministic even if the player
+  // releases the stick before the link point arrives.
+  if (game.p1.state === "ATTACK" && rawAttackPressed && game.playerComboStage < 3) {
+    game.__comboQueuedBranch = input.up
+      ? "FORWARD"
+      : input.down
+        ? "BACK"
+        : input.left || input.right
+          ? "SIDE"
+          : "NEUTRAL";
+  }
+
   if (
     game.p1.state === "ATTACK"
     && activeMove
     && game.p1.hitTargets.has(game.p2.id)
     && game.playerComboStage < 3
   ) {
-    if (rawAttackPressed) game.playerAttackQueued = true;
-    const cancelTick = activeMove.startup + activeMove.active + TPS_HYPE_PROFILE.hitConfirmCancelLagTicks;
-    if (game.playerAttackQueued && game.p1.moveTick >= cancelTick) {
+    const linkWindow = tpsComboLinkWindow(activeMove);
+    if (rawAttackPressed && game.p1.moveTick >= linkWindow.queueStart && game.p1.moveTick <= linkWindow.linkEnd) {
+      game.playerAttackQueued = true;
+    }
+
+    const inLinkWindow = game.p1.moveTick >= linkWindow.linkStart && game.p1.moveTick <= linkWindow.linkEnd;
+    if (game.playerAttackQueued && inLinkWindow) {
+      const linkTick = game.p1.moveTick;
+      const distance = Math.hypot(
+        game.p2.position.x - game.p1.position.x,
+        game.p2.position.z - game.p1.position.z,
+      );
+      const routeFrom = game.__comboRoute ?? chooseTpsComboRoute({
+        distance,
+        flank: false,
+        perfect: false,
+        variationSeed: game.__comboRouteSeed ?? 0,
+      });
+      const branch = game.__comboQueuedBranch ?? "NEUTRAL";
+      const routeTo = chooseTpsComboContinuationRoute({
+        currentRoute: routeFrom,
+        distance,
+        forward: branch === "FORWARD",
+        back: branch === "BACK",
+        side: branch === "SIDE",
+      });
+      game.__comboRoute = routeTo;
+      game.__comboLinkSerial = (game.__comboLinkSerial ?? 0) + 1;
+      game.p1.visual.root.userData.tpsComboLinkSerial = game.__comboLinkSerial;
+      game.p1.visual.root.userData.tpsComboLinkState = "LINKED";
+      game.p1.visual.root.userData.tpsComboLinkFromMove = activeMove.id;
+      game.p1.visual.root.userData.tpsComboLinkTick = linkTick;
+      game.p1.visual.root.userData.tpsComboLinkStart = linkWindow.linkStart;
+      game.p1.visual.root.userData.tpsComboLinkEnd = linkWindow.linkEnd;
+      game.p1.visual.root.userData.tpsComboLinkRouteFrom = routeFrom;
+      game.p1.visual.root.userData.tpsComboLinkRouteTo = routeTo;
+      game.p1.visual.root.userData.tpsComboLinkBranch = branch;
+      game.p1.visual.root.userData.tpsComboLinkBlendSeconds = 0.075;
+
       game.p1.setInput(input);
       game.p1.currentMove = null;
       game.p1.moveTick = 0;
       game.p1.state = "IDLE";
       game.p1.hitTargets.clear();
       game.playerAttackQueued = false;
+      game.__comboQueuedBranch = undefined;
       if (prototype.beginContextAttack.call(this)) {
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);
       }
       return;
+    }
+
+    if (game.p1.moveTick > linkWindow.linkEnd) {
+      game.playerAttackQueued = false;
+      game.__comboQueuedBranch = undefined;
+      game.p1.visual.root.userData.tpsComboLinkState = "MISSED";
+    } else if (game.playerAttackQueued) {
+      game.p1.visual.root.userData.tpsComboLinkState = "BUFFERED";
+      game.p1.visual.root.userData.tpsComboLinkStart = linkWindow.linkStart;
+      game.p1.visual.root.userData.tpsComboLinkEnd = linkWindow.linkEnd;
     }
   }
 
@@ -427,7 +489,15 @@ prototype.resetRound = function resetRound(): void {
   const game = extended(this as unknown as TpsFightGame);
   game.__comboRoute = undefined;
   game.__comboRouteSeed = 0;
+  game.__comboLinkSerial = 0;
+  game.__comboQueuedBranch = undefined;
   game.p1.visual.root.userData.tpsComboRoute = null;
+  game.p1.visual.root.userData.tpsComboLinkSerial = 0;
+  game.p1.visual.root.userData.tpsComboLinkState = null;
+  game.p1.visual.root.userData.tpsComboLinkFromMove = null;
+  game.p1.visual.root.userData.tpsComboLinkRouteFrom = null;
+  game.p1.visual.root.userData.tpsComboLinkRouteTo = null;
+  game.p1.visual.root.userData.tpsComboLinkBranch = null;
   game.p1.visual.root.userData.tpsComboMove = null;
   game.p1.visual.root.userData.tpsComboStage = 0;
   game.p1.visual.root.userData.tpsPerfectCounterLunge = 0;

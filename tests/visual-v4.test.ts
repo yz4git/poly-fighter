@@ -25,7 +25,9 @@ test("V4 punch and kick contact the same side as the deterministic hitbox", () =
       fighter.beginMove(moveId);
       fighter.moveTick = moveId === "jab" ? 6 : 11;
       animation.update(fighter, opponent, 0);
-      const contact = getVisualContactPoint(fighter.visual, moveId === "jab" ? "RIGHT_FIST" : "RIGHT_FOOT");
+      const contactPoint = fighter.currentMove?.visualContact;
+      assert.ok(contactPoint && contactPoint !== "BODY", `${moveId} must declare an authored contact point`);
+      const contact = getVisualContactPoint(fighter.visual, contactPoint);
       const hitbox = combat.hitboxes.getHitbox(fighter, fighter.currentMove!);
       const toOpponent = Math.sign(opponent.position.x - fighter.position.x);
       assert.ok((contact.x - fighter.position.x) * toOpponent > 0.25, `${moveId} must extend toward the opponent`);

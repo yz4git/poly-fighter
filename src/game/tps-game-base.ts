@@ -35,8 +35,9 @@ const TPS_COMBO_GRACE_TICKS = 34;
 const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 1.95;
-const TPS_CAMERA_CLOSE_BACK_BONUS = 0.24;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.55;
+const TPS_CAMERA_CLOSE_BACK_DELTA = -0.58;
+const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.30;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
@@ -883,13 +884,16 @@ export class TpsFightGame {
     // landscape enough vertical room for the HUD and touch controls.
     // Keep a modest extra pullback at contact, but preserve the strong lateral
     // shoulder angle that keeps both fighter centers separated on iPhone.
-    const backDistance = 4.88 + closeFactor * TPS_CAMERA_CLOSE_BACK_BONUS + compactLandscapeFactor * 0.24;
+    // At melee range rotate the composition toward a 3/4 side lane rather
+    // than simply pulling the shoulder camera farther away. This keeps camera-to-
+    // player distance nearly unchanged while increasing screen-space separation.
+    const backDistance = 4.70 + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA + compactLandscapeFactor * 0.18;
     const shoulderOffset = 2.50 + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
-      + compactLandscapeFactor * (0.62 + closeFactor * 0.62);
+      + compactLandscapeFactor * (0.52 + closeFactor * 0.48);
     const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06;
     const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, -0.34 * closeFactor - flankLaneShift)
+      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift)
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
     this.camera.userData.tpsShoulderOffset = shoulderOffset;

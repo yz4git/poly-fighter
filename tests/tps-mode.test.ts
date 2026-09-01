@@ -21,8 +21,9 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
   assert.match(source, /aspect < 2\.4 \? 52 : 47/);
   assert.match(source, /compactLandscapeFactor/);
-  assert.match(source, /TPS_CAMERA_CLOSE_SHOULDER_BONUS = 1\.95/);
-  assert.match(source, /TPS_CAMERA_CLOSE_BACK_BONUS = 0\.24/);
+  assert.match(source, /TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2\.55/);
+  assert.match(source, /TPS_CAMERA_CLOSE_BACK_DELTA = -0\.58/);
+  assert.match(source, /TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0\.30/);
   assert.match(source, /TPS_CAMERA_CLOSE_TARGET_LIFT = 0\.14/);
   assert.match(source, /tpsCloseReadabilityFactor/);
   assert.match(source, /tps-target-ground-ring/);

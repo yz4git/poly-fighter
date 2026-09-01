@@ -79,6 +79,13 @@ function panelGeometry(
   return geometry;
 }
 
+/** Compact faceted glove volume that guarantees a readable fist silhouette. */
+function fistGeometry(width: number, height: number, depth: number): THREE.BufferGeometry {
+  const geometry = new THREE.DodecahedronGeometry(0.5, 0);
+  geometry.scale(width, height, depth);
+  return geometry;
+}
+
 function heroMaterial(color: THREE.ColorRepresentation, metalness: number, roughness: number): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     color,
@@ -369,6 +376,22 @@ function buildKairoKit(visual: FighterVisual, host: THREE.Object3D, definition: 
       scale: [1.0, 1.0, 0.84],
     },
     {
+      name: "ubc-kairo-left-fist",
+      boneNames: ["hand_l"],
+      geometry: fistGeometry(0.062, 0.050, 0.072),
+      material: dark,
+      offset: [0, -0.012, 0.030],
+      rotation: [-0.05, 0.02, -0.03],
+    },
+    {
+      name: "ubc-kairo-right-fist",
+      boneNames: ["hand_r"],
+      geometry: fistGeometry(0.062, 0.050, 0.072),
+      material: dark,
+      offset: [0, -0.012, 0.030],
+      rotation: [-0.05, -0.02, 0.03],
+    },
+    {
       name: "ubc-kairo-outfit-left-trouser",
       boneNames: ["thigh_l"],
       geometry: panelGeometry(0.086, 0.205, 0.016, 1.0, 0.82),
@@ -587,6 +610,22 @@ function buildSeraKit(visual: FighterVisual, host: THREE.Object3D, definition: F
       material: primary,
       offset: [0, -0.047, 0.008],
       scale: [1.0, 1.0, 0.84],
+    },
+    {
+      name: "ubc-sera-left-fist",
+      boneNames: ["hand_l"],
+      geometry: fistGeometry(0.055, 0.045, 0.066),
+      material: clothDark,
+      offset: [0, -0.011, 0.027],
+      rotation: [-0.04, 0.02, -0.025],
+    },
+    {
+      name: "ubc-sera-right-fist",
+      boneNames: ["hand_r"],
+      geometry: fistGeometry(0.055, 0.045, 0.066),
+      material: clothDark,
+      offset: [0, -0.011, 0.027],
+      rotation: [-0.04, -0.02, 0.025],
     },
     {
       name: "ubc-sera-outfit-left-legging",

@@ -9,6 +9,7 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male-flat.glb`;
 export const QUATERNIUS_UBC_FEMALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-female-flat.glb`;
 export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
+export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/procedural-fight-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -66,7 +67,7 @@ function loadModel(bodyType: QuaterniusBodyType): Promise<THREE.Group> {
 
 function loadMotion(): Promise<MotionResources> {
   if (motionPromise) return motionPromise;
-  motionPromise = new GLTFLoader().loadAsync(QUATERNIUS_UAL_CORE_URL).then((gltf) => ({
+  motionPromise = new GLTFLoader().loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL).then((gltf) => ({
     source: gltf.scene,
     clips: gltf.animations,
   })).catch((error) => {
@@ -355,8 +356,10 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
 // the imported arms through the chest. Build a compact fighting guard from the
 // actual imported shoulder position and keep both hands explicitly in front of
 // the torso. Active attacks still use deterministic gameplay contact targets.
-const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.55;
-const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.85;
+const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.72;
+const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.98;
+const IMPORTED_NEUTRAL_HAND_LIFT = 0.035;
+const IMPORTED_GUARD_HAND_LIFT = 0.082;
 
 function importedReadyArmPose(
   fighter: FighterRuntime,
@@ -371,16 +374,19 @@ function importedReadyArmPose(
   const layout = fighter.visual.layout;
 
   const targetLocal = shoulderLocal.clone();
-  // A little inward gives a fighting stance, but never enough to cross the torso.
-  targetLocal.x -= side * layout.shoulderWidth * (guard ? 0.10 : 0.14);
-  targetLocal.y += guard ? 0.055 : -0.035;
+  // Keep the fists in a compact forward guard. The previous neutral pole sat
+  // below the shoulder, which made the two-bone solver choose a hanging elbow
+  // plane and visibly folded the forearm downward.
+  targetLocal.x -= side * layout.shoulderWidth * (guard ? 0.07 : 0.11);
+  targetLocal.y += guard ? IMPORTED_GUARD_HAND_LIFT : IMPORTED_NEUTRAL_HAND_LIFT;
   targetLocal.z += layout.chestDepth * (guard ? IMPORTED_GUARD_FORWARD_CLEARANCE : IMPORTED_NEUTRAL_FORWARD_CLEARANCE);
 
-  // Keep the elbow outside the rib cage and slightly behind the fist.
+  // The pole stays lateral and at shoulder height so the elbow bends outward,
+  // never underneath the upper arm. The fist target remains slightly above it.
   const poleLocal = shoulderLocal.clone();
-  poleLocal.x += side * layout.shoulderWidth * 0.72;
-  poleLocal.y += guard ? 0.015 : -0.075;
-  poleLocal.z += layout.chestDepth * (guard ? 1.25 : 1.05);
+  poleLocal.x += side * layout.shoulderWidth * (guard ? 0.86 : 0.82);
+  poleLocal.y += guard ? 0.010 : 0.0;
+  poleLocal.z += layout.chestDepth * (guard ? 1.12 : 0.94);
 
   return {
     target: fighter.visual.root.localToWorld(targetLocal),
@@ -412,32 +418,48 @@ function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime
   }
 }
 
+const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
+  jab: "PF_Jab_L",
+  straight: "PF_Cross_R",
+  backfist: "PF_Backfist_R",
+  bodyBlow: "PF_BodyBlow_L",
+  power: "PF_Power_R",
+  kick: "PF_FrontKick_R",
+  lowKick: "PF_LowKick_L",
+  risingKick: "PF_RisingKick_R",
+  dashKick: "PF_DashKick_R",
+  throw: "PF_Throw",
+  counter: "PF_Counter_R",
+};
+
+function proceduralAttackClip(moveId: string): string | null {
+  return PROCEDURAL_ATTACK_CLIPS[moveId] ?? null;
+}
+
 function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; speed: number } {
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
-    if (move.animation === "punch") {
-      return { name: move.id === "jab" ? "Punch_Jab" : "Punch_Cross", loop: false, speed: 1 / seconds };
-    }
-    if (move.animation === "kick") {
-      return { name: move.id === "dashKick" ? "Roll" : "Jump_Start", loop: false, speed: 1 / seconds };
-    }
-    if (move.animation === "throw") return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
+    const proceduralClip = proceduralAttackClip(move.id);
+    if (proceduralClip) return { name: proceduralClip, loop: false, speed: 1 / seconds };
+    if (move.animation === "punch") return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
+    if (move.animation === "kick") return { name: "Jump_Start", loop: false, speed: 1 / seconds };
+    if (move.animation === "throw") return { name: "PF_Throw", loop: false, speed: 1 / seconds };
     return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
   }
   switch (fighter.state) {
     case "WALK": return { name: "Walk_Loop", loop: true, speed: 1 };
     case "CROUCH": return { name: "Crouch_Idle_Loop", loop: true, speed: 1 };
     case "GUARD": return { name: "Idle_Loop", loop: true, speed: 0.82 };
-    case "BLOCK_STUN": return { name: "Hit_Chest", loop: false, speed: 1.35 };
+    case "BLOCK_STUN": return { name: "PF_GuardBreak", loop: false, speed: 1.35 };
     case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };
     case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
-    case "HIT": return { name: "Hit_Chest", loop: false, speed: 1.35 };
+    case "HIT": return { name: "PF_HitHeavy", loop: false, speed: 1.35 };
     case "KNOCKDOWN":
     case "KO":
-    case "RING_OUT": return { name: "Death01", loop: false, speed: 1 };
-    case "THROW": return { name: "Punch_Cross", loop: false, speed: 1 };
-    case "WAKEUP": return { name: "Jump_Land", loop: false, speed: 1.2 };
+    case "RING_OUT": return { name: "PF_DownBack", loop: false, speed: 1 };
+    case "THROW": return { name: "PF_Throw", loop: false, speed: 1 };
+    case "WAKEUP": return { name: "PF_Wakeup", loop: false, speed: 1.2 };
     default: return { name: "Idle_Loop", loop: true, speed: 1 };
   }
 }
@@ -456,6 +478,7 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   action.fadeIn(0.06).play();
   runtime.currentClip = name;
   runtime.currentAction = action;
+  runtime.host.userData.quaterniusCurrentClip = clip.name;
 }
 
 function advance(runtime: QuaterniusRuntime, timeSeconds: number): void {

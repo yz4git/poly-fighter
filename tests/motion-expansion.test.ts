@@ -11,15 +11,19 @@ import {
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Procedural Fight v1 maps every authored move to generated motion and reaction data", () => {
+test("Procedural Fight v2 maps every authored move to generated motion and reaction data", () => {
   assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 20);
-  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V1");
-  assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 15);
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V2");
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 20);
   assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
-  assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "Idle_Shield_Break");
+  assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "PF_GuardBreak");
   assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "PF_Wakeup");
+  assert.equal(MOTION_EXPANSION_PROFILE.sideStepLeftClip, "PF_Sidestep_L");
+  assert.equal(MOTION_EXPANSION_PROFILE.kickRecoveryClip, "PF_KickRecover");
+  assert.equal(MOTION_EXPANSION_PROFILE.heavyRecoveryClip, "PF_HeavyRecover");
+  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "ADDITIVE_COM_RETURN_TO_BIND");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -34,33 +38,54 @@ test("Procedural Fight v1 maps every authored move to generated motion and react
   }
 });
 
-test("procedural generator artifact contains all 15 clips and actually modifies animated UAL bones", async () => {
-  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions.mjs", import.meta.url), "utf8");
+test("procedural v2 generator artifact contains 20 clips, root motion and deterministic timing metadata", async () => {
+  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions-v2.mjs", import.meta.url), "utf8");
   const metrics = JSON.parse(
     await readFile(new URL("../public/models/quaternius/procedural-fight-core.metrics.json", import.meta.url), "utf8"),
   ) as {
     version: string;
     generatedClipCount: number;
     clips: string[];
-    metrics: Array<{ name: string; modifiedBones: string[]; missingAnimated: string[] }>;
+    rootMotionPolicy: string;
+    timingPolicy: string;
+    metrics: Array<{
+      name: string;
+      modifiedBones: string[];
+      modifiedPaths: string[];
+      missingAnimated: string[];
+      maxPlanarRootShift: number;
+      contactU: number;
+    }>;
   };
 
-  assert.match(source, /PROCEDURAL_FIGHT_V1/);
-  assert.match(source, /PF_RisingKick_R/);
+  assert.match(source, /PROCEDURAL_FIGHT_V2/);
+  assert.match(source, /ANTICIPATION/);
+  assert.match(source, /PF_GuardBreak/);
+  assert.match(source, /PF_Sidestep_L/);
+  assert.match(source, /PF_KickRecover/);
   assert.match(source, /sampleCurve/);
-  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V1");
-  assert.equal(metrics.generatedClipCount, 15);
-  assert.equal(metrics.clips.length, 15);
-  assert.ok(metrics.clips.includes("PF_Jab_L"));
-  assert.ok(metrics.clips.includes("PF_LowKick_L"));
-  assert.ok(metrics.clips.includes("PF_DownBack"));
+  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V2");
+  assert.equal(metrics.generatedClipCount, 20);
+  assert.equal(metrics.clips.length, 20);
+  assert.equal(metrics.rootMotionPolicy, "ADDITIVE_COM_RETURN_TO_BIND");
+  assert.equal(metrics.timingPolicy, "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE");
+  for (const required of [
+    "PF_Jab_L", "PF_LowKick_L", "PF_DownBack", "PF_GuardBreak",
+    "PF_Sidestep_L", "PF_Sidestep_R", "PF_KickRecover", "PF_HeavyRecover",
+  ]) assert.ok(metrics.clips.includes(required), `missing ${required}`);
+
+  let planarClips = 0;
   for (const entry of metrics.metrics) {
     assert.ok(entry.modifiedBones.length >= 3, `${entry.name} modifies too few bones`);
-    assert.deepEqual(entry.missingAnimated, [], `${entry.name} modifier bone is absent from its base clip`);
+    assert.deepEqual(entry.missingAnimated, [], `${entry.name} modifier path is absent from its base clip`);
+    assert.ok(entry.modifiedPaths.includes("pelvis:translation"), `${entry.name} lacks center-of-mass translation`);
+    assert.ok(entry.contactU >= 0 && entry.contactU <= 1, `${entry.name} invalid contactU`);
+    if (entry.maxPlanarRootShift > 0.001) planarClips += 1;
   }
+  assert.ok(planarClips >= 12, `only ${planarClips} v2 clips contain planar root motion`);
 });
 
-test("readability mappings separate body momentum and strike phases instead of reusing generic hook/roll poses", () => {
+test("v2 readability mappings use generated recovery clips instead of generic library recovery", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const jab = motionSpecForMove(kairo.moves.jab);
   const backfist = motionSpecForMove(kairo.moves.backfist);
@@ -73,23 +98,23 @@ test("readability mappings separate body momentum and strike phases instead of r
 
   assert.equal(jab.clip, "PF_Jab_L");
   assert.equal(backfist.clip, "PF_Backfist_R");
-  assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");
+  assert.equal(backfist.recoveryClip, "PF_HeavyRecover");
   assert.equal(body.clip, "PF_BodyBlow_L");
   assert.equal(power.clip, "PF_Power_R");
+  assert.equal(power.recoveryClip, "PF_HeavyRecover");
   assert.notEqual(body.clip, backfist.clip);
-  assert.notEqual(power.clip, backfist.clip);
   assert.equal(kick.clip, "PF_FrontKick_R");
   assert.equal(low.clip, "PF_LowKick_L");
   assert.equal(rising.clip, "PF_RisingKick_R");
   assert.equal(dash.clip, "PF_DashKick_R");
-  assert.equal(kick.recoveryClip, "NinjaJump_Land");
-  assert.equal(low.recoveryClip, "Slide_Exit");
-  assert.equal(rising.recoveryClip, "NinjaJump_Land");
-  assert.notEqual(dash.clip, "Roll");
+  assert.equal(kick.recoveryClip, "PF_KickRecover");
+  assert.equal(low.recoveryClip, "PF_KickRecover");
+  assert.equal(rising.recoveryClip, "PF_KickRecover");
+  assert.equal(dash.recoveryClip, "PF_KickRecover");
   assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);
 });
 
-test("motion runtime preloads generated pack and only biases generated strikes toward the opponent", async () => {
+test("motion runtime uses bounded procedural center-of-mass motion and generated guard/evasion states", async () => {
   const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
 
@@ -97,7 +122,13 @@ test("motion runtime preloads generated pack and only biases generated strikes t
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
   assert.match(source, /PROCEDURAL_URL/);
-  assert.match(source, /motionExpansionHasProcedural/);
+  assert.match(source, /PROCEDURAL_FIGHT_V2/);
+  assert.match(source, /preserveProceduralPlanarRoot/);
+  assert.match(source, /THREE\.MathUtils\.clamp\(track\.values\[offset\] - sourceNode\.position\.x, -0\.09, 0\.09\)/);
+  assert.match(source, /PF_GuardBreak/);
+  assert.match(source, /PF_Sidestep_L/);
+  assert.match(source, /PF_Sidestep_R/);
+  assert.match(source, /motionExpansionRootMotionPolicy = "BOUNDED_PROCEDURAL_COM_XZ_PLUS_Y"/);
   assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
   assert.doesNotMatch(source, /getVisualContactPoint/);
   assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);

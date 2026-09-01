@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
+import {
+  chooseTpsComboRoute,
+  tpsComboMoveForRoute,
+  type TpsComboRoute,
+} from "./motion-profile";
+import { trackMotionFighter } from "./motion-reaction";
 import type { HitEvent, InputFrame } from "./types";
 import {
   TPS_HYPE_PROFILE,
@@ -40,6 +46,8 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   difficulty: "EASY" | "NORMAL" | "HARD";
   __enemyVisualForward?: THREE.Vector3;
   __hypeDirector?: TpsHypeDirector;
+  __comboRoute?: TpsComboRoute;
+  __comboRouteSeed?: number;
 };
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -79,14 +87,14 @@ const coreUpdateVisual = corePrototype.updateVisual;
 const coreUpdateCamera = corePrototype.updateCamera;
 const coreResolveAttack = corePrototype.resolveAttack;
 const coreResetRound = corePrototype.resetRound;
-const coreBeginContextAttack = corePrototype.beginContextAttack;
 const coreDestroy = corePrototype.destroy;
 
 /**
  * TPS gameplay extension over the battle-tested core runtime.
  *
- * This layer owns the high-energy presentation and hit-confirm pacing while the
- * base runtime keeps the already-audited combat rules, AI, input, arena and HUD.
+ * This layer owns the high-energy presentation, the context-sensitive combo
+ * graph and hit-confirm pacing while the base runtime keeps the audited input,
+ * arena, lock-on, collision and round rules.
  */
 export class TpsFightGame extends CoreTpsFightGame {}
 
@@ -97,7 +105,44 @@ const prototype = TpsFightGame.prototype as unknown as {
   updateCamera(delta: number): void;
   resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void;
   resetRound(): void;
+  beginContextAttack(): boolean;
   destroy(): void;
+};
+
+prototype.beginContextAttack = function beginContextAttack(): boolean {
+  const game = extended(this as unknown as TpsFightGame);
+  if (!game.p1.canAct()) return false;
+  const distance = Math.hypot(
+    game.p2.position.x - game.p1.position.x,
+    game.p2.position.z - game.p1.position.z,
+  );
+  const stage = Math.min(2, game.playerComboStage);
+  const flank = game.playerFlankWindowTicks > 0 && game.playerStepSideWeight > 0.45;
+  const perfect = game.playerPerfectEvadeTicks > 0 && flank;
+
+  if (stage === 0 || !game.__comboRoute) {
+    game.__comboRouteSeed = (game.__comboRouteSeed ?? 0) + 1;
+    game.__comboRoute = chooseTpsComboRoute({
+      distance,
+      flank,
+      perfect,
+      variationSeed: game.__comboRouteSeed + Math.floor(game.simulationTicks / 45),
+    });
+  }
+
+  const moveId = tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
+  if (!game.p1.beginMove(moveId)) return false;
+  game.playerComboStage = stage + 1;
+  game.playerComboGraceTicks = 34;
+  game.p1.visual.root.userData.tpsComboRoute = game.__comboRoute;
+  game.p1.visual.root.userData.tpsComboMove = moveId;
+  game.p1.visual.root.userData.tpsComboStage = game.playerComboStage;
+
+  if (flank) {
+    game.playerFlankAttackTicks = 28;
+    game.playerFlankWindowTicks = 0;
+  }
+  return true;
 };
 
 prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
@@ -109,7 +154,8 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
 
   // Confirmed hits can cancel most of recovery after a tiny authored beat. This
   // turns the old "tap, wait, tap" rhythm into an arcade-style rush while still
-  // refusing to chain whiffs. Early taps remain buffered by the core runtime.
+  // refusing to chain whiffs. The next strike stays on the route chosen at the
+  // opening hit, so the three body motions read as one intentional combination.
   if (
     game.p1.state === "ATTACK"
     && activeMove
@@ -125,7 +171,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
       game.p1.state = "IDLE";
       game.p1.hitTargets.clear();
       game.playerAttackQueued = false;
-      if (coreBeginContextAttack.call(this)) {
+      if (prototype.beginContextAttack.call(this)) {
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);
@@ -163,6 +209,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
 
   const startedDash = beforeMoveId !== "dashKick" && game.p1.currentMove?.id === "dashKick";
   if (startedDash) {
+    game.__comboRoute = undefined;
     hype(game).dash();
     game.audio.rush(false, true);
   }
@@ -198,6 +245,28 @@ prototype.updateEnemy = function updateEnemy(): void {
     game.p2.state = "IDLE";
     game.enemyCooldown = Math.max(8, beforeCooldown > 0 ? beforeCooldown - 1 : 0);
     return;
+  }
+
+  // Broaden the CPU's visible vocabulary without changing its tactical timing.
+  // Core still decides *when* and whether the choice was a light punch/kick;
+  // this layer deterministically chooses a related body motion for that slot.
+  if (startedAttack && game.p2.currentMove && ["jab", "straight", "kick"].includes(game.p2.currentMove.id)) {
+    const distance = Math.hypot(
+      game.p1.position.x - game.p2.position.x,
+      game.p1.position.z - game.p2.position.z,
+    );
+    const selector = Math.floor(game.simulationTicks / 19);
+    const closeChoices = ["jab", "straight", "bodyBlow", "backfist"] as const;
+    const farChoices = ["kick", "lowKick", "risingKick"] as const;
+    const choices = distance <= 1.62 ? closeChoices : farChoices;
+    const nextId = choices[selector % choices.length];
+    const nextMove = game.p2.definition.moves[nextId];
+    if (nextMove) {
+      game.p2.currentMove = nextMove;
+      game.p2.moveTick = 0;
+      game.p2.hitTargets.clear();
+      game.p2.visual.root.userData.tpsCpuMotionMove = nextId;
+    }
   }
 
   // The core AI decides when to attack/guard. When it chooses locomotion, replace
@@ -253,6 +322,9 @@ prototype.resolveAttack = function resolveAttack(
   const beforeHitStop = defender.hitStop;
   const beforeState = defender.state;
 
+  // Register both runtimes before the shared effect callback records the hit.
+  trackMotionFighter(attacker);
+  trackMotionFighter(defender);
   coreResolveAttack.call(this, attacker, defender, defenderGuarding);
   if (!move || alreadyResolved || !attacker.hitTargets.has(defender.id)) return;
 
@@ -279,7 +351,7 @@ prototype.resolveAttack = function resolveAttack(
   }
 
   const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : 1.35;
+  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,
@@ -323,6 +395,11 @@ prototype.updateCamera = function updateCamera(delta: number): void {
 prototype.resetRound = function resetRound(): void {
   coreResetRound.call(this);
   const game = extended(this as unknown as TpsFightGame);
+  game.__comboRoute = undefined;
+  game.__comboRouteSeed = 0;
+  game.p1.visual.root.userData.tpsComboRoute = null;
+  game.p1.visual.root.userData.tpsComboMove = null;
+  game.p1.visual.root.userData.tpsComboStage = 0;
   hype(game).reset(game.camera);
 };
 

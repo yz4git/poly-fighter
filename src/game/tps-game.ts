@@ -26,6 +26,8 @@ const ENEMY_SPACING_DEAD_ZONE = 0.30;
 const ENEMY_ORBIT_ACTIVE_TICKS = 28;
 const ENEMY_TACTIC_INTERVAL = 72;
 const ENEMY_ATTACK_ALIGNMENT = 0.82;
+const PERFECT_COUNTER_TARGET_DISTANCE = 1.08;
+const PERFECT_COUNTER_MAX_LUNGE = 0.78;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 
 type ExtendedTpsRuntime = CoreTpsFightGame & {
@@ -132,6 +134,27 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
 
   const moveId = tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
   if (!game.p1.beginMove(moveId)) return false;
+
+  // A successful lateral PERFECT STEP creates a large side gap by design. The
+  // first counter therefore gets a short authored pursuit lunge so the reward
+  // still reaches the opponent instead of whiffing because STEP distance was
+  // doubled. The lunge stops at close striking distance and never teleports on
+  // ordinary/flank-only routes.
+  if (game.__comboRoute === "PERFECT" && stage === 0) {
+    const towardTarget = horizontalDirection(game.p1.position, game.p2.position);
+    const currentDistance = Math.hypot(
+      game.p2.position.x - game.p1.position.x,
+      game.p2.position.z - game.p1.position.z,
+    );
+    const lunge = THREE.MathUtils.clamp(
+      currentDistance - PERFECT_COUNTER_TARGET_DISTANCE,
+      0,
+      PERFECT_COUNTER_MAX_LUNGE,
+    );
+    game.p1.position.addScaledVector(towardTarget, lunge);
+    game.p1.visual.root.userData.tpsPerfectCounterLunge = lunge;
+  }
+
   game.playerComboStage = stage + 1;
   game.playerComboGraceTicks = 34;
   game.p1.visual.root.userData.tpsComboRoute = game.__comboRoute;
@@ -400,6 +423,7 @@ prototype.resetRound = function resetRound(): void {
   game.p1.visual.root.userData.tpsComboRoute = null;
   game.p1.visual.root.userData.tpsComboMove = null;
   game.p1.visual.root.userData.tpsComboStage = 0;
+  game.p1.visual.root.userData.tpsPerfectCounterLunge = 0;
   hype(game).reset(game.camera);
 };
 

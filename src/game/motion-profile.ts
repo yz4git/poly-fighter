@@ -32,24 +32,23 @@ export type TpsComboRoute = "CLOSE_A" | "CLOSE_B" | "FAR" | "FLANK" | "PERFECT";
 /**
  * Runtime-authoritative motion mapping.
  *
- * Motion Readability v2 established readable authored silhouettes and limited
- * opponent-weighted IK. Procedural Fight v1 keeps that contact model but swaps
- * the attack body motion to a deterministic generated pack built from the UAL
- * skeleton. Existing Quaternius clips remain runtime fallbacks if the generated
- * pack cannot be loaded.
+ * Procedural Fight v2 keeps opponent-weighted contact correction intentionally
+ * small and moves more of the visible mechanics into generated clips. Generated
+ * attacks now include anticipation/impact/settle cadence and center-of-mass
+ * motion; heavy attacks and kicks also use generated recovery clips.
  */
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
-  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.26 },
-  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.30 },
-  backfist: { clip: "PF_Backfist_R", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.34 },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.34 },
-  power: { clip: "PF_Power_R", style: "HEAVY", speedScale: 0.92, contactBlend: 0.40 },
-  kick: { clip: "PF_FrontKick_R", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.68 },
-  lowKick: { clip: "PF_LowKick_L", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.72 },
-  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.76 },
-  dashKick: { clip: "PF_DashKick_R", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.80 },
-  throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.30 },
-  counter: { clip: "PF_Counter_R", style: "COUNTER", speedScale: 1.08, contactBlend: 0.32 },
+  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24 },
+  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28 },
+  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31 },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31 },
+  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36 },
+  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.62 },
+  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.66 },
+  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.70 },
+  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.74 },
+  throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28 },
+  counter: { clip: "PF_Counter_R", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29 },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {
@@ -59,24 +58,29 @@ const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = 
   HEAVY: "PF_HitHeavy",
   LAUNCH: "PF_Launch",
   THROW: "PF_HitHeavy",
-  BLOCK: "Idle_Shield_Break",
+  BLOCK: "PF_GuardBreak",
   DOWN: "PF_DownBack",
   KO: "PF_DownBack",
 };
 
 export const MOTION_EXPANSION_PROFILE = {
   version: "MOTION_READABILITY_V2",
-  proceduralVersion: "PROCEDURAL_FIGHT_V1",
+  proceduralVersion: "PROCEDURAL_FIGHT_V2",
   primaryLibraryClips: 12,
   secondaryLibraryClips: 20,
-  proceduralLibraryClips: 15,
+  proceduralLibraryClips: 20,
   uniqueMoveMappings: Object.keys(MOVE_MOTIONS).length,
   reactionKinds: Object.keys(REACTION_CLIPS).length,
   airLoopClip: "NinjaJump_Idle_Loop",
   wakeupClip: "PF_Wakeup",
   guardClip: "Idle_Shield_Loop",
-  guardBreakClip: "Idle_Shield_Break",
-  sideStepClip: "Slide_Start",
+  guardBreakClip: "PF_GuardBreak",
+  sideStepClip: "PF_Sidestep_R",
+  sideStepLeftClip: "PF_Sidestep_L",
+  kickRecoveryClip: "PF_KickRecover",
+  heavyRecoveryClip: "PF_HeavyRecover",
+  rootMotionPolicy: "ADDITIVE_COM_RETURN_TO_BIND",
+  timingPolicy: "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE",
 } as const;
 
 export function motionSpecForMove(move: MoveDefinition): MoveMotionSpec {

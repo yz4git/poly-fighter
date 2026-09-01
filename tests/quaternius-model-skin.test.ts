@@ -91,7 +91,6 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
     "ubc-kairo-outfit-jacket-right",
     "ubc-kairo-outfit-abdomen",
     "ubc-kairo-outfit-belt",
-    "ubc-kairo-outfit-left-sleeve",
     "ubc-kairo-outfit-left-trouser",
     "ubc-kairo-outfit-left-boot-shaft",
     "ubc-kairo-outfit-left-shoe",
@@ -99,7 +98,6 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
     "ubc-sera-outfit-jacket-right",
     "ubc-sera-outfit-bodysuit",
     "ubc-sera-outfit-waist",
-    "ubc-sera-outfit-left-sleeve",
     "ubc-sera-outfit-left-legging",
     "ubc-sera-outfit-left-boot",
     "ubc-sera-outfit-left-shoe",
@@ -107,7 +105,18 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
     assert.match(polish, new RegExp(required));
   }
 
-  assert.match(polish, /ubc-kairo-left-gauntlet/);
+  for (const removedArmAddon of [
+    "ubc-kairo-outfit-left-sleeve",
+    "ubc-kairo-outfit-right-sleeve",
+    "ubc-kairo-left-gauntlet",
+    "ubc-kairo-right-gauntlet",
+    "ubc-sera-outfit-left-sleeve",
+    "ubc-sera-outfit-right-sleeve",
+    "ubc-sera-left-forearm-guard",
+    "ubc-sera-right-forearm-guard",
+  ]) {
+    assert.doesNotMatch(polish, new RegExp(removedArmAddon));
+  }
   assert.match(polish, /function fistGeometry/);
   assert.match(polish, /ubc-kairo-left-fist/);
   assert.match(polish, /ubc-kairo-right-fist/);
@@ -115,8 +124,6 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
   assert.match(polish, /ubc-sera-right-fist/);
   assert.match(polish, /ubc-kairo-left-shin-guard/);
   assert.match(polish, /new THREE\.CylinderGeometry\(0\.034, 0\.041, 0\.108/);
-  assert.match(polish, /ubc-sera-left-forearm-guard/);
-  assert.match(polish, /lowerarm_l/);
   assert.match(polish, /ubc-sera-left-shin-guard/);
   assert.match(polish, /calf_l/);
   assert.match(polish, /ubc-sera-ponytail-upper/);

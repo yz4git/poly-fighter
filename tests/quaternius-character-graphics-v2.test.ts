@@ -37,6 +37,8 @@ test("Character Graphics v2 keeps the UBC rig and adds layered face/silhouette d
     assert.match(v2, new RegExp(required));
   }
 
+  assert.doesNotMatch(v2, /ubc-sera-v2-left-forearm-fin/);
+  assert.doesNotMatch(v2, /ubc-sera-v2-right-forearm-fin/);
   assert.match(v2, /KAIRO_FORGE_V2_FACE_FRAME_COLLAR_ARMORED_SILHOUETTE/);
   assert.match(v2, /SERA_PRISM_V2_FACE_FRAME_ASYMMETRIC_SASH_LAYERED_SILHOUETTE/);
 });

@@ -352,6 +352,85 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-punch-settled.png`);
 
+  // Continue the real damage reaction until gameplay becomes actionable. Motion
+  // Expansion must still own a short presentation-only recoil tail on that first
+  // IDLE frame; otherwise the defender snaps immediately back to ready pose.
+  const damageAfterfeelProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      game.p2.updatePhysics(1 / 60);
+      if (!['HIT', 'BLOCK_STUN', 'KNOCKDOWN', 'THROW', 'KO'].includes(game.p2.state)) game.p2.state = 'IDLE';
+    };
+    let steps = 0;
+    while (steps < 80 && game.p2.state === 'HIT') {
+      game.renderTime += 1 / 60;
+      game.step();
+      steps += 1;
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const data = game.p2.visual.root.userData;
+    return {
+      steps,
+      state: game.p2.state,
+      canAct: game.p2.canAct(),
+      phase: data.motionExpansionPhase ?? null,
+      tailKind: data.motionExpansionTailKind ?? null,
+      tailRemaining: data.motionExpansionTailRemaining ?? 0,
+      clip: data.motionExpansionCurrentClip ?? null,
+    };
+  `);
+  if (damageAfterfeelProbe.state !== 'IDLE' || !damageAfterfeelProbe.canAct || damageAfterfeelProbe.phase !== 'SETTLE' || damageAfterfeelProbe.tailKind !== 'REACTION' || !(damageAfterfeelProbe.tailRemaining > 0)) {
+    throw new Error(`TPS damage reaction did not retain presentation-only afterfeel after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-damage-afterfeel.png`);
+
+  // A completed heavy attack gets the same treatment: gameplay is already free
+  // to accept a new action while the rendered body holds/recenters for a short
+  // follow-through beat. Use a whiff so defender state cannot influence it.
+  const attackAfterfeelProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+    }
+    game.p1.position.set(0, 0, 2.8);
+    game.p2.position.set(0, 0, -2.8);
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
+    if (!game.p1.beginMove('power')) return { error: 'power-begin-failed' };
+    let steps = 0;
+    while (steps < 100 && game.p1.state === 'ATTACK') {
+      game.renderTime += 1 / 60;
+      game.step();
+      steps += 1;
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const data = game.p1.visual.root.userData;
+    return {
+      steps,
+      state: game.p1.state,
+      canAct: game.p1.canAct(),
+      phase: data.motionExpansionPhase ?? null,
+      tailKind: data.motionExpansionTailKind ?? null,
+      tailRemaining: data.motionExpansionTailRemaining ?? 0,
+      clip: data.motionExpansionCurrentClip ?? null,
+    };
+  `);
+  if (attackAfterfeelProbe.error || attackAfterfeelProbe.state !== 'IDLE' || !attackAfterfeelProbe.canAct || attackAfterfeelProbe.phase !== 'SETTLE' || attackAfterfeelProbe.tailKind !== 'ATTACK' || !(attackAfterfeelProbe.tailRemaining > 0)) {
+    throw new Error(`TPS attack did not retain presentation-only follow-through after gameplay recovery: ${JSON.stringify(attackAfterfeelProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-attack-afterfeel.png`);
+
   const throwProbe = await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -433,6 +512,116 @@ try {
   const validCloseCombos = new Set(['jab,straight,power', 'jab,backfist,power']);
   if (!validCloseCombos.has(comboSequence)) throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-combo.png`);
+
+  // Deterministically prove a real branch at the authored link window. Force the
+  // opening route to CLOSE_A, buffer SIDE+ATTACK after jab contact, and require
+  // the next move to crossfade into CLOSE_B/backfist inside the published window.
+  const comboLinkProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    game.effects.update(2);
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (game.p2.state === 'HIT') game.p2.updatePhysics(1 / 60);
+      else game.p2.state = 'IDLE';
+    };
+    const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.78);
+    game.p2.position.set(0, 0, -0.42);
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.__comboRoute = undefined;
+    game.__comboRouteSeed = 0;
+    game.__comboLinkSerial = 0;
+    game.__comboQueuedBranch = undefined;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
+    game.p1.visual.root.userData.tpsComboLinkSerial = 0;
+
+    game.press('punch', 'tps-link-open');
+    game.renderTime += 1 / 60;
+    game.step();
+    game.release('punch', 'tps-link-open');
+    const firstMove = game.p1.currentMove?.id ?? null;
+    game.__comboRoute = 'CLOSE_A';
+    game.p1.visual.root.userData.tpsComboRoute = 'CLOSE_A';
+
+    let guard = 0;
+    while (guard < 45 && (game.p2.health === 100 || game.p1.moveTick < 6)) {
+      game.renderTime += 1 / 60;
+      game.step();
+      guard += 1;
+    }
+
+    game.press('right', 'tps-link-side');
+    game.press('punch', 'tps-link-attack');
+    game.renderTime += 1 / 60;
+    game.step();
+    game.release('punch', 'tps-link-attack');
+    game.release('right', 'tps-link-side');
+
+    let linked = false;
+    let secondMove = null;
+    for (let index = 0; index < 40; index += 1) {
+      if (game.p1.currentMove?.id && game.p1.currentMove.id !== firstMove) {
+        linked = true;
+        secondMove = game.p1.currentMove.id;
+        break;
+      }
+      game.renderTime += 1 / 60;
+      game.step();
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const data = game.p1.visual.root.userData;
+    return {
+      linked,
+      firstMove,
+      secondMove,
+      p2Health: game.p2.health,
+      linkState: data.tpsComboLinkState ?? null,
+      linkSerial: data.tpsComboLinkSerial ?? 0,
+      fromMove: data.tpsComboLinkFromMove ?? null,
+      linkTick: data.tpsComboLinkTick ?? -1,
+      linkStart: data.tpsComboLinkStart ?? -1,
+      linkEnd: data.tpsComboLinkEnd ?? -1,
+      routeFrom: data.tpsComboLinkRouteFrom ?? null,
+      routeTo: data.tpsComboLinkRouteTo ?? null,
+      branch: data.tpsComboLinkBranch ?? null,
+      requestedBlend: data.tpsComboLinkBlendSeconds ?? 0,
+      appliedBlend: data.motionExpansionComboBlendSeconds ?? 0,
+      motionMove: data.motionExpansionCurrentMove ?? null,
+      motionPhase: data.motionExpansionPhase ?? null,
+    };
+  `);
+  if (!comboLinkProbe.linked
+    || comboLinkProbe.firstMove !== 'jab'
+    || comboLinkProbe.secondMove !== 'backfist'
+    || comboLinkProbe.linkState !== 'LINKED'
+    || comboLinkProbe.fromMove !== 'jab'
+    || comboLinkProbe.routeFrom !== 'CLOSE_A'
+    || comboLinkProbe.routeTo !== 'CLOSE_B'
+    || comboLinkProbe.branch !== 'SIDE'
+    || comboLinkProbe.linkTick < comboLinkProbe.linkStart
+    || comboLinkProbe.linkTick > comboLinkProbe.linkEnd
+    || Math.abs(comboLinkProbe.requestedBlend - 0.075) > 0.0001
+    || Math.abs(comboLinkProbe.appliedBlend - 0.075) > 0.0001
+    || comboLinkProbe.motionMove !== 'backfist') {
+    throw new Error(`TPS authored combo branch did not link cleanly: ${JSON.stringify(comboLinkProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-combo-link.png`);
 
 
   const whiffComboProbe = await execute(sessionId, `${gameLookup}
@@ -606,7 +795,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, throwProbe, comboProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

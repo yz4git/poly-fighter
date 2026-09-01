@@ -1,18 +1,23 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FIGHTER_DEFINITIONS, MOVE_ORDER } from "../src/game/definitions";
 import {
   MOTION_EXPANSION_PROFILE,
   chooseTpsComboRoute,
   motionClipForMove,
+  motionSpecForMove,
   reactionKindForMove,
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Motion Expansion maps every authored move to explicit motion and reaction data", () => {
-  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_EXPANSION_V1");
+test("Motion Readability v2 maps every authored move to explicit motion and reaction data", () => {
+  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
+  assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 20);
   assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
+  assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "Idle_Shield_Break");
+  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "LayToIdle");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -25,6 +30,43 @@ test("Motion Expansion maps every authored move to explicit motion and reaction 
     }
     assert.ok(clips.size >= 8, `${fighter.name} only exposes ${clips.size} distinct move clips`);
   }
+});
+
+test("readability mappings separate body momentum and strike phases instead of reusing generic hook/roll poses", () => {
+  const kairo = FIGHTER_DEFINITIONS.red;
+  const jab = motionSpecForMove(kairo.moves.jab);
+  const backfist = motionSpecForMove(kairo.moves.backfist);
+  const body = motionSpecForMove(kairo.moves.bodyBlow);
+  const power = motionSpecForMove(kairo.moves.power);
+  const kick = motionSpecForMove(kairo.moves.kick);
+  const low = motionSpecForMove(kairo.moves.lowKick);
+  const rising = motionSpecForMove(kairo.moves.risingKick);
+  const dash = motionSpecForMove(kairo.moves.dashKick);
+
+  assert.equal(jab.clip, "Punch_Jab");
+  assert.equal(backfist.clip, "Melee_Hook");
+  assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");
+  assert.equal(body.clip, "Shield_OneShot");
+  assert.equal(power.clip, "Sword_Regular_C");
+  assert.notEqual(body.clip, backfist.clip);
+  assert.notEqual(power.clip, backfist.clip);
+  assert.equal(kick.recoveryClip, "NinjaJump_Land");
+  assert.equal(low.recoveryClip, "Slide_Exit");
+  assert.equal(rising.recoveryClip, "NinjaJump_Land");
+  assert.notEqual(dash.clip, "Roll");
+  assert.ok(dash.contactBlend >= 0.85);
+});
+
+test("motion runtime preloads in neutral and biases imported strikes toward the opponent instead of the old procedural contact pose", async () => {
+  const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
+  const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
+
+  assert.match(source, /const runtime = ensureRuntime\(fighter\);\s*if \(!EXPANDED_STATES\.has\(fighter\.state\)\) return false;/);
+  assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
+  assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
+  assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
+  assert.doesNotMatch(source, /getVisualContactPoint/);
+  assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
 });
 
 test("reaction selection distinguishes head, body, low, heavy and launch impacts", () => {

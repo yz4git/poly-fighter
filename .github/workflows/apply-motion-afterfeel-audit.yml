@@ -1,0 +1,42 @@
+name: Apply motion afterfeel audit
+
+on:
+  push:
+    branches: [improve/motion-afterfeel-combo-links-20260902]
+    paths:
+      - scripts/apply-motion-afterfeel-audit.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/motion-afterfeel-combo-links-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Add deterministic browser afterfeel probes
+        run: python3 scripts/apply-motion-afterfeel-audit.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run TPS regression
+        run: npm run test:rules:tps
+      - name: Run lint
+        run: npm run lint
+      - name: Commit audit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-tps-visual-audit.mjs
+          if git diff --cached --quiet; then
+            echo "No audit changes"
+          else
+            git commit -m "Audit motion afterfeel and combo link timing"
+            git push origin HEAD:improve/motion-afterfeel-combo-links-20260902
+          fi

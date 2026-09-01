@@ -104,9 +104,9 @@
     },
     {
       "name": "PF_FrontKick_R",
-      "base": "Jump_Start",
+      "base": "Idle_Loop",
       "family": "kick",
-      "duration": 1.3333333730697632,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "calf_r",
@@ -121,9 +121,9 @@
     },
     {
       "name": "PF_LowKick_L",
-      "base": "Jump_Start",
+      "base": "Idle_Loop",
       "family": "kick",
-      "duration": 1.3333333730697632,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "calf_l",
@@ -138,9 +138,9 @@
     },
     {
       "name": "PF_RisingKick_R",
-      "base": "Jump_Start",
+      "base": "Idle_Loop",
       "family": "kick",
-      "duration": 1.3333333730697632,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "calf_r",

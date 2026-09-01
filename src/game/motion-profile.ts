@@ -32,50 +32,48 @@ export type TpsComboRoute = "CLOSE_A" | "CLOSE_B" | "FAR" | "FLANK" | "PERFECT";
 /**
  * Runtime-authoritative motion mapping.
  *
- * V1 allowed the broad gameplay animation tag (punch/kick) and the first
- * available Quaternius clip to dominate the presentation. That left several
- * visibly different moves sharing one hook and used jump/roll as substitute
- * kicks. V2 treats the imported clip as the full-body momentum source, then the
- * runtime adds a move-specific strike trajectory on top of it.
+ * Motion Readability v2 established readable authored silhouettes and limited
+ * opponent-weighted IK. Procedural Fight v1 keeps that contact model but swaps
+ * the attack body motion to a deterministic generated pack built from the UAL
+ * skeleton. Existing Quaternius clips remain runtime fallbacks if the generated
+ * pack cannot be loaded.
  */
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
-  // Upper-body strikes intentionally use a restrained contact blend. The source
-  // clip carries the readable silhouette; IK only nudges the limb toward the
-  // opponent instead of burying the fist in the target and visually merging the
-  // two fighters at contact.
-  jab: { clip: "Punch_Jab", style: "JAB", speedScale: 1.08, contactBlend: 0.30 },
-  straight: { clip: "Punch_Cross", style: "CROSS", speedScale: 1.02, contactBlend: 0.36 },
-  backfist: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.42 },
-  bodyBlow: { clip: "Shield_OneShot", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.40 },
-  power: { clip: "Sword_Regular_C", style: "HEAVY", speedScale: 0.92, contactBlend: 0.48 },
-  kick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.78 },
-  lowKick: { clip: "Slide_Start", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82 },
-  risingKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.86 },
-  dashKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90 },
-  throw: { clip: "OverhandThrow", style: "THROW", speedScale: 0.92, contactBlend: 0.35 },
-  counter: { clip: "Punch_Cross", style: "COUNTER", speedScale: 1.08, contactBlend: 0.40 },
+  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.26 },
+  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.30 },
+  backfist: { clip: "PF_Backfist_R", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.34 },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.34 },
+  power: { clip: "PF_Power_R", style: "HEAVY", speedScale: 0.92, contactBlend: 0.40 },
+  kick: { clip: "PF_FrontKick_R", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.68 },
+  lowKick: { clip: "PF_LowKick_L", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.72 },
+  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.76 },
+  dashKick: { clip: "PF_DashKick_R", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.80 },
+  throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.30 },
+  counter: { clip: "PF_Counter_R", style: "COUNTER", speedScale: 1.08, contactBlend: 0.32 },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {
   HEAD: "Hit_Head",
   BODY: "Hit_Chest",
-  LOW: "Hit_Knockback",
-  HEAVY: "Hit_Knockback",
-  LAUNCH: "NinjaJump_Start",
-  THROW: "Hit_Knockback",
+  LOW: "PF_HitHeavy",
+  HEAVY: "PF_HitHeavy",
+  LAUNCH: "PF_Launch",
+  THROW: "PF_HitHeavy",
   BLOCK: "Idle_Shield_Break",
-  DOWN: "Death01",
-  KO: "Death01",
+  DOWN: "PF_DownBack",
+  KO: "PF_DownBack",
 };
 
 export const MOTION_EXPANSION_PROFILE = {
   version: "MOTION_READABILITY_V2",
+  proceduralVersion: "PROCEDURAL_FIGHT_V1",
   primaryLibraryClips: 12,
   secondaryLibraryClips: 20,
+  proceduralLibraryClips: 15,
   uniqueMoveMappings: Object.keys(MOVE_MOTIONS).length,
   reactionKinds: Object.keys(REACTION_CLIPS).length,
   airLoopClip: "NinjaJump_Idle_Loop",
-  wakeupClip: "LayToIdle",
+  wakeupClip: "PF_Wakeup",
   guardClip: "Idle_Shield_Loop",
   guardBreakClip: "Idle_Shield_Break",
   sideStepClip: "Slide_Start",

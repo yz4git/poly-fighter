@@ -11,13 +11,15 @@ import {
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Motion Readability v2 maps every authored move to explicit motion and reaction data", () => {
+test("Procedural Fight v1 maps every authored move to generated motion and reaction data", () => {
   assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_READABILITY_V2");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 20);
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V1");
+  assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 15);
   assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
   assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "Idle_Shield_Break");
-  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "LayToIdle");
+  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "PF_Wakeup");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -32,6 +34,32 @@ test("Motion Readability v2 maps every authored move to explicit motion and reac
   }
 });
 
+test("procedural generator artifact contains all 15 clips and actually modifies animated UAL bones", async () => {
+  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions.mjs", import.meta.url), "utf8");
+  const metrics = JSON.parse(
+    await readFile(new URL("../public/models/quaternius/procedural-fight-core.metrics.json", import.meta.url), "utf8"),
+  ) as {
+    version: string;
+    generatedClipCount: number;
+    clips: string[];
+    metrics: Array<{ name: string; modifiedBones: string[]; missingAnimated: string[] }>;
+  };
+
+  assert.match(source, /PROCEDURAL_FIGHT_V1/);
+  assert.match(source, /PF_RisingKick_R/);
+  assert.match(source, /sampleCurve/);
+  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V1");
+  assert.equal(metrics.generatedClipCount, 15);
+  assert.equal(metrics.clips.length, 15);
+  assert.ok(metrics.clips.includes("PF_Jab_L"));
+  assert.ok(metrics.clips.includes("PF_LowKick_L"));
+  assert.ok(metrics.clips.includes("PF_DownBack"));
+  for (const entry of metrics.metrics) {
+    assert.ok(entry.modifiedBones.length >= 3, `${entry.name} modifies too few bones`);
+    assert.deepEqual(entry.missingAnimated, [], `${entry.name} modifier bone is absent from its base clip`);
+  }
+});
+
 test("readability mappings separate body momentum and strike phases instead of reusing generic hook/roll poses", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const jab = motionSpecForMove(kairo.moves.jab);
@@ -43,27 +71,33 @@ test("readability mappings separate body momentum and strike phases instead of r
   const rising = motionSpecForMove(kairo.moves.risingKick);
   const dash = motionSpecForMove(kairo.moves.dashKick);
 
-  assert.equal(jab.clip, "Punch_Jab");
-  assert.equal(backfist.clip, "Melee_Hook");
+  assert.equal(jab.clip, "PF_Jab_L");
+  assert.equal(backfist.clip, "PF_Backfist_R");
   assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");
-  assert.equal(body.clip, "Shield_OneShot");
-  assert.equal(power.clip, "Sword_Regular_C");
+  assert.equal(body.clip, "PF_BodyBlow_L");
+  assert.equal(power.clip, "PF_Power_R");
   assert.notEqual(body.clip, backfist.clip);
   assert.notEqual(power.clip, backfist.clip);
+  assert.equal(kick.clip, "PF_FrontKick_R");
+  assert.equal(low.clip, "PF_LowKick_L");
+  assert.equal(rising.clip, "PF_RisingKick_R");
+  assert.equal(dash.clip, "PF_DashKick_R");
   assert.equal(kick.recoveryClip, "NinjaJump_Land");
   assert.equal(low.recoveryClip, "Slide_Exit");
   assert.equal(rising.recoveryClip, "NinjaJump_Land");
   assert.notEqual(dash.clip, "Roll");
-  assert.ok(dash.contactBlend >= 0.85);
+  assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);
 });
 
-test("motion runtime preloads in neutral and biases imported strikes toward the opponent instead of the old procedural contact pose", async () => {
+test("motion runtime preloads generated pack and only biases generated strikes toward the opponent", async () => {
   const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
 
   assert.match(source, /const runtime = ensureRuntime\(fighter\);\s*if \(!EXPANDED_STATES\.has\(fighter\.state\)\) return false;/);
   assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
   assert.match(source, /motionExpansionContactMode = "OPPONENT_WEIGHTED_IK"/);
+  assert.match(source, /PROCEDURAL_URL/);
+  assert.match(source, /motionExpansionHasProcedural/);
   assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
   assert.doesNotMatch(source, /getVisualContactPoint/);
   assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);

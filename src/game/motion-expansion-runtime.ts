@@ -13,6 +13,7 @@ import { motionReactionFor } from "./motion-reaction";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const UAL1_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
 const UAL2_URL = `${BASE_PATH}/models/quaternius/ual2-fight-core.glb`;
+const PROCEDURAL_URL = `${BASE_PATH}/models/quaternius/procedural-fight-core.glb`;
 
 const EXPANDED_STATES = new Set([
   "ATTACK",
@@ -28,6 +29,21 @@ const EXPANDED_STATES = new Set([
 ]);
 
 const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
+  PF_Jab_L: "Punch_Jab",
+  PF_Cross_R: "Punch_Cross",
+  PF_Backfist_R: "Melee_Hook",
+  PF_BodyBlow_L: "Shield_OneShot",
+  PF_Power_R: "Sword_Regular_C",
+  PF_FrontKick_R: "NinjaJump_Start",
+  PF_LowKick_L: "Slide_Start",
+  PF_RisingKick_R: "NinjaJump_Start",
+  PF_DashKick_R: "NinjaJump_Start",
+  PF_Throw: "OverhandThrow",
+  PF_Counter_R: "Punch_Cross",
+  PF_HitHeavy: "Hit_Knockback",
+  PF_Launch: "NinjaJump_Start",
+  PF_DownBack: "Death01",
+  PF_Wakeup: "LayToIdle",
   Melee_Hook: "Punch_Cross",
   Melee_Hook_Rec: "Punch_Cross",
   Hit_Knockback: "Hit_Chest",
@@ -82,6 +98,9 @@ function loadSourcePacks(): Promise<SourcePack[]> {
   sourcePromise = Promise.all([
     loader.loadAsync(UAL1_URL).then((gltf) => ({ source: gltf.scene, clips: gltf.animations })),
     loader.loadAsync(UAL2_URL)
+      .then((gltf) => ({ source: gltf.scene, clips: gltf.animations }))
+      .catch(() => null),
+    loader.loadAsync(PROCEDURAL_URL)
       .then((gltf) => ({ source: gltf.scene, clips: gltf.animations }))
       .catch(() => null),
   ]).then((packs) => packs.filter((pack): pack is SourcePack => Boolean(pack)));
@@ -181,6 +200,9 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
     fighter.visual.root.userData.motionExpansionClipCount = runtime.clips.size;
     fighter.visual.root.userData.motionExpansionHasUAL2 = runtime.clips.has("Melee_Hook");
+    fighter.visual.root.userData.motionExpansionHasProcedural = runtime.clips.has("PF_Jab_L") && runtime.clips.has("PF_RisingKick_R");
+    fighter.visual.root.userData.motionExpansionProceduralClipCount = Array.from(runtime.clips.keys()).filter((name) => name.startsWith("PF_")).length;
+    fighter.visual.root.userData.motionExpansionProceduralVersion = "PROCEDURAL_FIGHT_V1";
     fighter.visual.root.userData.motionExpansionLoading = false;
   }).catch((error: unknown) => {
     runtime.loading = false;
@@ -255,13 +277,13 @@ function desiredMotion(fighter: FighterRuntime): DesiredMotion {
   if (["KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(fighter.state)) {
     if (!fighter.grounded) {
       if (fighter.velocity.y > 0.5) {
-        return { name: reaction.kind === "LAUNCH" ? "NinjaJump_Start" : "Hit_Knockback", loop: false, speed: 1.2, phase: "AIR" };
+        return { name: reaction.kind === "LAUNCH" ? "PF_Launch" : "PF_HitHeavy", loop: false, speed: 1.2, phase: "AIR" };
       }
       return { name: "NinjaJump_Idle_Loop", loop: true, speed: 0.92, phase: "AIR" };
     }
-    return { name: "Death01", loop: false, speed: fighter.health <= 0 ? 0.78 : 0.96, phase: "DOWN" };
+    return { name: "PF_DownBack", loop: false, speed: fighter.health <= 0 ? 0.78 : 0.96, phase: "DOWN" };
   }
-  if (fighter.state === "WAKEUP") return { name: "LayToIdle", loop: false, speed: 1.05, phase: "DOWN" };
+  if (fighter.state === "WAKEUP") return { name: "PF_Wakeup", loop: false, speed: 1.05, phase: "DOWN" };
   if (fighter.state === "SIDESTEP") return { name: "Slide_Start", loop: false, speed: 1.65, phase: "EVASION" };
   if (fighter.state === "JUMP") return { name: "NinjaJump_Idle_Loop", loop: true, speed: 0.95, phase: "AIR" };
   return { name: "Idle_Loop", loop: true, speed: 1, phase: "REACTION" };

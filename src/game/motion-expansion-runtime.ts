@@ -1,9 +1,14 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { FighterRuntime } from "./fighter";
-import { motionClipForMove, motionClipForReaction } from "./motion-profile";
+import {
+  motionClipForMove,
+  motionClipForReaction,
+  motionRecoveryClipForMove,
+  motionSpecForMove,
+  type MotionStyle,
+} from "./motion-profile";
 import { motionReactionFor } from "./motion-reaction";
-import { getVisualContactPoint } from "./visual";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const UAL1_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
@@ -24,24 +29,31 @@ const EXPANDED_STATES = new Set([
 
 const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
   Melee_Hook: "Punch_Cross",
+  Melee_Hook_Rec: "Punch_Cross",
   Hit_Knockback: "Hit_Chest",
+  Idle_Shield_Break: "Hit_Chest",
   OverhandThrow: "Punch_Cross",
+  Shield_OneShot: "Punch_Cross",
+  Sword_Regular_C: "Melee_Hook",
   Slide_Start: "Roll",
   Slide_Loop: "Roll",
   Slide_Exit: "Jump_Land",
   NinjaJump_Start: "Jump_Start",
   NinjaJump_Idle_Loop: "Jump_Loop",
   NinjaJump_Land: "Jump_Land",
+  LayToIdle: "Jump_Land",
   Idle_Shield_Loop: "Idle_Loop",
 };
 
 type SourcePack = { source: THREE.Group; clips: THREE.AnimationClip[] };
+type MotionPhase = "STARTUP" | "ACTIVE" | "RECOVERY" | "REACTION" | "AIR" | "DOWN" | "EVASION";
 type ExpansionRuntime = {
   model: THREE.Group;
   mixer: THREE.AnimationMixer;
   clips: Map<string, THREE.AnimationClip>;
   bones: Map<string, THREE.Object3D>;
   currentClip: string;
+  currentPhase: MotionPhase | "";
   currentAction: THREE.AnimationAction | null;
   lastTime: number;
   lastMoveTick: number;
@@ -49,6 +61,9 @@ type ExpansionRuntime = {
   ready: boolean;
   loading: boolean;
 };
+
+type DesiredMotion = { name: string; loop: boolean; speed: number; phase: MotionPhase };
+type AttackWeights = { drive: number; impact: number; phase: "STARTUP" | "ACTIVE" | "RECOVERY"; progress: number };
 
 const runtimes = new WeakMap<THREE.Group, ExpansionRuntime>();
 let sourcePromise: Promise<SourcePack[]> | null = null;
@@ -146,6 +161,7 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     clips: new Map(),
     bones: nodeMap(model),
     currentClip: "",
+    currentPhase: "",
     currentAction: null,
     lastTime: 0,
     lastMoveTick: -1,
@@ -154,17 +170,21 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     loading: true,
   };
   runtimes.set(fighter.visual.root, runtime);
+  fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
+  fighter.visual.root.userData.motionExpansionLoading = true;
   void loadSourcePacks().then((packs) => {
     for (const pack of packs) {
       for (const [name, clip] of retargetPack(pack, model)) runtime.clips.set(name, clip);
     }
     runtime.ready = runtime.clips.size > 0;
     runtime.loading = false;
-    fighter.visual.root.userData.motionExpansionVersion = "MOTION_EXPANSION_V1";
+    fighter.visual.root.userData.motionExpansionVersion = "MOTION_READABILITY_V2";
     fighter.visual.root.userData.motionExpansionClipCount = runtime.clips.size;
     fighter.visual.root.userData.motionExpansionHasUAL2 = runtime.clips.has("Melee_Hook");
+    fighter.visual.root.userData.motionExpansionLoading = false;
   }).catch((error: unknown) => {
     runtime.loading = false;
+    fighter.visual.root.userData.motionExpansionLoading = false;
     console.error("[POLY FIGHTER] Motion Expansion load failed", error);
   });
   return runtime;
@@ -177,30 +197,74 @@ function resolveClip(runtime: ExpansionRuntime, requested: string): string {
   return runtime.clips.has("Idle_Loop") ? "Idle_Loop" : requested;
 }
 
-function desiredMotion(fighter: FighterRuntime): { name: string; loop: boolean; speed: number } {
+function smooth01(value: number): number {
+  const t = THREE.MathUtils.clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function attackWeights(fighter: FighterRuntime): AttackWeights {
+  const move = fighter.currentMove;
+  if (!move) return { drive: 0, impact: 0, phase: "RECOVERY", progress: 1 };
+  const tick = Math.max(0, fighter.moveTick);
+  if (tick < move.startup) {
+    const progress = tick / Math.max(1, move.startup);
+    return {
+      drive: smooth01(progress),
+      impact: smooth01((progress - 0.68) / 0.32) * 0.22,
+      phase: "STARTUP",
+      progress,
+    };
+  }
+  if (tick < move.startup + move.active) {
+    const progress = (tick - move.startup) / Math.max(1, move.active);
+    return {
+      drive: 1,
+      impact: 0.76 + Math.sin(progress * Math.PI) * 0.24,
+      phase: "ACTIVE",
+      progress,
+    };
+  }
+  const progress = (tick - move.startup - move.active) / Math.max(1, move.recovery);
+  return {
+    drive: 1 - smooth01(progress),
+    impact: 0,
+    phase: "RECOVERY",
+    progress,
+  };
+}
+
+function desiredMotion(fighter: FighterRuntime): DesiredMotion {
   const reaction = motionReactionFor(fighter);
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
-    const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
-    return { name: motionClipForMove(move), loop: false, speed: 1 / seconds };
+    const spec = motionSpecForMove(move);
+    const weights = attackWeights(fighter);
+    const recoveryClip = motionRecoveryClipForMove(move);
+    if (weights.phase === "RECOVERY" && recoveryClip) {
+      const seconds = Math.max(0.12, move.recovery / 60);
+      return { name: recoveryClip, loop: false, speed: spec.speedScale / seconds, phase: "RECOVERY" };
+    }
+    const phaseTicks = recoveryClip ? move.startup + move.active : move.startup + move.active + move.recovery;
+    const seconds = Math.max(0.16, phaseTicks / 60);
+    return { name: motionClipForMove(move), loop: false, speed: spec.speedScale / seconds, phase: weights.phase };
   }
   if (fighter.state === "HIT") {
-    return { name: motionClipForReaction(reaction.kind === "NONE" ? "BODY" : reaction.kind), loop: false, speed: 2.4 - reaction.tier * 0.25 };
+    return { name: motionClipForReaction(reaction.kind === "NONE" ? "BODY" : reaction.kind), loop: false, speed: 2.25 - reaction.tier * 0.20, phase: "REACTION" };
   }
-  if (fighter.state === "BLOCK_STUN") return { name: "Hit_Knockback", loop: false, speed: 2.2 };
+  if (fighter.state === "BLOCK_STUN") return { name: "Idle_Shield_Break", loop: false, speed: 1.75, phase: "REACTION" };
   if (["KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(fighter.state)) {
     if (!fighter.grounded) {
       if (fighter.velocity.y > 0.5) {
-        return { name: reaction.kind === "LAUNCH" ? "NinjaJump_Start" : "Hit_Knockback", loop: false, speed: 1.45 };
+        return { name: reaction.kind === "LAUNCH" ? "NinjaJump_Start" : "Hit_Knockback", loop: false, speed: 1.2, phase: "AIR" };
       }
-      return { name: "NinjaJump_Idle_Loop", loop: true, speed: 1.1 };
+      return { name: "NinjaJump_Idle_Loop", loop: true, speed: 0.92, phase: "AIR" };
     }
-    return { name: fighter.health <= 0 ? "Death01" : "Death01", loop: false, speed: fighter.health <= 0 ? 0.82 : 1.12 };
+    return { name: "Death01", loop: false, speed: fighter.health <= 0 ? 0.78 : 0.96, phase: "DOWN" };
   }
-  if (fighter.state === "WAKEUP") return { name: "NinjaJump_Land", loop: false, speed: 1.45 };
-  if (fighter.state === "SIDESTEP") return { name: "Slide_Start", loop: false, speed: 2.05 };
-  if (fighter.state === "JUMP") return { name: "NinjaJump_Idle_Loop", loop: true, speed: 1.1 };
-  return { name: "Idle_Loop", loop: true, speed: 1 };
+  if (fighter.state === "WAKEUP") return { name: "LayToIdle", loop: false, speed: 1.05, phase: "DOWN" };
+  if (fighter.state === "SIDESTEP") return { name: "Slide_Start", loop: false, speed: 1.65, phase: "EVASION" };
+  if (fighter.state === "JUMP") return { name: "NinjaJump_Idle_Loop", loop: true, speed: 0.95, phase: "AIR" };
+  return { name: "Idle_Loop", loop: true, speed: 1, phase: "REACTION" };
 }
 
 function playClip(runtime: ExpansionRuntime, requested: string, loop: boolean, speed: number, restart: boolean): void {
@@ -208,7 +272,7 @@ function playClip(runtime: ExpansionRuntime, requested: string, loop: boolean, s
   if (runtime.currentClip === name && !restart) return;
   const clip = runtime.clips.get(name);
   if (!clip) return;
-  const blend = name.startsWith("Hit_") || name === "Death01" ? 0.025 : 0.045;
+  const blend = name.startsWith("Hit_") || name === "Death01" || name === "Idle_Shield_Break" ? 0.025 : 0.045;
   runtime.currentAction?.fadeOut(blend);
   const action = runtime.mixer.clipAction(clip, runtime.model);
   action.reset();
@@ -255,64 +319,250 @@ function solveLimb(root: THREE.Object3D, mid: THREE.Object3D, end: THREE.Object3
   mid.updateWorldMatrix(true, true);
 }
 
-function contactCorrection(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
-  const move = fighter.currentMove;
-  if (fighter.state !== "ATTACK" || !move || !fighter.isActive() || !move.visualContact || move.visualContact === "BODY") return;
-  const target = getVisualContactPoint(fighter.visual, move.visualContact);
-  const foot = move.visualContact.endsWith("FOOT");
-  const preferred = move.visualContact.startsWith("LEFT") ? "l" : "r";
-  const order = [preferred, preferred === "l" ? "r" : "l"];
-  for (const suffix of order) {
-    const root = runtime.bones.get(foot ? `thigh_${suffix}` : `upperarm_${suffix}`);
-    const mid = runtime.bones.get(foot ? `calf_${suffix}` : `lowerarm_${suffix}`);
-    const end = runtime.bones.get(foot ? `foot_${suffix}` : `hand_${suffix}`);
-    if (!root || !mid || !end) continue;
-    const side = suffix === "l" ? 1 : -1;
-    const pole = fighter.visual.root.localToWorld(new THREE.Vector3(side * (foot ? 0.5 : 0.66), foot ? 0.44 : 0.78, foot ? 0.26 : 0.34));
-    solveLimb(root, mid, end, target, pole);
-    break;
+function addRotation(runtime: ExpansionRuntime, name: string, x: number, y: number, z: number, weight: number): void {
+  const bone = runtime.bones.get(name);
+  if (!bone || weight <= 0) return;
+  bone.rotation.x += x * weight;
+  bone.rotation.y += y * weight;
+  bone.rotation.z += z * weight;
+}
+
+function strikeSide(fighter: FighterRuntime): -1 | 1 {
+  return fighter.currentMove?.visualContact?.startsWith("LEFT") ? -1 : 1;
+}
+
+function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1): THREE.Vector3 {
+  opponent.visual.root.updateMatrixWorld(true);
+  const bones = opponent.visual.rig.bones;
+  const head = bones.head.getWorldPosition(new THREE.Vector3());
+  const chest = bones.chest.getWorldPosition(new THREE.Vector3());
+  const hips = bones.hips.getWorldPosition(new THREE.Vector3());
+  const leftShin = bones.leftShin.getWorldPosition(new THREE.Vector3());
+  const rightShin = bones.rightShin.getWorldPosition(new THREE.Vector3());
+  const body = chest.clone().lerp(hips, 0.42);
+  const legs = leftShin.clone().lerp(rightShin, 0.5).lerp(hips, 0.18);
+  const forward = opponent.position.clone().sub(bones.hips.getWorldPosition(new THREE.Vector3()));
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
+  forward.normalize();
+  const lateral = new THREE.Vector3(forward.z, 0, -forward.x);
+
+  switch (style) {
+    case "JAB":
+    case "CROSS":
+    case "HOOK":
+    case "COUNTER":
+      return head.addScaledVector(lateral, side * 0.035);
+    case "BODY_BLOW":
+      return body.lerp(hips, 0.22).addScaledVector(lateral, side * 0.025);
+    case "HEAVY":
+      return body.addScaledVector(lateral, side * 0.05);
+    case "LOW_KICK":
+      return legs.addScaledVector(lateral, side * 0.12);
+    case "RISING_KICK":
+      return body.lerp(head, 0.72).addScaledVector(lateral, side * 0.04);
+    case "DASH_KICK":
+      return body.lerp(chest, 0.42).addScaledVector(lateral, side * 0.06);
+    case "FRONT_KICK":
+      return body.lerp(chest, 0.28);
+    default:
+      return body;
   }
 }
 
-function reactionAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
-  if (!fighter.state.startsWith("HIT") && fighter.state !== "BLOCK_STUN") return;
-  const reaction = motionReactionFor(fighter);
-  const amount = reaction.side * (0.025 + reaction.tier * 0.018);
-  for (const name of ["spine_02", "spine_03", "neck_01", "head"]) {
-    const bone = runtime.bones.get(name);
-    if (bone) bone.rotation.z += amount;
+function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move) return;
+  const weights = attackWeights(fighter);
+  const spec = motionSpecForMove(move);
+  const side = strikeSide(fighter);
+  const w = weights.drive;
+
+  switch (spec.style) {
+    case "JAB":
+      addRotation(runtime, "spine_03", 0, side * 0.055, 0, w);
+      break;
+    case "CROSS":
+      addRotation(runtime, "pelvis", 0, side * 0.07, 0, w);
+      addRotation(runtime, "spine_02", 0, side * 0.14, 0, w);
+      addRotation(runtime, "spine_03", 0, side * 0.11, -side * 0.025, w);
+      break;
+    case "HOOK":
+      addRotation(runtime, "pelvis", 0, side * 0.11, 0, w);
+      addRotation(runtime, "spine_02", 0, side * 0.24, side * 0.035, w);
+      addRotation(runtime, "spine_03", 0, side * 0.16, side * 0.075, w);
+      break;
+    case "BODY_BLOW":
+      addRotation(runtime, "spine_02", 0.13, side * 0.18, 0, w);
+      addRotation(runtime, "spine_03", 0.08, side * 0.12, -side * 0.035, w);
+      break;
+    case "HEAVY":
+      addRotation(runtime, "pelvis", 0, side * 0.15, 0, w);
+      addRotation(runtime, "spine_02", 0.10, side * 0.29, side * 0.045, w);
+      addRotation(runtime, "spine_03", 0.08, side * 0.20, side * 0.065, w);
+      addRotation(runtime, "head", 0, -side * 0.05, 0, w);
+      break;
+    case "FRONT_KICK":
+      addRotation(runtime, "pelvis", 0.035, -side * 0.055, 0, w);
+      addRotation(runtime, "spine_03", -0.15, 0, -side * 0.025, w);
+      break;
+    case "LOW_KICK":
+      addRotation(runtime, "pelvis", 0.02, -side * 0.18, side * 0.045, w);
+      addRotation(runtime, "spine_02", 0.035, -side * 0.16, side * 0.075, w);
+      break;
+    case "RISING_KICK":
+      addRotation(runtime, "pelvis", -0.04, -side * 0.10, 0, w);
+      addRotation(runtime, "spine_03", -0.21, side * 0.04, -side * 0.035, w);
+      break;
+    case "DASH_KICK":
+      addRotation(runtime, "pelvis", -0.055, -side * 0.075, 0, w);
+      addRotation(runtime, "spine_02", -0.07, 0, 0, w);
+      addRotation(runtime, "spine_03", -0.25, side * 0.05, 0, w);
+      break;
+    case "THROW":
+      addRotation(runtime, "pelvis", 0.05, side * 0.09, 0, w);
+      addRotation(runtime, "spine_02", 0.12, side * 0.15, 0, w);
+      break;
+    case "COUNTER":
+      addRotation(runtime, "pelvis", 0, side * 0.09, -side * 0.025, w);
+      addRotation(runtime, "spine_02", 0, side * 0.20, -side * 0.035, w);
+      addRotation(runtime, "spine_03", -0.035, side * 0.12, 0, w);
+      break;
   }
+}
+
+/**
+ * Preserve the imported authored animation and only bias the striking limb near
+ * the contact frame. V1 solved the imported limb all the way to the OLD
+ * procedural rig's own fist/foot position, which visually collapsed different
+ * clips back into one generic pose. V2 instead aims partly toward the opponent.
+ */
+function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move || !move.visualContact || move.visualContact === "BODY") return;
+  const weights = attackWeights(fighter);
+  if (weights.impact <= 0.02) return;
+  const spec = motionSpecForMove(move);
+  const foot = move.visualContact.endsWith("FOOT");
+  const suffix = move.visualContact.startsWith("LEFT") ? "l" : "r";
+  const root = runtime.bones.get(foot ? `thigh_${suffix}` : `upperarm_${suffix}`);
+  const mid = runtime.bones.get(foot ? `calf_${suffix}` : `lowerarm_${suffix}`);
+  const end = runtime.bones.get(foot ? `foot_${suffix}` : `hand_${suffix}`);
+  if (!root || !mid || !end) return;
+
+  runtime.model.updateMatrixWorld(true);
+  const current = end.getWorldPosition(new THREE.Vector3());
+  const side = suffix === "l" ? -1 : 1;
+  const target = styleTarget(opponent, spec.style, side);
+  const blend = THREE.MathUtils.clamp(spec.contactBlend * weights.impact, 0, 0.92);
+  const solvedTarget = current.clone().lerp(target, blend);
+  const pole = fighter.visual.root.localToWorld(new THREE.Vector3(
+    (suffix === "l" ? -1 : 1) * (foot ? 0.48 : 0.62),
+    foot ? 0.46 : 0.80,
+    foot ? 0.24 : 0.32,
+  ));
+  solveLimb(root, mid, end, solvedTarget, pole);
+}
+
+function reactionAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  if (fighter.state !== "HIT" && fighter.state !== "BLOCK_STUN") return;
+  const reaction = motionReactionFor(fighter);
+  const side = reaction.side;
+  const tier = reaction.tier;
+  const strength = 0.72 + tier * 0.14;
+
+  switch (reaction.kind) {
+    case "HEAD":
+      addRotation(runtime, "spine_03", 0.015, -side * 0.055, side * 0.075, strength);
+      addRotation(runtime, "neck_01", 0.02, -side * 0.08, side * 0.14, strength);
+      addRotation(runtime, "head", 0.015, -side * 0.09, side * 0.18, strength);
+      break;
+    case "LOW":
+      addRotation(runtime, "pelvis", 0.04, 0, side * 0.13, strength);
+      addRotation(runtime, side < 0 ? "thigh_l" : "thigh_r", 0.16, 0, side * 0.06, strength);
+      addRotation(runtime, "spine_02", 0.04, 0, -side * 0.055, strength);
+      break;
+    case "HEAVY":
+    case "THROW":
+      addRotation(runtime, "pelvis", 0.08, -side * 0.07, side * 0.12, strength);
+      addRotation(runtime, "spine_02", 0.14, -side * 0.12, side * 0.15, strength);
+      addRotation(runtime, "spine_03", 0.12, -side * 0.10, side * 0.17, strength);
+      addRotation(runtime, "head", 0.04, -side * 0.06, side * 0.12, strength);
+      break;
+    case "BLOCK":
+      addRotation(runtime, "spine_02", -0.07, 0, side * 0.06, strength);
+      addRotation(runtime, "spine_03", -0.10, 0, side * 0.08, strength);
+      break;
+    default:
+      addRotation(runtime, "spine_02", 0.07, -side * 0.06, side * 0.09, strength);
+      addRotation(runtime, "spine_03", 0.08, -side * 0.05, side * 0.11, strength);
+      addRotation(runtime, "head", 0.02, -side * 0.035, side * 0.07, strength);
+      break;
+  }
+}
+
+function airborneAccent(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  if (fighter.grounded || !["KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(fighter.state)) return;
+  const reaction = motionReactionFor(fighter);
+  const vertical = THREE.MathUtils.clamp(fighter.velocity.y / 5, -1, 1);
+  addRotation(runtime, "pelvis", vertical > 0 ? -0.18 : 0.22, 0, reaction.side * 0.16, 1);
+  addRotation(runtime, "spine_02", vertical > 0 ? -0.10 : 0.16, 0, reaction.side * 0.18, 1);
+  addRotation(runtime, "thigh_l", 0.12, 0, -0.04, 1);
+  addRotation(runtime, "thigh_r", 0.18, 0, 0.04, 1);
 }
 
 /**
  * Returns true when the expanded runtime owns the current pose. Neutral/guard
  * states intentionally return false so the older audited UBC ready-pose layer
- * remains authoritative there.
+ * remains authoritative there. The runtime is still primed during neutral so
+ * the FIRST attack no longer falls back while the animation GLBs are loading.
  */
-export function updateMotionExpansionSkin(fighter: FighterRuntime, timeSeconds: number): boolean {
+export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: FighterRuntime, timeSeconds: number): boolean {
   motionReactionFor(fighter);
-  if (!EXPANDED_STATES.has(fighter.state)) return false;
   const runtime = ensureRuntime(fighter);
+  if (!EXPANDED_STATES.has(fighter.state)) return false;
   if (!runtime?.ready) return false;
+
   const reaction = motionReactionFor(fighter);
   const desired = desiredMotion(fighter);
   const restartedMove = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
   const restartedReaction = reaction.serial !== runtime.lastReactionSerial && fighter.state !== "ATTACK";
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = reaction.serial;
+  runtime.currentPhase = desired.phase;
   playClip(runtime, desired.name, desired.loop, desired.speed, restartedMove || restartedReaction);
   const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
   runtime.lastTime = timeSeconds;
   runtime.mixer.update(delta);
   runtime.model.updateMatrixWorld(true);
+  attackSilhouette(runtime, fighter);
   reactionAccent(runtime, fighter);
-  contactCorrection(runtime, fighter);
+  airborneAccent(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
+  strikeTrajectory(runtime, fighter, opponent);
+  runtime.model.updateMatrixWorld(true);
+
+  fighter.visual.root.userData.motionExpansionCurrentClip = runtime.currentClip;
+  fighter.visual.root.userData.motionExpansionCurrentMove = fighter.currentMove?.id ?? null;
+  fighter.visual.root.userData.motionExpansionPhase = runtime.currentPhase;
+  fighter.visual.root.userData.motionExpansionContactMode = "OPPONENT_WEIGHTED_IK";
   return true;
 }
 
-export function motionExpansionStats(fighter: FighterRuntime): { ready: boolean; clips: number; currentClip: string } | null {
+export function motionExpansionStats(fighter: FighterRuntime): {
+  ready: boolean;
+  loading: boolean;
+  clips: number;
+  currentClip: string;
+  currentPhase: string;
+} | null {
   const runtime = runtimes.get(fighter.visual.root);
   if (!runtime) return null;
-  return { ready: runtime.ready, clips: runtime.clips.size, currentClip: runtime.currentClip };
+  return {
+    ready: runtime.ready,
+    loading: runtime.loading,
+    clips: runtime.clips.size,
+    currentClip: runtime.currentClip,
+    currentPhase: runtime.currentPhase,
+  };
 }

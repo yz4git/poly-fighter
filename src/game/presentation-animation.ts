@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FighterAnimationController, type FighterRuntime } from "./fighter";
+import { updateMotionExpansionSkin } from "./motion-expansion-runtime";
 import { fighterBasis, orientBoneForward, solveTwoBoneIK } from "./rig";
 import { updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
@@ -59,6 +60,11 @@ export class PresentationAnimationController extends FighterAnimationController 
       visual.root.updateMatrixWorld(true);
     }
 
-    updateQuaterniusModelSkin(fighter, timeSeconds);
+    // Motion Expansion owns attacks, hit reactions, launches, falls, downs,
+    // wakeups and evasive movement. Neutral/guard states deliberately fall
+    // through to the older, heavily-audited UBC ready-pose runtime.
+    if (!updateMotionExpansionSkin(fighter, timeSeconds)) {
+      updateQuaterniusModelSkin(fighter, timeSeconds);
+    }
   }
 }

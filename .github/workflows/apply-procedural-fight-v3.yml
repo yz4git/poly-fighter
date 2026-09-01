@@ -1,0 +1,58 @@
+name: Apply Procedural Fight v3
+
+on:
+  push:
+    branches: [feat/procedural-fight-v3-20260902]
+    paths:
+      - scripts/apply-procedural-fight-v3.py
+      - .github/workflows/apply-procedural-fight-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/procedural-fight-v3-20260902
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply V3 source migration
+        run: python3 scripts/apply-procedural-fight-v3.py
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
+      - name: Generate V3 motion pack
+        run: |
+          node scripts/generate-procedural-fight-motions-v3.mjs \
+            public/models/quaternius/ual-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.metrics.json
+      - name: Validate V3
+        run: |
+          npm run test:rules:tps
+          npm run lint
+          npm run build
+      - name: Commit V3 implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/generate-procedural-fight-motions-v3.mjs \
+            scripts/capture-motion-readability-audit.mjs \
+            src/game/motion-profile.ts \
+            src/game/motion-expansion-runtime.ts \
+            tests/motion-expansion.test.ts \
+            .github/workflows/procedural-fight-motion-generator.yml \
+            public/models/quaternius/procedural-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.metrics.json
+          git commit -m "Implement Procedural Fight v3 motion system"
+          git pull --rebase origin feat/procedural-fight-v3-20260902
+          git push origin HEAD:feat/procedural-fight-v3-20260902

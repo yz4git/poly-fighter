@@ -39,6 +39,22 @@ jobs:
           echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1.glb' | sha256sum -c -
           test "$(git hash-object .tmp-quaternius/ual2.glb)" = "dc684c2a664927964307e8eb7b27b0000ebf6a18"
 
+      - name: List combat motion candidates
+        run: |
+          node --input-type=module <<'NODE'
+          import { NodeIO } from '@gltf-transform/core';
+          const io = new NodeIO();
+          for (const file of ['.tmp-quaternius/ual1.glb', '.tmp-quaternius/ual2.glb']) {
+            const doc = await io.read(file);
+            const names = doc.getRoot().listAnimations().map((a) => a.getName()).filter(Boolean).sort();
+            const combat = names.filter((name) => /attack|combo|counter|death|dodge|fall|hit|hook|jab|jump|kick|knock|melee|punch|roll|slide|stagger|throw|upper|wake/i.test(name));
+            console.log(`=== ${file} ALL ${names.length} ===`);
+            console.log(names.join('\n'));
+            console.log(`=== ${file} COMBAT ${combat.length} ===`);
+            console.log(combat.join('\n'));
+          }
+          NODE
+
       - name: Curate fight clips
         run: |
           set -euxo pipefail

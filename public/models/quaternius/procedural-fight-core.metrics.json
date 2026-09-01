@@ -151,12 +151,12 @@
     },
     {
       "name": "PF_BodyBlow_L",
-      "base": "Punch_Jab",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "RIGHT",
-      "duration": 0.8666666746139526,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_l",
@@ -176,17 +176,17 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.0239
+      "maxPlanarRootShift": 0.05134,
+      "maxVerticalRootShift": 0.01738
     },
     {
       "name": "PF_BodyBlow_R",
-      "base": "Punch_Jab",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "LEFT",
-      "duration": 0.8666666746139526,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_r",
@@ -206,17 +206,17 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.0239
+      "maxPlanarRootShift": 0.05134,
+      "maxVerticalRootShift": 0.01738
     },
     {
       "name": "PF_Power_R",
-      "base": "Punch_Cross",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "HEAVY",
       "contactU": 0.73,
       "plantFoot": "LEFT",
-      "duration": 1,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_r",
@@ -240,8 +240,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.08605,
-      "maxVerticalRootShift": 0.02151
+      "maxPlanarRootShift": 0.08345,
+      "maxVerticalRootShift": 0.01525
     },
     {
       "name": "PF_FrontKick_R",
@@ -270,8 +270,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03913,
-      "maxVerticalRootShift": 0.03962
+      "maxPlanarRootShift": 0.0374,
+      "maxVerticalRootShift": 0.03367
     },
     {
       "name": "PF_LowKick_L",
@@ -302,8 +302,8 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03692,
-      "maxVerticalRootShift": 0.04488
+      "maxPlanarRootShift": 0.03587,
+      "maxVerticalRootShift": 0.0359
     },
     {
       "name": "PF_RisingKick_R",
@@ -333,7 +333,7 @@
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.02997,
-      "maxVerticalRootShift": 0.03917
+      "maxVerticalRootShift": 0.03329
     },
     {
       "name": "PF_DashKick_R",
@@ -366,17 +366,17 @@
         "thigh_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0734,
-      "maxVerticalRootShift": 0.02959
+      "maxPlanarRootShift": 0.06655,
+      "maxVerticalRootShift": 0.02258
     },
     {
       "name": "PF_Throw",
-      "base": "Punch_Cross",
+      "base": "Idle_Loop",
       "family": "throw",
       "style": "THROW",
       "contactU": 0.58,
       "plantFoot": "BOTH",
-      "duration": 1,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "lowerarm_l",
@@ -398,8 +398,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.0443,
-      "maxVerticalRootShift": 0.02794
+      "maxPlanarRootShift": 0.04593,
+      "maxVerticalRootShift": 0.01594
     },
     {
       "name": "PF_Counter_R",
@@ -426,8 +426,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04123,
-      "maxVerticalRootShift": 0.0149
+      "maxPlanarRootShift": 0.03965,
+      "maxVerticalRootShift": 0.01391
     },
     {
       "name": "PF_Counter_L",
@@ -454,8 +454,8 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04123,
-      "maxVerticalRootShift": 0.0149
+      "maxPlanarRootShift": 0.03965,
+      "maxVerticalRootShift": 0.01391
     },
     {
       "name": "PF_HitHeavy",

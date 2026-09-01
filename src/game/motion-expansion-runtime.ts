@@ -452,6 +452,8 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
   }
 }
 
+const FULL_BODY_BALANCE_VERSION = "FULL_BODY_BALANCE_V3";
+
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
   if (fighter.state !== "ATTACK" || !move) return;
@@ -475,40 +477,41 @@ function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): v
       addRotation(runtime, "spine_03", 0, side * 0.08, side * 0.025, w);
       break;
     case "BODY_BLOW":
-      addRotation(runtime, "spine_02", 0.13, side * 0.18, 0, w);
-      addRotation(runtime, "spine_03", 0.08, side * 0.12, -side * 0.035, w);
+      addRotation(runtime, "spine_02", 0.055, side * 0.18, 0, w);
+      addRotation(runtime, "spine_03", 0.035, side * 0.12, -side * 0.035, w);
       break;
     case "HEAVY":
       addRotation(runtime, "pelvis", 0, side * 0.08, 0, w);
-      addRotation(runtime, "spine_02", 0.05, side * 0.14, side * 0.020, w);
-      addRotation(runtime, "spine_03", 0.03, side * 0.10, side * 0.025, w);
+      addRotation(runtime, "spine_02", 0.012, side * 0.14, side * 0.020, w);
+      addRotation(runtime, "spine_03", 0.008, side * 0.10, side * 0.025, w);
       addRotation(runtime, "head", 0, -side * 0.025, 0, w);
       break;
     case "FRONT_KICK":
-      addRotation(runtime, "pelvis", 0.035, -side * 0.055, 0, w);
-      addRotation(runtime, "spine_03", -0.15, 0, -side * 0.025, w);
+      addRotation(runtime, "pelvis", 0.018, -side * 0.055, 0, w);
+      addRotation(runtime, "spine_03", -0.075, 0, -side * 0.025, w);
       break;
     case "LOW_KICK":
       addRotation(runtime, "pelvis", 0.02, -side * 0.18, side * 0.045, w);
       addRotation(runtime, "spine_02", 0.035, -side * 0.16, side * 0.075, w);
       break;
     case "RISING_KICK":
-      addRotation(runtime, "pelvis", -0.04, -side * 0.10, 0, w);
-      addRotation(runtime, "spine_03", -0.21, side * 0.04, -side * 0.035, w);
+      addRotation(runtime, "pelvis", -0.020, -side * 0.10, 0, w);
+      addRotation(runtime, "spine_03", -0.105, side * 0.04, -side * 0.035, w);
       break;
     case "DASH_KICK":
-      addRotation(runtime, "pelvis", -0.055, -side * 0.075, 0, w);
-      addRotation(runtime, "spine_02", -0.07, 0, 0, w);
-      addRotation(runtime, "spine_03", -0.25, side * 0.05, 0, w);
+      addRotation(runtime, "pelvis", -0.020, -side * 0.075, 0, w);
+      addRotation(runtime, "spine_02", -0.025, 0, 0, w);
+      addRotation(runtime, "spine_03", -0.080, side * 0.05, 0, w);
       break;
     case "THROW":
-      addRotation(runtime, "pelvis", 0.05, side * 0.09, 0, w);
-      addRotation(runtime, "spine_02", 0.12, side * 0.15, 0, w);
+      addRotation(runtime, "pelvis", 0.018, side * 0.09, 0, w);
+      addRotation(runtime, "spine_02", 0.045, side * 0.15, 0, w);
+      addRotation(runtime, "spine_03", 0.025, side * 0.08, 0, w);
       break;
     case "COUNTER":
       addRotation(runtime, "pelvis", 0, side * 0.09, -side * 0.025, w);
       addRotation(runtime, "spine_02", 0, side * 0.20, -side * 0.035, w);
-      addRotation(runtime, "spine_03", -0.035, side * 0.12, 0, w);
+      addRotation(runtime, "spine_03", -0.010, side * 0.12, 0, w);
       break;
   }
 }
@@ -633,6 +636,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   const reaction = motionReactionFor(fighter);
   const runtime = ensureRuntime(fighter);
   if (!runtime?.ready) return false;
+  fighter.visual.root.userData.motionExpansionBalanceVersion = FULL_BODY_BALANCE_VERSION;
 
   const previousState = runtime.lastGameplayState;
   const tailNeutral = TAIL_NEUTRAL_STATES.has(fighter.state);

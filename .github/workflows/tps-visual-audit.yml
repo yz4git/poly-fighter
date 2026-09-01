@@ -13,6 +13,7 @@ on:
       - package-lock.json
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-motion-readability-audit.mjs
+      - scripts/capture-motion-intent-audit.mjs
       - scripts/touch-input-safety-audit.mjs
       - tests/fight-rules.test.ts
       - tests/input-rules.test.ts
@@ -33,6 +34,7 @@ on:
       - package-lock.json
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-motion-readability-audit.mjs
+      - scripts/capture-motion-intent-audit.mjs
       - scripts/touch-input-safety-audit.mjs
       - tests/fight-rules.test.ts
       - tests/input-rules.test.ts
@@ -101,17 +103,24 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" \
             AUDIT_URL="http://127.0.0.1:3000/" \
             TPS_AUDIT_DIR="artifacts/tps-visual-audit" \
+            node scripts/capture-motion-intent-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            TPS_AUDIT_DIR="artifacts/tps-visual-audit" \
             node scripts/touch-input-safety-audit.mjs
           for image in \
             tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled tps-throw \
             tps-motion-jab tps-motion-straight tps-motion-bodyblow tps-motion-backfist \
             tps-motion-power tps-motion-kick tps-motion-lowkick tps-motion-risingkick \
-            tps-motion-dashkick tps-motion-throw tps-motion-counter; do
+            tps-motion-dashkick tps-motion-throw tps-motion-counter \
+            tps-intent-kairo-backfist tps-intent-kairo-bodyblow tps-intent-kairo-counter \
+            tps-intent-sera-backfist tps-intent-sera-bodyblow tps-intent-sera-counter; do
             test -s "artifacts/tps-visual-audit/${image}.png"
             file "artifacts/tps-visual-audit/${image}.png" | grep -q "PNG image data"
           done
           test -s artifacts/tps-visual-audit/tps-runtime-state.json
           test -s artifacts/tps-visual-audit/motion-readability.json
+          test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json
           cp /tmp/poly-fighter-tps-server.log artifacts/tps-visual-audit/server.log
       - name: Preserve server log

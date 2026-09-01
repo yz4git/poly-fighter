@@ -34,6 +34,32 @@ test("Procedural Fight v1 maps every authored move to generated motion and react
   }
 });
 
+test("procedural generator artifact contains all 15 clips and actually modifies animated UAL bones", async () => {
+  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions.mjs", import.meta.url), "utf8");
+  const metrics = JSON.parse(
+    await readFile(new URL("../public/models/quaternius/procedural-fight-core.metrics.json", import.meta.url), "utf8"),
+  ) as {
+    version: string;
+    generatedClipCount: number;
+    clips: string[];
+    metrics: Array<{ name: string; modifiedBones: string[]; missingAnimated: string[] }>;
+  };
+
+  assert.match(source, /PROCEDURAL_FIGHT_V1/);
+  assert.match(source, /PF_RisingKick_R/);
+  assert.match(source, /sampleCurve/);
+  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V1");
+  assert.equal(metrics.generatedClipCount, 15);
+  assert.equal(metrics.clips.length, 15);
+  assert.ok(metrics.clips.includes("PF_Jab_L"));
+  assert.ok(metrics.clips.includes("PF_LowKick_L"));
+  assert.ok(metrics.clips.includes("PF_DownBack"));
+  for (const entry of metrics.metrics) {
+    assert.ok(entry.modifiedBones.length >= 3, `${entry.name} modifies too few bones`);
+    assert.deepEqual(entry.missingAnimated, [], `${entry.name} modifier bone is absent from its base clip`);
+  }
+});
+
 test("readability mappings separate body momentum and strike phases instead of reusing generic hook/roll poses", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const jab = motionSpecForMove(kairo.moves.jab);
@@ -60,10 +86,10 @@ test("readability mappings separate body momentum and strike phases instead of r
   assert.equal(low.recoveryClip, "Slide_Exit");
   assert.equal(rising.recoveryClip, "NinjaJump_Land");
   assert.notEqual(dash.clip, "Roll");
-  assert.ok(dash.contactBlend >= 0.85);
+  assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);
 });
 
-test("motion runtime preloads in neutral and biases imported strikes toward the opponent instead of the old procedural contact pose", async () => {
+test("motion runtime preloads generated pack and only biases generated strikes toward the opponent", async () => {
   const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
 

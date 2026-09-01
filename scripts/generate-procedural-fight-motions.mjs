@@ -91,7 +91,7 @@ const SPECS = [
   },
   {
     name: "PF_FrontKick_R",
-    base: "Jump_Start",
+    base: "Idle_Loop",
     family: "kick",
     bones: {
       pelvis: [K(0, R()), K(0.35, R(4, 5, 0)), K(0.62, R(-7, -8, 0)), K(0.78, R(-3, -4, 0)), K(1, R())],
@@ -105,7 +105,7 @@ const SPECS = [
   },
   {
     name: "PF_LowKick_L",
-    base: "Jump_Start",
+    base: "Idle_Loop",
     family: "kick",
     bones: {
       pelvis: [K(0, R()), K(0.34, R(2, 22, -5)), K(0.62, R(3, -30, 9)), K(0.78, R(2, -24, 7)), K(1, R())],
@@ -119,7 +119,7 @@ const SPECS = [
   },
   {
     name: "PF_RisingKick_R",
-    base: "Jump_Start",
+    base: "Idle_Loop",
     family: "kick",
     bones: {
       pelvis: [K(0, R()), K(0.34, R(-4, 8, 0)), K(0.62, R(-12, -8, 0)), K(0.78, R(-17, -5, 0)), K(1, R())],

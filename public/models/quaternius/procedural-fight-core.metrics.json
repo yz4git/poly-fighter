@@ -1,0 +1,267 @@
+{
+  "version": "PROCEDURAL_FIGHT_V1",
+  "source": "public/models/quaternius/ual-fight-core.glb",
+  "output": "public/models/quaternius/procedural-fight-core.glb",
+  "generatedClipCount": 15,
+  "clips": [
+    "PF_Backfist_R",
+    "PF_BodyBlow_L",
+    "PF_Counter_R",
+    "PF_Cross_R",
+    "PF_DashKick_R",
+    "PF_DownBack",
+    "PF_FrontKick_R",
+    "PF_HitHeavy",
+    "PF_Jab_L",
+    "PF_Launch",
+    "PF_LowKick_L",
+    "PF_Power_R",
+    "PF_RisingKick_R",
+    "PF_Throw",
+    "PF_Wakeup"
+  ],
+  "metrics": [
+    {
+      "name": "PF_Jab_L",
+      "base": "Punch_Jab",
+      "family": "punch",
+      "duration": 0.8666666746139526,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_l",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "upperarm_l"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Cross_R",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_r",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Backfist_R",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_r",
+        "lowerarm_r",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_BodyBlow_L",
+      "base": "Punch_Jab",
+      "family": "punch",
+      "duration": 0.8666666746139526,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_l",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_l"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Power_R",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_r",
+        "neck_01",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_FrontKick_R",
+      "base": "Jump_Start",
+      "family": "kick",
+      "duration": 1.3333333730697632,
+      "channels": 195,
+      "modifiedBones": [
+        "calf_r",
+        "foot_r",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_LowKick_L",
+      "base": "Jump_Start",
+      "family": "kick",
+      "duration": 1.3333333730697632,
+      "channels": 195,
+      "modifiedBones": [
+        "calf_l",
+        "foot_l",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_RisingKick_R",
+      "base": "Jump_Start",
+      "family": "kick",
+      "duration": 1.3333333730697632,
+      "channels": 195,
+      "modifiedBones": [
+        "calf_r",
+        "foot_r",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "thigh_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_DashKick_R",
+      "base": "Jump_Start",
+      "family": "kick",
+      "duration": 1.3333333730697632,
+      "channels": 195,
+      "modifiedBones": [
+        "calf_l",
+        "calf_r",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Throw",
+      "base": "Punch_Cross",
+      "family": "throw",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "lowerarm_l",
+        "lowerarm_r",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "upperarm_l",
+        "upperarm_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Counter_R",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_r",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "upperarm_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_HitHeavy",
+      "base": "Hit_Chest",
+      "family": "reaction",
+      "duration": 0.3333333432674408,
+      "channels": 195,
+      "modifiedBones": [
+        "neck_01",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Launch",
+      "base": "Hit_Chest",
+      "family": "reaction",
+      "duration": 0.3333333432674408,
+      "channels": 195,
+      "modifiedBones": [
+        "neck_01",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "thigh_l",
+        "thigh_r"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_DownBack",
+      "base": "Death01",
+      "family": "reaction",
+      "duration": 2.4000000953674316,
+      "channels": 195,
+      "modifiedBones": [
+        "pelvis",
+        "spine_02",
+        "spine_03"
+      ],
+      "missingAnimated": []
+    },
+    {
+      "name": "PF_Wakeup",
+      "base": "Jump_Land",
+      "family": "recovery",
+      "duration": 1.2666666507720947,
+      "channels": 195,
+      "modifiedBones": [
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03"
+      ],
+      "missingAnimated": []
+    }
+  ],
+  "meshes": 0,
+  "skins": 0
+}

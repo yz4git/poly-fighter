@@ -87,6 +87,11 @@ const resetAndPose = `
   function resetFighter(fighter) {
     fighter.currentMove = null;
     fighter.moveTick = 0;
+    fighter.hitStop = 0;
+    fighter.hitStun = 0;
+    fighter.blockStun = 0;
+    fighter.knockdownTicks = 0;
+    fighter.guardDamage = 0;
     fighter.velocity.set(0, 0, 0);
     fighter.hitTargets.clear();
     fighter.health = 100;
@@ -95,6 +100,22 @@ const resetAndPose = `
     const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
     fighter.input = { ...neutral };
     fighter.previousInput = { ...neutral };
+  }
+
+  function resetTpsTransient(game) {
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.playerFlankWindowTicks = 0;
+    game.playerFlankAttackTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerEvadeTicks = 0;
+    game.playerEvadeCooldown = 0;
+    game.playerEvadeSign = 0;
+    game.playerStepForwardWeight = 0;
+    game.playerStepSideWeight = 0;
+    game.effects?.update?.(10);
+    game.__hypeDirector?.reset?.(game.camera);
   }
 
   function importedModel(fighter) {
@@ -181,9 +202,6 @@ try {
   await delay(120);
   if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");
 
-  // Motion Readability v2 preloads both animation packs during neutral. Require
-  // that preload to finish before the first captured attack so this audit cannot
-  // silently validate the old fallback pose.
   let preload = null;
   for (let attempt = 0; attempt < 160; attempt += 1) {
     preload = await execute(sessionId, `${gameLookup}
@@ -227,22 +245,35 @@ try {
       const game = findGame();
       resetFighter(game.p1);
       resetFighter(game.p2);
+      resetTpsTransient(game);
       game.finished = false;
       game.input.clear();
       game.p1.position.set(0, 0, 0.74);
       game.p2.position.set(0, 0, -0.48);
       game.p1.facing = 1;
       game.p2.facing = -1;
-      game.p1.beginMove(moveId);
+      if (!game.p1.beginMove(moveId)) return { error: 'move-not-found', moveId };
       const move = game.p1.currentMove;
-      if (!move) return { error: 'move-not-found', moveId };
-      const captureTick = move.startup + Math.max(1, Math.floor(move.active * 0.55));
       let auditTime = performance.now() / 1000;
-      for (let tick = 0; tick < captureTick; tick += 1) {
+      let activeReached = false;
+      let steps = 0;
+      for (; steps < 90; steps += 1) {
+        // Hits in the previous or current frame are allowed to create normal
+        // presentation hit-stop, but the audit itself must not let that freeze
+        // obscure the requested move's ACTIVE pose.
+        game.p1.hitStop = 0;
+        game.p2.hitStop = 0;
         game.step();
+        game.p1.hitStop = 0;
+        game.p2.hitStop = 0;
         auditTime += 1 / 60;
         game.updateVisual(game.p1, game.p2, auditTime);
         game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        if (game.p1.visual.root.userData.motionExpansionPhase === 'ACTIVE' && game.p1.state === 'ATTACK') {
+          activeReached = true;
+          break;
+        }
+        if (game.p1.state !== 'ATTACK') break;
       }
       game.updateCamera(1 / 60);
       game.updateLockOn();
@@ -258,6 +289,8 @@ try {
         : points.pelvis;
       return {
         moveId,
+        activeReached,
+        steps,
         moveTick: game.p1.moveTick,
         state: game.p1.state,
         clip: root.userData.motionExpansionCurrentClip ?? null,
@@ -277,6 +310,9 @@ try {
   for (const [moveId, expected] of Object.entries(expectedClips)) {
     const result = results[moveId];
     if (!result) throw new Error(`Missing motion result for ${moveId}`);
+    if (!result.activeReached || result.phase !== "ACTIVE" || result.state !== "ATTACK") {
+      throw new Error(`Motion ${moveId} was not captured during ACTIVE: ${JSON.stringify(result)}`);
+    }
     if (result.clip !== expected) {
       throw new Error(`Motion ${moveId} resolved to ${result.clip}, expected ${expected}: ${JSON.stringify(result)}`);
     }
@@ -285,8 +321,6 @@ try {
     }
   }
 
-  // These pairs previously looked nearly identical because the same hook clip
-  // was used and then forced back onto the old procedural rig's contact point.
   const distinctPairs = [
     ["jab", "straight"],
     ["backfist", "bodyBlow"],
@@ -315,7 +349,13 @@ try {
     throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);
   }
 
-  const diagnostics = { preload, pairDistances, kickHeights: { lowY, kickY, risingY }, moves: results };
+  const diagnostics = {
+    preload,
+    allMovesActive: Object.values(results).every((result) => result.phase === "ACTIVE"),
+    pairDistances,
+    kickHeights: { lowY, kickY, risingY },
+    moves: results,
+  };
   await writeFile(`${outputDir}/motion-readability.json`, JSON.stringify(diagnostics, null, 2));
   console.log(JSON.stringify(diagnostics, null, 2));
 } finally {

@@ -48,7 +48,7 @@ const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
   risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.70 },
   dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.74 },
   throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28 },
-  counter: { clip: "PF_Counter_R", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29 },
+  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29 },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {
@@ -67,8 +67,8 @@ export const MOTION_EXPANSION_PROFILE = {
   version: "MOTION_READABILITY_V2",
   proceduralVersion: "PROCEDURAL_FIGHT_V2",
   primaryLibraryClips: 12,
-  secondaryLibraryClips: 20,
-  proceduralLibraryClips: 20,
+  secondaryLibraryClips: 23,
+  proceduralLibraryClips: 23,
   uniqueMoveMappings: Object.keys(MOVE_MOTIONS).length,
   reactionKinds: Object.keys(REACTION_CLIPS).length,
   airLoopClip: "NinjaJump_Idle_Loop",
@@ -83,8 +83,18 @@ export const MOTION_EXPANSION_PROFILE = {
   timingPolicy: "ANTICIPATION_DRIVE_IMPACT_OVERTRAVEL_SETTLE",
 } as const;
 
+function handedClipForMove(move: MoveDefinition, fallback: string): string {
+  const left = move.visualContact?.startsWith("LEFT") === true;
+  if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
+  if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
+  if (move.id === "counter") return left ? "PF_Counter_L" : "PF_Counter_R";
+  return fallback;
+}
+
 export function motionSpecForMove(move: MoveDefinition): MoveMotionSpec {
-  return MOVE_MOTIONS[move.id] ?? {
+  const authored = MOVE_MOTIONS[move.id];
+  if (authored) return { ...authored, clip: handedClipForMove(move, authored.clip) };
+  return {
     clip: move.motionId ?? (move.animation === "kick" ? "NinjaJump_Start" : "Punch_Cross"),
     style: move.animation === "kick" ? "FRONT_KICK" : "CROSS",
     speedScale: 1,

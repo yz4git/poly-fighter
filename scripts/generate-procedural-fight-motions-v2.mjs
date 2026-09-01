@@ -27,15 +27,18 @@ const S = (v, n = 1) => v * n;
 const SPECS = [
   { name: "PF_Jab_L", base: "Punch_Jab", family: "punch", style: "JAB", side: -1, power: 0.72, contactU: 0.66, plantFoot: "RIGHT" },
   { name: "PF_Cross_R", base: "Punch_Cross", family: "punch", style: "CROSS", side: 1, power: 0.90, contactU: 0.69, plantFoot: "LEFT" },
-  { name: "PF_Backfist_R", base: "Punch_Cross", family: "punch", style: "HOOK", side: 1, power: 0.92, contactU: 0.62, plantFoot: "LEFT" },
+  { name: "PF_Backfist_R", base: "Punch_Cross", family: "punch", style: "HOOK", side: 1, power: 0.88, contactU: 0.62, plantFoot: "LEFT" },
+  { name: "PF_Backfist_L", base: "Punch_Cross", family: "punch", style: "HOOK", side: -1, power: 0.88, contactU: 0.62, plantFoot: "RIGHT" },
   { name: "PF_BodyBlow_L", base: "Punch_Jab", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" },
+  { name: "PF_BodyBlow_R", base: "Punch_Jab", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" },
   { name: "PF_Power_R", base: "Punch_Cross", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" },
   { name: "PF_FrontKick_R", base: "Idle_Loop", family: "kick", style: "FRONT_KICK", side: 1, power: 0.94, contactU: 0.64, plantFoot: "LEFT" },
   { name: "PF_LowKick_L", base: "Idle_Loop", family: "kick", style: "LOW_KICK", side: -1, power: 0.98, contactU: 0.67, plantFoot: "RIGHT" },
   { name: "PF_RisingKick_R", base: "Idle_Loop", family: "kick", style: "RISING_KICK", side: 1, power: 1.10, contactU: 0.69, plantFoot: "LEFT" },
   { name: "PF_DashKick_R", base: "Jump_Start", family: "kick", style: "DASH_KICK", side: 1, power: 1.12, contactU: 0.66, plantFoot: "AIR" },
   { name: "PF_Throw", base: "Punch_Cross", family: "throw", style: "THROW", side: 1, power: 1.00, contactU: 0.58, plantFoot: "BOTH" },
-  { name: "PF_Counter_R", base: "Punch_Cross", family: "punch", style: "COUNTER", side: 1, power: 1.04, contactU: 0.55, plantFoot: "LEFT" },
+  { name: "PF_Counter_R", base: "Punch_Cross", family: "punch", style: "COUNTER", side: 1, power: 1.00, contactU: 0.55, plantFoot: "LEFT" },
+  { name: "PF_Counter_L", base: "Punch_Cross", family: "punch", style: "COUNTER", side: -1, power: 1.00, contactU: 0.55, plantFoot: "RIGHT" },
   { name: "PF_HitHeavy", base: "Hit_Chest", family: "reaction", style: "HIT_HEAVY", side: 1, power: 1.00, contactU: 0.18, plantFoot: "BOTH" },
   { name: "PF_Launch", base: "Hit_Chest", family: "reaction", style: "LAUNCH", side: 1, power: 1.00, contactU: 0.20, plantFoot: "AIR" },
   { name: "PF_DownBack", base: "Death01", family: "reaction", style: "DOWN", side: 1, power: 1.00, contactU: 0.35, plantFoot: "AIR" },
@@ -89,30 +92,37 @@ function makeCurves(spec) {
       bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 12)), K(impact, R(0, 0, -18)), K(settle, R(0, 0, -8)), K(1, R())];
       bones.upperarm_r = [K(0, R()), K(anticipate, R(11, 11, 13)), K(impact, R(-17, -21, -13)), K(settle, R(-7, -9, -6)), K(1, R())];
       break;
-    case "HOOK":
-      torso(24, 2, 5); rootDrive(0.028, -0.016, 0.014);
+    case "HOOK": {
+      const arm = s < 0 ? "l" : "r";
+      torso(17, 1, 2); rootDrive(0.040, -0.010, 0.012);
       bones.spine_01 = bones.pelvis;
-      bones.upperarm_r = [K(0, R()), K(anticipate, R(12, -12, 22)), K(impact, R(-21, 28, -25)), K(settle, R(-8, 11, -10)), K(1, R())];
-      bones.lowerarm_r = [K(0, R()), K(anticipate, R(0, 22, 11)), K(impact, R(0, -36, -9)), K(1, R())];
+      bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(9, -9 * s, 15 * s)), K(impact, R(-14, 19 * s, -14 * s)), K(settle, R(-6, 8 * s, -6 * s)), K(1, R())];
+      bones[`lowerarm_${arm}`] = [K(0, R()), K(anticipate, R(0, 16 * s, 7 * s)), K(impact, R(0, -24 * s, -6 * s)), K(settle, R(0, -8 * s, -2 * s)), K(1, R())];
       break;
-    case "BODY":
-      torso(14, 14, -4); rootDrive(0.040, 0.012, 0.028);
+    }
+    case "BODY": {
+      const arm = s < 0 ? "l" : "r";
+      torso(11, 11, -2); rootDrive(0.044, 0.010, 0.024);
       bones.spine_01 = bones.pelvis;
-      bones.clavicle_l = [K(0, R()), K(anticipate, R(0, 0, -8)), K(impact, R(0, 0, 13)), K(1, R())];
-      bones.upperarm_l = [K(0, R()), K(anticipate, R(13, -9, -12)), K(impact, R(-18, 17, 11)), K(1, R())];
+      bones[`clavicle_${arm}`] = [K(0, R()), K(anticipate, R(0, 0, 8 * s)), K(impact, R(0, 0, -13 * s)), K(1, R())];
+      bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(11, 9 * s, 10 * s)), K(impact, R(-16, -15 * s, -10 * s)), K(settle, R(-6, -6 * s, -4 * s)), K(1, R())];
       break;
+    }
     case "HEAVY":
-      torso(28, 12, 6); rootDrive(0.070, 0.026, 0.032);
+      torso(20, 6, 2); rootDrive(0.085, 0.014, 0.024);
       bones.spine_01 = bones.pelvis;
-      bones.neck_01 = [K(0, R()), K(anticipate, R(0, -5 * s, 0)), K(impact, R(1, 9 * s, 0)), K(1, R())];
-      bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 15)), K(impact, R(0, 0, -22)), K(1, R())];
-      bones.upperarm_r = [K(0, R()), K(anticipate, R(16, 15, 17)), K(impact, R(-24, -29, -17)), K(settle, R(-10, -12, -7)), K(1, R())];
+      bones.neck_01 = [K(0, R()), K(anticipate, R(0, -3 * s, 0)), K(impact, R(1, 5 * s, 0)), K(1, R())];
+      bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 11)), K(impact, R(0, 0, -16)), K(1, R())];
+      bones.upperarm_r = [K(0, R()), K(anticipate, R(12, 11, 12)), K(impact, R(-18, -21, -12)), K(settle, R(-7, -9, -5)), K(1, R())];
+      bones.lowerarm_r = [K(0, R()), K(anticipate, R(0, 8, 5)), K(impact, R(0, -12, -4)), K(settle, R(0, -5, -2)), K(1, R())];
       break;
-    case "COUNTER":
-      torso(22, 3, 4); rootDrive(0.045, 0.020, 0.018);
-      bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 13)), K(impact, R(0, 0, -19)), K(1, R())];
-      bones.upperarm_r = [K(0, R()), K(anticipate, R(13, 11, 16)), K(impact, R(-19, -23, -15)), K(1, R())];
+    case "COUNTER": {
+      const arm = s < 0 ? "l" : "r";
+      torso(14, 2, 1); rootDrive(0.050, 0.010, 0.015);
+      bones[`clavicle_${arm}`] = [K(0, R()), K(anticipate, R(0, 0, 10 * s)), K(impact, R(0, 0, -15 * s)), K(1, R())];
+      bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(10, 9 * s, 12 * s)), K(impact, R(-16, -18 * s, -11 * s)), K(settle, R(-6, -7 * s, -4 * s)), K(1, R())];
       break;
+    }
     case "THROW":
       torso(16, 15, 0); rootDrive(0.046, 0, 0.028);
       bones.upperarm_l = [K(0, R()), K(anticipate, R(-12, 18, -20)), K(impact, R(-28, 6, -10)), K(1, R())];

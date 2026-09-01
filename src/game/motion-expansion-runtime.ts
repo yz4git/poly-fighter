@@ -32,7 +32,9 @@ const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
   PF_Jab_L: "Punch_Jab",
   PF_Cross_R: "Punch_Cross",
   PF_Backfist_R: "Melee_Hook",
+  PF_Backfist_L: "Melee_Hook",
   PF_BodyBlow_L: "Shield_OneShot",
+  PF_BodyBlow_R: "Shield_OneShot",
   PF_Power_R: "Sword_Regular_C",
   PF_FrontKick_R: "NinjaJump_Start",
   PF_LowKick_L: "Slide_Start",
@@ -40,6 +42,7 @@ const FALLBACK_CLIPS: Readonly<Record<string, string>> = {
   PF_DashKick_R: "NinjaJump_Start",
   PF_Throw: "OverhandThrow",
   PF_Counter_R: "Punch_Cross",
+  PF_Counter_L: "Punch_Cross",
   PF_HitHeavy: "Hit_Knockback",
   PF_Launch: "NinjaJump_Start",
   PF_DownBack: "Death01",
@@ -224,6 +227,9 @@ function ensureRuntime(fighter: FighterRuntime): ExpansionRuntime | null {
     fighter.visual.root.userData.motionExpansionClipCount = runtime.clips.size;
     fighter.visual.root.userData.motionExpansionHasUAL2 = runtime.clips.has("Melee_Hook");
     fighter.visual.root.userData.motionExpansionHasProcedural = runtime.clips.has("PF_Jab_L")
+      && runtime.clips.has("PF_Backfist_L")
+      && runtime.clips.has("PF_BodyBlow_R")
+      && runtime.clips.has("PF_Counter_L")
       && runtime.clips.has("PF_RisingKick_R")
       && runtime.clips.has("PF_GuardBreak")
       && runtime.clips.has("PF_KickRecover");
@@ -440,19 +446,19 @@ function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): v
       addRotation(runtime, "spine_03", 0, side * 0.11, -side * 0.025, w);
       break;
     case "HOOK":
-      addRotation(runtime, "pelvis", 0, side * 0.11, 0, w);
-      addRotation(runtime, "spine_02", 0, side * 0.24, side * 0.035, w);
-      addRotation(runtime, "spine_03", 0, side * 0.16, side * 0.075, w);
+      addRotation(runtime, "pelvis", 0, side * 0.06, 0, w);
+      addRotation(runtime, "spine_02", 0, side * 0.11, side * 0.015, w);
+      addRotation(runtime, "spine_03", 0, side * 0.08, side * 0.025, w);
       break;
     case "BODY_BLOW":
       addRotation(runtime, "spine_02", 0.13, side * 0.18, 0, w);
       addRotation(runtime, "spine_03", 0.08, side * 0.12, -side * 0.035, w);
       break;
     case "HEAVY":
-      addRotation(runtime, "pelvis", 0, side * 0.15, 0, w);
-      addRotation(runtime, "spine_02", 0.10, side * 0.29, side * 0.045, w);
-      addRotation(runtime, "spine_03", 0.08, side * 0.20, side * 0.065, w);
-      addRotation(runtime, "head", 0, -side * 0.05, 0, w);
+      addRotation(runtime, "pelvis", 0, side * 0.08, 0, w);
+      addRotation(runtime, "spine_02", 0.05, side * 0.14, side * 0.020, w);
+      addRotation(runtime, "spine_03", 0.03, side * 0.10, side * 0.025, w);
+      addRotation(runtime, "head", 0, -side * 0.025, 0, w);
       break;
     case "FRONT_KICK":
       addRotation(runtime, "pelvis", 0.035, -side * 0.055, 0, w);

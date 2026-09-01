@@ -2,10 +2,13 @@
   "version": "PROCEDURAL_FIGHT_V2",
   "source": "public/models/quaternius/ual-fight-core.glb",
   "output": "public/models/quaternius/procedural-fight-core.glb",
-  "generatedClipCount": 20,
+  "generatedClipCount": 23,
   "clips": [
+    "PF_Backfist_L",
     "PF_Backfist_R",
     "PF_BodyBlow_L",
+    "PF_BodyBlow_R",
+    "PF_Counter_L",
     "PF_Counter_R",
     "PF_Cross_R",
     "PF_DashKick_R",
@@ -113,8 +116,38 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03183,
-      "maxVerticalRootShift": 0.01391
+      "maxPlanarRootShift": 0.0407,
+      "maxVerticalRootShift": 0.01192
+    },
+    {
+      "name": "PF_Backfist_L",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "style": "HOOK",
+      "contactU": 0.62,
+      "plantFoot": "RIGHT",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "lowerarm_l",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_l"
+      ],
+      "modifiedPaths": [
+        "lowerarm_l:rotation",
+        "pelvis:rotation",
+        "pelvis:translation",
+        "spine_01:rotation",
+        "spine_02:rotation",
+        "spine_03:rotation",
+        "upperarm_l:rotation"
+      ],
+      "missingAnimated": [],
+      "maxPlanarRootShift": 0.0407,
+      "maxVerticalRootShift": 0.01192
     },
     {
       "name": "PF_BodyBlow_L",
@@ -143,8 +176,38 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04168,
-      "maxVerticalRootShift": 0.02788
+      "maxPlanarRootShift": 0.04503,
+      "maxVerticalRootShift": 0.0239
+    },
+    {
+      "name": "PF_BodyBlow_R",
+      "base": "Punch_Jab",
+      "family": "punch",
+      "style": "BODY",
+      "contactU": 0.7,
+      "plantFoot": "LEFT",
+      "duration": 0.8666666746139526,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_r",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "upperarm_r"
+      ],
+      "modifiedPaths": [
+        "clavicle_r:rotation",
+        "pelvis:rotation",
+        "pelvis:translation",
+        "spine_01:rotation",
+        "spine_02:rotation",
+        "spine_03:rotation",
+        "upperarm_r:rotation"
+      ],
+      "missingAnimated": [],
+      "maxPlanarRootShift": 0.04503,
+      "maxVerticalRootShift": 0.0239
     },
     {
       "name": "PF_Power_R",
@@ -157,6 +220,7 @@
       "channels": 195,
       "modifiedBones": [
         "clavicle_r",
+        "lowerarm_r",
         "neck_01",
         "pelvis",
         "spine_01",
@@ -166,6 +230,7 @@
       ],
       "modifiedPaths": [
         "clavicle_r:rotation",
+        "lowerarm_r:rotation",
         "neck_01:rotation",
         "pelvis:rotation",
         "pelvis:translation",
@@ -175,8 +240,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.07459,
-      "maxVerticalRootShift": 0.02868
+      "maxPlanarRootShift": 0.08605,
+      "maxVerticalRootShift": 0.02151
     },
     {
       "name": "PF_FrontKick_R",
@@ -361,8 +426,36 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03982,
-      "maxVerticalRootShift": 0.01788
+      "maxPlanarRootShift": 0.04123,
+      "maxVerticalRootShift": 0.0149
+    },
+    {
+      "name": "PF_Counter_L",
+      "base": "Punch_Cross",
+      "family": "punch",
+      "style": "COUNTER",
+      "contactU": 0.55,
+      "plantFoot": "RIGHT",
+      "duration": 1,
+      "channels": 195,
+      "modifiedBones": [
+        "clavicle_l",
+        "pelvis",
+        "spine_02",
+        "spine_03",
+        "upperarm_l"
+      ],
+      "modifiedPaths": [
+        "clavicle_l:rotation",
+        "pelvis:rotation",
+        "pelvis:translation",
+        "spine_02:rotation",
+        "spine_03:rotation",
+        "upperarm_l:rotation"
+      ],
+      "missingAnimated": [],
+      "maxPlanarRootShift": 0.04123,
+      "maxVerticalRootShift": 0.0149
     },
     {
       "name": "PF_HitHeavy",

@@ -14,6 +14,11 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   heavyKnockdownVerticalSpeed: 5.25,
   maxShockRings: 10,
   maxBurstSpokes: 4,
+  lightImpactRingCount: 2,
+  mediumImpactRingCount: 2,
+  heavyImpactRingCount: 3,
+  impactRingExpansion: 2.2,
+  heavyBurstScale: 0.64,
   perfectStepFovRush: 4.8,
   dashFovRush: 3.8,
   heavyImpactFovPunch: -7.2,
@@ -143,13 +148,13 @@ export class TpsHypeDirector {
           : 0x4bdcff;
     const point = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
     const facing = camera.position.clone().sub(point).normalize();
-    const ringCount = event.blocked ? 1 : tier === 3 ? 5 : tier === 2 ? 3 : 2;
+    const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
 
     for (let index = 0; index < ringCount; index += 1) {
       const ring = this.rings.find((entry) => entry.life <= 0) ?? this.rings[index % this.rings.length];
       ring.life = 0.16 + tier * 0.035 + index * 0.012;
       ring.maxLife = ring.life;
-      ring.startScale = 0.72 + tier * 0.18 + index * 0.14;
+      ring.startScale = 0.56 + tier * 0.14 + index * 0.10;
       ring.mesh.visible = true;
       ring.mesh.position.copy(point);
       ring.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
@@ -162,14 +167,14 @@ export class TpsHypeDirector {
     const burst = this.bursts.find((entry) => entry.life <= 0) ?? this.bursts[0];
     burst.life = event.blocked ? 0.10 : tier === 3 ? 0.20 : tier === 2 ? 0.15 : 0.11;
     burst.maxLife = burst.life;
-    burst.startScale = event.blocked ? 0.36 : tier === 3 ? 0.78 : tier === 2 ? 0.58 : 0.42;
+    burst.startScale = event.blocked ? 0.34 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.50 : 0.40;
     burst.lines.visible = true;
     burst.lines.position.copy(point);
     burst.lines.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
     burst.lines.rotation.z += tier * 0.17;
     burst.lines.scale.setScalar(burst.startScale);
     burst.lines.material.color.setHex(color);
-    burst.lines.material.opacity = event.blocked ? 0.34 : tier === 3 ? 0.95 : 0.72;
+    burst.lines.material.opacity = event.blocked ? 0.32 : tier === 3 ? 0.82 : 0.68;
 
     if (event.blocked) {
       this.fovOffset = Math.max(this.fovOffset, 0.65);
@@ -236,7 +241,7 @@ export class TpsHypeDirector {
       if (ring.life <= 0) continue;
       ring.life -= delta;
       const progress = 1 - Math.max(0, ring.life) / Math.max(1e-4, ring.maxLife);
-      ring.mesh.scale.setScalar(ring.startScale * (1 + progress * 2.9));
+      ring.mesh.scale.setScalar(ring.startScale * (1 + progress * TPS_HYPE_PROFILE.impactRingExpansion));
       ring.mesh.material.opacity = Math.max(0, (1 - progress) * 0.82);
       if (ring.life <= 0) {
         ring.mesh.visible = false;

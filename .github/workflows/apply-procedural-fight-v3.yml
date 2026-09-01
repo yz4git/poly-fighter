@@ -1,5 +1,6 @@
 name: Apply Procedural Fight v3
 
+# Triggered after the workflow exists on the feature branch.
 on:
   push:
     branches: [feat/procedural-fight-v3-20260902]

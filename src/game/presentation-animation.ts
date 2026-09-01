@@ -60,10 +60,11 @@ export class PresentationAnimationController extends FighterAnimationController 
       visual.root.updateMatrixWorld(true);
     }
 
-    // Motion Expansion owns attacks, hit reactions, launches, falls, downs,
-    // wakeups and evasive movement. Neutral/guard states deliberately fall
-    // through to the older, heavily-audited UBC ready-pose runtime.
-    if (!updateMotionExpansionSkin(fighter, timeSeconds)) {
+    // Motion Readability v2 owns attacks, hit reactions, launches, falls,
+    // downs, wakeups and evasive movement. It also receives the opponent so
+    // strike IK can bias toward a real head/body/leg target instead of copying
+    // the older procedural rig's own fist/foot pose.
+    if (!updateMotionExpansionSkin(fighter, opponent, timeSeconds)) {
       updateQuaterniusModelSkin(fighter, timeSeconds);
     }
   }

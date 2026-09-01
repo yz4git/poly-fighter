@@ -172,7 +172,7 @@ const expectedClips = {
   risingKick: "PF_RisingKick_R",
   dashKick: "PF_DashKick_R",
   throw: "PF_Throw",
-  counter: "PF_Counter_R",
+  counter: "PF_Counter_L",
 };
 
 const moves = Object.keys(expectedClips);
@@ -213,7 +213,7 @@ try {
       if (!game) return null;
       const root = game.p1.visual.root;
       return {
-        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 20,
+        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 23,
         clips: root.userData.motionExpansionClipCount ?? 0,
         version: root.userData.motionExpansionVersion ?? null,
         proceduralVersion: root.userData.motionExpansionProceduralVersion ?? null,

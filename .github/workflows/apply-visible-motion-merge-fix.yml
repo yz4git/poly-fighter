@@ -2,6 +2,8 @@ name: Apply visible motion merge fix
 
 on:
   push:
+    branches:
+      - fix/arm-fist-playtest-20260901
     paths:
       - '.github/workflows/apply-visible-motion-merge-fix.yml'
 
@@ -17,53 +19,8 @@ jobs:
         with:
           ref: fix/arm-fist-playtest-20260901
           fetch-depth: 0
-      - name: Merge base locomotion and Procedural Fight v2 clips
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/game/visual-quaternius-runtime.ts')
-          s = p.read_text()
-          old = '''function loadMotion(): Promise<MotionResources> {
-  if (motionPromise) return motionPromise;
-  motionPromise = new GLTFLoader().loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL).then((gltf) => ({
-    source: gltf.scene,
-    clips: gltf.animations,
-  })).catch((error) => {
-    motionPromise = null;
-    throw error;
-  });
-  return motionPromise;
-}
-'''
-          new = '''function loadMotion(): Promise<MotionResources> {
-  if (motionPromise) return motionPromise;
-  const loader = new GLTFLoader();
-  motionPromise = Promise.all([
-    loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
-    loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
-  ]).then(([base, procedural]) => ({
-    // Retarget against the canonical UAL rest hierarchy while exposing both
-    // locomotion/state clips and the Procedural Fight v2 combat pack.
-    source: base.scene,
-    clips: [...base.animations, ...procedural.animations],
-  })).catch((error) => {
-    motionPromise = null;
-    throw error;
-  });
-  return motionPromise;
-}
-'''
-          if old not in s:
-            raise SystemExit('loadMotion anchor missing')
-          p.write_text(s.replace(old, new, 1))
-          t = Path('tests/quaternius-model-skin.test.ts')
-          q = t.read_text()
-          anchor = '  assert.match(runtime, /loadAsync\\(QUATERNIUS_PROCEDURAL_CORE_URL\\)/);\n'
-          replacement = '  assert.match(runtime, /loadAsync\\(QUATERNIUS_UAL_CORE_URL\\)/);\n  assert.match(runtime, /loadAsync\\(QUATERNIUS_PROCEDURAL_CORE_URL\\)/);\n  assert.match(runtime, /clips: \\[\\.\\.\\.base\\.animations, \\.\\.\\.procedural\\.animations\\]/);\n'
-          if anchor not in q:
-            raise SystemExit('model-skin test anchor missing')
-          t.write_text(q.replace(anchor, replacement, 1))
-          PY
+      - name: Apply visible motion merge
+        run: python3 scripts/merge-visible-motion-sources.py
       - name: Commit source fix
         run: |
           git config user.name "github-actions[bot]"

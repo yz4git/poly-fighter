@@ -1,5 +1,19 @@
 export type HitLevel = "HIGH" | "MID" | "LOW" | "THROW";
 
+export type ReactionKind =
+  | "NONE"
+  | "HEAD"
+  | "BODY"
+  | "LOW"
+  | "HEAVY"
+  | "LAUNCH"
+  | "THROW"
+  | "BLOCK"
+  | "DOWN"
+  | "KO";
+
+export type ReactionTarget = "HEAD" | "BODY" | "LEGS";
+
 export type FighterState =
   | "IDLE"
   | "WALK"
@@ -67,6 +81,8 @@ export interface MoveDefinition {
   label: string;
   input: string;
   animation: AnimationName;
+  motionId?: string;
+  reactionTarget?: ReactionTarget;
   startup: number;
   active: number;
   recovery: number;

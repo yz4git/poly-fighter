@@ -57,14 +57,38 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /quaterniusAnimationRigCoverage = 1/);
 });
 
-test("Quaternius hero graphics use body-conforming armor and bind-delta followers", async () => {
+test("Quaternius hero graphics use fitted cloth panels and bind-delta followers", async () => {
   const polish = await readFile(new URL("../src/game/quaternius-graphics-polish.ts", import.meta.url), "utf8");
-  assert.match(polish, /QUATERNIUS_HERO_KIT_V4_REFINED_SURFACE/);
+  assert.match(polish, /QUATERNIUS_HERO_KIT_V5_FITTED_OUTFIT/);
   assert.match(polish, /BIND_TO_ANIMATED_DELTA/);
   assert.match(polish, /inverseBindBoneRootQuaternion/);
   assert.match(polish, /poseDelta\.copy\(currentBoneRootQuaternion\)\.multiply\(inverseBindBoneRootQuaternion\)/);
   assert.doesNotMatch(polish, /mesh\.quaternion\.copy\(localQuaternion\)/);
-  assert.match(polish, /ubc-kairo-torso-core/);
+  assert.match(polish, /function panelGeometry/);
+  assert.match(polish, /THIN_CONFORMING_BIND_DELTA_PANELS/);
+
+  for (const required of [
+    "ubc-kairo-outfit-jacket-left",
+    "ubc-kairo-outfit-jacket-right",
+    "ubc-kairo-outfit-abdomen",
+    "ubc-kairo-outfit-belt",
+    "ubc-kairo-outfit-left-sleeve",
+    "ubc-kairo-outfit-left-trouser",
+    "ubc-kairo-outfit-left-boot-shaft",
+    "ubc-kairo-outfit-left-shoe",
+    "ubc-sera-outfit-jacket-left",
+    "ubc-sera-outfit-jacket-right",
+    "ubc-sera-outfit-bodysuit",
+    "ubc-sera-outfit-waist",
+    "ubc-sera-outfit-left-sleeve",
+    "ubc-sera-outfit-left-legging",
+    "ubc-sera-outfit-left-boot",
+    "ubc-sera-outfit-left-shoe",
+  ]) {
+    assert.match(polish, new RegExp(required));
+  }
+
+  // Keep the proven contact-facing armor pieces as part of the fitted outfit pass.
   assert.match(polish, /ubc-kairo-left-gauntlet/);
   assert.match(polish, /ubc-kairo-left-shin-guard/);
   assert.match(polish, /new THREE\.CylinderGeometry\(0\.034, 0\.041, 0\.108/);

@@ -1,6 +1,5 @@
 name: Apply Procedural Fight v3
 
-# Triggered after the workflow exists on the feature branch.
 on:
   push:
     branches: [feat/procedural-fight-v3-20260902]
@@ -45,13 +44,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Workflow files are updated separately through the connected GitHub API;
+          # the Actions token cannot mutate workflows.
+          git checkout -- .github/workflows/procedural-fight-motion-generator.yml
           git add \
             scripts/generate-procedural-fight-motions-v3.mjs \
             scripts/capture-motion-readability-audit.mjs \
             src/game/motion-profile.ts \
             src/game/motion-expansion-runtime.ts \
             tests/motion-expansion.test.ts \
-            .github/workflows/procedural-fight-motion-generator.yml \
             public/models/quaternius/procedural-fight-core.glb \
             public/models/quaternius/procedural-fight-core.metrics.json
           git commit -m "Implement Procedural Fight v3 motion system"

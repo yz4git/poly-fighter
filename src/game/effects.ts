@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { recordMotionHit } from "./motion-reaction";
 import type { HitEvent } from "./types";
 
 interface Particle {
@@ -51,6 +52,9 @@ export class EffectsManager {
   }
 
   hit(event: HitEvent): void {
+    // Motion Expansion listens at the shared impact presentation layer so TPS
+    // and the classic battle runtime drive the same directional reaction model.
+    recordMotionHit(event);
     const color = event.blocked ? 0x63e9ff : event.counter ? 0xffd45c : event.attacker === "p1" ? 0xff405d : 0x58e7ff;
     const tier = event.blocked ? 1 : impactTier(event);
     const tierScale = tier === 3 ? 1.42 : tier === 2 ? 1.18 : 1;

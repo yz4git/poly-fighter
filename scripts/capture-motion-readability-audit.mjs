@@ -105,7 +105,8 @@ const resetAndPose = `
 
   function point(object) {
     if (!object) return null;
-    const p = object.getWorldPosition(new THREE.Vector3());
+    const Vector3 = object.position.constructor;
+    const p = object.getWorldPosition(new Vector3());
     return { x: p.x, y: p.y, z: p.z };
   }
 

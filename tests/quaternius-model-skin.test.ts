@@ -104,7 +104,7 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
 });
 
 test("weighted UBC outfit skin maps face to skin and the remaining rig to clothing", async () => {
-  assert.equal(QUATERNIUS_OUTFIT_SKIN_ID, "QUATERNIUS_OUTFIT_SKIN_V1_WEIGHTED_VERTEX_COLOR");
+  assert.equal(QUATERNIUS_OUTFIT_SKIN_ID, "QUATERNIUS_OUTFIT_SKIN_V2_MATERIAL_AWARE_VERTEX_COLOR");
   assert.equal(quaterniusOutfitToneForBoneName("Head", "POWER"), "SKIN");
   assert.equal(quaterniusOutfitToneForBoneName("neck_01", "SPEED"), "SKIN");
 
@@ -130,5 +130,6 @@ test("weighted UBC outfit skin maps face to skin and the remaining rig to clothi
   assert.match(outfitSkin, /skinIndex/);
   assert.match(outfitSkin, /skinWeight/);
   assert.match(outfitSkin, /clothingRatio/);
-  assert.match(outfitSkin, /shouldKeepAuthoredMaterial/);
+  assert.match(outfitSkin, /shouldKeepAuthoredMaterial\(mesh, material\)/);
+  assert.match(outfitSkin, /quaterniusOutfitSkinMaterialCount/);
 });

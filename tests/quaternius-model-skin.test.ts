@@ -4,6 +4,10 @@ import test from "node:test";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS } from "../src/game/model-skins";
 import {
+  QUATERNIUS_OUTFIT_SKIN_ID,
+  quaterniusOutfitToneForBoneName,
+} from "../src/game/quaternius-outfit-skin";
+import {
   QUATERNIUS_UBC_FEMALE_MODEL_URL,
   QUATERNIUS_UBC_MALE_MODEL_URL,
   QUATERNIUS_UAL_CORE_URL,
@@ -88,7 +92,6 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
     assert.match(polish, new RegExp(required));
   }
 
-  // Keep the proven contact-facing armor pieces as part of the fitted outfit pass.
   assert.match(polish, /ubc-kairo-left-gauntlet/);
   assert.match(polish, /ubc-kairo-left-shin-guard/);
   assert.match(polish, /new THREE\.CylinderGeometry\(0\.034, 0\.041, 0\.108/);
@@ -98,4 +101,34 @@ test("Quaternius hero graphics use fitted cloth panels and bind-delta followers"
   assert.match(polish, /calf_l/);
   assert.match(polish, /ubc-sera-ponytail-upper/);
   assert.match(polish, /ubc-sera-ponytail-lower/);
+});
+
+test("weighted UBC outfit skin maps face to skin and the remaining rig to clothing", async () => {
+  assert.equal(QUATERNIUS_OUTFIT_SKIN_ID, "QUATERNIUS_OUTFIT_SKIN_V1_WEIGHTED_VERTEX_COLOR");
+  assert.equal(quaterniusOutfitToneForBoneName("Head", "POWER"), "SKIN");
+  assert.equal(quaterniusOutfitToneForBoneName("neck_01", "SPEED"), "SKIN");
+
+  assert.equal(quaterniusOutfitToneForBoneName("spine_03", "POWER"), "LIGHT");
+  assert.equal(quaterniusOutfitToneForBoneName("spine_02", "POWER"), "PRIMARY");
+  assert.equal(quaterniusOutfitToneForBoneName("pelvis", "POWER"), "DARK");
+  assert.equal(quaterniusOutfitToneForBoneName("upperarm_l", "POWER"), "PRIMARY");
+  assert.equal(quaterniusOutfitToneForBoneName("hand_l", "POWER"), "DARK");
+  assert.equal(quaterniusOutfitToneForBoneName("thigh_l", "POWER"), "DARK");
+
+  assert.equal(quaterniusOutfitToneForBoneName("spine_03", "SPEED"), "LIGHT");
+  assert.equal(quaterniusOutfitToneForBoneName("spine_02", "SPEED"), "DARK");
+  assert.equal(quaterniusOutfitToneForBoneName("pelvis", "SPEED"), "PRIMARY");
+  assert.equal(quaterniusOutfitToneForBoneName("upperarm_r", "SPEED"), "PRIMARY");
+  assert.equal(quaterniusOutfitToneForBoneName("lowerarm_r", "SPEED"), "LIGHT");
+  assert.equal(quaterniusOutfitToneForBoneName("thigh_r", "SPEED"), "DARK");
+  assert.equal(quaterniusOutfitToneForBoneName("calf_r", "SPEED"), "LIGHT");
+  assert.equal(quaterniusOutfitToneForBoneName("foot_r", "SPEED"), "PRIMARY");
+
+  const outfitSkin = await readFile(new URL("../src/game/quaternius-outfit-skin.ts", import.meta.url), "utf8");
+  assert.match(outfitSkin, /geometry\.setAttribute\("color"/);
+  assert.match(outfitSkin, /material\.vertexColors = true/);
+  assert.match(outfitSkin, /skinIndex/);
+  assert.match(outfitSkin, /skinWeight/);
+  assert.match(outfitSkin, /clothingRatio/);
+  assert.match(outfitSkin, /shouldKeepAuthoredMaterial/);
 });

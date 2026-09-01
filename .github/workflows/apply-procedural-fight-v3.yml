@@ -4,7 +4,7 @@ on:
   push:
     branches: [feat/procedural-fight-v3-20260902]
     paths:
-      - scripts/apply-procedural-fight-v3.py
+      - scripts/refine-procedural-fight-v3.py
       - .github/workflows/apply-procedural-fight-v3.yml
 
 permissions:
@@ -23,38 +23,23 @@ jobs:
         with:
           node-version: 22.13.0
           cache: npm
-      - name: Apply V3 source migration
-        run: python3 scripts/apply-procedural-fight-v3.py
+      - name: Refine V3 contracts
+        run: python3 scripts/refine-procedural-fight-v3.py
       - name: Install dependencies
-        run: |
-          npm ci --no-audit --no-fund
-          npm install --no-save --ignore-scripts @gltf-transform/core@4.4.1
-      - name: Generate V3 motion pack
-        run: |
-          node scripts/generate-procedural-fight-motions-v3.mjs \
-            public/models/quaternius/ual-fight-core.glb \
-            public/models/quaternius/procedural-fight-core.glb \
-            public/models/quaternius/procedural-fight-core.metrics.json
-      - name: Validate V3
+        run: npm ci --no-audit --no-fund
+      - name: Validate refined V3
         run: |
           npm run test:rules:tps
           npm run lint
           npm run build
-      - name: Commit V3 implementation
+      - name: Commit V3 refinement
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Workflow files are updated separately through the connected GitHub API;
-          # the Actions token cannot mutate workflows.
-          git checkout -- .github/workflows/procedural-fight-motion-generator.yml
           git add \
-            scripts/generate-procedural-fight-motions-v3.mjs \
-            scripts/capture-motion-readability-audit.mjs \
             src/game/motion-profile.ts \
-            src/game/motion-expansion-runtime.ts \
             tests/motion-expansion.test.ts \
-            public/models/quaternius/procedural-fight-core.glb \
-            public/models/quaternius/procedural-fight-core.metrics.json
-          git commit -m "Implement Procedural Fight v3 motion system"
+            scripts/capture-motion-readability-audit.mjs
+          git commit -m "Refine Procedural Fight v3 runtime contracts"
           git pull --rebase origin feat/procedural-fight-v3-20260902
           git push origin HEAD:feat/procedural-fight-v3-20260902

@@ -2,6 +2,18 @@ import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
 
+/**
+ * Outfit strategy for the production Quaternius UBC skin.
+ *
+ * The base character already owns a proven SkinnedMesh and 65-joint UAL-compatible
+ * rig. Rebinding a second full costume mesh at runtime would duplicate skinning
+ * work and invite rest-pose mismatch. Instead, use the existing vertex weights as
+ * semantic body regions: head/neck remain skin while torso, arms and legs receive
+ * garment vertex colours. Authored hair/eye materials opt out per material group,
+ * so a multi-material body mesh can still be dressed without repainting the face.
+ * Thin bind-delta panels in quaternius-graphics-polish add the visible jacket,
+ * seams and guards without replacing the animated body surface.
+ */
 export const QUATERNIUS_OUTFIT_SKIN_ID = "QUATERNIUS_OUTFIT_SKIN_V2_MATERIAL_AWARE_VERTEX_COLOR";
 
 type OutfitTone = "SKIN" | "LIGHT" | "PRIMARY" | "DARK";

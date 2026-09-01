@@ -47,10 +47,8 @@ jobs:
           for (const file of ['.tmp-quaternius/ual1.glb', '.tmp-quaternius/ual2.glb']) {
             const doc = await io.read(file);
             const names = doc.getRoot().listAnimations().map((a) => a.getName()).filter(Boolean).sort();
-            const combat = names.filter((name) => /attack|combo|counter|death|dodge|fall|hit|hook|jab|jump|kick|knock|melee|punch|roll|slide|stagger|throw|upper|wake/i.test(name));
-            console.log(`=== ${file} ALL ${names.length} ===`);
-            console.log(names.join('\n'));
-            console.log(`=== ${file} COMBAT ${combat.length} ===`);
+            const combat = names.filter((name) => /attack|combo|counter|death|dodge|fall|hit|hook|jab|jump|kick|knock|melee|punch|roll|slide|stagger|throw|upper|wake|shield|sword|lay/i.test(name));
+            console.log(`=== ${file} COMBAT ${combat.length}/${names.length} ===`);
             console.log(combat.join('\n'));
           }
           NODE
@@ -65,7 +63,7 @@ jobs:
           node scripts/curate-quaternius-animations.mjs \
             .tmp-quaternius/ual2.glb \
             public/models/quaternius/ual2-fight-core.glb \
-            Melee_Hook,Hit_Knockback,Idle_Shield_Loop,OverhandThrow,Slide_Start,Slide_Loop,Slide_Exit,NinjaJump_Start,NinjaJump_Idle_Loop,NinjaJump_Land
+            Hit_Knockback,Idle_Shield_Break,Idle_Shield_Loop,LayToIdle,Melee_Hook,Melee_Hook_Rec,NinjaJump_Start,NinjaJump_Idle_Loop,NinjaJump_Land,OverhandThrow,Shield_OneShot,Slide_Start,Slide_Loop,Slide_Exit,Sword_Regular_A,Sword_Regular_A_Rec,Sword_Regular_B,Sword_Regular_B_Rec,Sword_Regular_C,Sword_Regular_Combo
           ls -lh public/models/quaternius/*.glb
 
       - name: Publish curated assets
@@ -78,7 +76,7 @@ jobs:
             echo "Curated assets already current"
             exit 0
           fi
-          git commit -m "Curate expanded Quaternius fight motions"
+          git commit -m "Curate readable combat motion phases"
           # This workflow is branch-safe so development branches can generate the
           # pinned binary pack without ever writing directly to main.
           git push origin "HEAD:${GITHUB_REF_NAME}"

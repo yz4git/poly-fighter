@@ -1,8 +1,9 @@
 import * as THREE from "three";
+import { installCharacterClothing } from "./character-clothing";
 import type { FighterDefinition } from "./types";
 import type { ClothingAttachment, FighterVisual } from "./visual";
 
-export const CHARACTER_GRAPHICS_POLISH_ID = "CHARACTER_GRAPHICS_POLISH_V1";
+export const CHARACTER_GRAPHICS_POLISH_ID = "CHARACTER_GRAPHICS_POLISH_V2";
 
 interface CharacterGraphicsPolishOptions {
   addKairoDetails?: boolean;
@@ -310,11 +311,12 @@ export function applyCharacterGraphicsPolish(
     refineKairoExistingForms(visual);
     if (options.addKairoDetails !== false) addKairoHeroDetails(visual);
   }
+  installCharacterClothing(visual, definition);
   installRuntimeMaterialRefresh(visual, definition);
 
   visual.root.userData.characterGraphicsPolish = CHARACTER_GRAPHICS_POLISH_ID;
   visual.root.userData.characterGraphicsMaterialModel = definition.archetype === "POWER"
-    ? "KAIRO_FACET_MATERIAL_V2"
-    : "SERA_REFERENCE_PRESERVING_MATERIAL_V2";
+    ? "KAIRO_FACET_MATERIAL_V3_CLOTHED"
+    : "SERA_REFERENCE_PRESERVING_MATERIAL_V3_CLOTHED";
   return visual;
 }

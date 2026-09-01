@@ -137,6 +137,9 @@ const resetAndPose = `
     const get = (name) => model.getObjectByName(name);
     return {
       pelvis: point(get('pelvis')),
+      spine02: point(get('spine_02')),
+      chest: point(get('spine_03')),
+      neck: point(get('neck_01')),
       head: point(get('head')),
       upperArmL: point(get('upperarm_l')),
       upperArmR: point(get('upperarm_r')),
@@ -162,22 +165,31 @@ function poseDistance(a, b) {
 }
 
 function torsoPosture(points, neutralPoints) {
-  if (!points?.pelvis || !points?.upperArmL || !points?.upperArmR || !neutralPoints?.pelvis || !neutralPoints?.upperArmL || !neutralPoints?.upperArmR) return null;
+  if (!points?.pelvis || !points?.upperArmL || !points?.upperArmR || !points?.chest || !points?.neck
+      || !neutralPoints?.pelvis || !neutralPoints?.upperArmL || !neutralPoints?.upperArmR || !neutralPoints?.chest || !neutralPoints?.neck) return null;
   const midpoint = (p) => ({
     x: (p.upperArmL.x + p.upperArmR.x) * 0.5,
     y: (p.upperArmL.y + p.upperArmR.y) * 0.5,
     z: (p.upperArmL.z + p.upperArmR.z) * 0.5,
   });
+  const ratioFor = (top, pelvis) => {
+    const vertical = Math.abs(top.y - pelvis.y);
+    const horizontal = Math.hypot(top.x - pelvis.x, top.z - pelvis.z);
+    return { horizontal, vertical, ratio: vertical > 1e-5 ? horizontal / vertical : 99 };
+  };
   const shoulder = midpoint(points);
   const neutralShoulder = midpoint(neutralPoints);
-  const vertical = Math.abs(shoulder.y - points.pelvis.y);
+  const shoulderMetric = ratioFor(shoulder, points.pelvis);
+  const chestMetric = ratioFor(points.chest, points.pelvis);
+  const neckMetric = ratioFor(points.neck, points.pelvis);
   const neutralVertical = Math.abs(neutralShoulder.y - neutralPoints.pelvis.y);
-  const horizontal = Math.hypot(shoulder.x - points.pelvis.x, shoulder.z - points.pelvis.z);
   return {
-    horizontal,
-    vertical,
-    leanRatio: vertical > 1e-5 ? horizontal / vertical : 99,
-    heightRetention: neutralVertical > 1e-5 ? vertical / neutralVertical : 0,
+    horizontal: shoulderMetric.horizontal,
+    vertical: shoulderMetric.vertical,
+    leanRatio: shoulderMetric.ratio,
+    chestLeanRatio: chestMetric.ratio,
+    neckLeanRatio: neckMetric.ratio,
+    heightRetention: neutralVertical > 1e-5 ? shoulderMetric.vertical / neutralVertical : 0,
   };
 }
 
@@ -410,12 +422,12 @@ try {
   );
   for (const moveId of ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "throw", "counter"]) {
     const posture = torsoPostures[moveId];
-    if (!posture || posture.leanRatio > 0.58 || posture.heightRetention < 0.62) {
+    if (!posture || posture.leanRatio > 0.52 || posture.chestLeanRatio > 0.42 || posture.neckLeanRatio > 0.48 || posture.heightRetention < 0.68) {
       throw new Error(`Motion ${moveId} collapses the torso chain: ${JSON.stringify(posture)}`);
     }
   }
   const dashPosture = torsoPostures.dashKick;
-  if (!dashPosture || dashPosture.leanRatio > 0.95 || dashPosture.heightRetention < 0.38) {
+  if (!dashPosture || dashPosture.leanRatio > 0.72 || dashPosture.chestLeanRatio > 0.65 || dashPosture.neckLeanRatio > 0.72 || dashPosture.heightRetention < 0.55) {
     throw new Error(`Dash kick folds the body instead of driving through the target: ${JSON.stringify(dashPosture)}`);
   }
 

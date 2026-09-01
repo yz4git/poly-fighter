@@ -151,12 +151,12 @@
     },
     {
       "name": "PF_BodyBlow_L",
-      "base": "Punch_Jab",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "RIGHT",
-      "duration": 0.8666666746139526,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_l",
@@ -176,17 +176,17 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.01991
+      "maxPlanarRootShift": 0.05134,
+      "maxVerticalRootShift": 0.01738
     },
     {
       "name": "PF_BodyBlow_R",
-      "base": "Punch_Jab",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "LEFT",
-      "duration": 0.8666666746139526,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_r",
@@ -206,17 +206,17 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04503,
-      "maxVerticalRootShift": 0.01991
+      "maxPlanarRootShift": 0.05134,
+      "maxVerticalRootShift": 0.01738
     },
     {
       "name": "PF_Power_R",
-      "base": "Punch_Cross",
+      "base": "Idle_Loop",
       "family": "punch",
       "style": "HEAVY",
       "contactU": 0.73,
       "plantFoot": "LEFT",
-      "duration": 1,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "clavicle_r",
@@ -240,8 +240,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.07916,
-      "maxVerticalRootShift": 0.01613
+      "maxPlanarRootShift": 0.08345,
+      "maxVerticalRootShift": 0.01525
     },
     {
       "name": "PF_FrontKick_R",
@@ -371,12 +371,12 @@
     },
     {
       "name": "PF_Throw",
-      "base": "Punch_Cross",
+      "base": "Idle_Loop",
       "family": "throw",
       "style": "THROW",
       "contactU": 0.58,
       "plantFoot": "BOTH",
-      "duration": 1,
+      "duration": 2.5,
       "channels": 195,
       "modifiedBones": [
         "lowerarm_l",
@@ -398,8 +398,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04045,
-      "maxVerticalRootShift": 0.01796
+      "maxPlanarRootShift": 0.04593,
+      "maxVerticalRootShift": 0.01594
     },
     {
       "name": "PF_Counter_R",

@@ -66,6 +66,9 @@ test("procedural v2 generator artifact contains 23 clips, handed variants, root 
   assert.match(source, /PF_Sidestep_L/);
   assert.match(source, /PF_KickRecover/);
   assert.match(source, /FULL_BODY_BALANCE_V3/);
+  assert.match(source, /PF_Power_R.*, base: "Idle_Loop"/);
+  assert.match(source, /PF_Throw.*, base: "Idle_Loop"/);
+  assert.match(source, /PF_BodyBlow_L.*, base: "Idle_Loop"/);
   assert.match(source, /sampleCurve/);
   assert.equal(metrics.version, "PROCEDURAL_FIGHT_V2");
   assert.equal(metrics.generatedClipCount, 23);

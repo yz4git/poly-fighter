@@ -28,14 +28,14 @@ const SPECS = [
   { name: "PF_Cross_R", base: "Punch_Cross", family: "punch", style: "CROSS", side: 1, power: 0.90, contactU: 0.69, plantFoot: "LEFT" },
   { name: "PF_Backfist_R", base: "Punch_Cross", family: "punch", style: "HOOK", side: 1, power: 0.88, contactU: 0.62, plantFoot: "LEFT" },
   { name: "PF_Backfist_L", base: "Punch_Cross", family: "punch", style: "HOOK", side: -1, power: 0.88, contactU: 0.62, plantFoot: "RIGHT" },
-  { name: "PF_BodyBlow_L", base: "Punch_Jab", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" },
-  { name: "PF_BodyBlow_R", base: "Punch_Jab", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" },
-  { name: "PF_Power_R", base: "Punch_Cross", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" },
+  { name: "PF_BodyBlow_L", base: "Idle_Loop", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" },
+  { name: "PF_BodyBlow_R", base: "Idle_Loop", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" },
+  { name: "PF_Power_R", base: "Idle_Loop", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" },
   { name: "PF_FrontKick_R", base: "Idle_Loop", family: "kick", style: "FRONT_KICK", side: 1, power: 0.94, contactU: 0.64, plantFoot: "LEFT" },
   { name: "PF_LowKick_L", base: "Idle_Loop", family: "kick", style: "LOW_KICK", side: -1, power: 0.98, contactU: 0.67, plantFoot: "RIGHT" },
   { name: "PF_RisingKick_R", base: "Idle_Loop", family: "kick", style: "RISING_KICK", side: 1, power: 1.10, contactU: 0.69, plantFoot: "LEFT" },
   { name: "PF_DashKick_R", base: "Jump_Start", family: "kick", style: "DASH_KICK", side: 1, power: 1.12, contactU: 0.66, plantFoot: "AIR" },
-  { name: "PF_Throw", base: "Punch_Cross", family: "throw", style: "THROW", side: 1, power: 1.00, contactU: 0.58, plantFoot: "BOTH" },
+  { name: "PF_Throw", base: "Idle_Loop", family: "throw", style: "THROW", side: 1, power: 1.00, contactU: 0.58, plantFoot: "BOTH" },
   { name: "PF_Counter_R", base: "Punch_Cross", family: "punch", style: "COUNTER", side: 1, power: 1.00, contactU: 0.55, plantFoot: "LEFT" },
   { name: "PF_Counter_L", base: "Punch_Cross", family: "punch", style: "COUNTER", side: -1, power: 1.00, contactU: 0.55, plantFoot: "RIGHT" },
   { name: "PF_HitHeavy", base: "Hit_Chest", family: "reaction", style: "HIT_HEAVY", side: 1, power: 1.00, contactU: 0.18, plantFoot: "BOTH" },
@@ -101,14 +101,14 @@ function makeCurves(spec) {
     }
     case "BODY": {
       const arm = s < 0 ? "l" : "r";
-      torso(11, 5, -2); rootDrive(0.044, 0.010, 0.020);
+      torso(13, 2, -2); rootDrive(0.050, 0.012, 0.018);
       bones.spine_01 = bones.pelvis;
       bones[`clavicle_${arm}`] = [K(0, R()), K(anticipate, R(0, 0, 8 * s)), K(impact, R(0, 0, -13 * s)), K(1, R())];
       bones[`upperarm_${arm}`] = [K(0, R()), K(anticipate, R(11, 9 * s, 10 * s)), K(impact, R(-16, -15 * s, -10 * s)), K(settle, R(-6, -6 * s, -4 * s)), K(1, R())];
       break;
     }
     case "HEAVY":
-      torso(20, 1, 2); rootDrive(0.078, 0.014, 0.018);
+      torso(24, 0, 2); rootDrive(0.082, 0.016, 0.016);
       bones.spine_01 = bones.pelvis;
       bones.neck_01 = [K(0, R()), K(anticipate, R(0, -3 * s, 0)), K(impact, R(1, 5 * s, 0)), K(1, R())];
       bones.clavicle_r = [K(0, R()), K(anticipate, R(0, 0, 11)), K(impact, R(0, 0, -16)), K(1, R())];
@@ -123,7 +123,7 @@ function makeCurves(spec) {
       break;
     }
     case "THROW":
-      torso(16, 5, 0); rootDrive(0.042, 0, 0.018);
+      torso(18, 2, 0); rootDrive(0.046, 0, 0.016);
       bones.upperarm_l = [K(0, R()), K(anticipate, R(-12, 18, -20)), K(impact, R(-28, 6, -10)), K(1, R())];
       bones.upperarm_r = [K(0, R()), K(anticipate, R(-12, -18, 20)), K(impact, R(-28, -6, 10)), K(1, R())];
       bones.lowerarm_l = [K(0, R()), K(anticipate, R(0, 15, 18)), K(impact, R(0, 4, 8)), K(1, R())];

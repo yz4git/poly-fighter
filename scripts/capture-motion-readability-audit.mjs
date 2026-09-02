@@ -392,6 +392,10 @@ try {
         footLockError: root.userData.motionExpansionFootLockError ?? null,
         comPolicy: root.userData.motionExpansionComPolicy ?? null,
         motionDna: root.userData.motionExpansionMotionDna ?? null,
+        visualReadabilityVersion: root.userData.motionExpansionVisualReadabilityVersion ?? null,
+        kickContactSolver: root.userData.motionExpansionKickContactSolver ?? null,
+        strikeContactError: root.userData.motionExpansionStrikeContactError ?? null,
+        strikeContactBlend: root.userData.motionExpansionStrikeContactBlend ?? null,
       };
     `, [moveId]);
     if (result?.error) throw new Error(`Motion pose failed for ${moveId}: ${JSON.stringify(result)}`);
@@ -425,6 +429,17 @@ try {
     }
     if (result.motionDna !== "KAIRO_POWER") {
       throw new Error(`KAIRO motion DNA was not active for ${moveId}: ${JSON.stringify(result)}`);
+    }
+    if (result.visualReadabilityVersion !== "PROCEDURAL_FIGHT_V3_READABILITY_3") {
+      throw new Error(`Motion ${moveId} did not publish v3.2 readability telemetry: ${JSON.stringify(result)}`);
+    }
+    if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) {
+      if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V1"
+        || !Number.isFinite(result.strikeContactError)
+        || !Number.isFinite(result.strikeContactBlend)
+        || result.strikeContactBlend < 0.80) {
+        throw new Error(`Motion ${moveId} did not publish a valid v3.2 kick contact solve: ${JSON.stringify(result)}`);
+      }
     }
     if (moveId !== "dashKick") {
       if (result.footLockPolicy !== "WORLD_SPACE_SUPPORT_FOOT_IK" || !Number.isFinite(result.footLockError) || result.footLockError > 0.025) {

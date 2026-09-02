@@ -5,6 +5,7 @@ import test from 'node:test';
 const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 const panel = readFileSync(new URL('../src/components/model-viewer-panel.tsx', import.meta.url), 'utf8');
 const viewer = readFileSync(new URL('../src/game/model-viewer.ts', import.meta.url), 'utf8');
+const motionViewer = readFileSync(new URL('../src/game/model-viewer-motion.ts', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/game/visual-entry.ts', import.meta.url), 'utf8');
 const referencePose = readFileSync(new URL('../src/game/visual-v11-pose.ts', import.meta.url), 'utf8');
 
@@ -35,6 +36,33 @@ test('Model View is touch-first and disposes WebGL resources', () => {
   assert.match(panel, /RESET VIEW/);
   assert.match(panel, /DRAG TO ORBIT/);
   assert.match(panel, /PINCH TO ZOOM/);
+});
+
+test('Model View exposes a touch motion viewer with transport and scrubbing', () => {
+  assert.match(panel, /aria-label="Motion Viewer"/);
+  assert.match(panel, /aria-label="Motion clip"/);
+  assert.match(panel, /toggleMotionPlayback/);
+  assert.match(panel, /restartMotion/);
+  assert.match(panel, /stepMotion\(-1\)/);
+  assert.match(panel, /stepMotion\(1\)/);
+  assert.match(panel, /setMotionLoop/);
+  assert.match(panel, /setMotionSpeed/);
+  assert.match(panel, /aria-label="Motion timeline"/);
+  assert.match(panel, /seekMotion/);
+});
+
+test('motion viewer retargets both procedural and base packs on an isolated mixer', () => {
+  assert.match(motionViewer, /QUATERNIUS_UAL_CORE_URL/);
+  assert.match(motionViewer, /QUATERNIUS_PROCEDURAL_CORE_URL/);
+  assert.match(motionViewer, /new THREE\.AnimationMixer\(target\)/);
+  assert.match(motionViewer, /targetRest/);
+  assert.match(motionViewer, /sourceRestInverse/);
+  assert.match(motionViewer, /propertyName === "position" && nodeName === "pelvis"/);
+  assert.match(motionViewer, /source: "PROCEDURAL"/);
+  assert.match(motionViewer, /source: "BASE"/);
+  assert.match(viewer, /if \(this\.motionController\) this\.motionController\.update\(dt\)/);
+  assert.match(viewer, /else updateQuaterniusModelPreview/);
+  assert.match(viewer, /this\.motionController\?\.destroy\(\)/);
 });
 
 test('SERA reference pose does not accumulate on unchanged Model View frames', () => {

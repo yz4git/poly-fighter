@@ -81,7 +81,7 @@ const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
   jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24, plantFoot: "RIGHT" },
   straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28, plantFoot: "LEFT" },
   backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31, plantFoot: "RIGHT" },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.38, plantFoot: "RIGHT" },
   power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },
   kick: { clip: "PF_FrontKick_R", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },
   lowKick: { clip: "PF_LowKick_L", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },

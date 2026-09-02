@@ -1,0 +1,60 @@
+name: Apply v7.4 Low Kick upright balance
+
+on:
+  push:
+    branches:
+      - improve/procedural-v7-kick-kinematics-20260902
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v7-kick-kinematics-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock @gltf-transform/core@4.3.0
+      - name: Keep Low Kick torso upright while preserving hip turn
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/generate-procedural-fight-motions-v3.mjs')
+          s = p.read_text()
+          old = '''      torso(24, -1, 9);\n      rootDrive(0.030, 0.018, 0.030);'''
+          new = '''      // LOW_KICK_V7_4_UPRIGHT: keep the hip turn, but stop cumulative pelvis/spine\n      // roll from folding the torso toward the striking leg. A smaller lateral\n      // root shift keeps the head over the support side while the leg still arcs low.\n      torso(22, 0, 2);\n      rootDrive(0.030, 0.012, 0.022);'''
+          if old not in s:
+              raise SystemExit('Low Kick torso block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+      - name: Regenerate procedural fight core
+        run: |
+          node scripts/generate-procedural-fight-motions-v3.mjs \
+            public/models/quaternius/ual-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.metrics.json
+      - name: Validate Low Kick rebuild
+        run: |
+          grep -q 'LOW_KICK_V7_4_UPRIGHT' scripts/generate-procedural-fight-motions-v3.mjs
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit Low Kick rebuild
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/generate-procedural-fight-motions-v3.mjs public/models/quaternius/procedural-fight-core.glb public/models/quaternius/procedural-fight-core.metrics.json
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit'
+            exit 0
+          fi
+          git commit -m 'Keep Low Kick torso upright through impact'
+          git push origin HEAD:improve/procedural-v7-kick-kinematics-20260902

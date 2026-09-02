@@ -11,6 +11,7 @@ export const QUATERNIUS_UBC_FEMALE_MODEL_URL = `${BASE_PATH}/models/quaternius/u
 export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
 export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/procedural-fight-core.glb`;
 export const QUATERNIUS_BLENDER_CORE_URL = `${BASE_PATH}/models/quaternius/blender-fight-core.glb`;
+export const QUATERNIUS_BLENDER_CROSS_URL = `${BASE_PATH}/models/quaternius/blender-cross-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -23,6 +24,7 @@ type MotionResources = {
   base: MotionClipSource;
   procedural: MotionClipSource;
   blender: MotionClipSource | null;
+  blenderCross: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -76,17 +78,19 @@ function loadMotion(): Promise<MotionResources> {
   if (motionPromise) return motionPromise;
   const loader = new GLTFLoader();
   const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
+  const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
     blenderMotion,
-  ]).then(([base, procedural, blender]) => ({
-    // Retarget each pack against the hierarchy it was authored from. Blender
-    // Foundry is an optional authored override; a missing asset keeps the old
-    // procedural pack playable during staged deployments.
+    blenderCrossMotion,
+  ]).then(([base, procedural, blender, blenderCross]) => ({
+    // Each Blender Foundry slice is optional and falls back independently.
+    // This lets v2 Cross ship without destabilising the proven v1 Power asset.
     base: { source: base.scene, clips: base.animations },
     procedural: { source: procedural.scene, clips: procedural.animations },
     blender: blender ? { source: blender.scene, clips: blender.animations } : null,
+    blenderCross: blenderCross ? { source: blenderCross.scene, clips: blenderCross.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -437,7 +441,7 @@ function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime
 
 const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
   jab: "PF_Jab_L",
-  straight: "PF_Cross_R",
+  straight: "BF_Cross_R",
   backfist: "PF_Backfist_R",
   bodyBlow: "PF_BodyBlow_L",
   power: "BF_Power_R",
@@ -529,12 +533,23 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     const blenderClips = resources.motion.blender
       ? retargetMotionClips(resources.motion.blender.source, styled.model, resources.motion.blender.clips)
       : new Map<string, THREE.AnimationClip>();
-    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips, ...blenderClips]);
+    const blenderCrossClips = resources.motion.blenderCross
+      ? retargetMotionClips(resources.motion.blenderCross.source, styled.model, resources.motion.blenderCross.clips)
+      : new Map<string, THREE.AnimationClip>();
+    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips, ...blenderClips, ...blenderCrossClips]);
     if (!retargetedClips.has("BF_Power_R")) {
       const fallback = proceduralClips.get("PF_Power_R");
       if (fallback) {
         const alias = fallback.clone();
         alias.name = "BF_Power_R";
+        retargetedClips.set(alias.name, alias);
+      }
+    }
+    if (!retargetedClips.has("BF_Cross_R")) {
+      const fallback = proceduralClips.get("PF_Cross_R");
+      if (fallback) {
+        const alias = fallback.clone();
+        alias.name = "BF_Cross_R";
         retargetedClips.set(alias.name, alias);
       }
     }
@@ -558,9 +573,13 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
-    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size;
+    visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
     visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
       ? "BLENDER_MOTION_FOUNDRY_V1"
+      : "PROCEDURAL_FALLBACK";
+    visual.root.userData.quaterniusStraightMotionSource = blenderCrossClips.has("BF_Cross_R")
+      ? "BLENDER_MOTION_FOUNDRY_V2_CROSS"
       : "PROCEDURAL_FALLBACK";
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;

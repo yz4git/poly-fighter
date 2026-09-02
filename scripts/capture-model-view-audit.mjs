@@ -94,11 +94,13 @@ async function waitForMotionViewer(sessionId) {
         clip: select?.value ?? '',
         hasBlenderPower: options.some((option) => option.value === 'BF_Power_R'),
         hasProceduralPower: options.some((option) => option.value === 'PF_Power_R'),
+        hasBlenderCross: options.some((option) => option.value === 'BF_Cross_R'),
+        hasProceduralCross: options.some((option) => option.value === 'PF_Cross_R'),
         optionCount: options.length,
         options: options.slice(0, 80),
       };
     `);
-    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower) return state;
+    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower && state?.hasBlenderCross && state?.hasProceduralCross) return state;
     await delay(100);
   }
   throw new Error("MODEL VIEW Motion Viewer did not become ready");
@@ -200,6 +202,18 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);
 
+  const proceduralCross = await poseMotionViewer(sessionId, "PF_Cross_R", 0.5);
+  if (proceduralCross.clip !== "PF_Cross_R" || Math.abs(proceduralCross.timeline - 500) > 2 || !proceduralCross.paused) {
+    throw new Error(`Motion Viewer did not hold PF_Cross_R at 50%: ${JSON.stringify(proceduralCross)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-cross.png`);
+
+  const blenderCross = await poseMotionViewer(sessionId, "BF_Cross_R", 0.5);
+  if (blenderCross.clip !== "BF_Cross_R" || Math.abs(blenderCross.timeline - 500) > 2 || !blenderCross.paused) {
+    throw new Error(`Motion Viewer did not hold BF_Cross_R at 50%: ${JSON.stringify(blenderCross)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-cross.png`);
+
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);
   const kairo = await waitForModelView(sessionId, "KAIRO");
@@ -215,9 +229,9 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }, null, 2));
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, kairo, kairoMotionReady, titleState }, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }));
+  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, kairo, kairoMotionReady, titleState }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

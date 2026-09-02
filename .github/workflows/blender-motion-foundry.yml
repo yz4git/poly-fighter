@@ -6,14 +6,22 @@ on:
       - main
     paths:
       - tools/blender/build-fight-motion-foundry-v1.py
+      - tools/blender/build-fight-motion-foundry-v2-cross.py
       - scripts/apply-blender-motion-foundry-v1.mjs
+      - scripts/apply-blender-motion-foundry-v2.mjs
       - tests/blender-motion-foundry.test.mjs
+      - tests/blender-motion-foundry-v2.test.mjs
+      - tests/quaternius-model-skin.test.ts
+      - tests/model-viewer.test.mjs
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
       - public/models/quaternius/blender-fight-core.glb
       - public/models/quaternius/blender-fight-core.metrics.json
       - public/models/quaternius/blender-fight-core.generator.sha256
+      - public/models/quaternius/blender-cross-core.glb
+      - public/models/quaternius/blender-cross-core.metrics.json
+      - public/models/quaternius/blender-cross-core.generator.sha256
       - .github/workflows/blender-motion-foundry.yml
   workflow_dispatch:
 
@@ -21,7 +29,7 @@ jobs:
   build-motion:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
@@ -30,23 +38,32 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
-      - name: Check whether Blender artifact is current
+      - name: Check whether Blender artifacts are current
         id: foundry
         shell: bash
         run: |
           set -euo pipefail
-          script_hash="$(sha256sum tools/blender/build-fight-motion-foundry-v1.py | awk '{print $1}')"
-          echo "script_hash=$script_hash" >> "$GITHUB_OUTPUT"
+          power_hash="$(sha256sum tools/blender/build-fight-motion-foundry-v1.py | awk '{print $1}')"
+          cross_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
+          echo "power_hash=$power_hash" >> "$GITHUB_OUTPUT"
+          echo "cross_hash=$cross_hash" >> "$GITHUB_OUTPUT"
           if [ -s public/models/quaternius/blender-fight-core.glb ] \
             && [ -s public/models/quaternius/blender-fight-core.generator.sha256 ] \
-            && grep -qx "$script_hash" public/models/quaternius/blender-fight-core.generator.sha256; then
-            echo "needs_generate=false" >> "$GITHUB_OUTPUT"
+            && grep -qx "$power_hash" public/models/quaternius/blender-fight-core.generator.sha256; then
+            echo "needs_power=false" >> "$GITHUB_OUTPUT"
           else
-            echo "needs_generate=true" >> "$GITHUB_OUTPUT"
+            echo "needs_power=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -s public/models/quaternius/blender-cross-core.glb ] \
+            && [ -s public/models/quaternius/blender-cross-core.generator.sha256 ] \
+            && grep -qx "$cross_hash" public/models/quaternius/blender-cross-core.generator.sha256; then
+            echo "needs_cross=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_cross=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Fetch pinned full UAL authoring source
-        if: steps.foundry.outputs.needs_generate == 'true'
+        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true'
         run: |
           set -euxo pipefail
           mkdir -p .tmp-quaternius
@@ -56,7 +73,7 @@ jobs:
           echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1-full.glb' | sha256sum -c -
 
       - name: Install Blender
-        if: steps.foundry.outputs.needs_generate == 'true'
+        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
@@ -65,7 +82,7 @@ jobs:
           blender --background --python-use-system-env --python-expr "import numpy; print('BLENDER_NUMPY', numpy.__version__)"
 
       - name: Generate BF_Power_R in Blender
-        if: steps.foundry.outputs.needs_generate == 'true'
+        if: steps.foundry.outputs.needs_power == 'true'
         run: |
           set -euo pipefail
           export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
@@ -83,8 +100,8 @@ jobs:
           test -s "$out/blender-fight-core-v1.blend"
           cat "$out/blender-fight-core.metrics.json"
 
-      - name: Validate generated motion metrics
-        if: steps.foundry.outputs.needs_generate == 'true'
+      - name: Validate generated Power metrics
+        if: steps.foundry.outputs.needs_power == 'true'
         run: |
           python3 - <<'PY'
           import json
@@ -96,20 +113,67 @@ jobs:
           assert m['rightHandTravel'] > 0.03, m
           assert m['leftFootLockMaxDrift'] < 0.03, m
           assert m['boneCount'] >= 40, m
-          print('BLENDER_MOTION_FOUNDRY_METRICS_OK', m)
+          print('BLENDER_MOTION_FOUNDRY_POWER_METRICS_OK', m)
           PY
 
-      - name: Stage generated motion library
-        if: steps.foundry.outputs.needs_generate == 'true'
+      - name: Stage generated Power motion library
+        if: steps.foundry.outputs.needs_power == 'true'
         shell: bash
         run: |
           set -euo pipefail
           cp artifacts/blender-motion-foundry/blender-fight-core.glb public/models/quaternius/blender-fight-core.glb
           cp artifacts/blender-motion-foundry/blender-fight-core.metrics.json public/models/quaternius/blender-fight-core.metrics.json
-          printf '%s\n' '${{ steps.foundry.outputs.script_hash }}' > public/models/quaternius/blender-fight-core.generator.sha256
+          printf '%s\n' '${{ steps.foundry.outputs.power_hash }}' > public/models/quaternius/blender-fight-core.generator.sha256
+
+      - name: Generate BF_Cross_R in Blender
+        if: steps.foundry.outputs.needs_cross == 'true'
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+          out="artifacts/blender-motion-foundry-v2"
+          mkdir -p "$out"
+          xvfb-run -a blender --background \
+            --python-use-system-env \
+            --python-exit-code 1 \
+            --python tools/blender/build-fight-motion-foundry-v2-cross.py \
+            -- \
+            --source .tmp-quaternius/ual1-full.glb \
+            --output-dir "$out"
+          test -s "$out/blender-cross-core.glb"
+          test -s "$out/blender-cross-core.metrics.json"
+          test -s "$out/blender-cross-core-v2.blend"
+          cat "$out/blender-cross-core.metrics.json"
+
+      - name: Validate generated Cross metrics
+        if: steps.foundry.outputs.needs_cross == 'true'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/blender-motion-foundry-v2/blender-cross-core.metrics.json')
+          m = json.loads(p.read_text())
+          assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V2_CROSS', m
+          assert m['action'] == 'BF_Cross_R', m
+          assert m['rightHandTravel'] > 0.08, m
+          assert m['leftFootLockMaxDrift'] < 0.01, m
+          assert m['leftFootLockMaxAngularDriftDegrees'] < 1.0, m
+          assert m['pelvisTravel'] > 0.005, m
+          assert m['torsoTwistDegrees'] > 2.0, m
+          assert m['boneCount'] >= 40, m
+          print('BLENDER_MOTION_FOUNDRY_V2_CROSS_METRICS_OK', m)
+          PY
+
+      - name: Stage generated Cross motion library
+        if: steps.foundry.outputs.needs_cross == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp artifacts/blender-motion-foundry-v2/blender-cross-core.glb public/models/quaternius/blender-cross-core.glb
+          cp artifacts/blender-motion-foundry-v2/blender-cross-core.metrics.json public/models/quaternius/blender-cross-core.metrics.json
+          printf '%s\n' '${{ steps.foundry.outputs.cross_hash }}' > public/models/quaternius/blender-cross-core.generator.sha256
 
       - name: Apply runtime integration
-        run: node scripts/apply-blender-motion-foundry-v1.mjs
+        run: node scripts/apply-blender-motion-foundry-v2.mjs
 
       - uses: actions/setup-node@v4
         with:
@@ -119,15 +183,19 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate Foundry contract
-        run: node --test tests/blender-motion-foundry.test.mjs
+      - name: Validate Foundry contracts
+        run: |
+          node --test tests/blender-motion-foundry.test.mjs
+          node --test tests/blender-motion-foundry-v2.test.mjs
 
-      - name: Build and lint integrated game
+      - name: Build, rules and lint integrated game
         run: |
           npm run build
+          npm run test:rules
+          npm run test:pwa
           npm run lint
 
-      - name: Publish generated Foundry asset and integration to PR branch
+      - name: Publish generated Foundry assets and integration to PR branch
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -142,11 +210,16 @@ jobs:
             public/models/quaternius/blender-fight-core.glb \
             public/models/quaternius/blender-fight-core.metrics.json \
             public/models/quaternius/blender-fight-core.generator.sha256 \
+            public/models/quaternius/blender-cross-core.glb \
+            public/models/quaternius/blender-cross-core.metrics.json \
+            public/models/quaternius/blender-cross-core.generator.sha256 \
             src/game/visual-quaternius-runtime.ts \
             src/game/model-viewer-motion.ts \
             scripts/capture-model-view-audit.mjs \
+            tests/quaternius-model-skin.test.ts \
+            tests/model-viewer.test.mjs \
             package.json
-          git commit -m "Generate Blender Motion Foundry Power action"
+          git commit -m "Generate Blender Motion Foundry v2 Cross action"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - uses: actions/upload-artifact@v4
@@ -155,6 +228,8 @@ jobs:
           name: poly-fighter-blender-motion-foundry
           path: |
             artifacts/blender-motion-foundry
+            artifacts/blender-motion-foundry-v2
             public/models/quaternius/blender-fight-core.metrics.json
+            public/models/quaternius/blender-cross-core.metrics.json
           if-no-files-found: ignore
           retention-days: 14

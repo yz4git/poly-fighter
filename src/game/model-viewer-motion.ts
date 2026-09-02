@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { FighterVisual } from "./visual-entry";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
+  QUATERNIUS_BLENDER_CROSS_URL,
   QUATERNIUS_PROCEDURAL_CORE_URL,
   QUATERNIUS_UAL_CORE_URL,
 } from "./visual-quaternius-runtime";
@@ -39,16 +40,19 @@ function loadMotionSources(): Promise<MotionSourcePack[]> {
   if (sourcePromise) return sourcePromise;
   const loader = new GLTFLoader();
   const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
+  const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
   sourcePromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
     blenderMotion,
-  ]).then(([base, procedural, blender]) => {
+    blenderCrossMotion,
+  ]).then(([base, procedural, blender, blenderCross]) => {
     const packs: MotionSourcePack[] = [
       { root: base.scene, clips: base.animations, source: "BASE" },
       { root: procedural.scene, clips: procedural.animations, source: "PROCEDURAL" },
     ];
     if (blender) packs.push({ root: blender.scene, clips: blender.animations, source: "BLENDER" });
+    if (blenderCross) packs.push({ root: blenderCross.scene, clips: blenderCross.animations, source: "BLENDER" });
     return packs;
   }).catch((error) => {
     sourcePromise = null;

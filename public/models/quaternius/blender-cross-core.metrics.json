@@ -1,0 +1,33 @@
+{
+  "version": "BLENDER_MOTION_FOUNDRY_V2_CROSS",
+  "action": "BF_Cross_R",
+  "sourceAction": "Punch_Cross_Armature",
+  "fps": 60,
+  "startFrame": 1,
+  "endFrame": 42,
+  "durationSeconds": 0.6833333333333333,
+  "impactFrame": 21,
+  "rightHandTravel": 0.4906242518662258,
+  "leftFootLockMaxDrift": 6.02714670185944e-07,
+  "leftFootLockMaxAngularDriftDegrees": 0.0,
+  "pelvisTravel": 0.05142583211064314,
+  "torsoTwistDegrees": 31.13181782181053,
+  "constrainedFootLockMaxDrift": 3.11145380404906e-07,
+  "constrainedFootLockMaxAngularDriftDegrees": 0.0,
+  "constrainedRightHandTravel": 0.49062437287901023,
+  "constrainedPelvisTravel": 0.051425837770022416,
+  "constrainedTorsoTwistDegrees": 31.131869048229305,
+  "boneCount": 65,
+  "meshCount": 2,
+  "pipeline": [
+    "Punch_Cross source body motion",
+    "fast nonlinear whole-body retiming",
+    "COG/pelvis world-space master control",
+    "staged lower/upper torso master controls",
+    "right-hand two-bone IK contact control",
+    "world-space left support-foot position IK lock",
+    "world-space left support-foot orientation lock",
+    "Blender native NLA visual-keying bake",
+    "glTF Action export"
+  ]
+}

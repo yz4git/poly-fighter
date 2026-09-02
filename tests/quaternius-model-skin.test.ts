@@ -10,6 +10,7 @@ import {
 } from "../src/game/quaternius-outfit-skin";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
+  QUATERNIUS_BLENDER_CROSS_URL,
   QUATERNIUS_UBC_FEMALE_MODEL_URL,
   QUATERNIUS_UBC_MALE_MODEL_URL,
   QUATERNIUS_PROCEDURAL_CORE_URL,
@@ -48,6 +49,7 @@ test("KAIRO uses male UBC and SERA uses female UBC", () => {
   assert.match(QUATERNIUS_UAL_CORE_URL, /ual-fight-core\.glb$/);
   assert.match(QUATERNIUS_PROCEDURAL_CORE_URL, /procedural-fight-core\.glb$/);
   assert.match(QUATERNIUS_BLENDER_CORE_URL, /blender-fight-core\.glb$/);
+  assert.match(QUATERNIUS_BLENDER_CROSS_URL, /blender-cross-core\.glb$/);
 });
 
 test("Quaternius runtime retargets rest-pose deltas and preserves canonical combat poses", async () => {
@@ -67,18 +69,24 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /loadAsync\(QUATERNIUS_UAL_CORE_URL\)/);
   assert.match(runtime, /loadAsync\(QUATERNIUS_PROCEDURAL_CORE_URL\)/);
   assert.match(runtime, /loadAsync\(QUATERNIUS_BLENDER_CORE_URL\)/);
+  assert.match(runtime, /loadAsync\(QUATERNIUS_BLENDER_CROSS_URL\)/);
   assert.match(runtime, /base: \{ source: base\.scene, clips: base\.animations \}/);
   assert.match(runtime, /procedural: \{ source: procedural\.scene, clips: procedural\.animations \}/);
   assert.match(runtime, /blender: blender \? \{ source: blender\.scene, clips: blender\.animations \} : null/);
+  assert.match(runtime, /blenderCross: blenderCross \? \{ source: blenderCross\.scene, clips: blenderCross\.animations \} : null/);
   assert.match(runtime, /retargetMotionClips\(resources\.motion\.base\.source/);
   assert.match(runtime, /resources\.motion\.procedural\.source/);
   assert.match(runtime, /resources\.motion\.blender\.source/);
-  assert.match(runtime, /new Map<string, THREE\.AnimationClip>\(\[\.\.\.baseClips, \.\.\.proceduralClips, \.\.\.blenderClips\]\)/);
+  assert.match(runtime, /resources\.motion\.blenderCross\.source/);
+  assert.match(runtime, /new Map<string, THREE\.AnimationClip>\(\[\.\.\.baseClips, \.\.\.proceduralClips, \.\.\.blenderClips, \.\.\.blenderCrossClips\]\)/);
   assert.match(runtime, /quaterniusProceduralClipCount = proceduralClips\.size/);
-  assert.match(runtime, /quaterniusBlenderClipCount = blenderClips\.size/);
+  assert.match(runtime, /quaterniusBlenderClipCount = blenderClips\.size \+ blenderCrossClips\.size/);
+  assert.match(runtime, /quaterniusBlenderCrossClipCount = blenderCrossClips\.size/);
   assert.match(runtime, /PF_Jab_L/);
   assert.match(runtime, /PF_Power_R/);
   assert.match(runtime, /BF_Power_R/);
+  assert.match(runtime, /BF_Cross_R/);
+  assert.match(runtime, /straight: "BF_Cross_R"/);
   assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);
   assert.doesNotMatch(runtime, /poleLocal\.y \+= guard \? 0\.015 : -0\.075/);
 });

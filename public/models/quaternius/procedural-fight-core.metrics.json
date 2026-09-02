@@ -496,27 +496,35 @@
         "calf_r",
         "foot_l",
         "foot_r",
+        "lowerarm_l",
+        "lowerarm_r",
         "pelvis",
         "spine_02",
         "spine_03",
         "thigh_l",
-        "thigh_r"
+        "thigh_r",
+        "upperarm_l",
+        "upperarm_r"
       ],
       "modifiedPaths": [
         "calf_l:rotation",
         "calf_r:rotation",
         "foot_l:rotation",
         "foot_r:rotation",
+        "lowerarm_l:rotation",
+        "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
         "thigh_l:rotation",
-        "thigh_r:rotation"
+        "thigh_r:rotation",
+        "upperarm_l:rotation",
+        "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04631,
-      "maxVerticalRootShift": 0.03299
+      "maxPlanarRootShift": 0.04308,
+      "maxVerticalRootShift": 0.02716
     },
     {
       "name": "PF_LowKick_L",
@@ -553,27 +561,35 @@
         "calf_r",
         "foot_l",
         "foot_r",
+        "lowerarm_l",
+        "lowerarm_r",
         "pelvis",
         "spine_02",
         "spine_03",
         "thigh_l",
-        "thigh_r"
+        "thigh_r",
+        "upperarm_l",
+        "upperarm_r"
       ],
       "modifiedPaths": [
         "calf_l:rotation",
         "calf_r:rotation",
         "foot_l:rotation",
         "foot_r:rotation",
+        "lowerarm_l:rotation",
+        "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
         "thigh_l:rotation",
-        "thigh_r:rotation"
+        "thigh_r:rotation",
+        "upperarm_l:rotation",
+        "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.04044,
-      "maxVerticalRootShift": 0.036
+      "maxPlanarRootShift": 0.03751,
+      "maxVerticalRootShift": 0.03
     },
     {
       "name": "PF_RisingKick_R",
@@ -610,27 +626,35 @@
         "calf_r",
         "foot_l",
         "foot_r",
+        "lowerarm_l",
+        "lowerarm_r",
         "pelvis",
         "spine_02",
         "spine_03",
         "thigh_l",
-        "thigh_r"
+        "thigh_r",
+        "upperarm_l",
+        "upperarm_r"
       ],
       "modifiedPaths": [
         "calf_l:rotation",
         "calf_r:rotation",
         "foot_l:rotation",
         "foot_r:rotation",
+        "lowerarm_l:rotation",
+        "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
         "thigh_l:rotation",
-        "thigh_r:rotation"
+        "thigh_r:rotation",
+        "upperarm_l:rotation",
+        "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03237,
-      "maxVerticalRootShift": 0.02907
+      "maxPlanarRootShift": 0.03022,
+      "maxVerticalRootShift": 0.02394
     },
     {
       "name": "PF_DashKick_R",
@@ -666,26 +690,34 @@
         "calf_l",
         "calf_r",
         "foot_r",
+        "lowerarm_l",
+        "lowerarm_r",
         "pelvis",
         "spine_02",
         "spine_03",
         "thigh_l",
-        "thigh_r"
+        "thigh_r",
+        "upperarm_l",
+        "upperarm_r"
       ],
       "modifiedPaths": [
         "calf_l:rotation",
         "calf_r:rotation",
         "foot_r:rotation",
+        "lowerarm_l:rotation",
+        "lowerarm_r:rotation",
         "pelvis:rotation",
         "pelvis:translation",
         "spine_02:rotation",
         "spine_03:rotation",
         "thigh_l:rotation",
-        "thigh_r:rotation"
+        "thigh_r:rotation",
+        "upperarm_l:rotation",
+        "upperarm_r:rotation"
       ],
       "missingAnimated": [],
       "maxPlanarRootShift": 0.0708,
-      "maxVerticalRootShift": 0.02147
+      "maxVerticalRootShift": 0.01999
     },
     {
       "name": "PF_Throw",

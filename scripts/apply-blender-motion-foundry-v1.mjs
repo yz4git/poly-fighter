@@ -12,6 +12,13 @@ function replaceOnce(source, before, after, label) {
   return source.replace(before, after);
 }
 
+function replaceEither(source, befores, after, label) {
+  if (source.includes(after)) return source;
+  const before = befores.find((candidate) => source.includes(candidate));
+  if (!before) throw new Error(`Motion Foundry patch anchor missing: ${label}`);
+  return source.replace(before, after);
+}
+
 await patch("src/game/visual-quaternius-runtime.ts", (input) => {
   let source = input;
   source = replaceOnce(
@@ -79,17 +86,46 @@ await patch("src/game/model-viewer-motion.ts", (input) => {
 
 await patch("scripts/capture-model-view-audit.mjs", (input) => {
   let source = input;
-  source = replaceOnce(
+  source = replaceEither(
     source,
-    "        hasPower: options.some((option) => option.value === 'PF_Power_R'),",
-    "        hasPower: options.some((option) => option.value === 'BF_Power_R'),",
-    "audit BF power readiness",
+    [
+      "        hasPower: options.some((option) => option.value === 'PF_Power_R'),",
+      "        hasPower: options.some((option) => option.value === 'BF_Power_R'),",
+    ],
+    "        hasBlenderPower: options.some((option) => option.value === 'BF_Power_R'),\n        hasProceduralPower: options.some((option) => option.value === 'PF_Power_R'),",
+    "audit A-B power readiness fields",
   );
-  source = replaceOnce(
+  source = replaceEither(
     source,
-    '  const motionPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);\n  if (motionPower.clip !== "PF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {\n    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(motionPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-power.png`);',
-    '  const motionPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);\n  if (motionPower.clip !== "BF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {\n    throw new Error(`Motion Viewer did not hold BF_Power_R at 50%: ${JSON.stringify(motionPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);',
-    "audit BF power pose",
+    [
+      "    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasPower) return state;",
+      "    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower) return state;",
+    ],
+    "    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower) return state;",
+    "audit A-B power readiness condition",
+  );
+
+  const proceduralSingle = '  const motionPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);\n  if (motionPower.clip !== "PF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {\n    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(motionPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-power.png`);';
+  const blenderSingle = '  const motionPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);\n  if (motionPower.clip !== "BF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {\n    throw new Error(`Motion Viewer did not hold BF_Power_R at 50%: ${JSON.stringify(motionPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);';
+  const abBlock = '  const proceduralPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);\n  if (proceduralPower.clip !== "PF_Power_R" || Math.abs(proceduralPower.timeline - 500) > 2 || !proceduralPower.paused) {\n    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(proceduralPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-power.png`);\n\n  const blenderPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);\n  if (blenderPower.clip !== "BF_Power_R" || Math.abs(blenderPower.timeline - 500) > 2 || !blenderPower.paused) {\n    throw new Error(`Motion Viewer did not hold BF_Power_R at 50%: ${JSON.stringify(blenderPower)}`);\n  }\n  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);';
+  source = replaceEither(source, [proceduralSingle, blenderSingle], abBlock, "audit Power A-B capture");
+  source = replaceEither(
+    source,
+    [
+      "JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }, null, 2)",
+      "JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }, null, 2)",
+    ],
+    "JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }, null, 2)",
+    "audit A-B state output",
+  );
+  source = replaceEither(
+    source,
+    [
+      "console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }));",
+      "console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }));",
+    ],
+    "console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }));",
+    "audit A-B console output",
   );
   return source;
 });

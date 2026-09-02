@@ -1,0 +1,42 @@
+name: Apply v3 contact camera fix
+
+on:
+  push:
+    branches: [improve/procedural-v3-visual-readability-20260902]
+    paths:
+      - scripts/fix-v3-contact-camera.py
+      - .github/workflows/apply-v3-contact-camera-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v3-visual-readability-20260902
+          fetch-depth: 0
+      - name: Apply contact camera correction
+        run: python3 scripts/fix-v3-contact-camera.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TPS regression
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts
+          git commit -m "Correct v3 contact camera readability"
+          git pull --rebase origin improve/procedural-v3-visual-readability-20260902
+          git push origin HEAD:improve/procedural-v3-visual-readability-20260902

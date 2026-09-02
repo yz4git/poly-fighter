@@ -1,0 +1,146 @@
+name: POLY FIGHTER Blender Motion Foundry
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/blender/build-fight-motion-foundry-v1.py
+      - scripts/apply-blender-motion-foundry-v1.mjs
+      - tests/blender-motion-foundry.test.mjs
+      - src/game/visual-quaternius-runtime.ts
+      - src/game/model-viewer-motion.ts
+      - scripts/capture-model-view-audit.mjs
+      - public/models/quaternius/blender-fight-core.glb
+      - public/models/quaternius/blender-fight-core.metrics.json
+      - public/models/quaternius/blender-fight-core.generator.sha256
+      - .github/workflows/blender-motion-foundry.yml
+  workflow_dispatch:
+
+jobs:
+  build-motion:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Check whether Blender artifact is current
+        id: foundry
+        shell: bash
+        run: |
+          set -euo pipefail
+          script_hash="$(sha256sum tools/blender/build-fight-motion-foundry-v1.py | awk '{print $1}')"
+          echo "script_hash=$script_hash" >> "$GITHUB_OUTPUT"
+          if [ -s public/models/quaternius/blender-fight-core.glb ] \
+            && [ -s public/models/quaternius/blender-fight-core.generator.sha256 ] \
+            && grep -qx "$script_hash" public/models/quaternius/blender-fight-core.generator.sha256; then
+            echo "needs_generate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_generate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Blender
+        if: steps.foundry.outputs.needs_generate == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender libegl1 libgl1-mesa-dri xvfb
+          blender --version | head -n 2
+
+      - name: Generate BF_Power_R in Blender
+        if: steps.foundry.outputs.needs_generate == 'true'
+        run: |
+          set -euo pipefail
+          out="artifacts/blender-motion-foundry"
+          mkdir -p "$out"
+          xvfb-run -a blender --background \
+            --python-exit-code 1 \
+            --python tools/blender/build-fight-motion-foundry-v1.py \
+            -- \
+            --source public/models/quaternius/ual-fight-core.glb \
+            --output-dir "$out"
+          test -s "$out/blender-fight-core.glb"
+          test -s "$out/blender-fight-core.metrics.json"
+          test -s "$out/blender-fight-core-v1.blend"
+          cat "$out/blender-fight-core.metrics.json"
+
+      - name: Validate generated motion metrics
+        if: steps.foundry.outputs.needs_generate == 'true'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/blender-motion-foundry/blender-fight-core.metrics.json')
+          m = json.loads(p.read_text())
+          assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V1', m
+          assert m['action'] == 'BF_Power_R', m
+          assert m['rightHandTravel'] > 0.03, m
+          assert m['leftFootLockMaxDrift'] < 0.03, m
+          assert m['boneCount'] >= 40, m
+          print('BLENDER_MOTION_FOUNDRY_METRICS_OK', m)
+          PY
+
+      - name: Stage generated motion library
+        if: steps.foundry.outputs.needs_generate == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp artifacts/blender-motion-foundry/blender-fight-core.glb public/models/quaternius/blender-fight-core.glb
+          cp artifacts/blender-motion-foundry/blender-fight-core.metrics.json public/models/quaternius/blender-fight-core.metrics.json
+          printf '%s\n' '${{ steps.foundry.outputs.script_hash }}' > public/models/quaternius/blender-fight-core.generator.sha256
+
+      - name: Apply runtime integration
+        run: node scripts/apply-blender-motion-foundry-v1.mjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate Foundry contract
+        run: node --test tests/blender-motion-foundry.test.mjs
+
+      - name: Build and lint integrated game
+        run: |
+          npm run build
+          npm run lint
+
+      - name: Publish generated Foundry asset and integration to PR branch
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet --exit-code && [ -z "$(git status --porcelain)" ]; then
+            echo "Blender Motion Foundry branch is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            public/models/quaternius/blender-fight-core.glb \
+            public/models/quaternius/blender-fight-core.metrics.json \
+            public/models/quaternius/blender-fight-core.generator.sha256 \
+            src/game/visual-quaternius-runtime.ts \
+            src/game/model-viewer-motion.ts \
+            scripts/capture-model-view-audit.mjs \
+            package.json
+          git commit -m "Generate Blender Motion Foundry Power action"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-blender-motion-foundry
+          path: |
+            artifacts/blender-motion-foundry
+            public/models/quaternius/blender-fight-core.metrics.json
+          if-no-files-found: ignore
+          retention-days: 14

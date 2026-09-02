@@ -175,6 +175,10 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /IMPACT_PAIR_REACTION_STATES/);
   assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);
   assert.match(source, /applyMotionDna/);
+  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_1"/);
+  assert.match(source, /motionExpansionDnaSilhouetteStrength/);
+  assert.match(source, /motionExpansionImpactPairStrength/);
+  assert.match(source, /motionExpansionVisualReadabilityVersion/);
   assert.match(source, /motionExpansionFootLockError/);
   assert.match(source, /PROCEDURAL_URL/);
   assert.match(source, /PROCEDURAL_FIGHT_V3/);

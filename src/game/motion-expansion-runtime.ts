@@ -454,6 +454,7 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
 }
 
 const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
+const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_1";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -646,16 +647,25 @@ function impactPairAccent(runtime: ExpansionRuntime, fighter: FighterRuntime, op
   if (!attacker && !victim) return null;
   const side = attacker ? strikeSide(fighter) : -strikeSide(opponent);
   if (attacker) {
-    const power = fighter.currentMove?.power ?? 1;
-    addRotation(runtime, "pelvis", 0, side * 0.025 * power, 0, 1);
-    addRotation(runtime, "spine_02", 0, side * 0.045 * power, side * 0.012, 1);
-    addRotation(runtime, "spine_03", 0, side * 0.055 * power, side * 0.018, 1);
+    const power = THREE.MathUtils.clamp(fighter.currentMove?.power ?? 1, 0.7, 2.2);
+    const accent = 0.88 + power * 0.18;
+    addRotation(runtime, "pelvis", 0.010 * power, side * 0.034 * power, side * 0.010, accent);
+    addRotation(runtime, "spine_02", 0.012 * power, side * 0.060 * power, side * 0.020, accent);
+    addRotation(runtime, "spine_03", 0.018 * power, side * 0.078 * power, side * 0.030, accent);
+    addRotation(runtime, "head", -0.008, -side * 0.030, -side * 0.020, accent);
+    fighter.visual.root.userData.motionExpansionImpactPairStrength = accent;
     return "ATTACKER";
   }
-  addRotation(runtime, "pelvis", 0.018, -side * 0.035, side * 0.045, 1);
-  addRotation(runtime, "spine_02", 0.045, -side * 0.055, side * 0.070, 1);
-  addRotation(runtime, "spine_03", 0.060, -side * 0.070, side * 0.090, 1);
-  addRotation(runtime, "head", 0.018, -side * 0.055, side * 0.080, 1);
+  const incomingPower = THREE.MathUtils.clamp(opponent.currentMove?.power ?? 1, 0.7, 2.2);
+  const recoil = 0.92 + incomingPower * 0.17;
+  addRotation(runtime, "pelvis", 0.030, -side * 0.050, side * 0.075, recoil);
+  addRotation(runtime, "spine_02", 0.070, -side * 0.085, side * 0.115, recoil);
+  addRotation(runtime, "spine_03", 0.090, -side * 0.105, side * 0.145, recoil);
+  addRotation(runtime, "neck_01", 0.035, -side * 0.095, side * 0.125, recoil);
+  addRotation(runtime, "head", 0.035, -side * 0.090, side * 0.135, recoil);
+  addRotation(runtime, "upperarm_l", 0.035, side * 0.045, -side * 0.055, recoil);
+  addRotation(runtime, "upperarm_r", 0.025, side * 0.035, side * 0.060, recoil);
+  fighter.visual.root.userData.motionExpansionImpactPairStrength = recoil;
   return "VICTIM";
 }
 
@@ -665,13 +675,32 @@ function applyMotionDna(runtime: ExpansionRuntime, fighter: FighterRuntime): voi
   const weights = attackWeights(fighter);
   const side = strikeSide(fighter);
   if (dna.id === "KAIRO_POWER") {
-    addRotation(runtime, "pelvis", 0, side * 0.035 * dna.hipLead, 0, weights.drive);
-    addRotation(runtime, "spine_02", 0, side * 0.025 * dna.chestFollow, 0, weights.drive);
-    if (weights.phase === "RECOVERY") addRotation(runtime, "spine_03", 0.020 * dna.recoil, -side * 0.020, 0, 1 - weights.drive);
+    // KAIRO visibly commits mass through hip -> chest -> shoulder, then keeps a
+    // heavier overtravel in recovery. Foot Lock runs afterwards and preserves
+    // the authored support foot despite the larger upper-body torque.
+    addRotation(runtime, "pelvis", 0.018, side * 0.060 * dna.hipLead, side * 0.012, weights.drive);
+    addRotation(runtime, "spine_02", 0.026, side * 0.050 * dna.chestFollow, side * 0.016, weights.drive);
+    addRotation(runtime, "spine_03", 0.038, side * 0.055 * dna.chestFollow, side * 0.022, weights.drive);
+    addRotation(runtime, "head", -0.012, -side * 0.025, -side * 0.018, weights.drive);
+    if (weights.phase === "RECOVERY") {
+      const settle = 1 - weights.drive;
+      addRotation(runtime, "spine_02", 0.026 * dna.recoil, -side * 0.024, side * 0.014, settle);
+      addRotation(runtime, "spine_03", 0.042 * dna.recoil, -side * 0.034, side * 0.020, settle);
+    }
+    fighter.visual.root.userData.motionExpansionDnaSilhouetteStrength = 1.28;
   } else {
-    addRotation(runtime, "pelvis", 0, side * 0.018, -side * 0.030 * dna.lateral, weights.drive);
-    addRotation(runtime, "spine_03", -0.018, side * 0.018, -side * 0.025 * dna.lateral, weights.drive);
-    if (weights.phase === "RECOVERY") addRotation(runtime, "pelvis", -0.012, -side * 0.025, side * 0.018, 1 - weights.drive);
+    // SERA takes a narrower, more elastic line: stronger lateral slip, quicker
+    // chest counter-rotation and a visibly springy return instead of KAIRO's mass.
+    addRotation(runtime, "pelvis", -0.010, side * 0.026, -side * 0.066 * dna.lateral, weights.drive);
+    addRotation(runtime, "spine_02", -0.018, -side * 0.030, -side * 0.042 * dna.lateral, weights.drive);
+    addRotation(runtime, "spine_03", -0.032, side * 0.036, -side * 0.062 * dna.lateral, weights.drive);
+    addRotation(runtime, "head", 0.008, -side * 0.030, side * 0.028, weights.drive);
+    if (weights.phase === "RECOVERY") {
+      const settle = 1 - weights.drive;
+      addRotation(runtime, "pelvis", -0.020, -side * 0.040, side * 0.030, settle);
+      addRotation(runtime, "spine_03", -0.018, -side * 0.025, side * 0.038, settle);
+    }
+    fighter.visual.root.userData.motionExpansionDnaSilhouetteStrength = 1.42;
   }
 }
 
@@ -878,6 +907,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionComPolicy = "PLANT_WEIGHTED_BOUNDED_COM";
   fighter.visual.root.userData.motionExpansionImpactPairRole = impactPairRole;
   fighter.visual.root.userData.motionExpansionMotionDna = motionDnaForFighter(fighter.definition).id;
+  fighter.visual.root.userData.motionExpansionVisualReadabilityVersion = V3_VISUAL_READABILITY_VERSION;
   fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";
   return true;
 }

@@ -292,12 +292,12 @@ function phaseAlignedAttackPoseU(fighter: FighterRuntime, tick: number): number 
     return THREE.MathUtils.lerp(0, timing.pre, smooth01(progress));
   }
   if (tick < move.startup + move.active) {
-    const progress = THREE.MathUtils.clamp((tick - move.startup) / Math.max(1, move.active), 0, 1);
-    const impactAt = 0.46;
-    if (progress <= impactAt) {
-      return THREE.MathUtils.lerp(timing.pre, timing.impact, smooth01(progress / impactAt));
-    }
-    return THREE.MathUtils.lerp(timing.impact, timing.over, smooth01((progress - impactAt) / (1 - impactAt)));
+    // Gameplay hitboxes become live on the first ACTIVE frame, so the visible
+    // strike must already be at authored contact at that exact boundary.
+    // STARTUP ends at PRE/chamber; ACTIVE snaps to IMPACT then carries through
+    // OVERTRAVEL. This removes the old invisible-hit gap while preserving recoil.
+    const progress = THREE.MathUtils.clamp((tick - move.startup) / Math.max(1, move.active - 1), 0, 1);
+    return THREE.MathUtils.lerp(timing.impact, timing.over, smooth01(progress));
   }
   const recovery = THREE.MathUtils.clamp(
     (tick - move.startup - move.active) / Math.max(1, move.recovery),
@@ -402,7 +402,7 @@ function syncKickActionToAuthoredPose(runtime: ExpansionRuntime, fighter: Fighte
   const poseU = phaseAlignedAttackPoseU(fighter, Math.max(0, fighter.moveTick));
   action.time = THREE.MathUtils.clamp(poseU, 0, 0.99999) * clip.duration;
   runtime.mixer.update(0);
-  fighter.visual.root.userData.motionExpansionTimelinePolicy = "PHASE_ALIGNED_KICK_V1";
+  fighter.visual.root.userData.motionExpansionTimelinePolicy = "PHASE_ALIGNED_KICK_V2";
   fighter.visual.root.userData.motionExpansionAuthoredPoseU = poseU;
 }
 

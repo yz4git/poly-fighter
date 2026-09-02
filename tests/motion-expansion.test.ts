@@ -184,7 +184,7 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /motionExpansionStrikeContactBlend/);
   assert.match(source, /phaseAlignedAttackPoseU/);
   assert.match(source, /syncKickActionToAuthoredPose/);
-  assert.match(source, /PHASE_ALIGNED_KICK_V1/);
+  assert.match(source, /PHASE_ALIGNED_KICK_V2/);
   assert.match(source, /motionExpansionAuthoredPoseU/);
   assert.match(source, /motionExpansionDnaSilhouetteStrength/);
   assert.match(source, /motionExpansionImpactPairStrength/);

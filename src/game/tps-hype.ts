@@ -14,14 +14,14 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   heavyKnockdownVerticalSpeed: 5.25,
   maxShockRings: 10,
   maxBurstSpokes: 4,
-  lightImpactRingCount: 2,
-  mediumImpactRingCount: 2,
-  heavyImpactRingCount: 3,
-  impactRingExpansion: 2.2,
-  heavyBurstScale: 0.64,
+  lightImpactRingCount: 1,
+  mediumImpactRingCount: 1,
+  heavyImpactRingCount: 2,
+  impactRingExpansion: 1.6,
+  heavyBurstScale: 0.48,
   perfectStepFovRush: 4.8,
   dashFovRush: 3.8,
-  heavyImpactFovPunch: -7.2,
+  heavyImpactFovPunch: -5.2,
 });
 
 type ImpactTier = 1 | 2 | 3;
@@ -87,7 +87,7 @@ function burstGeometry(): THREE.BufferGeometry {
 
 export class TpsHypeDirector {
   readonly group = new THREE.Group();
-  private readonly ringGeometry = new THREE.RingGeometry(0.22, 0.29, 40);
+  private readonly ringGeometry = new THREE.RingGeometry(0.18, 0.235, 40);
   private readonly spokeGeometry = burstGeometry();
   private readonly rings: ShockRing[] = [];
   private readonly bursts: BurstSpokes[] = [];
@@ -161,7 +161,7 @@ export class TpsHypeDirector {
       ring.mesh.rotateZ(index * 0.44 + tier * 0.11);
       ring.mesh.scale.setScalar(ring.startScale);
       ring.mesh.material.color.setHex(color);
-      ring.mesh.material.opacity = event.blocked ? 0.42 : Math.max(0.44, 0.92 - index * 0.11);
+      ring.mesh.material.opacity = event.blocked ? 0.36 : Math.max(0.38, 0.76 - index * 0.10);
     }
 
     const burst = this.bursts.find((entry) => entry.life <= 0) ?? this.bursts[0];
@@ -174,7 +174,7 @@ export class TpsHypeDirector {
     burst.lines.rotation.z += tier * 0.17;
     burst.lines.scale.setScalar(burst.startScale);
     burst.lines.material.color.setHex(color);
-    burst.lines.material.opacity = event.blocked ? 0.32 : tier === 3 ? 0.82 : 0.68;
+    burst.lines.material.opacity = event.blocked ? 0.28 : tier === 3 ? 0.68 : 0.58;
 
     if (event.blocked) {
       this.fovOffset = Math.max(this.fovOffset, 0.65);
@@ -183,7 +183,7 @@ export class TpsHypeDirector {
       return;
     }
 
-    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -3.8 : -1.7;
+    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -2.9 : -1.2;
     this.fovOffset = Math.min(this.fovOffset, tierFov);
     this.cameraKick = Math.max(this.cameraKick, tier === 3 ? 0.22 : tier === 2 ? 0.105 : 0.045);
     this.cameraSide = (event.attacker === "p1" ? 1 : -1)
@@ -193,7 +193,7 @@ export class TpsHypeDirector {
     this.cameraShake = Math.max(this.cameraShake, tier === 3 ? 0.115 : tier === 2 ? 0.060 : 0.030);
 
     if (event.counter) {
-      this.fovOffset = Math.min(this.fovOffset, -8.4);
+      this.fovOffset = Math.min(this.fovOffset, -6.4);
       this.cameraKick = Math.max(this.cameraKick, 0.26);
       this.cameraShake = Math.max(this.cameraShake, 0.14);
     }

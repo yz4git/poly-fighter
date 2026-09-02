@@ -39,6 +39,22 @@ const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.55;
 const TPS_CAMERA_CLOSE_BACK_DELTA = -0.58;
 const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.30;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
+const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
+const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
+const TPS_IMPACT_CONTACT_MINIMUM = 1.28;
+const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
+  jab: 2.62,
+  straight: 2.60,
+  backfist: 2.48,
+  bodyBlow: 2.12,
+  power: 2.35,
+  kick: 1.80,
+  lowKick: 0.92,
+  risingKick: 2.06,
+  dashKick: 1.98,
+  throw: 1.75,
+  counter: 2.66,
+});
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 
@@ -797,7 +813,7 @@ export class TpsFightGame {
     const blocked = defenderGuarding && move.hitLevel !== "THROW" && !flankStrike;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-    impactPosition.y = move.hitLevel === "LOW" ? 0.55 : 1.35;
+    impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
 
     if (blocked) {
       defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);
@@ -842,9 +858,24 @@ export class TpsFightGame {
     const distance = delta.length();
     const p1Throwing = this.p1.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p1.state);
     const p2Throwing = this.p2.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p2.state);
-    // Preserve throw contact, but keep normal strikes from collapsing both silhouettes
-    // into the same screen-space column on iPhone landscape.
-    const minimum = p1Throwing || p2Throwing ? 0.98 : 1.12;
+    // Preserve throw contact. For resolved normal strikes, open a slightly wider
+    // contact lane only while hit-stop freezes the pair. Hit detection has already
+    // completed before this runs, so gameplay reach stays unchanged; the following
+    // visual pass can solve the striking limb back onto the opponent from a clearer
+    // full-body silhouette.
+    const impactFrozen = Math.max(this.p1.hitStop, this.p2.hitStop) > 0;
+    const p1Impacting = this.p1.state === "ATTACK"
+      && ["HIT", "BLOCK_STUN", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(this.p2.state);
+    const p2Impacting = this.p2.state === "ATTACK"
+      && ["HIT", "BLOCK_STUN", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(this.p1.state);
+    const impactPair = impactFrozen && (p1Impacting || p2Impacting);
+    const throwContact = p1Throwing || p2Throwing;
+    const minimum = throwContact ? 0.98 : impactPair ? TPS_IMPACT_CONTACT_MINIMUM : 1.12;
+    const spacingMode = throwContact ? "THROW" : impactPair ? "IMPACT_PAIR" : "NEUTRAL";
+    this.p1.visual.root.userData.tpsContactSpacingMode = spacingMode;
+    this.p2.visual.root.userData.tpsContactSpacingMode = spacingMode;
+    this.p1.visual.root.userData.tpsContactSpacingMinimum = minimum;
+    this.p2.visual.root.userData.tpsContactSpacingMinimum = minimum;
     if (distance >= minimum || distance < 1e-5) return;
     const correction = delta.normalize().multiplyScalar((minimum - distance) * 0.5);
     this.p1.position.addScaledVector(correction, -1);
@@ -887,15 +918,22 @@ export class TpsFightGame {
     // At melee range rotate the composition toward a 3/4 side lane rather
     // than simply pulling the shoulder camera farther away. This keeps camera-to-
     // player distance nearly unchanged while increasing screen-space separation.
-    const backDistance = 4.70 + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA + compactLandscapeFactor * 0.18;
-    const shoulderOffset = 2.50 + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
-      + compactLandscapeFactor * (0.52 + closeFactor * 0.48);
-    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06;
+    const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
+    const backDistance = 4.70
+      + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
+      + compactLandscapeFactor * 0.18
+      + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA;
+    const shoulderOffset = 2.50
+      + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
+      + compactLandscapeFactor * (0.52 + closeFactor * 0.48)
+      + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER;
+    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035;
     const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift)
+      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift + impactReadabilityFactor * 0.080)
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
+    this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;
     this.camera.userData.tpsShoulderOffset = shoulderOffset;
     this.camera.userData.tpsTargetHeight = targetHeight;
     this.cameraDesired.copy(this.p1.position)

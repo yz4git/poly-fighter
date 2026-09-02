@@ -1,0 +1,51 @@
+name: Isolate motion readability audit samples
+
+on:
+  push:
+    branches:
+      - improve/procedural-v7-kick-kinematics-20260902
+    paths:
+      - .github/workflows/v74-motion-audit-isolation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v7-kick-kinematics-20260902
+      - name: Isolate each readability sample from the previous mixer pose
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/capture-motion-readability-audit.mjs')
+          s = p.read_text()
+          old = '''      game.p1.facing = 1;\n      game.p2.facing = -1;\n      if (!game.p1.beginMove(moveId)) return { error: 'move-not-found', moveId };\n      const move = game.p1.currentMove;\n      let auditTime = performance.now() / 1000;'''
+          new = '''      game.p1.facing = 1;\n      game.p2.facing = -1;\n      // resetFighter clears gameplay state but the Three.js mixer still contains\n      // the previous sampled move. Let Idle_Loop fully win its short crossfade\n      // before capturing a new move so every readability sample starts from the\n      // same grounded neutral pose instead of inheriting a prior ACTIVE kick.\n      let auditTime = performance.now() / 1000;\n      for (let settle = 0; settle < 8; settle += 1) {\n        auditTime += 1 / 60;\n        game.updateVisual(game.p1, game.p2, auditTime);\n        game.updateVisual(game.p2, game.p1, auditTime + 0.007);\n      }\n      if (!game.p1.beginMove(moveId)) return { error: 'move-not-found', moveId };\n      const move = game.p1.currentMove;'''
+          if old not in s:
+              if 'the previous sampled move' in s:
+                  raise SystemExit(0)
+              raise SystemExit('readability isolation anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate harness change
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit harness isolation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-motion-readability-audit.mjs
+          git commit -m "Isolate motion readability samples"
+          git push origin HEAD:improve/procedural-v7-kick-kinematics-20260902

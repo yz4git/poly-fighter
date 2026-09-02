@@ -55,7 +55,7 @@ test('motion viewer retargets both procedural and base packs on an isolated mixe
   assert.match(motionViewer, /QUATERNIUS_UAL_CORE_URL/);
   assert.match(motionViewer, /QUATERNIUS_PROCEDURAL_CORE_URL/);
   assert.match(motionViewer, /new THREE\.AnimationMixer\(target\)/);
-  assert.match(motionViewer, /targetRest/);
+  assert.match(motionViewer, /targetNode\.quaternion/);
   assert.match(motionViewer, /sourceRestInverse/);
   assert.match(motionViewer, /propertyName === "position" && nodeName === "pelvis"/);
   assert.match(motionViewer, /source: "PROCEDURAL"/);

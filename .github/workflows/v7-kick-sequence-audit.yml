@@ -1,4 +1,4 @@
-name: V7.2 kick sequence WebGL audit
+name: V7.3 kick sequence WebGL audit
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: v72-kick-sequence-${{ github.ref }}
+  group: v73-kick-sequence-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Select v7.2 contact frames
+      - name: Select v7.3 contact frames
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -45,28 +45,28 @@ jobs:
           PY
       - name: Start production preview
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-v72-sequence.log 2>&1 &
+          PORT=3000 npm start > /tmp/poly-fighter-v73-sequence.log 2>&1 &
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/poly-fighter-v72-sequence.log
+          cat /tmp/poly-fighter-v73-sequence.log
           exit 1
       - name: Capture kick sequence
         run: |
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
           test -n "$DRIVER"
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" KICK_AUDIT_DIR="artifacts/kick-sequence-v72" node scripts/capture-kick-sequence-v7.mjs
-          test -s artifacts/kick-sequence-v72/kick-sequence.json
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" KICK_AUDIT_DIR="artifacts/kick-sequence-v73" node scripts/capture-kick-sequence-v7.mjs
+          test -s artifacts/kick-sequence-v73/kick-sequence.json
           for move in kick lowKick risingKick dashKick; do
             for phase in chamber impact recoil; do
-              test -s "artifacts/kick-sequence-v72/${move}-${phase}.png"
+              test -s "artifacts/kick-sequence-v73/${move}-${phase}.png"
             done
           done
           node - <<'NODE'
           const fs = require('fs');
-          const report = JSON.parse(fs.readFileSync('artifacts/kick-sequence-v72/kick-sequence.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync('artifacts/kick-sequence-v73/kick-sequence.json', 'utf8'));
           for (const [move, data] of Object.entries(report)) {
             for (const phase of ['chamber', 'impact', 'recoil']) {
               if (data[phase]?.timelinePolicy !== 'PHASE_ALIGNED_KICK_V2') throw new Error(`${move}/${phase} is not V2: ${JSON.stringify(data[phase])}`);
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: poly-fighter-v72-kick-sequence
-          path: artifacts/kick-sequence-v72
+          name: poly-fighter-v73-kick-sequence
+          path: artifacts/kick-sequence-v73
           if-no-files-found: error
           retention-days: 7

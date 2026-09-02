@@ -456,8 +456,9 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
 }
 
 const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
-const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_2";
+const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3";
 const V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";
+const V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -527,18 +528,18 @@ function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): v
  * procedural rig's own fist/foot position, which visually collapsed different
  * clips back into one generic pose. V2 instead aims partly toward the opponent.
  */
-function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {
+function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): number {
   const move = fighter.currentMove;
-  if (fighter.state !== "ATTACK" || !move || !move.visualContact || move.visualContact === "BODY") return;
+  if (fighter.state !== "ATTACK" || !move || !move.visualContact || move.visualContact === "BODY") return -1;
   const weights = attackWeights(fighter);
-  if (weights.impact <= 0.02) return;
+  if (weights.impact <= 0.02) return -1;
   const spec = motionSpecForMove(move);
   const foot = move.visualContact.endsWith("FOOT");
   const suffix = move.visualContact.startsWith("LEFT") ? "l" : "r";
   const root = runtime.bones.get(foot ? `thigh_${suffix}` : `upperarm_${suffix}`);
   const mid = runtime.bones.get(foot ? `calf_${suffix}` : `lowerarm_${suffix}`);
   const end = runtime.bones.get(foot ? `foot_${suffix}` : `hand_${suffix}`);
-  if (!root || !mid || !end) return;
+  if (!root || !mid || !end) return -1;
 
   runtime.model.updateMatrixWorld(true);
   const current = end.getWorldPosition(new THREE.Vector3());
@@ -546,12 +547,23 @@ function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, op
   const target = styleTarget(opponent, spec.style, side);
   const blend = THREE.MathUtils.clamp(spec.contactBlend * weights.impact, 0, 0.92);
   const solvedTarget = current.clone().lerp(target, blend);
+  const kickPole = foot
+    ? spec.style === "LOW_KICK"
+      ? { lateral: 0.42, y: 0.30, z: 0.34 }
+      : spec.style === "RISING_KICK"
+        ? { lateral: 0.40, y: 0.82, z: 0.42 }
+        : spec.style === "DASH_KICK"
+          ? { lateral: 0.38, y: 0.66, z: 0.46 }
+          : { lateral: 0.40, y: 0.62, z: 0.44 }
+    : null;
   const pole = fighter.visual.root.localToWorld(new THREE.Vector3(
-    (suffix === "l" ? -1 : 1) * (foot ? 0.48 : 0.62),
-    foot ? 0.46 : 0.80,
-    foot ? 0.24 : 0.32,
+    (suffix === "l" ? -1 : 1) * (kickPole?.lateral ?? 0.62),
+    kickPole?.y ?? 0.80,
+    kickPole?.z ?? 0.32,
   ));
   solveLimb(root, mid, end, solvedTarget, pole);
+  runtime.model.updateMatrixWorld(true);
+  return end.getWorldPosition(new THREE.Vector3()).distanceTo(target);
 }
 
 function captureFootLocks(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
@@ -893,7 +905,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   airborneAccent(runtime, fighter);
   const impactPairRole = impactPairAccent(runtime, fighter, opponent);
   runtime.model.updateMatrixWorld(true);
-  strikeTrajectory(runtime, fighter, opponent);
+  const strikeContactError = strikeTrajectory(runtime, fighter, opponent);
   runtime.model.updateMatrixWorld(true);
   const footLockError = solveFootLock(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
@@ -912,6 +924,9 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionMotionDna = motionDnaForFighter(fighter.definition).id;
   fighter.visual.root.userData.motionExpansionVisualReadabilityVersion = V3_VISUAL_READABILITY_VERSION;
   fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;
+  fighter.visual.root.userData.motionExpansionKickContactSolver = V3_KICK_CONTACT_SOLVER;
+  fighter.visual.root.userData.motionExpansionStrikeContactError = strikeContactError;
+  fighter.visual.root.userData.motionExpansionStrikeContactBlend = fighter.currentMove ? motionSpecForMove(fighter.currentMove).contactBlend : 0;
   fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";
   return true;
 }

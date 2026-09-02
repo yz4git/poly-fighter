@@ -1,0 +1,52 @@
+name: V7 kick sequence WebGL audit
+
+on:
+  push:
+    branches:
+      - improve/procedural-v7-kick-kinematics-20260902
+    paths:
+      - .github/workflows/v7-kick-sequence-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-v7-sequence.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-v7-sequence.log
+          exit 1
+      - name: Capture kick sequence
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" KICK_AUDIT_DIR="artifacts/kick-sequence-v7" node scripts/capture-kick-sequence-v7.mjs
+          test -s artifacts/kick-sequence-v7/kick-sequence.json
+          for move in kick lowKick risingKick dashKick; do
+            for phase in chamber impact recoil; do
+              test -s "artifacts/kick-sequence-v7/${move}-${phase}.png"
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-v7-kick-sequence
+          path: artifacts/kick-sequence-v7
+          if-no-files-found: error
+          retention-days: 7

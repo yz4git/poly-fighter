@@ -280,13 +280,39 @@ function smooth01(value: number): number {
   return t * t * (3 - 2 * t);
 }
 
+function phaseAlignedAttackPoseU(fighter: FighterRuntime, tick: number): number {
+  const move = fighter.currentMove;
+  if (!move) return 1;
+  const total = Math.max(1, move.startup + move.active + move.recovery);
+  if (move.animation !== "kick") return THREE.MathUtils.clamp(tick / total, 0, 1);
+
+  const timing = motionTimingForMove(move);
+  if (tick < move.startup) {
+    const progress = THREE.MathUtils.clamp(tick / Math.max(1, move.startup), 0, 1);
+    return THREE.MathUtils.lerp(0, timing.pre, smooth01(progress));
+  }
+  if (tick < move.startup + move.active) {
+    const progress = THREE.MathUtils.clamp((tick - move.startup) / Math.max(1, move.active), 0, 1);
+    const impactAt = 0.46;
+    if (progress <= impactAt) {
+      return THREE.MathUtils.lerp(timing.pre, timing.impact, smooth01(progress / impactAt));
+    }
+    return THREE.MathUtils.lerp(timing.impact, timing.over, smooth01((progress - impactAt) / (1 - impactAt)));
+  }
+  const recovery = THREE.MathUtils.clamp(
+    (tick - move.startup - move.active) / Math.max(1, move.recovery),
+    0,
+    1,
+  );
+  return THREE.MathUtils.lerp(timing.over, 1, smooth01(recovery));
+}
+
 function attackWeights(fighter: FighterRuntime): AttackWeights {
   const move = fighter.currentMove;
   if (!move) return { drive: 0, impact: 0, phase: "RECOVERY", progress: 1, poseU: 1 };
   const tick = Math.max(0, fighter.moveTick);
-  const total = Math.max(1, move.startup + move.active + move.recovery);
-  const poseU = THREE.MathUtils.clamp(tick / total, 0, 1);
   const timing = motionTimingForMove(move);
+  const poseU = phaseAlignedAttackPoseU(fighter, tick);
   const launchDrive = smooth01((poseU - timing.launch) / Math.max(0.001, timing.impact - timing.launch));
   const recoilDrive = 1 - smooth01((poseU - timing.over) / Math.max(0.001, timing.settle - timing.over));
   const drive = THREE.MathUtils.clamp(launchDrive * recoilDrive, 0, 1);
@@ -366,6 +392,18 @@ function playClip(
   action.fadeIn(blend).play();
   runtime.currentClip = name;
   runtime.currentAction = action;
+}
+
+function syncKickActionToAuthoredPose(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  const move = fighter.currentMove;
+  const action = runtime.currentAction;
+  if (fighter.state !== "ATTACK" || !move || move.animation !== "kick" || !action || !runtime.currentClip.startsWith("PF_")) return;
+  const clip = action.getClip();
+  const poseU = phaseAlignedAttackPoseU(fighter, Math.max(0, fighter.moveTick));
+  action.time = THREE.MathUtils.clamp(poseU, 0, 0.99999) * clip.duration;
+  runtime.mixer.update(0);
+  fighter.visual.root.userData.motionExpansionTimelinePolicy = "PHASE_ALIGNED_KICK_V1";
+  fighter.visual.root.userData.motionExpansionAuthoredPoseU = poseU;
 }
 
 function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaternion): void {
@@ -895,6 +933,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
     comboLinked ? COMBO_LINK_BLEND_SECONDS : undefined,
   );
   runtime.mixer.update(delta);
+  syncKickActionToAuthoredPose(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
   captureFootLocks(runtime, fighter);
   solveCenterOfMass(runtime, fighter, opponent);

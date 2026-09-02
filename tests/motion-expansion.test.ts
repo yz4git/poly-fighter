@@ -101,7 +101,7 @@ test("procedural v3 generator contains pose graph, support-foot authoring, COM a
   assert.ok(planarClips >= 12, `only ${planarClips} v3 clips contain planar root motion`);
 });
 
-test("v3 mappings retain generated recovery clips and authored support feet", () => {
+test("v7.1 kick mappings retain authored support feet and keep the attack clip through recovery", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const jab = motionSpecForMove(kairo.moves.jab);
   const backfist = motionSpecForMove(kairo.moves.backfist);
@@ -123,10 +123,10 @@ test("v3 mappings retain generated recovery clips and authored support feet", ()
   assert.equal(low.clip, "PF_LowKick_L");
   assert.equal(rising.clip, "PF_RisingKick_R");
   assert.equal(dash.clip, "PF_DashKick_R");
-  assert.equal(kick.recoveryClip, "PF_KickRecover");
-  assert.equal(low.recoveryClip, "PF_KickRecover");
-  assert.equal(rising.recoveryClip, "PF_KickRecover");
-  assert.equal(dash.recoveryClip, "PF_KickRecover");
+  assert.equal(kick.recoveryClip, undefined);
+  assert.equal(low.recoveryClip, undefined);
+  assert.equal(rising.recoveryClip, undefined);
+  assert.equal(dash.recoveryClip, undefined);
   assert.ok(kick.contactBlend >= 0.82 && kick.contactBlend <= 0.90);
   assert.ok(low.contactBlend >= 0.80 && low.contactBlend <= 0.88);
   assert.ok(rising.contactBlend >= 0.88 && rising.contactBlend <= 0.94);
@@ -182,6 +182,10 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1"/);
   assert.match(source, /motionExpansionStrikeContactError/);
   assert.match(source, /motionExpansionStrikeContactBlend/);
+  assert.match(source, /phaseAlignedAttackPoseU/);
+  assert.match(source, /syncKickActionToAuthoredPose/);
+  assert.match(source, /PHASE_ALIGNED_KICK_V1/);
+  assert.match(source, /motionExpansionAuthoredPoseU/);
   assert.match(source, /motionExpansionDnaSilhouetteStrength/);
   assert.match(source, /motionExpansionImpactPairStrength/);
   assert.match(source, /motionExpansionVisualReadabilityVersion/);

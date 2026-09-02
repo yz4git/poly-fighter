@@ -6,6 +6,7 @@ on:
       - improve/procedural-v7-kick-kinematics-20260902
     paths:
       - .github/workflows/v73-kick-plant-apply.yml
+      - scripts/patch-kick-plant-solver-v73.py
 
 permissions:
   contents: write

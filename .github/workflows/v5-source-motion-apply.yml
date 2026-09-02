@@ -60,9 +60,8 @@ jobs:
           }'''
           new = '''function handedClipForMove(move: MoveDefinition, fallback: string): string {
             const left = move.visualContact?.startsWith("LEFT") === true;
-            // Source-library clips already carry a coherent whole-body performance.
-            // Only mirror procedural PF variants; do not silently replace a selected
-            // source clip with the old synthetic clip.
+            // Preserve coherent source-library performances. Only PF procedural
+            // variants are mirrored through the old left/right clip table.
             if (fallback.startsWith("PF_")) {
               if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
               if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
@@ -78,15 +77,30 @@ jobs:
 
           t = Path('tests/motion-expansion.test.ts')
           ts = t.read_text()
-          ts = ts.replace('assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");', 'assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V5_SOURCE_HYBRID");')
-          # Existing clip-name assertions are intentionally relaxed for the source-hybrid A/B pass.
-          ts = ts.replace('assert.equal(backfist.clip, "PF_Backfist_R");', 'assert.equal(backfist.clip, "Melee_Hook");')
-          ts = ts.replace('assert.equal(body.clip, "PF_BodyBlow_L");', 'assert.equal(body.clip, "Shield_OneShot");')
-          ts = ts.replace('assert.equal(power.clip, "PF_Power_R");', 'assert.equal(power.clip, "Melee_Hook");')
-          ts = ts.replace('assert.equal(kick.clip, "PF_FrontKick_R");', 'assert.equal(kick.clip, "NinjaJump_Start");')
-          ts = ts.replace('assert.equal(lowKick.clip, "PF_LowKick_L");', 'assert.equal(lowKick.clip, "Slide_Start");')
-          ts = ts.replace('assert.equal(risingKick.clip, "PF_RisingKick_R");', 'assert.equal(risingKick.clip, "NinjaJump_Start");')
-          ts = ts.replace('assert.equal(dashKick.clip, "PF_DashKick_R");', 'assert.equal(dashKick.clip, "NinjaJump_Start");')
+          replacements = {
+            'assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");': 'assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V5_SOURCE_HYBRID");',
+            'assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");': 'assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "SOURCE_MOTION_WITH_RUNTIME_IK_FOOT_LOCK");',
+            'assert.equal(backfist.clip, "PF_Backfist_R");': 'assert.equal(backfist.clip, "Melee_Hook");',
+            'assert.equal(backfist.recoveryClip, "PF_HeavyRecover");': 'assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");',
+            'assert.equal(body.clip, "PF_BodyBlow_L");': 'assert.equal(body.clip, "Shield_OneShot");',
+            'assert.equal(power.clip, "PF_Power_R");': 'assert.equal(power.clip, "Melee_Hook");',
+            'assert.equal(power.recoveryClip, "PF_HeavyRecover");': 'assert.equal(power.recoveryClip, "Melee_Hook_Rec");',
+            'assert.equal(kick.clip, "PF_FrontKick_R");': 'assert.equal(kick.clip, "NinjaJump_Start");',
+            'assert.equal(low.clip, "PF_LowKick_L");': 'assert.equal(low.clip, "Slide_Start");',
+            'assert.equal(rising.clip, "PF_RisingKick_R");': 'assert.equal(rising.clip, "NinjaJump_Start");',
+            'assert.equal(dash.clip, "PF_DashKick_R");': 'assert.equal(dash.clip, "NinjaJump_Start");',
+            'assert.equal(kick.recoveryClip, "PF_KickRecover");': 'assert.equal(kick.recoveryClip, "NinjaJump_Land");',
+            'assert.equal(low.recoveryClip, "PF_KickRecover");': 'assert.equal(low.recoveryClip, "Slide_Exit");',
+            'assert.equal(rising.recoveryClip, "PF_KickRecover");': 'assert.equal(rising.recoveryClip, "NinjaJump_Land");',
+            'assert.equal(dash.recoveryClip, "PF_KickRecover");': 'assert.equal(dash.recoveryClip, "NinjaJump_Land");',
+            'assert.equal(motionSpecForMove(kairo.moves.backfist).clip, "PF_Backfist_R");': 'assert.equal(motionSpecForMove(kairo.moves.backfist).clip, "Melee_Hook");',
+            'assert.equal(motionSpecForMove(sera.moves.backfist).clip, "PF_Backfist_L");': 'assert.equal(motionSpecForMove(sera.moves.backfist).clip, "Melee_Hook");',
+            'assert.equal(motionSpecForMove(kairo.moves.bodyBlow).clip, "PF_BodyBlow_L");': 'assert.equal(motionSpecForMove(kairo.moves.bodyBlow).clip, "Shield_OneShot");',
+            'assert.equal(motionSpecForMove(sera.moves.bodyBlow).clip, "PF_BodyBlow_R");': 'assert.equal(motionSpecForMove(sera.moves.bodyBlow).clip, "Shield_OneShot");',
+          }
+          for old, new in replacements.items():
+              assert old in ts, old
+              ts = ts.replace(old, new)
           t.write_text(ts)
       - name: Validate hybrid profile
         run: |

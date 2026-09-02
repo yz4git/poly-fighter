@@ -79,6 +79,67 @@ async function waitForModelView(sessionId, fighter) {
   throw new Error(`MODEL VIEW did not become ready for ${fighter}`);
 }
 
+async function waitForMotionViewer(sessionId) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const state = await execute(sessionId, `
+      const viewer = document.querySelector('[aria-label="Motion Viewer"]');
+      const select = viewer?.querySelector('select[aria-label="Motion clip"]');
+      const timeline = viewer?.querySelector('input[aria-label="Motion timeline"]');
+      const options = select ? [...select.options].map((option) => ({ value: option.value, label: option.textContent })) : [];
+      return {
+        viewer: Boolean(viewer),
+        select: Boolean(select),
+        timeline: Boolean(timeline),
+        timelineDisabled: timeline?.disabled ?? true,
+        clip: select?.value ?? '',
+        hasPower: options.some((option) => option.value === 'PF_Power_R'),
+        optionCount: options.length,
+        options: options.slice(0, 80),
+      };
+    `);
+    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasPower) return state;
+    await delay(100);
+  }
+  throw new Error("MODEL VIEW Motion Viewer did not become ready");
+}
+
+async function poseMotionViewer(sessionId, clipName, normalized) {
+  const selected = await execute(sessionId, `
+    const clipName = arguments[0];
+    const select = document.querySelector('select[aria-label="Motion clip"]');
+    if (!select || ![...select.options].some((option) => option.value === clipName)) return { selected: false };
+    select.value = clipName;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return { selected: true, clip: select.value };
+  `, [clipName]);
+  if (!selected?.selected) throw new Error(`Motion clip was not selectable: ${clipName}`);
+  await delay(120);
+
+  await execute(sessionId, `
+    const pause = [...document.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Pause motion');
+    pause?.click();
+    const timeline = document.querySelector('input[aria-label="Motion timeline"]');
+    if (!timeline) return { posed: false };
+    timeline.value = String(Math.round(arguments[0] * 1000));
+    timeline.dispatchEvent(new Event('input', { bubbles: true }));
+    timeline.dispatchEvent(new Event('change', { bubbles: true }));
+    return { posed: true, value: timeline.value };
+  `, [normalized]);
+  await delay(120);
+
+  return execute(sessionId, `
+    const select = document.querySelector('select[aria-label="Motion clip"]');
+    const timeline = document.querySelector('input[aria-label="Motion timeline"]');
+    const play = [...document.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Play motion');
+    return {
+      clip: select?.value ?? '',
+      timeline: Number(timeline?.value ?? -1),
+      paused: Boolean(play),
+      motionViewerText: document.querySelector('[aria-label="Motion Viewer"]')?.textContent?.slice(0, 500) ?? '',
+    };
+  `);
+}
+
 async function screenshot(sessionId, path) {
   const encoded = await command(`/session/${sessionId}/screenshot`);
   const bytes = Buffer.from(encoded, "base64");
@@ -118,12 +179,19 @@ try {
   const sera = await waitForModelView(sessionId, "SERA");
   await delay(700);
   const seraAfterLoad = await waitForModelView(sessionId, "SERA");
+  const motionReady = await waitForMotionViewer(sessionId);
   await screenshot(sessionId, `${outputDir}/model-view-sera.png`);
+  const motionPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);
+  if (motionPower.clip !== "PF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {
+    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(motionPower)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/model-view-motion-power.png`);
 
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);
   const kairo = await waitForModelView(sessionId, "KAIRO");
   await delay(250);
+  const kairoMotionReady = await waitForMotionViewer(sessionId);
   await screenshot(sessionId, `${outputDir}/model-view-kairo.png`);
 
   const reset = await clickButton(sessionId, "RESET VIEW");
@@ -134,9 +202,9 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, kairo, titleState }, null, 2));
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, kairo, titleState }));
+  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

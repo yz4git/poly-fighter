@@ -1,7 +1,7 @@
 {
   "version": "PROCEDURAL_FIGHT_V3",
   "source": "public/models/quaternius/ual-fight-core.glb",
-  "output": "public/models/quaternius/procedural-fight-core.glb",
+  "output": "/tmp/procedural-v3.glb",
   "generatedClipCount": 23,
   "clips": [
     "PF_Backfist_L",

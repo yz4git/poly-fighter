@@ -1,0 +1,301 @@
+{
+  "version": "SOURCE_FOUNDATION_V1",
+  "source": "public/models/quaternius/ual-fight-core.glb",
+  "procedural": "/tmp/procedural-v3.glb",
+  "output": "/tmp/procedural-v6.glb",
+  "foundations": [
+    {
+      "target": "PF_BodyBlow_L",
+      "source": "Punch_Jab",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.52
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.44
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.46
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.4
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.3
+        },
+        {
+          "bone": "thigh_r",
+          "path": "rotation",
+          "weight": 0.18
+        },
+        {
+          "bone": "calf_r",
+          "path": "rotation",
+          "weight": 0.14
+        },
+        {
+          "bone": "foot_r",
+          "path": "rotation",
+          "weight": 0.1
+        }
+      ],
+      "maxRotationDeltaDeg": 7.709,
+      "maxTranslationDelta": 0.02815
+    },
+    {
+      "target": "PF_BodyBlow_R",
+      "source": "Punch_Cross",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.52
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.44
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.46
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.4
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.3
+        },
+        {
+          "bone": "thigh_l",
+          "path": "rotation",
+          "weight": 0.18
+        },
+        {
+          "bone": "calf_l",
+          "path": "rotation",
+          "weight": 0.14
+        },
+        {
+          "bone": "foot_l",
+          "path": "rotation",
+          "weight": 0.1
+        }
+      ],
+      "maxRotationDeltaDeg": 10.508,
+      "maxTranslationDelta": 0.01669
+    },
+    {
+      "target": "PF_Power_R",
+      "source": "Punch_Cross",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.64
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.54
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.56
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.48
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.36
+        },
+        {
+          "bone": "thigh_l",
+          "path": "rotation",
+          "weight": 0.22
+        },
+        {
+          "bone": "calf_l",
+          "path": "rotation",
+          "weight": 0.18
+        },
+        {
+          "bone": "foot_l",
+          "path": "rotation",
+          "weight": 0.12
+        },
+        {
+          "bone": "thigh_r",
+          "path": "rotation",
+          "weight": 0.1
+        }
+      ],
+      "maxRotationDeltaDeg": 12.933,
+      "maxTranslationDelta": 0.02048
+    },
+    {
+      "target": "PF_FrontKick_R",
+      "source": "Jump_Start",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.3
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.28
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.2
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.16
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.1
+        },
+        {
+          "bone": "thigh_l",
+          "path": "rotation",
+          "weight": 0.34
+        },
+        {
+          "bone": "calf_l",
+          "path": "rotation",
+          "weight": 0.3
+        },
+        {
+          "bone": "foot_l",
+          "path": "rotation",
+          "weight": 0.22
+        }
+      ],
+      "maxRotationDeltaDeg": 26.872,
+      "maxTranslationDelta": 0.10572
+    },
+    {
+      "target": "PF_LowKick_L",
+      "source": "Jump_Start",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.22
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.18
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.14
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.12
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.08
+        },
+        {
+          "bone": "thigh_r",
+          "path": "rotation",
+          "weight": 0.28
+        },
+        {
+          "bone": "calf_r",
+          "path": "rotation",
+          "weight": 0.24
+        },
+        {
+          "bone": "foot_r",
+          "path": "rotation",
+          "weight": 0.18
+        }
+      ],
+      "maxRotationDeltaDeg": 26.792,
+      "maxTranslationDelta": 0.06797
+    },
+    {
+      "target": "PF_RisingKick_R",
+      "source": "Jump_Start",
+      "tracks": [
+        {
+          "bone": "pelvis",
+          "path": "rotation",
+          "weight": 0.4
+        },
+        {
+          "bone": "pelvis",
+          "path": "translation",
+          "weight": 0.38
+        },
+        {
+          "bone": "spine_01",
+          "path": "rotation",
+          "weight": 0.24
+        },
+        {
+          "bone": "spine_02",
+          "path": "rotation",
+          "weight": 0.2
+        },
+        {
+          "bone": "spine_03",
+          "path": "rotation",
+          "weight": 0.14
+        },
+        {
+          "bone": "thigh_l",
+          "path": "rotation",
+          "weight": 0.4
+        },
+        {
+          "bone": "calf_l",
+          "path": "rotation",
+          "weight": 0.34
+        },
+        {
+          "bone": "foot_l",
+          "path": "rotation",
+          "weight": 0.24
+        }
+      ],
+      "maxRotationDeltaDeg": 30.608,
+      "maxTranslationDelta": 0.14348
+    }
+  ]
+}

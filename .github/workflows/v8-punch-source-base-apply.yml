@@ -43,6 +43,18 @@ jobs:
             s = s.replace(old, new, 1)
           s = s.replace('// KICK_MOTION_V7: chamber -> extension -> re-chamber with support-foot-safe authored curves.', '// KICK_MOTION_V7: chamber -> extension -> re-chamber with support-foot-safe authored curves.\n// PUNCH_MOTION_V8_SOURCE_BASE: BODY/HEAVY reuse proven punch source mechanics before pose-graph shaping.')
           p.write_text(s)
+
+          t = Path('tests/motion-expansion.test.ts')
+          ts = t.read_text()
+          test_replacements = {
+            'assert.match(source, /PF_Power_R.*, base: "Idle_Loop"/);': 'assert.match(source, /PF_Power_R.*, base: "Punch_Cross"/);',
+            'assert.match(source, /PF_BodyBlow_L.*, base: "Idle_Loop"/);': 'assert.match(source, /PF_BodyBlow_L.*, base: "Punch_Jab"/);',
+          }
+          for old, new in test_replacements.items():
+            if old not in ts:
+              raise SystemExit(f'missing test contract: {old}')
+            ts = ts.replace(old, new, 1)
+          t.write_text(ts)
       - name: Regenerate procedural fight core
         run: |
           node scripts/generate-procedural-fight-motions-v3.mjs \
@@ -68,7 +80,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add scripts/generate-procedural-fight-motions-v3.mjs public/models/quaternius/procedural-fight-core.glb public/models/quaternius/procedural-fight-core.metrics.json
+          git add scripts/generate-procedural-fight-motions-v3.mjs public/models/quaternius/procedural-fight-core.glb public/models/quaternius/procedural-fight-core.metrics.json tests/motion-expansion.test.ts
           if git diff --cached --quiet; then
             echo 'No candidate changes'
             exit 0

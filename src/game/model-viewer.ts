@@ -8,12 +8,18 @@ import {
   type FighterVisualQuality,
 } from "./visual-entry";
 import { updateQuaterniusModelPreview } from "./visual-quaternius-runtime";
+import {
+  ModelViewerMotionController,
+  unavailableModelViewerMotionSnapshot,
+  type ModelViewerMotionSnapshot,
+} from "./model-viewer-motion";
 
 export interface ModelViewerOptions {
   definition: FighterDefinition;
   quality?: FighterVisualQuality;
   modelId?: FighterModelId;
   onFallback?: (message: string) => void;
+  onMotionState?: (state: ModelViewerMotionSnapshot) => void;
 }
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -29,6 +35,12 @@ export class ModelViewer {
   private readonly pointers = new Map<number, THREE.Vector2>();
   private readonly target = new THREE.Vector3();
   private readonly floor = new THREE.Group();
+  private readonly motionCapable: boolean;
+  private readonly onMotionState?: (state: ModelViewerMotionSnapshot) => void;
+  private motionController: ModelViewerMotionController | null = null;
+  private motionLoading = false;
+  private motionLastNotify = 0;
+  private destroyed = false;
   private raf = 0;
   private running = false;
   private lastTime = 0;
@@ -42,6 +54,9 @@ export class ModelViewer {
 
   constructor(mount: HTMLElement, options: ModelViewerOptions) {
     this.mount = mount;
+    const modelId = options.modelId ?? "ORIGINAL";
+    this.motionCapable = modelId === "QUATERNIUS_UBC";
+    this.onMotionState = options.onMotionState;
     try {
       this.renderer = new THREE.WebGLRenderer({
         antialias: options.quality !== "LOW",
@@ -77,11 +92,12 @@ export class ModelViewer {
     fill.position.set(-5, 2, -4);
     this.scene.add(hemi, key, rim, fill);
 
-    this.visual = createFighterVisual(options.definition, options.quality ?? "NORMAL", options.modelId ?? "ORIGINAL");
+    this.visual = createFighterVisual(options.definition, options.quality ?? "NORMAL", modelId);
     this.scene.add(this.visual.root);
     this.createFloor(options.definition.colors.primary);
     this.fitModel(true);
     this.runtimeState = String(this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    this.emitMotionState(true);
 
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
@@ -199,11 +215,78 @@ export class ModelViewer {
     this.updateCamera();
   };
 
+  private emitMotionState(force = false, time = performance.now()): void {
+    if (!this.onMotionState) return;
+    if (!force && time - this.motionLastNotify < 80) return;
+    this.motionLastNotify = time;
+    if (this.motionController) {
+      this.onMotionState(this.motionController.snapshot());
+      return;
+    }
+    this.onMotionState(unavailableModelViewerMotionSnapshot(this.motionCapable && (this.motionLoading || this.runtimeState === "loading")));
+  }
+
+  private ensureMotionController(): void {
+    if (!this.motionCapable || this.motionController || this.motionLoading || this.destroyed || this.runtimeState !== "ready") return;
+    this.motionLoading = true;
+    this.emitMotionState(true);
+    void ModelViewerMotionController.create(this.visual).then((controller) => {
+      if (this.destroyed) {
+        controller.destroy();
+        return;
+      }
+      this.motionController = controller;
+      this.motionLoading = false;
+      this.fitModel(false);
+      this.emitMotionState(true);
+    }).catch((error: unknown) => {
+      this.motionLoading = false;
+      this.visual.root.userData.modelViewerMotionState = "failed";
+      console.error("[POLY FIGHTER] Model View motion controller failed", error);
+      this.emitMotionState(true);
+    });
+  }
+
   reset(): void {
     this.yaw = 0.34;
     this.pitch = 0.055;
     this.userMoved = false;
     this.fitModel(true);
+  }
+
+  setMotionClip(name: string): void {
+    this.motionController?.setClip(name);
+    this.emitMotionState(true);
+  }
+
+  toggleMotionPlayback(): void {
+    this.motionController?.togglePlaying();
+    this.emitMotionState(true);
+  }
+
+  setMotionLoop(loop: boolean): void {
+    this.motionController?.setLoop(loop);
+    this.emitMotionState(true);
+  }
+
+  setMotionSpeed(speed: number): void {
+    this.motionController?.setSpeed(speed);
+    this.emitMotionState(true);
+  }
+
+  seekMotion(normalized: number): void {
+    this.motionController?.seekNormalized(normalized);
+    this.emitMotionState(true);
+  }
+
+  restartMotion(): void {
+    this.motionController?.restart();
+    this.emitMotionState(true);
+  }
+
+  stepMotion(frames: number): void {
+    this.motionController?.step(frames / 60);
+    this.emitMotionState(true);
   }
 
   start(): void {
@@ -217,7 +300,8 @@ export class ModelViewer {
     if (!this.running) return;
     const dt = clamp((time - this.lastTime) / 1000, 0, 0.05);
     this.lastTime = time;
-    updateQuaterniusModelPreview(this.visual, time / 1000);
+    if (this.motionController) this.motionController.update(dt);
+    else updateQuaterniusModelPreview(this.visual, time / 1000);
     if (!this.userMoved && this.pointers.size === 0) {
       this.yaw += dt * 0.16;
       this.updateCamera();
@@ -226,12 +310,16 @@ export class ModelViewer {
     if (nextRuntimeState !== this.runtimeState) {
       this.runtimeState = nextRuntimeState;
       if (nextRuntimeState === "ready") this.fitModel(false);
+      this.emitMotionState(true, time);
     }
+    this.ensureMotionController();
+    this.emitMotionState(false, time);
     this.renderer.render(this.scene, this.camera);
     this.raf = window.requestAnimationFrame(this.loop);
   };
 
   destroy(): void {
+    this.destroyed = true;
     this.running = false;
     window.cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.resize);
@@ -242,6 +330,8 @@ export class ModelViewer {
     this.renderer.domElement.removeEventListener("pointercancel", this.onPointerEnd);
     this.renderer.domElement.removeEventListener("lostpointercapture", this.onPointerEnd);
     this.renderer.domElement.removeEventListener("wheel", this.onWheel);
+    this.motionController?.destroy();
+    this.motionController = null;
     disposeFighterVisual(this.visual);
     this.floor.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;

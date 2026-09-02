@@ -1,0 +1,77 @@
+name: Apply v8 punch source-base experiment
+
+on:
+  push:
+    branches:
+      - improve/procedural-v8-punch-chain-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v8-punch-chain-20260903
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock @gltf-transform/core@4.3.0
+      - name: Replace idle strike foundations with authored punch motion
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/generate-procedural-fight-motions-v3.mjs')
+          s = p.read_text()
+          replacements = {
+            '{ name: "PF_BodyBlow_L", base: "Idle_Loop", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" }':
+            '{ name: "PF_BodyBlow_L", base: "Punch_Jab", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" }',
+            '{ name: "PF_BodyBlow_R", base: "Idle_Loop", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" }':
+            '{ name: "PF_BodyBlow_R", base: "Punch_Cross", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" }',
+            '{ name: "PF_Power_R", base: "Idle_Loop", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" }':
+            '{ name: "PF_Power_R", base: "Punch_Cross", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" }',
+          }
+          for old, new in replacements.items():
+            if old not in s:
+              raise SystemExit(f'missing source spec: {old}')
+            s = s.replace(old, new, 1)
+          s = s.replace('// KICK_MOTION_V7: chamber -> extension -> re-chamber with support-foot-safe authored curves.', '// KICK_MOTION_V7: chamber -> extension -> re-chamber with support-foot-safe authored curves.\n// PUNCH_MOTION_V8_SOURCE_BASE: BODY/HEAVY reuse proven punch source mechanics before pose-graph shaping.')
+          p.write_text(s)
+      - name: Regenerate procedural fight core
+        run: |
+          node scripts/generate-procedural-fight-motions-v3.mjs \
+            public/models/quaternius/ual-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.metrics.json
+      - name: Verify experiment contract
+        shell: python
+        run: |
+          import json
+          d=json.load(open('public/models/quaternius/procedural-fight-core.metrics.json'))
+          m={x['name']: x for x in d['metrics']}
+          assert m['PF_BodyBlow_L']['base']=='Punch_Jab'
+          assert m['PF_BodyBlow_R']['base']=='Punch_Cross'
+          assert m['PF_Power_R']['base']=='Punch_Cross'
+          print({k:m[k]['base'] for k in ['PF_BodyBlow_L','PF_BodyBlow_R','PF_Power_R']})
+      - name: Validate product
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit source-base candidate
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/generate-procedural-fight-motions-v3.mjs public/models/quaternius/procedural-fight-core.glb public/models/quaternius/procedural-fight-core.metrics.json
+          if git diff --cached --quiet; then
+            echo 'No candidate changes'
+            exit 0
+          fi
+          git commit -m 'Use authored punch mechanics for body and power strikes'
+          git push origin HEAD:improve/procedural-v8-punch-chain-20260903

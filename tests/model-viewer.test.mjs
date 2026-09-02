@@ -60,6 +60,9 @@ test('motion viewer retargets both procedural and base packs on an isolated mixe
   assert.match(motionViewer, /propertyName === "position" && nodeName === "pelvis"/);
   assert.match(motionViewer, /source: "PROCEDURAL"/);
   assert.match(motionViewer, /source: "BASE"/);
+  assert.match(motionViewer, /function restoreBindPose/);
+  assert.match(motionViewer, /mesh\.skeleton\.pose\(\)/);
+  assert.match(motionViewer, /restoreBindPose\(target\)/);
   assert.match(viewer, /if \(this\.motionController\) this\.motionController\.update\(dt\)/);
   assert.match(viewer, /else updateQuaterniusModelPreview/);
   assert.match(viewer, /this\.motionController\?\.destroy\(\)/);

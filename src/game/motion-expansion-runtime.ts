@@ -414,17 +414,32 @@ function strikeSide(fighter: FighterRuntime): -1 | 1 {
   return fighter.currentMove?.visualContact?.startsWith("LEFT") ? -1 : 1;
 }
 
+function targetRigPoint(opponent: FighterRuntime, importedName: string, fallback: THREE.Object3D): THREE.Vector3 {
+  const opponentRuntime = runtimes.get(opponent.visual.root);
+  if (opponentRuntime) {
+    opponentRuntime.model.updateMatrixWorld(true);
+    const imported = opponentRuntime.bones.get(importedName);
+    if (imported) return imported.getWorldPosition(new THREE.Vector3());
+  }
+  return fallback.getWorldPosition(new THREE.Vector3());
+}
+
 function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1): THREE.Vector3 {
   opponent.visual.root.updateMatrixWorld(true);
-  const bones = opponent.visual.rig.bones;
-  const head = bones.head.getWorldPosition(new THREE.Vector3());
-  const chest = bones.chest.getWorldPosition(new THREE.Vector3());
-  const hips = bones.hips.getWorldPosition(new THREE.Vector3());
-  const leftShin = bones.leftShin.getWorldPosition(new THREE.Vector3());
-  const rightShin = bones.rightShin.getWorldPosition(new THREE.Vector3());
+  const visual = opponent.visual.rig.bones;
+  const opponentRuntime = runtimes.get(opponent.visual.root);
+  const hips = targetRigPoint(opponent, "pelvis", visual.hips);
+  const chest = targetRigPoint(opponent, "spine_03", visual.chest);
+  const neck = targetRigPoint(opponent, "neck_01", visual.head);
+  const importedHead = opponentRuntime?.bones.get("head");
+  const head = importedHead
+    ? importedHead.getWorldPosition(new THREE.Vector3())
+    : neck.clone().add(new THREE.Vector3(0, 0.20, 0));
+  const leftShin = targetRigPoint(opponent, "calf_l", visual.leftShin);
+  const rightShin = targetRigPoint(opponent, "calf_r", visual.rightShin);
   const body = chest.clone().lerp(hips, 0.42);
   const legs = leftShin.clone().lerp(rightShin, 0.5).lerp(hips, 0.18);
-  const forward = opponent.position.clone().sub(bones.hips.getWorldPosition(new THREE.Vector3()));
+  const forward = opponent.position.clone().sub(hips);
   forward.y = 0;
   if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
   forward.normalize();
@@ -459,6 +474,8 @@ const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
 const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3";
 const V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";
 const V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1";
+const V4_KINETIC_CHAIN = "SUPPORT_HIP_CHEST_STRIKE_V1";
+const V4_TARGET_RIG = "VISIBLE_IMPORTED_RIG_V1";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -522,6 +539,25 @@ function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): v
   }
 }
 
+function strikePoleLocal(style: MotionStyle, foot: boolean, suffix: "l" | "r"): THREE.Vector3 {
+  const side = suffix === "l" ? -1 : 1;
+  if (foot) {
+    switch (style) {
+      case "LOW_KICK": return new THREE.Vector3(side * 0.50, 0.38, 0.28);
+      case "RISING_KICK": return new THREE.Vector3(side * 0.18, 0.98, 0.50);
+      case "DASH_KICK": return new THREE.Vector3(side * 0.16, 0.82, 0.58);
+      default: return new THREE.Vector3(side * 0.18, 0.76, 0.54);
+    }
+  }
+  switch (style) {
+    case "HOOK": return new THREE.Vector3(side * 0.44, 0.94, 0.24);
+    case "BODY_BLOW": return new THREE.Vector3(side * 0.28, 0.72, 0.40);
+    case "HEAVY": return new THREE.Vector3(side * 0.32, 0.86, 0.38);
+    case "COUNTER": return new THREE.Vector3(side * 0.24, 0.90, 0.42);
+    default: return new THREE.Vector3(side * 0.22, 0.92, 0.44);
+  }
+}
+
 /**
  * Preserve the imported authored animation and only bias the striking limb near
  * the contact frame. V1 solved the imported limb all the way to the OLD
@@ -547,23 +583,56 @@ function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, op
   const target = styleTarget(opponent, spec.style, side);
   const blend = THREE.MathUtils.clamp(spec.contactBlend * weights.impact, 0, 0.92);
   const solvedTarget = current.clone().lerp(target, blend);
-  const kickPole = foot
-    ? spec.style === "LOW_KICK"
-      ? { lateral: 0.42, y: 0.30, z: 0.34 }
-      : spec.style === "RISING_KICK"
-        ? { lateral: 0.40, y: 0.82, z: 0.42 }
-        : spec.style === "DASH_KICK"
-          ? { lateral: 0.38, y: 0.66, z: 0.46 }
-          : { lateral: 0.40, y: 0.62, z: 0.44 }
-    : null;
-  const pole = fighter.visual.root.localToWorld(new THREE.Vector3(
-    (suffix === "l" ? -1 : 1) * (kickPole?.lateral ?? 0.62),
-    kickPole?.y ?? 0.80,
-    kickPole?.z ?? 0.32,
-  ));
+  fighter.visual.root.updateMatrixWorld(true);
+  const pole = fighter.visual.root.localToWorld(strikePoleLocal(spec.style, foot, suffix));
   solveLimb(root, mid, end, solvedTarget, pole);
   runtime.model.updateMatrixWorld(true);
   return end.getWorldPosition(new THREE.Vector3()).distanceTo(target);
+}
+
+function kineticChainAccent(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const move = fighter.currentMove;
+  if (fighter.state !== "ATTACK" || !move) return;
+  const spec = motionSpecForMove(move);
+  const weights = attackWeights(fighter);
+  const timing = motionTimingForMove(move);
+  const dna = motionDnaForFighter(fighter.definition);
+  const side = strikeSide(fighter);
+  const launch = smooth01((weights.poseU - timing.hold) / Math.max(0.001, timing.impact - timing.hold));
+  const commit = THREE.MathUtils.clamp(Math.max(weights.drive * 0.72, weights.impact), 0, 1);
+  const load = THREE.MathUtils.clamp(1 - launch, 0, 1);
+  const target = styleTarget(opponent, spec.style, side);
+  runtime.model.updateMatrixWorld(true);
+  const localTarget = runtime.model.worldToLocal(target.clone());
+  const aimYaw = THREE.MathUtils.clamp(Math.atan2(localTarget.x, Math.max(0.30, Math.abs(localTarget.z))), -0.26, 0.26);
+  const kick = spec.style === "FRONT_KICK" || spec.style === "LOW_KICK" || spec.style === "RISING_KICK" || spec.style === "DASH_KICK";
+
+  if (!kick && spec.style !== "THROW") {
+    const factor = spec.style === "HEAVY" ? 1.16
+      : spec.style === "HOOK" ? 1.04
+      : spec.style === "BODY_BLOW" ? 0.90
+      : spec.style === "COUNTER" ? 0.86
+      : spec.style === "CROSS" ? 0.78
+      : 0.58;
+    // Rear foot/hip starts the strike, ribcage follows, shoulder arrives last.
+    addRotation(runtime, "pelvis", -0.010 * factor, -side * 0.024 * factor * load + side * 0.052 * factor * dna.hipLead * launch, side * 0.008 * factor, commit);
+    addRotation(runtime, "spine_02", -0.014 * factor, -side * 0.016 * factor * load + side * 0.040 * factor * dna.chestFollow * launch + aimYaw * 0.12, side * 0.006 * factor, commit);
+    addRotation(runtime, "spine_03", spec.style === "HEAVY" ? -0.050 : spec.style === "BODY_BLOW" ? -0.026 : -0.012, side * 0.025 * factor * launch + aimYaw * 0.10, -side * 0.006 * factor, commit);
+    const strikeLeft = move.visualContact?.startsWith("LEFT") === true;
+    const clavicle = strikeLeft ? "clavicle_l" : "clavicle_r";
+    addRotation(runtime, clavicle, 0, side * 0.012 * factor, -side * 0.030 * factor, weights.impact);
+    return;
+  }
+
+  if (kick) {
+    const turn = spec.style === "LOW_KICK" ? 0.16 : spec.style === "RISING_KICK" ? 0.085 : spec.style === "DASH_KICK" ? 0.065 : 0.095;
+    const backLean = spec.style === "RISING_KICK" ? 0.050 : spec.style === "DASH_KICK" ? 0.042 : spec.style === "FRONT_KICK" ? 0.035 : 0.012;
+    // The support hip turns into the kick while the ribcage counterbalances.
+    addRotation(runtime, "pelvis", -0.010, -side * turn * dna.hipLead, side * (spec.style === "LOW_KICK" ? 0.026 : 0.012), commit);
+    addRotation(runtime, "spine_02", -backLean, side * turn * 0.28, -side * 0.018, commit);
+    addRotation(runtime, "spine_03", -backLean * 0.72, side * turn * 0.16, -side * 0.026, commit);
+    addRotation(runtime, "head", 0.006, -side * turn * 0.12, side * 0.012, commit);
+  }
 }
 
 function captureFootLocks(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
@@ -898,6 +967,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   runtime.model.updateMatrixWorld(true);
   captureFootLocks(runtime, fighter);
   solveCenterOfMass(runtime, fighter, opponent);
+  kineticChainAccent(runtime, fighter, opponent);
   attackSilhouette(runtime, fighter);
   fullBodyStrikeSolve(runtime, fighter, opponent);
   applyMotionDna(runtime, fighter);
@@ -925,6 +995,8 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionVisualReadabilityVersion = V3_VISUAL_READABILITY_VERSION;
   fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;
   fighter.visual.root.userData.motionExpansionKickContactSolver = V3_KICK_CONTACT_SOLVER;
+  fighter.visual.root.userData.motionExpansionKineticChain = V4_KINETIC_CHAIN;
+  fighter.visual.root.userData.motionExpansionTargetRig = runtimes.get(opponent.visual.root) ? V4_TARGET_RIG : "LEGACY_VISUAL_RIG_FALLBACK";
   fighter.visual.root.userData.motionExpansionStrikeContactError = strikeContactError;
   fighter.visual.root.userData.motionExpansionStrikeContactBlend = fighter.currentMove ? motionSpecForMove(fighter.currentMove).contactBlend : 0;
   fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";

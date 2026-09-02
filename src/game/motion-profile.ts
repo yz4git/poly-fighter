@@ -78,17 +78,17 @@ const MOTION_DNA: Readonly<Record<FighterDefinition["archetype"], MotionDna>> = 
 };
 
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
-  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24, plantFoot: "RIGHT" },
-  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28, plantFoot: "LEFT" },
-  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31, plantFoot: "RIGHT" },
-  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },
+  jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.34, plantFoot: "RIGHT" },
+  straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.40, plantFoot: "LEFT" },
+  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.42, plantFoot: "LEFT" },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.40, plantFoot: "RIGHT" },
+  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.46, plantFoot: "LEFT" },
   kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },
   lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },
   risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.90, plantFoot: "LEFT" },
   dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90, plantFoot: "AIR" },
   throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28, plantFoot: "BOTH" },
-  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29, plantFoot: "RIGHT" },
+  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.42, plantFoot: "RIGHT" },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {

@@ -391,6 +391,8 @@ try {
         footLockPolicy: root.userData.motionExpansionFootLockPolicy ?? null,
         footLockError: root.userData.motionExpansionFootLockError ?? null,
         comPolicy: root.userData.motionExpansionComPolicy ?? null,
+        kineticChain: root.userData.motionExpansionKineticChain ?? null,
+        targetRig: root.userData.motionExpansionTargetRig ?? null,
         motionDna: root.userData.motionExpansionMotionDna ?? null,
         visualReadabilityVersion: root.userData.motionExpansionVisualReadabilityVersion ?? null,
         kickContactSolver: root.userData.motionExpansionKickContactSolver ?? null,
@@ -426,6 +428,9 @@ try {
     }
     if (result.poseGraph !== "9_POSE_GRAPH" || result.comPolicy !== "PLANT_WEIGHTED_BOUNDED_COM") {
       throw new Error(`Motion ${moveId} did not publish Pose Graph / COM V3 contracts: ${JSON.stringify(result)}`);
+    }
+    if (result.kineticChain !== "SUPPORT_HIP_CHEST_STRIKE_V1" || result.targetRig !== "VISIBLE_IMPORTED_RIG_V1") {
+      throw new Error(`Motion ${moveId} did not use the v4 kinetic chain / visible target rig: ${JSON.stringify(result)}`);
     }
     if (result.motionDna !== "KAIRO_POWER") {
       throw new Error(`KAIRO motion DNA was not active for ${moveId}: ${JSON.stringify(result)}`);

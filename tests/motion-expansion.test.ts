@@ -127,6 +127,10 @@ test("v3 mappings retain generated recovery clips and authored support feet", ()
   assert.equal(low.recoveryClip, "PF_KickRecover");
   assert.equal(rising.recoveryClip, "PF_KickRecover");
   assert.equal(dash.recoveryClip, "PF_KickRecover");
+  assert.ok(jab.contactBlend >= 0.32 && jab.contactBlend <= 0.38);
+  assert.ok(backfist.contactBlend >= 0.40 && backfist.contactBlend <= 0.46);
+  assert.ok(body.contactBlend >= 0.38 && body.contactBlend <= 0.44);
+  assert.ok(power.contactBlend >= 0.44 && power.contactBlend <= 0.50);
   assert.ok(kick.contactBlend >= 0.82 && kick.contactBlend <= 0.90);
   assert.ok(low.contactBlend >= 0.80 && low.contactBlend <= 0.88);
   assert.ok(rising.contactBlend >= 0.88 && rising.contactBlend <= 0.94);
@@ -174,6 +178,11 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /solveFootLock/);
   assert.match(source, /solveCenterOfMass/);
   assert.match(source, /fullBodyStrikeSolve/);
+  assert.match(source, /kineticChainAccent/);
+  assert.match(source, /SUPPORT_HIP_CHEST_STRIKE_V1/);
+  assert.match(source, /VISIBLE_IMPORTED_RIG_V1/);
+  assert.match(source, /strikePoleLocal/);
+  assert.match(source, /targetRigPoint/);
   assert.match(source, /impactPairAccent/);
   assert.match(source, /IMPACT_PAIR_REACTION_STATES/);
   assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);

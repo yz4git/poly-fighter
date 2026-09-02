@@ -288,12 +288,12 @@
     },
     {
       "name": "PF_BodyBlow_L",
-      "base": "Idle_Loop",
+      "base": "Punch_Jab",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "RIGHT",
-      "duration": 2.5,
+      "duration": 0.8666666746139526,
       "poseGraphNodes": [
         "STANCE",
         "LOAD",
@@ -340,17 +340,17 @@
         "upperarm_l:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.05544,
-      "maxVerticalRootShift": 0.01461
+      "maxPlanarRootShift": 0.05545,
+      "maxVerticalRootShift": 0.01562
     },
     {
       "name": "PF_BodyBlow_R",
-      "base": "Idle_Loop",
+      "base": "Punch_Cross",
       "family": "punch",
       "style": "BODY",
       "contactU": 0.7,
       "plantFoot": "LEFT",
-      "duration": 2.5,
+      "duration": 1,
       "poseGraphNodes": [
         "STANCE",
         "LOAD",
@@ -397,17 +397,17 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.05544,
-      "maxVerticalRootShift": 0.01461
+      "maxPlanarRootShift": 0.05487,
+      "maxVerticalRootShift": 0.01652
     },
     {
       "name": "PF_Power_R",
-      "base": "Idle_Loop",
+      "base": "Punch_Cross",
       "family": "punch",
       "style": "HEAVY",
       "contactU": 0.73,
       "plantFoot": "LEFT",
-      "duration": 2.5,
+      "duration": 1,
       "poseGraphNodes": [
         "STANCE",
         "LOAD",
@@ -458,8 +458,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.08998,
-      "maxVerticalRootShift": 0.01206
+      "maxPlanarRootShift": 0.09013,
+      "maxVerticalRootShift": 0.01152
     },
     {
       "name": "PF_FrontKick_R",

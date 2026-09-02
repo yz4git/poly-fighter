@@ -1,0 +1,102 @@
+name: Apply v5 source-motion hybrid
+
+on:
+  push:
+    branches:
+      - improve/procedural-v5-source-motion-20260902
+    paths:
+      - .github/workflows/v5-source-motion-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v5-source-motion-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Switch synthetic strikes to source-motion hybrid
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/game/motion-profile.ts')
+          s = p.read_text()
+          repl = {
+            'backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },':
+              'backfist: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.34, plantFoot: "LEFT" },',
+            'bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31, plantFoot: "RIGHT" },':
+              'bodyBlow: { clip: "Shield_OneShot", style: "BODY_BLOW", speedScale: 1.10, contactBlend: 0.28, plantFoot: "RIGHT" },',
+            'power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },':
+              'power: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HEAVY", speedScale: 0.82, contactBlend: 0.38, plantFoot: "LEFT" },',
+            'kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },':
+              'kick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.16, contactBlend: 0.84, plantFoot: "LEFT" },',
+            'lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },':
+              'lowKick: { clip: "Slide_Start", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.18, contactBlend: 0.82, plantFoot: "RIGHT" },',
+            'risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.90, plantFoot: "LEFT" },':
+              'risingKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 1.02, contactBlend: 0.90, plantFoot: "LEFT" },',
+            'dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90, plantFoot: "AIR" },':
+              'dashKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 1.22, contactBlend: 0.90, plantFoot: "AIR" },',
+          }
+          for old, new in repl.items():
+              assert old in s, old
+              s = s.replace(old, new)
+
+          old = '''function handedClipForMove(move: MoveDefinition, fallback: string): string {
+            const left = move.visualContact?.startsWith("LEFT") === true;
+            if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
+            if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
+            if (move.id === "counter") return left ? "PF_Counter_L" : "PF_Counter_R";
+            return fallback;
+          }'''
+          new = '''function handedClipForMove(move: MoveDefinition, fallback: string): string {
+            const left = move.visualContact?.startsWith("LEFT") === true;
+            // Source-library clips already carry a coherent whole-body performance.
+            // Only mirror procedural PF variants; do not silently replace a selected
+            // source clip with the old synthetic clip.
+            if (fallback.startsWith("PF_")) {
+              if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
+              if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
+              if (move.id === "counter") return left ? "PF_Counter_L" : "PF_Counter_R";
+            }
+            return fallback;
+          }'''
+          assert old in s
+          s = s.replace(old, new)
+          s = s.replace('version: "MOTION_QUALITY_V3",', 'version: "MOTION_QUALITY_V5_SOURCE_HYBRID",')
+          s = s.replace('rootMotionPolicy: "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK",', 'rootMotionPolicy: "SOURCE_MOTION_WITH_RUNTIME_IK_FOOT_LOCK",')
+          p.write_text(s)
+
+          t = Path('tests/motion-expansion.test.ts')
+          ts = t.read_text()
+          ts = ts.replace('assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");', 'assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V5_SOURCE_HYBRID");')
+          # Existing clip-name assertions are intentionally relaxed for the source-hybrid A/B pass.
+          ts = ts.replace('assert.equal(backfist.clip, "PF_Backfist_R");', 'assert.equal(backfist.clip, "Melee_Hook");')
+          ts = ts.replace('assert.equal(body.clip, "PF_BodyBlow_L");', 'assert.equal(body.clip, "Shield_OneShot");')
+          ts = ts.replace('assert.equal(power.clip, "PF_Power_R");', 'assert.equal(power.clip, "Melee_Hook");')
+          ts = ts.replace('assert.equal(kick.clip, "PF_FrontKick_R");', 'assert.equal(kick.clip, "NinjaJump_Start");')
+          ts = ts.replace('assert.equal(lowKick.clip, "PF_LowKick_L");', 'assert.equal(lowKick.clip, "Slide_Start");')
+          ts = ts.replace('assert.equal(risingKick.clip, "PF_RisingKick_R");', 'assert.equal(risingKick.clip, "NinjaJump_Start");')
+          ts = ts.replace('assert.equal(dashKick.clip, "PF_DashKick_R");', 'assert.equal(dashKick.clip, "NinjaJump_Start");')
+          t.write_text(ts)
+      - name: Validate hybrid profile
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit source-motion hybrid
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/motion-profile.ts tests/motion-expansion.test.ts
+          git commit -m "Use authored source motion for heavy strikes and kicks"
+          git push origin HEAD:improve/procedural-v5-source-motion-20260902

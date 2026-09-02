@@ -10,6 +10,7 @@ if (!inputPath || !outputPath || !metricsPath) {
 
 const VERSION = "PROCEDURAL_FIGHT_V3";
 // KICK_MOTION_V7: chamber -> extension -> re-chamber with support-foot-safe authored curves.
+// PUNCH_MOTION_V8_SOURCE_BASE: BODY/HEAVY reuse proven punch source mechanics before pose-graph shaping.
 const DEG = Math.PI / 180;
 const R = (x = 0, y = 0, z = 0) => [x * DEG, y * DEG, z * DEG];
 const T = (x = 0, y = 0, z = 0) => [x, y, z];
@@ -62,9 +63,9 @@ const SPECS = [
   { name: "PF_Cross_R", base: "Punch_Cross", family: "punch", style: "CROSS", side: 1, power: 0.90, contactU: 0.69, plantFoot: "LEFT" },
   { name: "PF_Backfist_R", base: "Punch_Cross", family: "punch", style: "HOOK", side: 1, power: 0.88, contactU: 0.62, plantFoot: "LEFT" },
   { name: "PF_Backfist_L", base: "Punch_Cross", family: "punch", style: "HOOK", side: -1, power: 0.88, contactU: 0.62, plantFoot: "RIGHT" },
-  { name: "PF_BodyBlow_L", base: "Idle_Loop", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" },
-  { name: "PF_BodyBlow_R", base: "Idle_Loop", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" },
-  { name: "PF_Power_R", base: "Idle_Loop", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" },
+  { name: "PF_BodyBlow_L", base: "Punch_Jab", family: "punch", style: "BODY", side: -1, power: 0.88, contactU: 0.70, plantFoot: "RIGHT" },
+  { name: "PF_BodyBlow_R", base: "Punch_Cross", family: "punch", style: "BODY", side: 1, power: 0.88, contactU: 0.70, plantFoot: "LEFT" },
+  { name: "PF_Power_R", base: "Punch_Cross", family: "punch", style: "HEAVY", side: 1, power: 1.18, contactU: 0.73, plantFoot: "LEFT" },
   { name: "PF_FrontKick_R", base: "Idle_Loop", family: "kick", style: "FRONT_KICK", side: 1, power: 0.94, contactU: 0.64, plantFoot: "LEFT" },
   { name: "PF_LowKick_L", base: "Idle_Loop", family: "kick", style: "LOW_KICK", side: -1, power: 0.98, contactU: 0.67, plantFoot: "RIGHT" },
   { name: "PF_RisingKick_R", base: "Idle_Loop", family: "kick", style: "RISING_KICK", side: 1, power: 1.10, contactU: 0.69, plantFoot: "LEFT" },

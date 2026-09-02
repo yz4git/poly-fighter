@@ -42,6 +42,19 @@ const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.28;
+const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
+  jab: 2.62,
+  straight: 2.60,
+  backfist: 2.48,
+  bodyBlow: 2.12,
+  power: 2.35,
+  kick: 1.80,
+  lowKick: 0.92,
+  risingKick: 2.06,
+  dashKick: 1.98,
+  throw: 1.75,
+  counter: 2.66,
+});
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 
@@ -800,7 +813,7 @@ export class TpsFightGame {
     const blocked = defenderGuarding && move.hitLevel !== "THROW" && !flankStrike;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-    impactPosition.y = move.hitLevel === "LOW" ? 0.55 : 1.35;
+    impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
 
     if (blocked) {
       defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);

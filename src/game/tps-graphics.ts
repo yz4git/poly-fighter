@@ -400,6 +400,8 @@ export class TpsGraphicsDirector {
     }
 
     this.group.userData.lastImpactTier = visualTier;
+    this.group.userData.lastImpactMove = event.move.id;
+    this.group.userData.lastImpactHeight = event.position.y;
     this.group.userData.lastSharedAttackerHitStop = sharedHitStop;
     this.group.userData.lastImpactWaveCount = waveCount;
   }
@@ -507,6 +509,8 @@ export class TpsGraphicsDirector {
     this.pendingAttackerHitStop = 0;
     this.renderer.toneMappingExposure = baseExposure(this.quality);
     this.group.userData.lastImpactTier = 0;
+    this.group.userData.lastImpactMove = null;
+    this.group.userData.lastImpactHeight = 0;
     this.group.userData.lastSharedAttackerHitStop = 0;
     this.group.userData.lastImpactWaveCount = 0;
     this.lastP1TrailSpawn = -Infinity;

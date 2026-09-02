@@ -434,7 +434,7 @@ try {
       throw new Error(`Motion ${moveId} did not publish v3.2 readability telemetry: ${JSON.stringify(result)}`);
     }
     if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) {
-      if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V1"
+      if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED"
         || !Number.isFinite(result.strikeContactError)
         || !Number.isFinite(result.strikeContactBlend)
         || result.strikeContactBlend < 0.80) {

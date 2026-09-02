@@ -33,11 +33,11 @@ test("Foundry v2 runtime prefers authored Straight but keeps procedural fallback
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_CROSS/);
 });
 
-test("Motion Viewer and WebGL audit preserve PF/BF Cross A-B inspection", () => {
+test("Motion Viewer and WebGL audit preserve PF/BF Cross A-B inspection at the same impact phase", () => {
   assert.match(viewer, /QUATERNIUS_BLENDER_CROSS_URL/);
   assert.match(viewer, /source: "BLENDER"/);
-  assert.match(audit, /PF_Cross_R/);
-  assert.match(audit, /BF_Cross_R/);
+  assert.match(audit, /poseMotionViewer\(sessionId, "PF_Cross_R", 0\.5\)/);
+  assert.match(audit, /poseMotionViewer\(sessionId, "BF_Cross_R", 0\.5\)/);
   assert.match(audit, /model-view-motion-procedural-cross\.png/);
   assert.match(audit, /model-view-motion-blender-cross\.png/);
 });

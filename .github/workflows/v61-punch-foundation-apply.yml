@@ -25,20 +25,6 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm install --no-save --no-package-lock @gltf-transform/core@4.3.0
-      - name: Remove rejected kick foundations
-        shell: python
-        run: |
-          from pathlib import Path
-          p = Path('scripts/apply-motion-foundation-v4.mjs')
-          s = p.read_text()
-          s = s.replace('const VERSION = "SOURCE_FOUNDATION_V1";', 'const VERSION = "SOURCE_FOUNDATION_V1_PUNCH_ONLY";')
-          for target in ['PF_FrontKick_R', 'PF_LowKick_L', 'PF_RisingKick_R']:
-              marker = f'    target: "{target}",'
-              pos = s.index(marker)
-              start = s.rfind('  {\n', 0, pos)
-              end = s.index('  },\n', pos) + len('  },\n')
-              s = s[:start] + s[end:]
-          p.write_text(s)
       - name: Rebuild punch-foundation motion
         run: |
           node scripts/generate-procedural-fight-motions-v3.mjs \

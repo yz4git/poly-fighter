@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """POLY FIGHTER Blender Motion Foundry v1.
 
-Builds BF_Power_R from the proven Punch_Cross source inside Blender instead of
-writing final joint curves in JavaScript. The source body motion is non-linearly
-retimed, a right-arm IK contact controller is layered around impact, the planted
-left ankle is locked with a two-bone IK constraint, and Blender's evaluated pose
-is baked back to a portable deform-skeleton Action for glTF export.
+Creates BF_Power_R as a Blender-authored animation vertical slice.
 
-The first pass deliberately keeps the authored source torso mechanics intact.
-Later Foundry passes can add a COG/chest control rig without changing the game
-runtime contract introduced here.
+The source Punch_Cross supplies a proven human kinetic chain. Blender then owns
+retiming and contact constraints: a right-hand IK target with elbow pole drives
+contact, while a left-leg IK target keeps the support ankle planted. The final
+motion is baked with Blender's native visual-keying/NLA bake, so constraint
+results are converted to portable deform-skeleton keys before glTF export.
 """
 
 from __future__ import annotations
@@ -47,13 +45,6 @@ REQUIRED_BONES = (
 )
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source", required=True)
-    parser.add_argument("--output-dir", required=True)
-    return parser.parse_args(_argv_after_double_dash())
-
-
 def _argv_after_double_dash() -> List[str]:
     import sys
 
@@ -62,20 +53,18 @@ def _argv_after_double_dash() -> List[str]:
     return sys.argv[sys.argv.index("--") + 1 :]
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--output-dir", required=True)
+    return parser.parse_args(_argv_after_double_dash())
+
+
 def reset_scene() -> None:
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    for datablocks in (
-        bpy.data.actions,
-        bpy.data.armatures,
-        bpy.data.meshes,
-        bpy.data.materials,
-        bpy.data.cameras,
-        bpy.data.lights,
-    ):
-        # Object deletion does not necessarily orphan all imported animation data.
-        if datablocks is bpy.data.actions:
-            continue
 
 
 def import_source(path: str) -> bpy.types.Object:
@@ -84,8 +73,9 @@ def import_source(path: str) -> bpy.types.Object:
     if not armatures:
         raise RuntimeError(f"No armature found in {path}")
     armature = max(armatures, key=lambda obj: len(obj.data.bones))
-    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.select_all(action="DESELECT")
     armature.select_set(True)
+    bpy.context.view_layer.objects.active = armature
     return armature
 
 
@@ -116,12 +106,11 @@ def smoothstep(value: float) -> float:
 
 
 def source_u_for_destination_u(u: float) -> float:
-    """Non-linear hand-authored timing map.
+    """Hand-authored timing map applied to the entire source body.
 
-    Stores weight in the first third, accelerates sharply into contact, gives a
-    short readable overtravel beat, then spends more time on recoil/guard return.
-    This map retimes the complete source body rather than independently rotating
-    bones, preserving the source clip's kinetic chain.
+    The early frames store weight, the middle accelerates aggressively into
+    contact, a short overtravel beat keeps impact readable, and recovery is given
+    enough time to avoid a robotic snap back to guard.
     """
 
     knots: Tuple[Tuple[float, float], ...] = (
@@ -164,7 +153,10 @@ def sample_source_basis(
         source_u = source_u_for_destination_u(u)
         source_frame = source_start + source_span * source_u
         set_scene_frame(scene, source_frame)
-        samples[frame] = {pose_bone.name: pose_bone.matrix_basis.copy() for pose_bone in armature.pose.bones}
+        samples[frame] = {
+            pose_bone.name: pose_bone.matrix_basis.copy()
+            for pose_bone in armature.pose.bones
+        }
     return samples
 
 
@@ -195,6 +187,10 @@ def pose_head(armature: bpy.types.Object, bone_name: str) -> Vector:
     return armature.pose.bones[bone_name].head.copy()
 
 
+def pose_tail(armature: bpy.types.Object, bone_name: str) -> Vector:
+    return armature.pose.bones[bone_name].tail.copy()
+
+
 def evaluated_positions(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
@@ -209,19 +205,33 @@ def evaluated_positions(
     return result
 
 
-def make_control(name: str, armature: bpy.types.Object, location: Vector) -> bpy.types.Object:
+def local_to_world(armature: bpy.types.Object, location: Vector) -> Vector:
+    return armature.matrix_world @ location
+
+
+def make_control(name: str, armature: bpy.types.Object, local_location: Vector) -> bpy.types.Object:
+    """Create an unparented world-space IK target.
+
+    Constraint targets are deliberately not parented to the driven armature.
+    That removes any parent-space feedback from pelvis/root motion and makes a
+    planted foot genuinely stationary in world space while the body moves.
+    """
+
     control = bpy.data.objects.new(name, None)
     control.empty_display_type = "SPHERE"
     control.empty_display_size = 0.055
-    control.parent = armature
-    control.location = location
+    control.location = local_to_world(armature, local_location)
     bpy.context.scene.collection.objects.link(control)
     return control
 
 
-def set_control_keys(control: bpy.types.Object, keys: Iterable[Tuple[int, Vector]]) -> None:
-    for frame, location in keys:
-        control.location = location
+def set_control_keys(
+    control: bpy.types.Object,
+    armature: bpy.types.Object,
+    keys: Iterable[Tuple[int, Vector]],
+) -> None:
+    for frame, local_location in keys:
+        control.location = local_to_world(armature, local_location)
         control.keyframe_insert(data_path="location", frame=frame)
     if control.animation_data and control.animation_data.action:
         for fcurve in control.animation_data.action.fcurves:
@@ -244,7 +254,15 @@ def chain_pole(root: Vector, joint: Vector, end: Vector, scale: float = 2.4) -> 
 
 
 def add_ik_controls(scene: bpy.types.Scene, armature: bpy.types.Object) -> List[bpy.types.Object]:
-    frames = (START_FRAME, LOAD_FRAME, PRECONTACT_FRAME, IMPACT_FRAME, OVERTRAVEL_FRAME, RECOVERY_FRAME, END_FRAME)
+    frames = (
+        START_FRAME,
+        LOAD_FRAME,
+        PRECONTACT_FRAME,
+        IMPACT_FRAME,
+        OVERTRAVEL_FRAME,
+        RECOVERY_FRAME,
+        END_FRAME,
+    )
     positions = evaluated_positions(
         scene,
         armature,
@@ -268,12 +286,16 @@ def add_ik_controls(scene: bpy.types.Scene, armature: bpy.types.Object) -> List[
         (RECOVERY_FRAME, positions[RECOVERY_FRAME]["hand_r"]),
         (END_FRAME, positions[END_FRAME]["hand_r"]),
     )
-    set_control_keys(hand_target, hand_keys)
+    set_control_keys(hand_target, armature, hand_keys)
 
     shoulder = positions[IMPACT_FRAME]["upperarm_r"]
     elbow = positions[IMPACT_FRAME]["lowerarm_r"]
     wrist = positions[IMPACT_FRAME]["hand_r"]
-    elbow_pole = make_control("BF_CTRL_elbow_r", armature, chain_pole(shoulder, elbow, wrist))
+    elbow_pole = make_control(
+        "BF_CTRL_elbow_r",
+        armature,
+        chain_pole(shoulder, elbow, wrist),
+    )
 
     lowerarm = armature.pose.bones["lowerarm_r"]
     hand_ik = lowerarm.constraints.new(type="IK")
@@ -293,13 +315,20 @@ def add_ik_controls(scene: bpy.types.Scene, armature: bpy.types.Object) -> List[
         hand_ik.influence = influence
         hand_ik.keyframe_insert(data_path="influence", frame=frame)
 
-    # Plant the left ankle. The non-striking rear leg is deliberately left free
-    # so the source clip can retain its natural heel/pivot mechanics.
-    ankle = positions[START_FRAME]["foot_l"]
+    # A calf two-bone IK target controls the ankle (calf tail / foot head).
+    # The target is fixed in world space so the support foot cannot inherit root
+    # translation from the moving pelvis.
+    scene.frame_set(START_FRAME)
+    bpy.context.view_layer.update()
+    ankle = pose_tail(armature, "calf_l")
     knee = positions[START_FRAME]["calf_l"]
     hip = positions[START_FRAME]["thigh_l"]
     foot_target = make_control("BF_CTRL_foot_l", armature, ankle)
-    knee_pole = make_control("BF_CTRL_knee_l", armature, chain_pole(hip, knee, ankle, scale=1.8))
+    knee_pole = make_control(
+        "BF_CTRL_knee_l",
+        armature,
+        chain_pole(hip, knee, ankle, scale=1.8),
+    )
     calf = armature.pose.bones["calf_l"]
     foot_ik = calf.constraints.new(type="IK")
     foot_ik.name = "BF_LeftFootLockIK"
@@ -311,67 +340,95 @@ def add_ik_controls(scene: bpy.types.Scene, armature: bpy.types.Object) -> List[
     return [hand_target, elbow_pole, foot_target, knee_pole]
 
 
-def capture_visual_pose(scene: bpy.types.Scene, armature: bpy.types.Object) -> Dict[int, Dict[str, Matrix]]:
-    samples: Dict[int, Dict[str, Matrix]] = {}
+def foot_lock_drift(scene: bpy.types.Scene, armature: bpy.types.Object) -> float:
+    scene.frame_set(START_FRAME)
+    bpy.context.view_layer.update()
+    start = pose_tail(armature, "calf_l")
+    maximum = 0.0
     for frame in range(START_FRAME, END_FRAME + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        samples[frame] = {pose_bone.name: pose_bone.matrix.copy() for pose_bone in armature.pose.bones}
-    return samples
+        maximum = max(maximum, (pose_tail(armature, "calf_l") - start).length)
+    return maximum
 
 
-def clear_pose_constraints(armature: bpy.types.Object) -> None:
-    for pose_bone in armature.pose.bones:
-        for constraint in list(pose_bone.constraints):
-            pose_bone.constraints.remove(constraint)
+def hand_travel(scene: bpy.types.Scene, armature: bpy.types.Object) -> float:
+    scene.frame_set(START_FRAME)
+    bpy.context.view_layer.update()
+    start = pose_head(armature, "hand_r")
+    scene.frame_set(IMPACT_FRAME)
+    bpy.context.view_layer.update()
+    return (pose_head(armature, "hand_r") - start).length
+
+
+def capture_visual_pose(scene: bpy.types.Scene, armature: bpy.types.Object) -> Dict[str, float]:
+    """Capture pre-bake constraint diagnostics.
+
+    Kept as a named stage so the CI contract can distinguish an IK problem from
+    a visual-bake problem instead of treating every foot-lock failure alike.
+    """
+
+    return {
+        "constrainedFootLockMaxDrift": foot_lock_drift(scene, armature),
+        "constrainedRightHandTravel": hand_travel(scene, armature),
+    }
 
 
 def bake_visual_action(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
-    visual_samples: Dict[int, Dict[str, Matrix]],
+    diagnostics: Dict[str, float],
 ) -> bpy.types.Action:
-    if armature.animation_data is None:
-        armature.animation_data_create()
-    armature.animation_data.action = None
-    clear_pose_constraints(armature)
-    for pose_bone in armature.pose.bones:
-        pose_bone.matrix_basis.identity()
+    del diagnostics  # Diagnostics are measured before this destructive bake.
+    if armature.animation_data is None or armature.animation_data.action is None:
+        raise RuntimeError("Motion Foundry has no active action to bake")
 
-    action = bpy.data.actions.new(name=ACTION_NAME)
-    armature.animation_data.action = action
-    pose_order = list(armature.pose.bones)
-    for frame in range(START_FRAME, END_FRAME + 1):
-        scene.frame_set(frame)
-        for pose_bone in pose_order:
-            pose_bone.matrix = visual_samples[frame][pose_bone.name]
-        bpy.context.view_layer.update()
-        for pose_bone in pose_order:
-            pose_bone.keyframe_insert(data_path="location", frame=frame, group=pose_bone.name)
-            pose_bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=pose_bone.name)
-            pose_bone.keyframe_insert(data_path="scale", frame=frame, group=pose_bone.name)
+    # Blender's native NLA bake performs the parent/rest-space conversion needed
+    # for constrained pose bones. This is more reliable than assigning evaluated
+    # pose matrices back into matrix_basis by hand.
+    bpy.ops.object.mode_set(mode="OBJECT") if bpy.context.object and bpy.context.object.mode != "OBJECT" else None
+    bpy.ops.object.select_all(action="DESELECT")
+    armature.select_set(True)
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.select_all(action="SELECT")
+    bpy.ops.nla.bake(
+        frame_start=START_FRAME,
+        frame_end=END_FRAME,
+        step=1,
+        only_selected=False,
+        visual_keying=True,
+        clear_constraints=True,
+        clear_parents=False,
+        use_current_action=True,
+        clean_curves=False,
+        bake_types={"POSE"},
+    )
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    action = armature.animation_data.action
+    if action is None:
+        raise RuntimeError("Blender NLA bake did not produce an active Action")
+    action.name = ACTION_NAME
+    action.use_fake_user = True
     return action
 
 
 def remove_controls(controls: Iterable[bpy.types.Object]) -> None:
     for control in controls:
-        bpy.data.objects.remove(control, do_unlink=True)
+        if control.name in bpy.data.objects:
+            bpy.data.objects.remove(control, do_unlink=True)
 
 
-def motion_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, source_action_name: str) -> dict:
+def motion_metrics(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    source_action_name: str,
+    constrained: Dict[str, float],
+) -> dict:
     armature.animation_data.action = bpy.data.actions[ACTION_NAME]
-    scene.frame_set(START_FRAME)
-    bpy.context.view_layer.update()
-    left_ankle_start = pose_head(armature, "foot_l")
-    hand_start = pose_head(armature, "hand_r")
-    max_foot_drift = 0.0
-    for frame in range(START_FRAME, END_FRAME + 1):
-        scene.frame_set(frame)
-        bpy.context.view_layer.update()
-        max_foot_drift = max(max_foot_drift, (pose_head(armature, "foot_l") - left_ankle_start).length)
-    scene.frame_set(IMPACT_FRAME)
-    bpy.context.view_layer.update()
-    hand_impact = pose_head(armature, "hand_r")
+    baked_foot_drift = foot_lock_drift(scene, armature)
+    baked_hand_travel = hand_travel(scene, armature)
     return {
         "version": "BLENDER_MOTION_FOUNDRY_V1",
         "action": ACTION_NAME,
@@ -381,30 +438,38 @@ def motion_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, source_ac
         "endFrame": END_FRAME,
         "durationSeconds": (END_FRAME - START_FRAME) / FPS,
         "impactFrame": IMPACT_FRAME,
-        "rightHandTravel": (hand_impact - hand_start).length,
-        "leftFootLockMaxDrift": max_foot_drift,
+        "rightHandTravel": baked_hand_travel,
+        "leftFootLockMaxDrift": baked_foot_drift,
+        "constrainedRightHandTravel": constrained["constrainedRightHandTravel"],
+        "constrainedFootLockMaxDrift": constrained["constrainedFootLockMaxDrift"],
         "boneCount": len(armature.pose.bones),
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),
         "pipeline": [
             "Punch_Cross source body motion",
             "nonlinear whole-body retiming",
             "right-hand two-bone IK contact control",
-            "left support-foot IK lock",
-            "evaluated visual-pose bake",
+            "world-space left support-foot IK lock",
+            "Blender native NLA visual-keying bake",
             "glTF Action export",
         ],
     }
 
 
-def export_outputs(scene: bpy.types.Scene, armature: bpy.types.Object, output_dir: Path, metrics: dict) -> None:
+def export_outputs(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    output_dir: Path,
+    metrics: dict,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     scene.render.fps = FPS
     scene.frame_start = START_FRAME
     scene.frame_end = END_FRAME
     armature.animation_data.action = bpy.data.actions[ACTION_NAME]
 
-    # Remove source/intermediate Actions so the GLB is an unambiguous one-clip
-    # library. The runtime retargeter consumes the deform skeleton by bone name.
+    # Keep only the final baked Action. Mesh/skin remain in this first vertical
+    # slice because Blender's exporter then preserves an unambiguous armature;
+    # a later optimization pass can strip presentation geometry from the GLB.
     for action in list(bpy.data.actions):
         if action.name != ACTION_NAME:
             bpy.data.actions.remove(action)
@@ -421,7 +486,10 @@ def export_outputs(scene: bpy.types.Scene, armature: bpy.types.Object, output_di
         export_force_sampling=True,
     )
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    (output_dir / "blender-version.txt").write_text(bpy.app.version_string + "\n", encoding="utf-8")
+    (output_dir / "blender-version.txt").write_text(
+        bpy.app.version_string + "\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> None:
@@ -440,11 +508,11 @@ def main() -> None:
     base_action = key_pose_basis(scene, armature, "BF_BASE_Power_R", source_samples)
     armature.animation_data.action = base_action
     controls = add_ik_controls(scene, armature)
-    visual_samples = capture_visual_pose(scene, armature)
-    final_action = bake_visual_action(scene, armature, visual_samples)
+    constrained = capture_visual_pose(scene, armature)
+    final_action = bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
     remove_controls(controls)
-    metrics = motion_metrics(scene, armature, source_action_name)
+    metrics = motion_metrics(scene, armature, source_action_name, constrained)
     export_outputs(scene, armature, output_dir, metrics)
     print(json.dumps(metrics, indent=2))
 

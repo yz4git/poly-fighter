@@ -49,15 +49,19 @@ test('Model View exposes a touch motion viewer with transport and scrubbing', ()
   assert.match(panel, /setMotionSpeed/);
   assert.match(panel, /aria-label="Motion timeline"/);
   assert.match(panel, /seekMotion/);
+  assert.match(panel, /clip\.source === "BLENDER" \? "BLENDER"/);
+  assert.match(panel, /motionClipLabel\(clip\)/);
 });
 
-test('motion viewer retargets both procedural and base packs on an isolated mixer', () => {
+test('motion viewer retargets Blender, procedural and base packs on an isolated mixer', () => {
+  assert.match(motionViewer, /QUATERNIUS_BLENDER_CORE_URL/);
   assert.match(motionViewer, /QUATERNIUS_UAL_CORE_URL/);
   assert.match(motionViewer, /QUATERNIUS_PROCEDURAL_CORE_URL/);
   assert.match(motionViewer, /new THREE\.AnimationMixer\(target\)/);
   assert.match(motionViewer, /targetNode\.quaternion/);
   assert.match(motionViewer, /sourceRestInverse/);
   assert.match(motionViewer, /propertyName === "position" && nodeName === "pelvis"/);
+  assert.match(motionViewer, /source: "BLENDER"/);
   assert.match(motionViewer, /source: "PROCEDURAL"/);
   assert.match(motionViewer, /source: "BASE"/);
   assert.match(motionViewer, /function restoreBindPose/);

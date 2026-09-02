@@ -5,6 +5,7 @@ import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { ModelViewer } from "@/src/game/model-viewer";
 import {
   unavailableModelViewerMotionSnapshot,
+  type ModelViewerMotionClipInfo,
   type ModelViewerMotionSnapshot,
 } from "@/src/game/model-viewer-motion";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
@@ -20,6 +21,11 @@ const speedOptions = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds)) return "0.00";
   return Math.max(0, seconds).toFixed(2);
+}
+
+function motionClipLabel(clip: ModelViewerMotionClipInfo): string {
+  const source = clip.source === "BLENDER" ? "BLENDER" : clip.source === "PROCEDURAL" ? "PF" : "BASE";
+  return `${source} / ${clip.name}`;
 }
 
 const transportButtonStyle = {
@@ -235,7 +241,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
                 }}
               >
                 {motionState.clips.map((clip) => (
-                  <option key={clip.name} value={clip.name}>{clip.source === "PROCEDURAL" ? "PF / " : "BASE / "}{clip.name}</option>
+                  <option key={clip.name} value={clip.name}>{motionClipLabel(clip)}</option>
                 ))}
               </select>
               <button type="button" aria-label="Restart motion" onClick={() => viewerRef.current?.restartMotion()} style={transportButtonStyle}>↺</button>

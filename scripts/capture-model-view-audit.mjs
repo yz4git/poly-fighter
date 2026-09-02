@@ -92,12 +92,13 @@ async function waitForMotionViewer(sessionId) {
         timeline: Boolean(timeline),
         timelineDisabled: timeline?.disabled ?? true,
         clip: select?.value ?? '',
-        hasPower: options.some((option) => option.value === 'PF_Power_R'),
+        hasBlenderPower: options.some((option) => option.value === 'BF_Power_R'),
+        hasProceduralPower: options.some((option) => option.value === 'PF_Power_R'),
         optionCount: options.length,
         options: options.slice(0, 80),
       };
     `);
-    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasPower) return state;
+    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower) return state;
     await delay(100);
   }
   throw new Error("MODEL VIEW Motion Viewer did not become ready");
@@ -187,11 +188,17 @@ try {
   const seraAfterLoad = await waitForModelView(sessionId, "SERA");
   const motionReady = await waitForMotionViewer(sessionId);
   await screenshot(sessionId, `${outputDir}/model-view-sera.png`);
-  const motionPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);
-  if (motionPower.clip !== "PF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {
-    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(motionPower)}`);
+  const proceduralPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);
+  if (proceduralPower.clip !== "PF_Power_R" || Math.abs(proceduralPower.timeline - 500) > 2 || !proceduralPower.paused) {
+    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(proceduralPower)}`);
   }
-  await screenshot(sessionId, `${outputDir}/model-view-motion-power.png`);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-power.png`);
+
+  const blenderPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);
+  if (blenderPower.clip !== "BF_Power_R" || Math.abs(blenderPower.timeline - 500) > 2 || !blenderPower.paused) {
+    throw new Error(`Motion Viewer did not hold BF_Power_R at 50%: ${JSON.stringify(blenderPower)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);
 
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);
@@ -208,9 +215,9 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }, null, 2));
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, motionPower, kairo, kairoMotionReady, titleState }));
+  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, kairo, kairoMotionReady, titleState }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

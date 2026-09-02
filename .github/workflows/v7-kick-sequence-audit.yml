@@ -6,9 +6,17 @@ on:
       - improve/procedural-v7-kick-kinematics-20260902
     paths:
       - .github/workflows/v7-kick-sequence-audit.yml
+      - scripts/capture-kick-sequence-v7.mjs
+      - src/game/motion-expansion-runtime.ts
+      - src/game/motion-profile.ts
+      - public/models/quaternius/procedural-fight-core.glb
 
 permissions:
   contents: read
+
+concurrency:
+  group: v7-kick-sequence-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   capture:
@@ -31,18 +39,6 @@ jobs:
           done
           cat /tmp/poly-fighter-v7-sequence.log
           exit 1
-      - name: Make animation time deterministic
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('scripts/capture-kick-sequence-v7.mjs')
-          s = p.read_text()
-          old = 'const t = performance.now()/1000;'
-          new = 'game.__kickAuditTime = (game.__kickAuditTime ?? performance.now()/1000) + 1/60; const t = game.__kickAuditTime;'
-          if old not in s:
-              raise SystemExit('audit timing line not found')
-          p.write_text(s.replace(old, new))
-          PY
       - name: Capture kick sequence
         run: |
           DRIVER="$(command -v chromedriver || true)"

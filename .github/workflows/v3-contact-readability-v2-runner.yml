@@ -1,0 +1,57 @@
+name: Apply v3 contact readability v2 runner
+
+on:
+  push:
+    branches:
+      - improve/procedural-v3-contact-readability-2-20260902
+    paths:
+      - .github/workflows/v3-contact-readability-v2-runner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v3-contact-readability-2-20260902
+          fetch-depth: 0
+
+      - name: Reuse patch and repair test newlines
+        run: |
+          python3 - <<'PYRUN'
+          from pathlib import Path
+          from textwrap import dedent
+
+          workflow = Path('.github/workflows/v3-contact-readability-v2.yml').read_text()
+          marker = "          python3 - <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY", start)
+          patch_script = dedent(workflow[start:end])
+          exec(compile(patch_script, '<v3-contact-readability-v2>', 'exec'), {})
+
+          test_path = Path('tests/tps-mode.test.ts')
+          text = test_path.read_text()
+          text = text.replace(
+              r'  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\.40/);\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1\.46/);\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM_KICK = 1\.50/);',
+              '  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\\.40/);\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1\\.46/);\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM_KICK = 1\\.50/);',
+          )
+          test_path.write_text(text)
+          PYRUN
+
+      - name: Verify targeted tests
+        run: |
+          npm ci --ignore-scripts
+          node --import tsx --test tests/tps-mode.test.ts tests/tps-graphics.test.ts
+          npm run lint
+
+      - name: Commit fixes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/tps-game-base.ts src/game/tps-graphics.ts src/game/tps-hype.ts tests/tps-mode.test.ts tests/tps-graphics.test.ts scripts/capture-tps-visual-audit.mjs
+          git diff --cached --check
+          git commit -m "Refine v3 contact depth and impact readability"
+          git push origin HEAD:improve/procedural-v3-contact-readability-2-20260902

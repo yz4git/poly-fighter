@@ -349,11 +349,22 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, targetGroundRing };
+    const impactPlayerScreen = game.p1.position.clone();
+    const impactEnemyScreen = game.p2.position.clone();
+    impactPlayerScreen.y = 1.2;
+    impactEnemyScreen.y = 1.2;
+    impactPlayerScreen.project(game.camera);
+    impactEnemyScreen.project(game.camera);
+    const impactScreenSeparation = Math.abs(impactEnemyScreen.x - impactPlayerScreen.x) * canvas.width * 0.5;
+    const impactWorldSeparation = Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z);
+    const spacingMode = game.p1.visual.root.userData.tpsContactSpacingMode ?? null;
+    const spacingMinimum = game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0;
+    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, impactScreenSeparation, impactWorldSeparation, spacingMode, spacingMinimum, targetGroundRing };
   `);
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
   if (!(punchProbe?.screenSeparation >= 72)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
+  if (punchProbe?.spacingMode !== "IMPACT_PAIR" || !(punchProbe?.spacingMinimum >= 1.28) || !(punchProbe?.impactWorldSeparation >= 1.27)) throw new Error(`TPS resolved impact did not open the v3 contact lane: ${JSON.stringify(punchProbe)}`);
   if (!punchProbe?.targetGroundRing) throw new Error(`TPS target ground ring was not present: ${JSON.stringify(punchProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
   await execute(sessionId, `${gameLookup}

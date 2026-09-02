@@ -433,28 +433,31 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
   switch (style) {
     case "JAB":
     case "CROSS":
+      return head.addScaledVector(lateral, side * 0.070);
     case "HOOK":
+      return head.addScaledVector(lateral, side * 0.105);
     case "COUNTER":
-      return head.addScaledVector(lateral, side * 0.035);
+      return head.addScaledVector(lateral, side * 0.085);
     case "BODY_BLOW":
-      return body.lerp(hips, 0.22).addScaledVector(lateral, side * 0.025);
+      return body.lerp(hips, 0.22).addScaledVector(lateral, side * 0.055);
     case "HEAVY":
-      return body.addScaledVector(lateral, side * 0.05);
+      return body.addScaledVector(lateral, side * 0.080);
     case "LOW_KICK":
-      return legs.addScaledVector(lateral, side * 0.12);
+      return legs.addScaledVector(lateral, side * 0.140);
     case "RISING_KICK":
-      return body.lerp(head, 0.72).addScaledVector(lateral, side * 0.04);
+      return body.lerp(head, 0.72).addScaledVector(lateral, side * 0.075);
     case "DASH_KICK":
-      return body.lerp(chest, 0.42).addScaledVector(lateral, side * 0.06);
+      return body.lerp(chest, 0.42).addScaledVector(lateral, side * 0.090);
     case "FRONT_KICK":
-      return body.lerp(chest, 0.28);
+      return body.lerp(chest, 0.28).addScaledVector(lateral, side * 0.055);
     default:
       return body;
   }
 }
 
 const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
-const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_1";
+const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_2";
+const V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -908,6 +911,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   fighter.visual.root.userData.motionExpansionImpactPairRole = impactPairRole;
   fighter.visual.root.userData.motionExpansionMotionDna = motionDnaForFighter(fighter.definition).id;
   fighter.visual.root.userData.motionExpansionVisualReadabilityVersion = V3_VISUAL_READABILITY_VERSION;
+  fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;
   fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";
   return true;
 }

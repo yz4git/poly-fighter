@@ -45,6 +45,16 @@ jobs:
             echo "needs_generate=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fetch pinned full UAL authoring source
+        if: steps.foundry.outputs.needs_generate == 'true'
+        run: |
+          set -euxo pipefail
+          mkdir -p .tmp-quaternius
+          BASE_PIN=aa02a4e6d8337a0604d2da131bcbbeb1f01badf0
+          BASE_URL=https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/$BASE_PIN/public/assets/vendor/quaternius
+          curl -L --fail --retry 3 "$BASE_URL/universal-animation-library.glb" -o .tmp-quaternius/ual1-full.glb
+          echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1-full.glb' | sha256sum -c -
+
       - name: Install Blender
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
@@ -66,7 +76,7 @@ jobs:
             --python-exit-code 1 \
             --python tools/blender/build-fight-motion-foundry-v1.py \
             -- \
-            --source public/models/quaternius/ual-fight-core.glb \
+            --source .tmp-quaternius/ual1-full.glb \
             --output-dir "$out"
           test -s "$out/blender-fight-core.glb"
           test -s "$out/blender-fight-core.metrics.json"

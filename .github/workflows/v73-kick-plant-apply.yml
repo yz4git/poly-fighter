@@ -1,0 +1,39 @@
+name: Apply v7.3 planted kick solver
+
+on:
+  push:
+    branches:
+      - improve/procedural-v7-kick-kinematics-20260902
+    paths:
+      - .github/workflows/v73-kick-plant-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v7-kick-kinematics-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply v7.3 planted-kick solver
+        run: python scripts/patch-kick-plant-solver-v73.py
+      - run: npm ci --no-audit --no-fund
+      - name: Validate v7.3
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit v7.3 solver
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/motion-expansion-runtime.ts tests/motion-expansion.test.ts
+          git commit -m "Stabilize planted kicks at contact"
+          git push origin HEAD:improve/procedural-v7-kick-kinematics-20260902

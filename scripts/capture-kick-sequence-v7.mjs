@@ -89,11 +89,14 @@ const resetCode = `
   }
 `;
 
+// KAIRO's gameplay frame data. The re-chamber tick is chosen from each v7
+// generator profile's authored overtravel -> re-chamber position, mapped through
+// the PHASE_ALIGNED_KICK_V1 recovery segment.
 const configs = {
-  kick:       { activeStep: 8 },
-  lowKick:    { activeStep: 7 },
-  risingKick: { activeStep: 11 },
-  dashKick:   { activeStep: 12 },
+  kick:       { startup: 9,  active: 5, recovery: 17, chamber: 8,  impact: 11, recoil: 19 },
+  lowKick:    { startup: 8,  active: 5, recovery: 14, chamber: 7,  impact: 10, recoil: 18 },
+  risingKick: { startup: 12, active: 5, recovery: 22, chamber: 11, impact: 14, recoil: 26 },
+  dashKick:   { startup: 13, active: 6, recovery: 21, chamber: 12, impact: 16, recoil: 26 },
 };
 
 let sessionId;
@@ -131,6 +134,7 @@ try {
     game.input.clear();
     game.enemyOpeningGraceTicks = 9999;
     game.updateEnemy = () => { game.p2.velocity.set(0,0,0); if (!['HIT','KNOCKDOWN','KO','THROW'].includes(game.p2.state)) game.p2.state='IDLE'; };
+    game.__kickAuditTime = performance.now()/1000;
     return true;
   `);
 
@@ -143,23 +147,22 @@ try {
       game.finished = false; game.input.clear();
       game.p1.position.set(0,0,0.74); game.p2.position.set(0,0,-0.48);
       game.p1.facing = 1; game.p2.facing = -1;
+      game.__kickAuditTime = performance.now()/1000;
       return game.p1.beginMove(arguments[0]);
     `, [moveId]);
     if (!initialized) throw new Error(`move not found: ${moveId}`);
 
-    const selected = new Map([
-      [Math.max(1, cfg.activeStep - 3), "chamber"],
-      [cfg.activeStep, "impact"],
-      [cfg.activeStep + 4, "recoil"],
-    ]);
-    report[moveId] = {};
-    for (let step = 1; step <= cfg.activeStep + 4; step += 1) {
+    const targets = new Map([[cfg.chamber, "chamber"], [cfg.impact, "impact"], [cfg.recoil, "recoil"]]);
+    report[moveId] = { config: cfg };
+    const endTick = Math.min(cfg.startup + cfg.active + cfg.recovery - 1, cfg.recoil + 1);
+    for (let guard = 0; guard < endTick + 5; guard += 1) {
       const state = await execute(sessionId, `${gameLookup}
         const game = findGame();
         game.p1.hitStop = 0; game.p2.hitStop = 0;
         game.step();
         game.p1.hitStop = 0; game.p2.hitStop = 0;
-        const t = performance.now()/1000;
+        game.__kickAuditTime = (game.__kickAuditTime ?? performance.now()/1000) + 1/60;
+        const t = game.__kickAuditTime;
         game.updateVisual(game.p1, game.p2, t);
         game.updateVisual(game.p2, game.p1, t + 0.007);
         game.updateCamera(1/60); game.updateLockOn(); game.renderer.render(game.scene, game.camera);
@@ -168,19 +171,26 @@ try {
         const model = modelHost?.children.find((child) => child.type === 'Group' || child.children?.length > 0) ?? modelHost?.children?.[0];
         const point = (name) => { const obj=model?.getObjectByName(name); if(!obj) return null; const V=obj.position.constructor; const p=obj.getWorldPosition(new V()); return {x:p.x,y:p.y,z:p.z}; };
         return {
-          step: arguments[0], moveTick: game.p1.moveTick, state: game.p1.state,
+          moveTick: game.p1.moveTick, state: game.p1.state,
           phase: root.userData.motionExpansionPhase ?? null,
           clip: root.userData.motionExpansionCurrentClip ?? null,
+          timelinePolicy: root.userData.motionExpansionTimelinePolicy ?? null,
+          authoredPoseU: root.userData.motionExpansionAuthoredPoseU ?? null,
           footLockError: root.userData.motionExpansionFootLockError ?? null,
           strikeContactError: root.userData.motionExpansionStrikeContactError ?? null,
-          pelvis: point('pelvis'), kneeL: point('calf_l'), kneeR: point('calf_r'), footL: point('foot_l'), footR: point('foot_r'), handL: point('hand_l'), handR: point('hand_r'),
+          pelvis: point('pelvis'), kneeL: point('calf_l'), kneeR: point('calf_r'),
+          footL: point('foot_l'), footR: point('foot_r'), handL: point('hand_l'), handR: point('hand_r'),
         };
-      `, [step]);
-      const label = selected.get(step);
-      if (label) {
+      `);
+      const label = targets.get(state.moveTick);
+      if (label && !report[moveId][label]) {
         report[moveId][label] = state;
         await screenshot(sessionId, `${outputDir}/${moveId}-${label}.png`);
       }
+      if (state.moveTick >= endTick || state.state !== 'ATTACK') break;
+    }
+    for (const label of ["chamber", "impact", "recoil"]) {
+      if (!report[moveId][label]) throw new Error(`${moveId} missing ${label} capture: ${JSON.stringify(report[moveId])}`);
     }
   }
   await writeFile(`${outputDir}/kick-sequence.json`, JSON.stringify(report, null, 2) + "\n");

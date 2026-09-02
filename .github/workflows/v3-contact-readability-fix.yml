@@ -66,16 +66,31 @@ jobs:
               '  fighter.visual.root.userData.motionExpansionVisualReadabilityVersion = V3_VISUAL_READABILITY_VERSION;\n  fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;\n  fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";',
           )
 
-          test_motion = "tests/motion-expansion.test.ts"
-          replace_exact(
-              test_motion,
-              'assert.match(source, /V3_VISUAL_READABILITY_VERSION = \\"PROCEDURAL_FIGHT_V3_READABILITY_1\\"/);',
-              'assert.match(source, /V3_VISUAL_READABILITY_VERSION = \\"PROCEDURAL_FIGHT_V3_READABILITY_2\\"/);\n  assert.match(source, /V3_CONTACT_LANE_POLICY = \\"OUTER_EDGE_TARGET_V2\\"/);\n  assert.match(source, /motionExpansionContactLanePolicy/);',
-          )
+          test_motion = Path("tests/motion-expansion.test.ts")
+          text = test_motion.read_text()
+          if text.count("PROCEDURAL_FIGHT_V3_READABILITY_1") != 1:
+              raise SystemExit("motion-expansion test readability version anchor mismatch")
+          text = text.replace("PROCEDURAL_FIGHT_V3_READABILITY_1", "PROCEDURAL_FIGHT_V3_READABILITY_2")
+          anchor = '  assert.match(source, /motionExpansionVisualReadabilityVersion/);'
+          if text.count(anchor) != 1:
+              raise SystemExit("motion-expansion test telemetry anchor mismatch")
+          text = text.replace(anchor, anchor + '\n  assert.match(source, /V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2"/);\n  assert.match(source, /motionExpansionContactLanePolicy/);')
+          test_motion.write_text(text)
 
-          test_tps = "tests/tps-mode.test.ts"
-          replace_exact(test_tps, 'assert.match(source, /TPS_CAMERA_IMPACT_BACK_DELTA = -0\\\\.16/);', 'assert.match(source, /TPS_CAMERA_IMPACT_BACK_DELTA = 0\\\\.24/);')
-          replace_exact(test_tps, 'assert.match(source, /TPS_CAMERA_IMPACT_SHOULDER = 0\\\\.20/);', 'assert.match(source, /TPS_CAMERA_IMPACT_SHOULDER = 0\\\\.38/);\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\\\\.28/);\n  assert.match(source, /tpsContactSpacingMode/);')
+          test_tps = Path("tests/tps-mode.test.ts")
+          text = test_tps.read_text()
+          for old, new in [
+              (r"TPS_CAMERA_IMPACT_BACK_DELTA = -0\.16", r"TPS_CAMERA_IMPACT_BACK_DELTA = 0\.24"),
+              (r"TPS_CAMERA_IMPACT_SHOULDER = 0\.20", r"TPS_CAMERA_IMPACT_SHOULDER = 0\.38"),
+          ]:
+              if text.count(old) != 1:
+                  raise SystemExit(f"tps-mode test anchor mismatch: {old}")
+              text = text.replace(old, new)
+          anchor = r'  assert.match(source, /TPS_CAMERA_IMPACT_SHOULDER = 0\.38/);'
+          if text.count(anchor) != 1:
+              raise SystemExit("tps-mode impact shoulder anchor mismatch")
+          text = text.replace(anchor, anchor + '\n  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\\.28/);\n  assert.match(source, /tpsContactSpacingMode/);')
+          test_tps.write_text(text)
 
           audit = "scripts/capture-tps-visual-audit.mjs"
           replace_exact(
@@ -93,7 +108,7 @@ jobs:
       - name: Verify targeted tests
         run: |
           npm ci --ignore-scripts
-          npm test -- --runInBand tests/motion-expansion.test.ts tests/tps-mode.test.ts
+          node --import tsx --test tests/motion-expansion.test.ts tests/tps-mode.test.ts
 
       - name: Commit fixes
         run: |

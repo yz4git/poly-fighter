@@ -108,34 +108,40 @@ async function poseMotionViewer(sessionId, clipName, normalized) {
     const clipName = arguments[0];
     const select = document.querySelector('select[aria-label="Motion clip"]');
     if (!select || ![...select.options].some((option) => option.value === clipName)) return { selected: false };
-    select.value = clipName;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    if (!setter) return { selected: false, reason: 'select setter unavailable' };
+    setter.call(select, clipName);
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return { selected: true, clip: select.value };
   `, [clipName]);
-  if (!selected?.selected) throw new Error(`Motion clip was not selectable: ${clipName}`);
+  if (!selected?.selected) throw new Error(`Motion clip was not selectable: ${clipName} ${JSON.stringify(selected)}`);
   await delay(120);
 
-  await execute(sessionId, `
+  const posed = await execute(sessionId, `
     const pause = [...document.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Pause motion');
     pause?.click();
     const timeline = document.querySelector('input[aria-label="Motion timeline"]');
-    if (!timeline) return { posed: false };
-    timeline.value = String(Math.round(arguments[0] * 1000));
+    if (!timeline) return { posed: false, reason: 'timeline unavailable' };
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setter) return { posed: false, reason: 'input setter unavailable' };
+    setter.call(timeline, String(Math.round(arguments[0] * 1000)));
     timeline.dispatchEvent(new Event('input', { bubbles: true }));
     timeline.dispatchEvent(new Event('change', { bubbles: true }));
     return { posed: true, value: timeline.value };
   `, [normalized]);
+  if (!posed?.posed) throw new Error(`Motion timeline was not controllable: ${JSON.stringify(posed)}`);
   await delay(120);
 
   return execute(sessionId, `
     const select = document.querySelector('select[aria-label="Motion clip"]');
     const timeline = document.querySelector('input[aria-label="Motion timeline"]');
     const play = [...document.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Play motion');
+    const timeText = document.querySelector('[aria-label="Motion Viewer"]')?.textContent ?? '';
     return {
       clip: select?.value ?? '',
       timeline: Number(timeline?.value ?? -1),
       paused: Boolean(play),
-      motionViewerText: document.querySelector('[aria-label="Motion Viewer"]')?.textContent?.slice(0, 500) ?? '',
+      motionViewerText: timeText.slice(0, 500),
     };
   `);
 }

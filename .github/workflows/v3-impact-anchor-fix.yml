@@ -33,24 +33,27 @@ jobs:
               p.write_text(text.replace(old, new))
 
           game = "src/game/tps-game-base.ts"
+          heights = "\n".join([
+              "const TPS_IMPACT_CONTACT_MINIMUM = 1.28;",
+              "const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({",
+              "  jab: 2.62,",
+              "  straight: 2.60,",
+              "  backfist: 2.48,",
+              "  bodyBlow: 2.12,",
+              "  power: 2.35,",
+              "  kick: 1.80,",
+              "  lowKick: 0.92,",
+              "  risingKick: 2.06,",
+              "  dashKick: 1.98,",
+              "  throw: 1.75,",
+              "  counter: 2.66,",
+              "});",
+              "const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);",
+          ])
           replace_exact(
               game,
-              'const TPS_IMPACT_CONTACT_MINIMUM = 1.28;\nconst MODEL_FORWARD = new THREE.Vector3(0, 0, 1);',
-              '''const TPS_IMPACT_CONTACT_MINIMUM = 1.28;
-const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
-  jab: 2.62,
-  straight: 2.60,
-  backfist: 2.48,
-  bodyBlow: 2.12,
-  power: 2.35,
-  kick: 1.80,
-  lowKick: 0.92,
-  risingKick: 2.06,
-  dashKick: 1.98,
-  throw: 1.75,
-  counter: 2.66,
-});
-const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);''',
+              "const TPS_IMPACT_CONTACT_MINIMUM = 1.28;\nconst MODEL_FORWARD = new THREE.Vector3(0, 0, 1);",
+              heights,
           )
           replace_exact(
               game,
@@ -61,27 +64,27 @@ const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);''',
           graphics = "src/game/tps-graphics.ts"
           replace_exact(
               graphics,
-              '    this.group.userData.lastImpactTier = visualTier;\n    this.group.userData.lastSharedAttackerHitStop = sharedHitStop;',
-              '    this.group.userData.lastImpactTier = visualTier;\n    this.group.userData.lastImpactMove = event.move.id;\n    this.group.userData.lastImpactHeight = event.position.y;\n    this.group.userData.lastSharedAttackerHitStop = sharedHitStop;',
+              "    this.group.userData.lastImpactTier = visualTier;\n    this.group.userData.lastSharedAttackerHitStop = sharedHitStop;",
+              "    this.group.userData.lastImpactTier = visualTier;\n    this.group.userData.lastImpactMove = event.move.id;\n    this.group.userData.lastImpactHeight = event.position.y;\n    this.group.userData.lastSharedAttackerHitStop = sharedHitStop;",
           )
           replace_exact(
               graphics,
-              '    this.group.userData.lastImpactTier = 0;\n    this.group.userData.lastSharedAttackerHitStop = 0;',
-              '    this.group.userData.lastImpactTier = 0;\n    this.group.userData.lastImpactMove = null;\n    this.group.userData.lastImpactHeight = 0;\n    this.group.userData.lastSharedAttackerHitStop = 0;',
+              "    this.group.userData.lastImpactTier = 0;\n    this.group.userData.lastSharedAttackerHitStop = 0;",
+              "    this.group.userData.lastImpactTier = 0;\n    this.group.userData.lastImpactMove = null;\n    this.group.userData.lastImpactHeight = 0;\n    this.group.userData.lastSharedAttackerHitStop = 0;",
           )
 
           test = "tests/tps-mode.test.ts"
           replace_exact(
               test,
-              '  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\\.28/);\n  assert.match(source, /tpsContactSpacingMode/);',
-              '  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\\.28/);\n  assert.match(source, /TPS_IMPACT_HEIGHTS/);\n  assert.match(source, /risingKick: 2\\.06/);\n  assert.match(source, /impactPosition\\.y = TPS_IMPACT_HEIGHTS\\[move\\.id\\]/);\n  assert.match(source, /tpsContactSpacingMode/);',
+              r"  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\.28/);" + "\n" + "  assert.match(source, /tpsContactSpacingMode/);",
+              r"  assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM = 1\.28/);" + "\n" + "  assert.match(source, /TPS_IMPACT_HEIGHTS/);" + "\n" + r"  assert.match(source, /risingKick: 2\.06/);" + "\n" + r"  assert.match(source, /impactPosition\.y = TPS_IMPACT_HEIGHTS\[move\.id\]/);" + "\n" + "  assert.match(source, /tpsContactSpacingMode/);",
           )
 
           audit = "scripts/capture-tps-visual-audit.mjs"
           replace_exact(
               audit,
-              '    const spacingMinimum = game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0;\n    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, impactScreenSeparation, impactWorldSeparation, spacingMode, spacingMinimum, targetGroundRing };',
-              '    const spacingMinimum = game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0;\n    const impactFxMove = game.graphics.group.userData.lastImpactMove ?? null;\n    const impactFxHeight = game.graphics.group.userData.lastImpactHeight ?? 0;\n    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, impactScreenSeparation, impactWorldSeparation, spacingMode, spacingMinimum, impactFxMove, impactFxHeight, targetGroundRing };',
+              "    const spacingMinimum = game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0;\n    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, impactScreenSeparation, impactWorldSeparation, spacingMode, spacingMinimum, targetGroundRing };",
+              "    const spacingMinimum = game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0;\n    const impactFxMove = game.graphics.group.userData.lastImpactMove ?? null;\n    const impactFxHeight = game.graphics.group.userData.lastImpactHeight ?? 0;\n    return { steps, p1Health: game.p1.health, p2Health: game.p2.health, p1State: game.p1.state, p2State: game.p2.state, screenSeparation, impactScreenSeparation, impactWorldSeparation, spacingMode, spacingMinimum, impactFxMove, impactFxHeight, targetGroundRing };",
           )
           replace_exact(
               audit,

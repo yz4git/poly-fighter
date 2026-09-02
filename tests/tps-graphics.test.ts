@@ -26,6 +26,7 @@ test("TPS impact feel escalates from quick hits to finishers without unbounded e
   assert.equal(TPS_IMPACT_FEEL_PROFILE.lightHitStopTicks, 2);
   assert.equal(TPS_IMPACT_FEEL_PROFILE.mediumHitStopTicks, 4);
   assert.equal(TPS_IMPACT_FEEL_PROFILE.heavyHitStopTicks, 6);
+  assert.equal(TPS_IMPACT_FEEL_PROFILE.maxImpactWaves, 2);
   assert.ok(TPS_IMPACT_FEEL_PROFILE.maxImpactWaves <= TPS_GRAPHICS_PROFILE.impactWavePool);
   assert.ok(TPS_IMPACT_FEEL_PROFILE.heavyExposurePunch <= 0.16);
   assert.equal(tpsImpactTier("jab", 1), 1);
@@ -55,8 +56,9 @@ test("TPS exhilaration pass adds fast confirms, cinematic finishers and bounded 
   assert.equal(TPS_HYPE_PROFILE.lightImpactRingCount, 1);
   assert.equal(TPS_HYPE_PROFILE.mediumImpactRingCount, 1);
   assert.equal(TPS_HYPE_PROFILE.heavyImpactRingCount, 2);
-  assert.ok(TPS_HYPE_PROFILE.impactRingExpansion <= 1.6);
-  assert.ok(TPS_HYPE_PROFILE.heavyBurstScale <= 0.48);
+  assert.ok(TPS_HYPE_PROFILE.impactRingExpansion <= 1.4);
+  assert.ok(TPS_HYPE_PROFILE.heavyBurstScale <= 0.4);
+  assert.ok(TPS_HYPE_PROFILE.impactDepthBias >= 0.05);
   assert.ok(TPS_HYPE_PROFILE.heavyImpactFovPunch >= -8.5);
   assert.ok(TPS_HYPE_PROFILE.perfectStepFovRush <= 5);
 });

@@ -21,7 +21,7 @@ export const TPS_IMPACT_FEEL_PROFILE = Object.freeze({
   lightHitStopTicks: 2,
   mediumHitStopTicks: 4,
   heavyHitStopTicks: 6,
-  maxImpactWaves: 3,
+  maxImpactWaves: 2,
   heavyExposurePunch: 0.14,
 });
 
@@ -33,6 +33,7 @@ interface ImpactWave {
   mesh: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
   life: number;
   maxLife: number;
+  baseOpacity: number;
 }
 
 interface AttackTrail {
@@ -296,7 +297,7 @@ export class TpsGraphicsDirector {
       mesh.visible = false;
       mesh.renderOrder = 24;
       this.group.add(mesh);
-      this.waves.push({ mesh, life: 0, maxLife: 0 });
+      this.waves.push({ mesh, life: 0, maxLife: 0, baseOpacity: 0 });
     }
 
     for (let index = 0; index < TPS_GRAPHICS_PROFILE.attackTrailPool; index += 1) {
@@ -356,18 +357,27 @@ export class TpsGraphicsDirector {
     const color = event.blocked ? 0x62e8ff : event.counter ? 0xffd85d : event.attacker === "p1" ? 0xff4f70 : 0x58d9ff;
     const tierBoost = visualTier === 3 ? 1.42 : visualTier === 2 ? 1.18 : 1;
     const strength = Math.max(0.7, event.move.power * (event.blocked ? 0.7 : 1) * tierBoost);
-    const waveCount = event.blocked ? 1 : visualTier === 3 ? 3 : visualTier === 2 ? 2 : 1;
-    const facing = camera.position.clone().sub(new THREE.Vector3(event.position.x, event.position.y, event.position.z)).normalize();
+    const waveCount = event.blocked ? 1 : visualTier === 3 ? 2 : 1;
+    const contactPoint = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
+    const facing = camera.position.clone().sub(contactPoint).normalize();
+    const visualPoint = contactPoint.clone().addScaledVector(facing, -0.055);
 
     for (let index = 0; index < waveCount; index += 1) {
       const wave = this.waves.find((item) => item.life <= 0) ?? this.waves[index % this.waves.length];
       wave.life = 0.18 + strength * 0.035 + index * 0.018;
       wave.maxLife = wave.life;
       wave.mesh.visible = true;
-      wave.mesh.position.set(event.position.x, event.position.y, event.position.z);
-      wave.mesh.scale.setScalar(0.68 + strength * 0.20 + index * 0.17);
+      wave.mesh.position.copy(visualPoint);
+      wave.mesh.scale.setScalar(0.60 + strength * 0.14 + index * 0.12);
       wave.mesh.material.color.setHex(color);
-      wave.mesh.material.opacity = event.blocked ? 0.45 : Math.max(0.48, 0.82 - index * 0.13);
+      wave.baseOpacity = event.blocked
+        ? 0.28
+        : visualTier === 3
+          ? Math.max(0.34, 0.50 - index * 0.10)
+          : visualTier === 2
+            ? 0.38
+            : 0.30;
+      wave.mesh.material.opacity = wave.baseOpacity;
       wave.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
       wave.mesh.rotateZ(index * 0.52);
     }
@@ -459,7 +469,7 @@ export class TpsGraphicsDirector {
       wave.life -= delta;
       const progress = 1 - Math.max(0, wave.life) / Math.max(1e-4, wave.maxLife);
       wave.mesh.scale.multiplyScalar(1 + delta * (4.6 + progress * 2.2));
-      wave.mesh.material.opacity = Math.max(0, (1 - progress) * 0.78);
+      wave.mesh.material.opacity = Math.max(0, (1 - progress) * wave.baseOpacity);
       if (wave.life <= 0) {
         wave.mesh.visible = false;
         wave.mesh.material.opacity = 0;
@@ -520,6 +530,7 @@ export class TpsGraphicsDirector {
     for (const wave of this.waves) {
       wave.life = 0;
       wave.maxLife = 0;
+      wave.baseOpacity = 0;
       wave.mesh.visible = false;
       wave.mesh.material.opacity = 0;
     }

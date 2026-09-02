@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { FighterVisual } from "./visual-entry";
 import {
+  QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_PROCEDURAL_CORE_URL,
   QUATERNIUS_UAL_CORE_URL,
 } from "./visual-quaternius-runtime";
 
-export type ModelViewerMotionSource = "PROCEDURAL" | "BASE";
+export type ModelViewerMotionSource = "BLENDER" | "PROCEDURAL" | "BASE";
 
 export interface ModelViewerMotionClipInfo {
   name: string;
@@ -37,13 +38,19 @@ let sourcePromise: Promise<MotionSourcePack[]> | null = null;
 function loadMotionSources(): Promise<MotionSourcePack[]> {
   if (sourcePromise) return sourcePromise;
   const loader = new GLTFLoader();
+  const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
   sourcePromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
-  ]).then(([base, procedural]) => [
-    { root: base.scene, clips: base.animations, source: "BASE" as const },
-    { root: procedural.scene, clips: procedural.animations, source: "PROCEDURAL" as const },
-  ]).catch((error) => {
+    blenderMotion,
+  ]).then(([base, procedural, blender]) => {
+    const packs: MotionSourcePack[] = [
+      { root: base.scene, clips: base.animations, source: "BASE" },
+      { root: procedural.scene, clips: procedural.animations, source: "PROCEDURAL" },
+    ];
+    if (blender) packs.push({ root: blender.scene, clips: blender.animations, source: "BLENDER" });
+    return packs;
+  }).catch((error) => {
     sourcePromise = null;
     throw error;
   });
@@ -139,7 +146,10 @@ function retargetClip(
 function clipSort(a: ModelViewerMotionClipInfo, b: ModelViewerMotionClipInfo): number {
   if (a.name === "Idle_Loop") return -1;
   if (b.name === "Idle_Loop") return 1;
-  if (a.source !== b.source) return a.source === "PROCEDURAL" ? -1 : 1;
+  if (a.source !== b.source) {
+    const priority: Record<ModelViewerMotionSource, number> = { BLENDER: 0, PROCEDURAL: 1, BASE: 2 };
+    return priority[a.source] - priority[b.source];
+  }
   return a.name.localeCompare(b.name);
 }
 

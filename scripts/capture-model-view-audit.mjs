@@ -92,7 +92,7 @@ async function waitForMotionViewer(sessionId) {
         timeline: Boolean(timeline),
         timelineDisabled: timeline?.disabled ?? true,
         clip: select?.value ?? '',
-        hasPower: options.some((option) => option.value === 'PF_Power_R'),
+        hasPower: options.some((option) => option.value === 'BF_Power_R'),
         optionCount: options.length,
         options: options.slice(0, 80),
       };
@@ -187,11 +187,11 @@ try {
   const seraAfterLoad = await waitForModelView(sessionId, "SERA");
   const motionReady = await waitForMotionViewer(sessionId);
   await screenshot(sessionId, `${outputDir}/model-view-sera.png`);
-  const motionPower = await poseMotionViewer(sessionId, "PF_Power_R", 0.5);
-  if (motionPower.clip !== "PF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {
-    throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(motionPower)}`);
+  const motionPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);
+  if (motionPower.clip !== "BF_Power_R" || Math.abs(motionPower.timeline - 500) > 2 || !motionPower.paused) {
+    throw new Error(`Motion Viewer did not hold BF_Power_R at 50%: ${JSON.stringify(motionPower)}`);
   }
-  await screenshot(sessionId, `${outputDir}/model-view-motion-power.png`);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-power.png`);
 
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);

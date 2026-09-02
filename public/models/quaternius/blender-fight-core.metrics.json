@@ -1,0 +1,24 @@
+{
+  "version": "BLENDER_MOTION_FOUNDRY_V1",
+  "action": "BF_Power_R",
+  "sourceAction": "Punch_Cross_Armature",
+  "fps": 60,
+  "startFrame": 1,
+  "endFrame": 52,
+  "durationSeconds": 0.85,
+  "impactFrame": 30,
+  "rightHandTravel": 0.5108011254572836,
+  "leftFootLockMaxDrift": 1.9999778781575345e-06,
+  "constrainedRightHandTravel": 0.510800873391712,
+  "constrainedFootLockMaxDrift": 4.702727150338739e-07,
+  "boneCount": 65,
+  "meshCount": 2,
+  "pipeline": [
+    "Punch_Cross source body motion",
+    "nonlinear whole-body retiming",
+    "right-hand two-bone IK contact control",
+    "world-space left support-foot IK lock",
+    "Blender native NLA visual-keying bake",
+    "glTF Action export"
+  ]
+}

@@ -10,6 +10,7 @@ export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc
 export const QUATERNIUS_UBC_FEMALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-female-flat.glb`;
 export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight-core.glb`;
 export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/procedural-fight-core.glb`;
+export const QUATERNIUS_BLENDER_CORE_URL = `${BASE_PATH}/models/quaternius/blender-fight-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -21,6 +22,7 @@ type MotionClipSource = {
 type MotionResources = {
   base: MotionClipSource;
   procedural: MotionClipSource;
+  blender: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -73,15 +75,18 @@ function loadModel(bodyType: QuaterniusBodyType): Promise<THREE.Group> {
 function loadMotion(): Promise<MotionResources> {
   if (motionPromise) return motionPromise;
   const loader = new GLTFLoader();
+  const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
-  ]).then(([base, procedural]) => ({
-    // Retarget each pack against the hierarchy it was authored from. PF v2 is
-    // generated from UAL, but keeping its own loaded scene here avoids losing
-    // animation bindings when the two GLBs differ in node identity/layout.
+    blenderMotion,
+  ]).then(([base, procedural, blender]) => ({
+    // Retarget each pack against the hierarchy it was authored from. Blender
+    // Foundry is an optional authored override; a missing asset keeps the old
+    // procedural pack playable during staged deployments.
     base: { source: base.scene, clips: base.animations },
     procedural: { source: procedural.scene, clips: procedural.animations },
+    blender: blender ? { source: blender.scene, clips: blender.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -435,7 +440,7 @@ const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
   straight: "PF_Cross_R",
   backfist: "PF_Backfist_R",
   bodyBlow: "PF_BodyBlow_L",
-  power: "PF_Power_R",
+  power: "BF_Power_R",
   kick: "PF_FrontKick_R",
   lowKick: "PF_LowKick_L",
   risingKick: "PF_RisingKick_R",
@@ -521,7 +526,18 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     if (!proceduralClips.has("PF_Jab_L") || !proceduralClips.has("PF_Power_R")) {
       throw new Error(`Procedural Fight v2 clips missing after retarget: ${[...proceduralClips.keys()].join(",")}`);
     }
-    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips]);
+    const blenderClips = resources.motion.blender
+      ? retargetMotionClips(resources.motion.blender.source, styled.model, resources.motion.blender.clips)
+      : new Map<string, THREE.AnimationClip>();
+    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips, ...blenderClips]);
+    if (!retargetedClips.has("BF_Power_R")) {
+      const fallback = proceduralClips.get("PF_Power_R");
+      if (fallback) {
+        const alias = fallback.clone();
+        alias.name = "BF_Power_R";
+        retargetedClips.set(alias.name, alias);
+      }
+    }
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
@@ -542,6 +558,10 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size;
+    visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
+      ? "BLENDER_MOTION_FOUNDRY_V1"
+      : "PROCEDURAL_FALLBACK";
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

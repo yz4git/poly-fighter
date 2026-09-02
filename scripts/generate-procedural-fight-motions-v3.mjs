@@ -276,8 +276,11 @@ function makeCurves(spec) {
       const reChamber = Math.min(settle - 0.08, overtravel + 0.09);
       // The right support leg is intentionally untouched. Hip rotation, strike-leg
       // chamber/extension and arm counterbalance create the power without foot drift.
-      torso(24, -1, 9);
-      rootDrive(0.030, 0.018, 0.030);
+      // LOW_KICK_V7_4_UPRIGHT: keep the hip turn, but stop cumulative pelvis/spine
+      // roll from folding the torso toward the striking leg. A smaller lateral
+      // root shift keeps the head over the support side while the leg still arcs low.
+      torso(22, 0, 2);
+      rootDrive(0.030, 0.012, 0.022);
       bones.thigh_l = [
         K(0, R()),
         K(anticipate, R(18, -10, -2), "hold"),

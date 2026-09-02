@@ -588,8 +588,8 @@
         "upperarm_r:rotation"
       ],
       "missingAnimated": [],
-      "maxPlanarRootShift": 0.03751,
-      "maxVerticalRootShift": 0.03
+      "maxPlanarRootShift": 0.03476,
+      "maxVerticalRootShift": 0.022
     },
     {
       "name": "PF_RisingKick_R",

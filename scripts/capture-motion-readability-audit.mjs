@@ -330,9 +330,18 @@ try {
       game.p2.position.set(0, 0, -0.48);
       game.p1.facing = 1;
       game.p2.facing = -1;
+      // resetFighter clears gameplay state but the Three.js mixer still contains
+      // the previous sampled move. Let Idle_Loop fully win its short crossfade
+      // before capturing a new move so every readability sample starts from the
+      // same grounded neutral pose instead of inheriting a prior ACTIVE kick.
+      let auditTime = performance.now() / 1000;
+      for (let settle = 0; settle < 8; settle += 1) {
+        auditTime += 1 / 60;
+        game.updateVisual(game.p1, game.p2, auditTime);
+        game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+      }
       if (!game.p1.beginMove(moveId)) return { error: 'move-not-found', moveId };
       const move = game.p1.currentMove;
-      let auditTime = performance.now() / 1000;
       let activeReached = false;
       let steps = 0;
       for (; steps < 90; steps += 1) {
@@ -434,7 +443,7 @@ try {
       throw new Error(`Motion ${moveId} did not publish v3.2 readability telemetry: ${JSON.stringify(result)}`);
     }
     if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) {
-      if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V1"
+      if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED"
         || !Number.isFinite(result.strikeContactError)
         || !Number.isFinite(result.strikeContactBlend)
         || result.strikeContactBlend < 0.80) {

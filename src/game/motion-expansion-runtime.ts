@@ -280,13 +280,39 @@ function smooth01(value: number): number {
   return t * t * (3 - 2 * t);
 }
 
+function phaseAlignedAttackPoseU(fighter: FighterRuntime, tick: number): number {
+  const move = fighter.currentMove;
+  if (!move) return 1;
+  const total = Math.max(1, move.startup + move.active + move.recovery);
+  if (move.animation !== "kick") return THREE.MathUtils.clamp(tick / total, 0, 1);
+
+  const timing = motionTimingForMove(move);
+  if (tick < move.startup) {
+    const progress = THREE.MathUtils.clamp(tick / Math.max(1, move.startup), 0, 1);
+    return THREE.MathUtils.lerp(0, timing.pre, smooth01(progress));
+  }
+  if (tick < move.startup + move.active) {
+    // Gameplay hitboxes become live on the first ACTIVE frame, so the visible
+    // strike must already be at authored contact at that exact boundary.
+    // STARTUP ends at PRE/chamber; ACTIVE snaps to IMPACT then carries through
+    // OVERTRAVEL. This removes the old invisible-hit gap while preserving recoil.
+    const progress = THREE.MathUtils.clamp((tick - move.startup) / Math.max(1, move.active - 1), 0, 1);
+    return THREE.MathUtils.lerp(timing.impact, timing.over, smooth01(progress));
+  }
+  const recovery = THREE.MathUtils.clamp(
+    (tick - move.startup - move.active) / Math.max(1, move.recovery),
+    0,
+    1,
+  );
+  return THREE.MathUtils.lerp(timing.over, 1, smooth01(recovery));
+}
+
 function attackWeights(fighter: FighterRuntime): AttackWeights {
   const move = fighter.currentMove;
   if (!move) return { drive: 0, impact: 0, phase: "RECOVERY", progress: 1, poseU: 1 };
   const tick = Math.max(0, fighter.moveTick);
-  const total = Math.max(1, move.startup + move.active + move.recovery);
-  const poseU = THREE.MathUtils.clamp(tick / total, 0, 1);
   const timing = motionTimingForMove(move);
+  const poseU = phaseAlignedAttackPoseU(fighter, tick);
   const launchDrive = smooth01((poseU - timing.launch) / Math.max(0.001, timing.impact - timing.launch));
   const recoilDrive = 1 - smooth01((poseU - timing.over) / Math.max(0.001, timing.settle - timing.over));
   const drive = THREE.MathUtils.clamp(launchDrive * recoilDrive, 0, 1);
@@ -366,6 +392,18 @@ function playClip(
   action.fadeIn(blend).play();
   runtime.currentClip = name;
   runtime.currentAction = action;
+}
+
+function syncKickActionToAuthoredPose(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
+  const move = fighter.currentMove;
+  const action = runtime.currentAction;
+  if (fighter.state !== "ATTACK" || !move || move.animation !== "kick" || !action || !runtime.currentClip.startsWith("PF_")) return;
+  const clip = action.getClip();
+  const poseU = phaseAlignedAttackPoseU(fighter, Math.max(0, fighter.moveTick));
+  action.time = THREE.MathUtils.clamp(poseU, 0, 0.99999) * clip.duration;
+  runtime.mixer.update(0);
+  fighter.visual.root.userData.motionExpansionTimelinePolicy = "PHASE_ALIGNED_KICK_V2";
+  fighter.visual.root.userData.motionExpansionAuthoredPoseU = poseU;
 }
 
 function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaternion): void {
@@ -458,7 +496,7 @@ function styleTarget(opponent: FighterRuntime, style: MotionStyle, side: -1 | 1)
 const FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3";
 const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3";
 const V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";
-const V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1";
+const V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED";
 
 function attackSilhouette(runtime: ExpansionRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
@@ -607,6 +645,15 @@ function solveCenterOfMass(runtime: ExpansionRuntime, fighter: FighterRuntime, o
   pelvis.position.y -= Math.min(0.016, (move.power * 0.003 + 0.002) * (0.4 + weights.drive));
 }
 
+function translateBoneWorld(bone: THREE.Object3D, deltaWorld: THREE.Vector3): void {
+  const parent = bone.parent;
+  if (!parent || deltaWorld.lengthSq() <= 1e-12) return;
+  parent.updateWorldMatrix(true, false);
+  const desiredWorld = bone.getWorldPosition(new THREE.Vector3()).add(deltaWorld);
+  bone.position.copy(parent.worldToLocal(desiredWorld));
+  bone.updateWorldMatrix(true, true);
+}
+
 function solveFootLock(runtime: ExpansionRuntime, fighter: FighterRuntime): number {
   const lock = runtime.footLock;
   const move = fighter.currentMove;
@@ -614,6 +661,7 @@ function solveFootLock(runtime: ExpansionRuntime, fighter: FighterRuntime): numb
   const timing = motionTimingForMove(move);
   const weights = attackWeights(fighter);
   const release = smooth01((weights.poseU - timing.recoil) / Math.max(0.001, 1 - timing.recoil));
+  const groundedKick = move.animation === "kick" && motionPlantFootForMove(move) !== "AIR";
   let maxError = 0;
   const solve = (suffix: "l" | "r", target: THREE.Vector3 | null, side: number) => {
     if (!target) return;
@@ -621,12 +669,36 @@ function solveFootLock(runtime: ExpansionRuntime, fighter: FighterRuntime): numb
     const calf = runtime.bones.get(`calf_${suffix}`);
     const foot = runtime.bones.get(`foot_${suffix}`);
     if (!thigh || !calf || !foot) return;
-    const current = foot.getWorldPosition(new THREE.Vector3());
-    const blended = target.clone().lerp(current, release);
+    const blendedTarget = target.clone().lerp(foot.getWorldPosition(new THREE.Vector3()), release);
     const pole = fighter.visual.root.localToWorld(new THREE.Vector3(side * 0.30, 0.50, 0.18));
-    solveLimb(thigh, calf, foot, blended, pole);
+
+    solveLimb(thigh, calf, foot, blendedTarget, pole);
     runtime.model.updateMatrixWorld(true);
-    maxError = Math.max(maxError, foot.getWorldPosition(new THREE.Vector3()).distanceTo(blended));
+
+    // At the v7 contact pose the authored pelvis can sit a few centimetres
+    // outside the support leg's reachable circle. Rotating the support leg
+    // harder then produces a visible skate. Move the pelvis only by the
+    // residual that the two-bone solve could not absorb, clamp it tightly,
+    // and solve the planted leg again. Because this runs after strike IK, the
+    // subsequent kick-only contact pass can recover the attacking foot without
+    // disturbing the support chain.
+    let solved = foot.getWorldPosition(new THREE.Vector3());
+    let residual = blendedTarget.clone().sub(solved);
+    if (groundedKick && release < 0.55 && residual.length() > 0.024) {
+      const pelvis = runtime.bones.get("pelvis");
+      if (pelvis) {
+        const correction = residual.clone();
+        const maxPelvisCorrection = THREE.MathUtils.lerp(0.058, 0.020, release);
+        if (correction.length() > maxPelvisCorrection) correction.setLength(maxPelvisCorrection);
+        translateBoneWorld(pelvis, correction);
+        runtime.model.updateMatrixWorld(true);
+        solveLimb(thigh, calf, foot, blendedTarget, pole);
+        runtime.model.updateMatrixWorld(true);
+        solved = foot.getWorldPosition(new THREE.Vector3());
+        residual = blendedTarget.clone().sub(solved);
+      }
+    }
+    maxError = Math.max(maxError, residual.length());
   };
   solve("l", lock.left, -1);
   solve("r", lock.right, 1);
@@ -895,6 +967,7 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
     comboLinked ? COMBO_LINK_BLEND_SECONDS : undefined,
   );
   runtime.mixer.update(delta);
+  syncKickActionToAuthoredPose(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
   captureFootLocks(runtime, fighter);
   solveCenterOfMass(runtime, fighter, opponent);
@@ -905,10 +978,16 @@ export function updateMotionExpansionSkin(fighter: FighterRuntime, opponent: Fig
   airborneAccent(runtime, fighter);
   const impactPairRole = impactPairAccent(runtime, fighter, opponent);
   runtime.model.updateMatrixWorld(true);
-  const strikeContactError = strikeTrajectory(runtime, fighter, opponent);
+  let strikeContactError = strikeTrajectory(runtime, fighter, opponent);
   runtime.model.updateMatrixWorld(true);
-  const footLockError = solveFootLock(runtime, fighter);
+  let footLockError = solveFootLock(runtime, fighter);
   runtime.model.updateMatrixWorld(true);
+  if (fighter.currentMove?.animation === "kick" && attackWeights(fighter).phase === "ACTIVE") {
+    strikeContactError = strikeTrajectory(runtime, fighter, opponent);
+    runtime.model.updateMatrixWorld(true);
+    footLockError = solveFootLock(runtime, fighter);
+    runtime.model.updateMatrixWorld(true);
+  }
 
   fighter.visual.root.userData.motionExpansionCurrentClip = runtime.currentClip;
   fighter.visual.root.userData.motionExpansionCurrentMove = fighter.currentMove?.id ?? null;

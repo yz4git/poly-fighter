@@ -179,7 +179,7 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);
   assert.match(source, /applyMotionDna/);
   assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3"/);
-  assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1"/);
+  assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED"/);
   assert.match(source, /motionExpansionStrikeContactError/);
   assert.match(source, /motionExpansionStrikeContactBlend/);
   assert.match(source, /phaseAlignedAttackPoseU/);

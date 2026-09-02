@@ -127,7 +127,10 @@ test("v3 mappings retain generated recovery clips and authored support feet", ()
   assert.equal(low.recoveryClip, "PF_KickRecover");
   assert.equal(rising.recoveryClip, "PF_KickRecover");
   assert.equal(dash.recoveryClip, "PF_KickRecover");
-  assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);
+  assert.ok(kick.contactBlend >= 0.82 && kick.contactBlend <= 0.90);
+  assert.ok(low.contactBlend >= 0.80 && low.contactBlend <= 0.88);
+  assert.ok(rising.contactBlend >= 0.88 && rising.contactBlend <= 0.94);
+  assert.ok(dash.contactBlend >= 0.88 && dash.contactBlend <= 0.94);
   assert.equal(jab.plantFoot, "RIGHT");
   assert.equal(power.plantFoot, "LEFT");
   assert.equal(dash.plantFoot, "AIR");
@@ -175,7 +178,10 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /IMPACT_PAIR_REACTION_STATES/);
   assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);
   assert.match(source, /applyMotionDna/);
-  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_2"/);
+  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3"/);
+  assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1"/);
+  assert.match(source, /motionExpansionStrikeContactError/);
+  assert.match(source, /motionExpansionStrikeContactBlend/);
   assert.match(source, /motionExpansionDnaSilhouetteStrength/);
   assert.match(source, /motionExpansionImpactPairStrength/);
   assert.match(source, /motionExpansionVisualReadabilityVersion/);

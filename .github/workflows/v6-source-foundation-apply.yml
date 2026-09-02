@@ -1,0 +1,57 @@
+name: Apply v6 source motion foundation
+
+on:
+  push:
+    branches:
+      - improve/procedural-v6-source-foundation-20260902
+    paths:
+      - .github/workflows/v6-source-foundation-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v6-source-foundation-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Rebuild v3 procedural source clips
+        run: |
+          node scripts/generate-procedural-fight-motions-v3.mjs \
+            public/models/quaternius/ual-fight-core.glb \
+            /tmp/procedural-v3.glb \
+            /tmp/procedural-v3.metrics.json
+      - name: Apply source foundation deltas
+        run: |
+          node scripts/apply-motion-foundation-v4.mjs \
+            /tmp/procedural-v3.glb \
+            public/models/quaternius/ual-fight-core.glb \
+            /tmp/procedural-v6.glb \
+            public/models/quaternius/procedural-fight-foundation.metrics.json
+          cp /tmp/procedural-v6.glb public/models/quaternius/procedural-fight-core.glb
+          cp /tmp/procedural-v3.metrics.json public/models/quaternius/procedural-fight-core.metrics.json
+      - name: Validate generated motion
+        run: |
+          node -e "const m=require('./public/models/quaternius/procedural-fight-foundation.metrics.json'); if(m.version!=='SOURCE_FOUNDATION_V1'||m.foundations.length!==6) process.exit(1); for(const f of m.foundations){if(!f.tracks.length||f.maxRotationDeltaDeg<=0) process.exit(1)}"
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit generated source-foundation motion
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/apply-motion-foundation-v4.mjs \
+            public/models/quaternius/procedural-fight-core.glb \
+            public/models/quaternius/procedural-fight-core.metrics.json \
+            public/models/quaternius/procedural-fight-foundation.metrics.json
+          git commit -m "Blend source foundation motion into procedural strikes"
+          git push origin HEAD:improve/procedural-v6-source-foundation-20260902

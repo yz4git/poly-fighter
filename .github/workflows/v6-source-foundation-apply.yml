@@ -24,6 +24,8 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Install generation-only GLTF tooling
+        run: npm install --no-save --no-package-lock @gltf-transform/core@4.3.0
       - name: Rebuild v3 procedural source clips
         run: |
           node scripts/generate-procedural-fight-motions-v3.mjs \

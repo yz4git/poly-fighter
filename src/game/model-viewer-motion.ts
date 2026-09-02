@@ -69,6 +69,17 @@ function findQuaterniusTarget(visual: FighterVisual): THREE.Object3D | null {
   return target;
 }
 
+function restoreBindPose(target: THREE.Object3D): void {
+  const posed = new Set<THREE.Skeleton>();
+  target.traverse((object) => {
+    const mesh = object as THREE.SkinnedMesh;
+    if (!mesh.isSkinnedMesh || !mesh.skeleton || posed.has(mesh.skeleton)) return;
+    mesh.skeleton.pose();
+    posed.add(mesh.skeleton);
+  });
+  target.updateMatrixWorld(true);
+}
+
 function retargetClip(
   sourceRoot: THREE.Object3D,
   targetRoot: THREE.Object3D,
@@ -166,6 +177,10 @@ export class ModelViewerMotionController {
     if (!target) throw new Error("Quaternius Model View target is not ready");
     const controller = new ModelViewerMotionController(target);
     const packs = await loadMotionSources();
+    // The normal Model View may already have advanced Idle_Loop while the
+    // libraries were loading. Retarget from the actual UBC bind/rest pose, not
+    // that animated frame, otherwise every preview clip inherits an idle bias.
+    restoreBindPose(target);
     for (const pack of packs) {
       for (const clip of pack.clips) {
         const retargeted = retargetClip(pack.root, target, clip);

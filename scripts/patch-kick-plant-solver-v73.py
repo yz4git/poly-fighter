@@ -6,7 +6,6 @@ source = runtime_path.read_text()
 
 start = source.index('function solveFootLock(runtime: ExpansionRuntime, fighter: FighterRuntime): number {')
 end = source.index('\nfunction fullBodyStrikeSolve(', start)
-old = source[start:end]
 new = r'''function translateBoneWorld(bone: THREE.Object3D, deltaWorld: THREE.Vector3): void {
   const parent = bone.parent;
   if (!parent || deltaWorld.lengthSq() <= 1e-12) return;
@@ -78,7 +77,7 @@ source = source.replace('const V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1"
 runtime_path.write_text(source)
 
 tests = test_path.read_text()
-tests = tests.replace('V3_KICK_CONTACT_SOLVER = \\"KICK_CONTACT_SOLVER_V1\\"', 'V3_KICK_CONTACT_SOLVER = \\"KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED\\"')
+tests = tests.replace('KICK_CONTACT_SOLVER_V1', 'KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED')
 if 'KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED' not in tests:
     raise SystemExit('test expectation was not updated')
 test_path.write_text(tests)

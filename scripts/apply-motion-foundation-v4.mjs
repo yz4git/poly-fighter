@@ -7,11 +7,13 @@ if (!proceduralPath || !sourcePath || !outputPath || !metricsPath) {
   throw new Error("usage: node apply-motion-foundation-v4.mjs <procedural.glb> <source.glb> <output.glb> <metrics.json>");
 }
 
-const VERSION = "SOURCE_FOUNDATION_V1";
+const VERSION = "SOURCE_FOUNDATION_V1_PUNCH_ONLY";
 
 // The source clip is never replayed wholesale. Only its local delta from frame
 // zero is transferred, at deliberately low weights, into the already-authored
 // PF strike. This preserves move identity while adding human whole-body timing.
+// Kick foundations are intentionally excluded: real WebGL A/B showed that even
+// low-weight Jump_Start support-leg deltas fight the final world-space Foot Lock.
 const FOUNDATIONS = [
   {
     target: "PF_BodyBlow_L",
@@ -39,33 +41,6 @@ const FOUNDATIONS = [
       spine_01: { rotation: 0.56 }, spine_02: { rotation: 0.48 }, spine_03: { rotation: 0.36 },
       thigh_l: { rotation: 0.22 }, calf_l: { rotation: 0.18 }, foot_l: { rotation: 0.12 },
       thigh_r: { rotation: 0.10 },
-    },
-  },
-  {
-    target: "PF_FrontKick_R",
-    source: "Jump_Start",
-    bones: {
-      pelvis: { rotation: 0.30, translation: 0.28 },
-      spine_01: { rotation: 0.20 }, spine_02: { rotation: 0.16 }, spine_03: { rotation: 0.10 },
-      thigh_l: { rotation: 0.34 }, calf_l: { rotation: 0.30 }, foot_l: { rotation: 0.22 },
-    },
-  },
-  {
-    target: "PF_LowKick_L",
-    source: "Jump_Start",
-    bones: {
-      pelvis: { rotation: 0.22, translation: 0.18 },
-      spine_01: { rotation: 0.14 }, spine_02: { rotation: 0.12 }, spine_03: { rotation: 0.08 },
-      thigh_r: { rotation: 0.28 }, calf_r: { rotation: 0.24 }, foot_r: { rotation: 0.18 },
-    },
-  },
-  {
-    target: "PF_RisingKick_R",
-    source: "Jump_Start",
-    bones: {
-      pelvis: { rotation: 0.40, translation: 0.38 },
-      spine_01: { rotation: 0.24 }, spine_02: { rotation: 0.20 }, spine_03: { rotation: 0.14 },
-      thigh_l: { rotation: 0.40 }, calf_l: { rotation: 0.34 }, foot_l: { rotation: 0.24 },
     },
   },
 ];

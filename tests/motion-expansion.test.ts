@@ -16,7 +16,7 @@ import {
 } from "../src/game/motion-profile";
 
 test("Procedural Fight v3 maps every authored move to pose-graph motion and reaction data", () => {
-  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");
+  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V5_SOURCE_HYBRID");
   assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
   assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 23);
   assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V3");
@@ -27,7 +27,7 @@ test("Procedural Fight v3 maps every authored move to pose-graph motion and reac
   assert.equal(MOTION_EXPANSION_PROFILE.sideStepLeftClip, "PF_Sidestep_L");
   assert.equal(MOTION_EXPANSION_PROFILE.kickRecoveryClip, "PF_KickRecover");
   assert.equal(MOTION_EXPANSION_PROFILE.heavyRecoveryClip, "PF_HeavyRecover");
-  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");
+  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "SOURCE_MOTION_WITH_RUNTIME_IK_FOOT_LOCK");
   assert.equal(MOTION_EXPANSION_PROFILE.timingPolicy, "MOVE_SPECIFIC_9_POSE_TIMING");
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
@@ -113,20 +113,20 @@ test("v3 mappings retain generated recovery clips and authored support feet", ()
   const dash = motionSpecForMove(kairo.moves.dashKick);
 
   assert.equal(jab.clip, "PF_Jab_L");
-  assert.equal(backfist.clip, "PF_Backfist_R");
-  assert.equal(backfist.recoveryClip, "PF_HeavyRecover");
-  assert.equal(body.clip, "PF_BodyBlow_L");
-  assert.equal(power.clip, "PF_Power_R");
-  assert.equal(power.recoveryClip, "PF_HeavyRecover");
+  assert.equal(backfist.clip, "Melee_Hook");
+  assert.equal(backfist.recoveryClip, "Melee_Hook_Rec");
+  assert.equal(body.clip, "Shield_OneShot");
+  assert.equal(power.clip, "Melee_Hook");
+  assert.equal(power.recoveryClip, "Melee_Hook_Rec");
   assert.notEqual(body.clip, backfist.clip);
-  assert.equal(kick.clip, "PF_FrontKick_R");
-  assert.equal(low.clip, "PF_LowKick_L");
-  assert.equal(rising.clip, "PF_RisingKick_R");
-  assert.equal(dash.clip, "PF_DashKick_R");
-  assert.equal(kick.recoveryClip, "PF_KickRecover");
-  assert.equal(low.recoveryClip, "PF_KickRecover");
-  assert.equal(rising.recoveryClip, "PF_KickRecover");
-  assert.equal(dash.recoveryClip, "PF_KickRecover");
+  assert.equal(kick.clip, "NinjaJump_Start");
+  assert.equal(low.clip, "Slide_Start");
+  assert.equal(rising.clip, "NinjaJump_Start");
+  assert.equal(dash.clip, "NinjaJump_Start");
+  assert.equal(kick.recoveryClip, "NinjaJump_Land");
+  assert.equal(low.recoveryClip, "Slide_Exit");
+  assert.equal(rising.recoveryClip, "NinjaJump_Land");
+  assert.equal(dash.recoveryClip, "NinjaJump_Land");
   assert.ok(kick.contactBlend >= 0.82 && kick.contactBlend <= 0.90);
   assert.ok(low.contactBlend >= 0.80 && low.contactBlend <= 0.88);
   assert.ok(rising.contactBlend >= 0.88 && rising.contactBlend <= 0.94);
@@ -139,10 +139,10 @@ test("v3 mappings retain generated recovery clips and authored support feet", ()
 test("side-sensitive punches select the clip that matches each fighter's authored contact hand", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const sera = FIGHTER_DEFINITIONS.blue;
-  assert.equal(motionSpecForMove(kairo.moves.backfist).clip, "PF_Backfist_R");
-  assert.equal(motionSpecForMove(sera.moves.backfist).clip, "PF_Backfist_L");
-  assert.equal(motionSpecForMove(kairo.moves.bodyBlow).clip, "PF_BodyBlow_L");
-  assert.equal(motionSpecForMove(sera.moves.bodyBlow).clip, "PF_BodyBlow_R");
+  assert.equal(motionSpecForMove(kairo.moves.backfist).clip, "Melee_Hook");
+  assert.equal(motionSpecForMove(sera.moves.backfist).clip, "Melee_Hook");
+  assert.equal(motionSpecForMove(kairo.moves.bodyBlow).clip, "Shield_OneShot");
+  assert.equal(motionSpecForMove(sera.moves.bodyBlow).clip, "Shield_OneShot");
   assert.equal(motionSpecForMove(kairo.moves.counter).clip, "PF_Counter_L");
   assert.equal(motionSpecForMove(sera.moves.counter).clip, "PF_Counter_L");
   assert.equal(motionPlantFootForMove(kairo.moves.backfist), "LEFT");

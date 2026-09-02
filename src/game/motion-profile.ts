@@ -80,13 +80,13 @@ const MOTION_DNA: Readonly<Record<FighterDefinition["archetype"], MotionDna>> = 
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
   jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24, plantFoot: "RIGHT" },
   straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28, plantFoot: "LEFT" },
-  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.31, plantFoot: "RIGHT" },
-  power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },
-  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },
-  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },
-  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.90, plantFoot: "LEFT" },
-  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90, plantFoot: "AIR" },
+  backfist: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HOOK", speedScale: 1.0, contactBlend: 0.34, plantFoot: "LEFT" },
+  bodyBlow: { clip: "Shield_OneShot", style: "BODY_BLOW", speedScale: 1.10, contactBlend: 0.28, plantFoot: "RIGHT" },
+  power: { clip: "Melee_Hook", recoveryClip: "Melee_Hook_Rec", style: "HEAVY", speedScale: 0.82, contactBlend: 0.38, plantFoot: "LEFT" },
+  kick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "FRONT_KICK", speedScale: 1.16, contactBlend: 0.84, plantFoot: "LEFT" },
+  lowKick: { clip: "Slide_Start", recoveryClip: "Slide_Exit", style: "LOW_KICK", speedScale: 1.18, contactBlend: 0.82, plantFoot: "RIGHT" },
+  risingKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "RISING_KICK", speedScale: 1.02, contactBlend: 0.90, plantFoot: "LEFT" },
+  dashKick: { clip: "NinjaJump_Start", recoveryClip: "NinjaJump_Land", style: "DASH_KICK", speedScale: 1.22, contactBlend: 0.90, plantFoot: "AIR" },
   throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28, plantFoot: "BOTH" },
   counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29, plantFoot: "RIGHT" },
 };
@@ -104,7 +104,7 @@ const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = 
 };
 
 export const MOTION_EXPANSION_PROFILE = {
-  version: "MOTION_QUALITY_V3",
+  version: "MOTION_QUALITY_V5_SOURCE_HYBRID",
   proceduralVersion: "PROCEDURAL_FIGHT_V3",
   primaryLibraryClips: 12,
   secondaryLibraryClips: 23,
@@ -119,15 +119,19 @@ export const MOTION_EXPANSION_PROFILE = {
   sideStepLeftClip: "PF_Sidestep_L",
   kickRecoveryClip: "PF_KickRecover",
   heavyRecoveryClip: "PF_HeavyRecover",
-  rootMotionPolicy: "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK",
+  rootMotionPolicy: "SOURCE_MOTION_WITH_RUNTIME_IK_FOOT_LOCK",
   timingPolicy: "MOVE_SPECIFIC_9_POSE_TIMING",
 } as const;
 
 function handedClipForMove(move: MoveDefinition, fallback: string): string {
   const left = move.visualContact?.startsWith("LEFT") === true;
-  if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
-  if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
-  if (move.id === "counter") return left ? "PF_Counter_L" : "PF_Counter_R";
+  // Preserve coherent source-library performances. Only PF procedural
+  // variants are mirrored through the old left/right clip table.
+  if (fallback.startsWith("PF_")) {
+    if (move.id === "backfist") return left ? "PF_Backfist_L" : "PF_Backfist_R";
+    if (move.id === "bodyBlow") return left ? "PF_BodyBlow_L" : "PF_BodyBlow_R";
+    if (move.id === "counter") return left ? "PF_Counter_L" : "PF_Counter_R";
+  }
   return fallback;
 }
 

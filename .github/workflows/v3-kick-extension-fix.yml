@@ -1,0 +1,96 @@
+name: Apply v3 kick extension fix
+
+on:
+  push:
+    branches:
+      - improve/procedural-v3-kick-extension-20260902
+    paths:
+      - .github/workflows/v3-kick-extension-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: improve/procedural-v3-kick-extension-20260902
+          fetch-depth: 0
+
+      - name: Apply kick contact solver pass
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:140]!r}")
+              p.write_text(text.replace(old, new))
+
+          profile = "src/game/motion-profile.ts"
+          replace_exact(
+              profile,
+              '''  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.62, plantFoot: "LEFT" },\n  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.66, plantFoot: "RIGHT" },\n  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.70, plantFoot: "LEFT" },\n  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.74, plantFoot: "AIR" },''',
+              '''  kick: { clip: "PF_FrontKick_R", recoveryClip: "PF_KickRecover", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },\n  lowKick: { clip: "PF_LowKick_L", recoveryClip: "PF_KickRecover", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },\n  risingKick: { clip: "PF_RisingKick_R", recoveryClip: "PF_KickRecover", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.90, plantFoot: "LEFT" },\n  dashKick: { clip: "PF_DashKick_R", recoveryClip: "PF_KickRecover", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90, plantFoot: "AIR" },''',
+          )
+
+          runtime = "src/game/motion-expansion-runtime.ts"
+          replace_exact(
+              runtime,
+              '''function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): void {\n  const move = fighter.currentMove;\n  if (fighter.state !== "ATTACK" || !move || !move.visualContact || move.visualContact === "BODY") return;\n  const weights = attackWeights(fighter);\n  if (weights.impact <= 0.02) return;''',
+              '''function strikeTrajectory(runtime: ExpansionRuntime, fighter: FighterRuntime, opponent: FighterRuntime): number {\n  const move = fighter.currentMove;\n  if (fighter.state !== "ATTACK" || !move || !move.visualContact || move.visualContact === "BODY") return -1;\n  const weights = attackWeights(fighter);\n  if (weights.impact <= 0.02) return -1;''',
+          )
+          replace_exact(runtime, "  if (!root || !mid || !end) return;", "  if (!root || !mid || !end) return -1;")
+          replace_exact(
+              runtime,
+              '''  const solvedTarget = current.clone().lerp(target, blend);\n  const pole = fighter.visual.root.localToWorld(new THREE.Vector3(\n    (suffix === "l" ? -1 : 1) * (foot ? 0.48 : 0.62),\n    foot ? 0.46 : 0.80,\n    foot ? 0.24 : 0.32,\n  ));\n  solveLimb(root, mid, end, solvedTarget, pole);\n}''',
+              '''  const solvedTarget = current.clone().lerp(target, blend);\n  const kickPole = foot\n    ? spec.style === "LOW_KICK"\n      ? { lateral: 0.42, y: 0.30, z: 0.34 }\n      : spec.style === "RISING_KICK"\n        ? { lateral: 0.40, y: 0.82, z: 0.42 }\n        : spec.style === "DASH_KICK"\n          ? { lateral: 0.38, y: 0.66, z: 0.46 }\n          : { lateral: 0.40, y: 0.62, z: 0.44 }\n    : null;\n  const pole = fighter.visual.root.localToWorld(new THREE.Vector3(\n    (suffix === "l" ? -1 : 1) * (kickPole?.lateral ?? 0.62),\n    kickPole?.y ?? 0.80,\n    kickPole?.z ?? 0.32,\n  ));\n  solveLimb(root, mid, end, solvedTarget, pole);\n  runtime.model.updateMatrixWorld(true);\n  return end.getWorldPosition(new THREE.Vector3()).distanceTo(target);\n}''',
+          )
+          replace_exact(
+              runtime,
+              'const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_2";\nconst V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";',
+              'const V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3";\nconst V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2";\nconst V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1";',
+          )
+          replace_exact(
+              runtime,
+              '''  runtime.model.updateMatrixWorld(true);\n  strikeTrajectory(runtime, fighter, opponent);\n  runtime.model.updateMatrixWorld(true);\n  const footLockError = solveFootLock(runtime, fighter);''',
+              '''  runtime.model.updateMatrixWorld(true);\n  const strikeContactError = strikeTrajectory(runtime, fighter, opponent);\n  runtime.model.updateMatrixWorld(true);\n  const footLockError = solveFootLock(runtime, fighter);''',
+          )
+          replace_exact(
+              runtime,
+              '''  fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;\n  fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";''',
+              '''  fighter.visual.root.userData.motionExpansionContactLanePolicy = V3_CONTACT_LANE_POLICY;\n  fighter.visual.root.userData.motionExpansionKickContactSolver = V3_KICK_CONTACT_SOLVER;\n  fighter.visual.root.userData.motionExpansionStrikeContactError = strikeContactError;\n  fighter.visual.root.userData.motionExpansionStrikeContactBlend = fighter.currentMove ? motionSpecForMove(fighter.currentMove).contactBlend : 0;\n  fighter.visual.root.userData.motionExpansionPoseGraph = "9_POSE_GRAPH";''',
+          )
+
+          tests = "tests/motion-expansion.test.ts"
+          replace_exact(
+              tests,
+              '  assert.ok(dash.contactBlend >= 0.65 && dash.contactBlend <= 0.8);',
+              '  assert.ok(kick.contactBlend >= 0.82 && kick.contactBlend <= 0.90);\n  assert.ok(low.contactBlend >= 0.80 && low.contactBlend <= 0.88);\n  assert.ok(rising.contactBlend >= 0.88 && rising.contactBlend <= 0.94);\n  assert.ok(dash.contactBlend >= 0.88 && dash.contactBlend <= 0.94);',
+          )
+          replace_exact(
+              tests,
+              '  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_2"/);',
+              '  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3"/);\n  assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V1"/);\n  assert.match(source, /motionExpansionStrikeContactError/);\n  assert.match(source, /motionExpansionStrikeContactBlend/);',
+          )
+          PY
+
+      - name: Verify motion tests
+        run: |
+          npm ci --ignore-scripts
+          node --import tsx --test tests/motion-expansion.test.ts tests/tps-mode.test.ts
+          npm run lint
+
+      - name: Commit fixes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/motion-profile.ts src/game/motion-expansion-runtime.ts tests/motion-expansion.test.ts
+          git diff --cached --check
+          git commit -m "Extend v3 kick contact poses"
+          git push origin HEAD:improve/procedural-v3-kick-extension-20260902

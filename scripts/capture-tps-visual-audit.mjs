@@ -366,7 +366,7 @@ try {
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
   if (!(punchProbe?.screenSeparation >= 72)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
-  if (punchProbe?.spacingMode !== "IMPACT_PAIR" || !(punchProbe?.spacingMinimum >= 1.28) || !(punchProbe?.impactWorldSeparation >= 1.27)) throw new Error(`TPS resolved impact did not open the v3 contact lane: ${JSON.stringify(punchProbe)}`);
+  if (punchProbe?.spacingMode !== "IMPACT_PAIR" || !(punchProbe?.spacingMinimum >= 1.40) || !(punchProbe?.impactWorldSeparation >= 1.39) || !(punchProbe?.impactScreenSeparation >= 90)) throw new Error(`TPS resolved impact did not open the v3.1 contact lane: ${JSON.stringify(punchProbe)}`);
   if (punchProbe?.impactFxMove !== "jab" || !(punchProbe?.impactFxHeight >= 2.5)) throw new Error(`TPS impact FX did not follow the procedural strike contact height: ${JSON.stringify(punchProbe)}`);
   if (!punchProbe?.targetGroundRing) throw new Error(`TPS target ground ring was not present: ${JSON.stringify(punchProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);

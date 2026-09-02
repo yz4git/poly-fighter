@@ -41,7 +41,9 @@ const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.30;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
-const TPS_IMPACT_CONTACT_MINIMUM = 1.28;
+const TPS_IMPACT_CONTACT_MINIMUM = 1.40;
+const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.46;
+const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.50;
 const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   jab: 2.62,
   straight: 2.60,
@@ -870,12 +872,21 @@ export class TpsFightGame {
       && ["HIT", "BLOCK_STUN", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(this.p1.state);
     const impactPair = impactFrozen && (p1Impacting || p2Impacting);
     const throwContact = p1Throwing || p2Throwing;
-    const minimum = throwContact ? 0.98 : impactPair ? TPS_IMPACT_CONTACT_MINIMUM : 1.12;
+    const impactMove = p1Impacting ? this.p1.currentMove : p2Impacting ? this.p2.currentMove : null;
+    const impactMoveId = impactMove?.id ?? null;
+    const impactMinimum = impactMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(impactMoveId)
+      ? TPS_IMPACT_CONTACT_MINIMUM_KICK
+      : impactMoveId && ["power", "backfist", "counter"].includes(impactMoveId)
+        ? TPS_IMPACT_CONTACT_MINIMUM_HEAVY
+        : TPS_IMPACT_CONTACT_MINIMUM;
+    const minimum = throwContact ? 0.98 : impactPair ? impactMinimum : 1.12;
     const spacingMode = throwContact ? "THROW" : impactPair ? "IMPACT_PAIR" : "NEUTRAL";
     this.p1.visual.root.userData.tpsContactSpacingMode = spacingMode;
     this.p2.visual.root.userData.tpsContactSpacingMode = spacingMode;
     this.p1.visual.root.userData.tpsContactSpacingMinimum = minimum;
     this.p2.visual.root.userData.tpsContactSpacingMinimum = minimum;
+    this.p1.visual.root.userData.tpsContactSpacingMove = impactMoveId;
+    this.p2.visual.root.userData.tpsContactSpacingMove = impactMoveId;
     if (distance >= minimum || distance < 1e-5) return;
     const correction = delta.normalize().multiplyScalar((minimum - distance) * 0.5);
     this.p1.position.addScaledVector(correction, -1);

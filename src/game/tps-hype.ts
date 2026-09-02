@@ -17,8 +17,9 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   lightImpactRingCount: 1,
   mediumImpactRingCount: 1,
   heavyImpactRingCount: 2,
-  impactRingExpansion: 1.6,
-  heavyBurstScale: 0.48,
+  impactRingExpansion: 1.34,
+  heavyBurstScale: 0.38,
+  impactDepthBias: 0.07,
   perfectStepFovRush: 4.8,
   dashFovRush: 3.8,
   heavyImpactFovPunch: -5.2,
@@ -31,6 +32,7 @@ interface ShockRing {
   life: number;
   maxLife: number;
   startScale: number;
+  baseOpacity: number;
 }
 
 interface BurstSpokes {
@@ -38,6 +40,7 @@ interface BurstSpokes {
   life: number;
   maxLife: number;
   startScale: number;
+  baseOpacity: number;
 }
 
 export function tpsHypeImpactTier(moveId: string, power: number): ImpactTier {
@@ -117,7 +120,7 @@ export class TpsHypeDirector {
       mesh.visible = false;
       mesh.renderOrder = 28;
       this.group.add(mesh);
-      this.rings.push({ mesh, life: 0, maxLife: 0, startScale: 1 });
+      this.rings.push({ mesh, life: 0, maxLife: 0, startScale: 1, baseOpacity: 0 });
     }
 
     for (let index = 0; index < TPS_HYPE_PROFILE.maxBurstSpokes; index += 1) {
@@ -133,7 +136,7 @@ export class TpsHypeDirector {
       lines.visible = false;
       lines.renderOrder = 29;
       this.group.add(lines);
-      this.bursts.push({ lines, life: 0, maxLife: 0, startScale: 1 });
+      this.bursts.push({ lines, life: 0, maxLife: 0, startScale: 1, baseOpacity: 0 });
     }
   }
 
@@ -148,6 +151,7 @@ export class TpsHypeDirector {
           : 0x4bdcff;
     const point = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
     const facing = camera.position.clone().sub(point).normalize();
+    const visualPoint = point.clone().addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias);
     const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
 
     for (let index = 0; index < ringCount; index += 1) {
@@ -156,25 +160,33 @@ export class TpsHypeDirector {
       ring.maxLife = ring.life;
       ring.startScale = 0.56 + tier * 0.14 + index * 0.10;
       ring.mesh.visible = true;
-      ring.mesh.position.copy(point);
+      ring.mesh.position.copy(visualPoint);
       ring.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
       ring.mesh.rotateZ(index * 0.44 + tier * 0.11);
       ring.mesh.scale.setScalar(ring.startScale);
       ring.mesh.material.color.setHex(color);
-      ring.mesh.material.opacity = event.blocked ? 0.36 : Math.max(0.38, 0.76 - index * 0.10);
+      ring.baseOpacity = event.blocked
+        ? 0.26
+        : tier === 3
+          ? Math.max(0.34, 0.46 - index * 0.08)
+          : tier === 2
+            ? 0.35
+            : 0.29;
+      ring.mesh.material.opacity = ring.baseOpacity;
     }
 
     const burst = this.bursts.find((entry) => entry.life <= 0) ?? this.bursts[0];
     burst.life = event.blocked ? 0.10 : tier === 3 ? 0.20 : tier === 2 ? 0.15 : 0.11;
     burst.maxLife = burst.life;
-    burst.startScale = event.blocked ? 0.34 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.50 : 0.40;
+    burst.startScale = event.blocked ? 0.28 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.35 : 0.30;
     burst.lines.visible = true;
-    burst.lines.position.copy(point);
+    burst.lines.position.copy(visualPoint);
     burst.lines.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
     burst.lines.rotation.z += tier * 0.17;
     burst.lines.scale.setScalar(burst.startScale);
     burst.lines.material.color.setHex(color);
-    burst.lines.material.opacity = event.blocked ? 0.28 : tier === 3 ? 0.68 : 0.58;
+    burst.baseOpacity = event.blocked ? 0.22 : tier === 3 ? 0.46 : tier === 2 ? 0.37 : 0.29;
+    burst.lines.material.opacity = burst.baseOpacity;
 
     if (event.blocked) {
       this.fovOffset = Math.max(this.fovOffset, 0.65);
@@ -214,7 +226,8 @@ export class TpsHypeDirector {
     ring.mesh.rotation.set(-Math.PI / 2, 0, Math.atan2(forward.z, forward.x));
     ring.mesh.scale.setScalar(ring.startScale);
     ring.mesh.material.color.setHex(perfect ? 0x79ffc0 : fighter.definition.colors.glow);
-    ring.mesh.material.opacity = perfect ? 0.72 : 0.42;
+    ring.baseOpacity = perfect ? 0.62 : 0.38;
+    ring.mesh.material.opacity = ring.baseOpacity;
 
     this.fovOffset = Math.max(this.fovOffset, perfect ? TPS_HYPE_PROFILE.perfectStepFovRush : 2.8);
     this.cameraKick = Math.max(this.cameraKick, perfect ? 0.075 : 0.035);
@@ -242,7 +255,7 @@ export class TpsHypeDirector {
       ring.life -= delta;
       const progress = 1 - Math.max(0, ring.life) / Math.max(1e-4, ring.maxLife);
       ring.mesh.scale.setScalar(ring.startScale * (1 + progress * TPS_HYPE_PROFILE.impactRingExpansion));
-      ring.mesh.material.opacity = Math.max(0, (1 - progress) * 0.82);
+      ring.mesh.material.opacity = Math.max(0, (1 - progress) * ring.baseOpacity);
       if (ring.life <= 0) {
         ring.mesh.visible = false;
         ring.mesh.material.opacity = 0;
@@ -253,8 +266,8 @@ export class TpsHypeDirector {
       if (burst.life <= 0) continue;
       burst.life -= delta;
       const progress = 1 - Math.max(0, burst.life) / Math.max(1e-4, burst.maxLife);
-      burst.lines.scale.setScalar(burst.startScale * (1 + progress * 1.75));
-      burst.lines.material.opacity = Math.max(0, (1 - progress) * 0.92);
+      burst.lines.scale.setScalar(burst.startScale * (1 + progress * 1.20));
+      burst.lines.material.opacity = Math.max(0, (1 - progress) * burst.baseOpacity);
       if (burst.life <= 0) {
         burst.lines.visible = false;
         burst.lines.material.opacity = 0;
@@ -302,11 +315,13 @@ export class TpsHypeDirector {
     camera.updateProjectionMatrix();
     for (const ring of this.rings) {
       ring.life = 0;
+      ring.baseOpacity = 0;
       ring.mesh.visible = false;
       ring.mesh.material.opacity = 0;
     }
     for (const burst of this.bursts) {
       burst.life = 0;
+      burst.baseOpacity = 0;
       burst.lines.visible = false;
       burst.lines.material.opacity = 0;
     }

@@ -35,12 +35,12 @@ const TPS_COMBO_GRACE_TICKS = 34;
 const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.15;
-const TPS_CAMERA_CLOSE_BACK_DELTA = 0.18;
-const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.42;
-const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.12;
-const TPS_CAMERA_IMPACT_PULLBACK = 0.42;
-const TPS_CAMERA_IMPACT_SHOULDER = 0.62;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.55;
+const TPS_CAMERA_CLOSE_BACK_DELTA = -0.58;
+const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.30;
+const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
+const TPS_CAMERA_IMPACT_BACK_DELTA = -0.16;
+const TPS_CAMERA_IMPACT_SHOULDER = 0.20;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 
@@ -893,7 +893,7 @@ export class TpsFightGame {
     const backDistance = 4.70
       + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
       + compactLandscapeFactor * 0.18
-      + impactReadabilityFactor * TPS_CAMERA_IMPACT_PULLBACK;
+      + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA;
     const shoulderOffset = 2.50
       + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
       + compactLandscapeFactor * (0.52 + closeFactor * 0.48)
@@ -901,7 +901,7 @@ export class TpsFightGame {
     const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035;
     const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
     this.cameraTarget.copy(this.p2.position)
-      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift + impactReadabilityFactor * 0.08)
+      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift + impactReadabilityFactor * 0.035)
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
     this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;

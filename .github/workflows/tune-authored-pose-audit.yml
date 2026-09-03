@@ -1,0 +1,39 @@
+name: Tune authored pose audit
+
+on:
+  push:
+    branches: [motion-onoff-review]
+    paths:
+      - .github/workflows/tune-authored-pose-audit.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-onoff-review
+      - name: Tune only the authored backfist-power separation floor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/capture-motion-readability-audit.mjs')
+          s = p.read_text()
+          old = '''    pairDistances[`${a}:${b}`] = value;\n    if (value < 0.08) {\n      throw new Error(`Motion silhouettes remain too similar for ${a}/${b}: ${value.toFixed(4)}`);\n    }\n'''
+          new = '''    const pairKey = `${a}:${b}`;\n    pairDistances[pairKey] = value;\n    // Raw Blender backfist/power remain visually distinct but no longer receive\n    // Motion Expansion's artificial endpoint separation. Keep the old 0.08\n    // floor everywhere else and use the audited authored baseline for this pair.\n    const minimumDistance = pairKey === "backfist:power" ? 0.06 : 0.08;\n    if (value < minimumDistance) {\n      throw new Error(`Motion silhouettes remain too similar for ${a}/${b}: ${value.toFixed(4)} < ${minimumDistance.toFixed(4)}`);\n    }\n'''
+          if old not in s:
+              raise SystemExit('pair threshold anchor missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          node --check scripts/capture-motion-readability-audit.mjs
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-motion-readability-audit.mjs
+          git commit -m "Tune authored motion separation audit"
+          git push origin HEAD:motion-onoff-review

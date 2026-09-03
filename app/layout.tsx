@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import TouchInputSafety from "./TouchInputSafety";
 import "./globals.css";
 import "./playtest-polish.css";
+import "./hud-face-safe.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

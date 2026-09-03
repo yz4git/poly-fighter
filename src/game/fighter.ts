@@ -67,6 +67,10 @@ export class FighterRuntime {
   readonly visualScale: number;
   grounded = true;
   invariantError: string | null = null;
+  reactionKind: "LIGHT" | "MID" | "HEAVY" | "COUNTER" = "HEAVY";
+  reactionSide: "LEFT" | "RIGHT" = "RIGHT";
+  reactionAtEdge = false;
+  reactionSerial = 0;
 
   constructor(
     id: string,
@@ -102,6 +106,17 @@ export class FighterRuntime {
 
   justPressed(action: keyof InputFrame): boolean {
     return this.input[action] && !this.previousInput[action];
+  }
+
+  setHitReactionVisual(
+    kind: "LIGHT" | "MID" | "HEAVY" | "COUNTER",
+    side: "LEFT" | "RIGHT",
+    atEdge: boolean,
+  ): void {
+    this.reactionKind = kind;
+    this.reactionSide = side;
+    this.reactionAtEdge = atEdge;
+    this.reactionSerial += 1;
   }
 
   canAct(): boolean {

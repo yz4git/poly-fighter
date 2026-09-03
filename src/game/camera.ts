@@ -17,17 +17,21 @@ export class FightCamera {
     const separation = Math.hypot(p1.position.x - p2.position.x, p1.position.z - p2.position.z);
 
     // Real-WebGL playtest pass: move the baseline composition about 8-10%
-    // closer.  Both fighters remain visible at maximum practical separation,
+    // closer. Both fighters remain visible at maximum practical separation,
     // but the characters now dominate the screen instead of the empty floor.
     const desiredZ = 7.55 + Math.min(3.45, separation * 0.54);
     const desiredY = 2.95 + Math.min(1.0, separation * 0.09);
     this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, midX, 5.8, deltaSeconds);
     this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, desiredY, 5.8, deltaSeconds);
     this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, desiredZ, 5.8, deltaSeconds);
+
+    // Face-safe composition: aim slightly higher in world space so both
+    // fighters render lower in the viewport. This creates a stable visual gap
+    // below the compact top HUD without changing gameplay positions or reach.
     const targetY = THREE.MathUtils.clamp(
-      1.46 + Math.max(p1.position.y, p2.position.y) * 0.24,
-      1.28,
-      2.02,
+      1.62 + Math.max(p1.position.y, p2.position.y) * 0.24,
+      1.44,
+      2.18,
     );
     this.target.set(midX, targetY, midZ * 0.18);
     if (this.shake > 0.001) {

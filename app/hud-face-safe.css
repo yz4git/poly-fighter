@@ -1,0 +1,164 @@
+/*
+ * Face-safe combat HUD pass.
+ * Keep the fighter heads below the readable UI band on short landscape phones.
+ * This file is loaded after playtest-polish.css and intentionally only overrides
+ * the match HUD composition; controls and gameplay layout stay unchanged.
+ */
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .fight-hud {
+    top: max(5px, env(safe-area-inset-top));
+    left: max(24px, calc(env(safe-area-inset-left) + 10px));
+    right: max(24px, calc(env(safe-area-inset-right) + 10px));
+    grid-template-columns: minmax(0, 1fr) 82px minmax(0, 1fr);
+    gap: clamp(8px, 1.35vw, 12px);
+    align-items: start;
+  }
+
+  /* Names now sit inside the health-bar lane instead of consuming a full row. */
+  .hud-player {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 24px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .hud-name {
+    grid-column: 1;
+    grid-row: 1;
+    z-index: 2;
+    min-height: 0;
+    margin: 0;
+    padding: 0 8px;
+    align-items: center;
+    pointer-events: none;
+  }
+
+  .hud-name span {
+    display: none;
+  }
+
+  .hud-name strong {
+    max-width: 100%;
+    font-size: clamp(13px, 3.9vh, 17px);
+    line-height: 1;
+    letter-spacing: .04em;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, .92), 1px 1px 0 rgba(3, 12, 25, .95);
+  }
+
+  .right-player .hud-name {
+    justify-content: flex-end;
+  }
+
+  .health-track {
+    grid-column: 1;
+    grid-row: 1;
+    height: 18px;
+    padding: 2px;
+    background: rgba(2, 8, 18, .68);
+    border-color: rgba(213, 239, 255, .54);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .2);
+  }
+
+  .health-fill {
+    opacity: .83;
+  }
+
+  .win-pips {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0 0 0 6px;
+    gap: 3px;
+    align-self: center;
+  }
+
+  .right-player .win-pips {
+    justify-content: flex-start;
+    margin: 0 6px 0 0;
+    order: -1;
+  }
+
+  .win-pips i {
+    width: 9px;
+    height: 4px;
+  }
+
+  .round-readout {
+    min-height: 0;
+    padding: 2px 5px 4px;
+    background: rgba(3, 11, 24, .72);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .2), inset 0 0 16px rgba(72, 184, 255, .035);
+    transform: translateY(-1px);
+  }
+
+  .round-readout span {
+    font-size: 6px;
+    line-height: 1;
+  }
+
+  .round-readout b {
+    font-size: 22px;
+    line-height: .92;
+  }
+
+  .round-readout small {
+    min-height: 6px;
+    font-size: 6px;
+    line-height: 1;
+  }
+
+  .pause-button:not(.tps-pause-button) {
+    top: max(5px, env(safe-area-inset-top));
+  }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .fight-hud {
+    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .hud-player {
+    grid-template-rows: 20px;
+  }
+
+  .hud-name {
+    padding-inline: 6px;
+  }
+
+  .hud-name strong {
+    font-size: 12px;
+  }
+
+  .health-track {
+    height: 16px;
+  }
+
+  .win-pips {
+    gap: 2px;
+    margin-left: 4px;
+  }
+
+  .right-player .win-pips {
+    margin-right: 4px;
+  }
+
+  .win-pips i {
+    width: 7px;
+    height: 3px;
+  }
+
+  .round-readout {
+    padding: 2px 4px 3px;
+  }
+
+  .round-readout span,
+  .round-readout small {
+    font-size: 5px;
+  }
+
+  .round-readout b {
+    font-size: 19px;
+  }
+}

@@ -40,7 +40,7 @@ class KickSpec:
     recovery_frame: int
     strike_side: str
     support_side: str
-    foot_offsets: PhaseOffsets  # (forward, lateral, vertical), in body-relative metres
+    foot_offsets: PhaseOffsets
     foot_pitch: rig.PhaseValues
     foot_yaw: rig.PhaseValues
     ik_influences: rig.PhaseValues
@@ -52,13 +52,15 @@ class KickSpec:
     pelvis_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     lower_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     upper_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-    # Blender imports UAL actions with the armature suffix. Be explicit here so
-    # v1.find_source_action() cannot partially match Crouch_Idle_Loop first.
     source_action_hint: str = "Idle_Loop_Armature"
     source_knots: Tuple[Tuple[float, float], ...] = ((0.0, 0.0), (1.0, 1.0))
     hand_scales: rig.HandScales = (None, None, None, None, None, None, None)
     hand_offsets: rig.HandOffsets = ((0.0, 0.0, 0.0),) * 7
     knee_pole_scale: float = 2.2
+    guard_influences: rig.PhaseValues = (0.0, 0.68, 0.94, 1.0, 1.0, 0.70, 0.0)
+    guard_forward: float = 0.105
+    guard_width: float = 0.105
+    guard_height: float = 0.155
 
     @property
     def start_frame(self) -> int:
@@ -99,17 +101,17 @@ FRONT_KICK = KickSpec(
     foot_offsets=(
         (0.00, 0.00, 0.00),
         (-0.05, 0.00, 0.16),
-        (0.20, 0.00, 0.24),
-        (0.43, 0.00, 0.21),
-        (0.47, 0.00, 0.18),
-        (0.02, 0.00, 0.16),
+        (0.23, 0.00, 0.23),
+        (0.51, 0.00, 0.18),
+        (0.55, 0.00, 0.16),
+        (0.03, 0.00, 0.15),
         (0.00, 0.00, 0.00),
     ),
-    foot_pitch=(0.0, 10.0, -4.0, -18.0, -22.0, 5.0, 0.0),
+    foot_pitch=(0.0, 10.0, -5.0, -20.0, -24.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-    ik_influences=(0.0, 0.72, 0.94, 1.0, 1.0, 0.74, 0.0),
-    pelvis_forward=(0.000, -0.010, 0.005, 0.022, 0.025, 0.002, 0.000),
-    pelvis_drop=(0.000, -0.025, -0.008, 0.008, 0.010, -0.010, 0.000),
+    ik_influences=(0.0, 0.74, 0.96, 1.0, 1.0, 0.76, 0.0),
+    pelvis_forward=(0.000, -0.010, 0.006, 0.024, 0.028, 0.002, 0.000),
+    pelvis_drop=(0.000, -0.026, -0.010, 0.005, 0.007, -0.010, 0.000),
     pelvis_yaw=(0.0, -2.0, 2.0, 4.0, 5.0, 1.0, 0.0),
     lower_yaw=(0.0, -3.0, 3.0, 6.0, 7.0, 1.5, 0.0),
     upper_yaw=(0.0, -3.0, 2.0, 4.0, 5.0, 1.0, 0.0),
@@ -132,21 +134,22 @@ LOW_KICK = KickSpec(
     foot_offsets=(
         (0.00, 0.00, 0.00),
         (-0.04, 0.05, 0.12),
-        (0.17, 0.11, 0.13),
-        (0.33, 0.18, 0.10),
-        (0.35, 0.23, 0.09),
-        (0.00, 0.06, 0.11),
+        (0.19, 0.10, 0.13),
+        (0.38, 0.16, 0.09),
+        (0.41, 0.21, 0.08),
+        (0.00, 0.05, 0.11),
         (0.00, 0.00, 0.00),
     ),
-    foot_pitch=(0.0, 8.0, 2.0, -7.0, -10.0, 5.0, 0.0),
+    foot_pitch=(0.0, 8.0, 2.0, -8.0, -11.0, 5.0, 0.0),
     foot_yaw=(0.0, 8.0, 28.0, 54.0, 68.0, 12.0, 0.0),
-    ik_influences=(0.0, 0.68, 0.92, 1.0, 1.0, 0.70, 0.0),
-    pelvis_forward=(0.000, -0.014, 0.004, 0.020, 0.023, 0.001, 0.000),
+    ik_influences=(0.0, 0.70, 0.94, 1.0, 1.0, 0.72, 0.0),
+    pelvis_forward=(0.000, -0.014, 0.005, 0.021, 0.025, 0.001, 0.000),
     pelvis_drop=(0.000, -0.028, -0.014, -0.004, -0.002, -0.012, 0.000),
     pelvis_yaw=(0.0, -5.0, 8.0, 18.0, 23.0, 4.0, 0.0),
     lower_yaw=(0.0, -7.0, 12.0, 25.0, 31.0, 6.0, 0.0),
     upper_yaw=(0.0, -5.0, 8.0, 16.0, 20.0, 4.0, 0.0),
     pelvis_pitch=(0.0, -1.0, -2.0, -2.0, -1.0, 0.0, 0.0),
+    guard_width=0.12,
 )
 
 RISING_KICK = KickSpec(
@@ -163,58 +166,84 @@ RISING_KICK = KickSpec(
     foot_offsets=(
         (0.00, 0.00, 0.00),
         (-0.06, 0.00, 0.17),
-        (0.12, 0.00, 0.36),
-        (0.25, 0.00, 0.59),
-        (0.24, 0.00, 0.64),
-        (0.00, 0.00, 0.18),
+        (0.17, 0.00, 0.35),
+        (0.36, 0.00, 0.56),
+        (0.39, 0.00, 0.61),
+        (0.01, 0.00, 0.18),
         (0.00, 0.00, 0.00),
     ),
-    foot_pitch=(0.0, 12.0, -10.0, -34.0, -42.0, 5.0, 0.0),
+    foot_pitch=(0.0, 12.0, -10.0, -35.0, -43.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 2.0, 4.0, 5.0, 1.0, 0.0),
-    ik_influences=(0.0, 0.70, 0.94, 1.0, 1.0, 0.72, 0.0),
-    pelvis_forward=(0.000, -0.012, 0.000, 0.014, 0.015, 0.000, 0.000),
-    pelvis_drop=(0.000, -0.040, -0.024, -0.005, 0.000, -0.018, 0.000),
+    ik_influences=(0.0, 0.72, 0.96, 1.0, 1.0, 0.74, 0.0),
+    pelvis_forward=(0.000, -0.012, 0.002, 0.017, 0.019, 0.000, 0.000),
+    pelvis_drop=(0.000, -0.040, -0.024, -0.006, -0.001, -0.018, 0.000),
     pelvis_yaw=(0.0, -3.0, 3.0, 7.0, 8.0, 2.0, 0.0),
     lower_yaw=(0.0, -4.0, 4.0, 9.0, 10.0, 2.0, 0.0),
     upper_yaw=(0.0, -3.0, 2.0, 5.0, 6.0, 1.0, 0.0),
     pelvis_pitch=(0.0, -3.0, -6.0, -10.0, -11.0, -2.0, 0.0),
     lower_pitch=(0.0, -3.0, -7.0, -12.0, -13.0, -3.0, 0.0),
     upper_pitch=(0.0, 2.0, 5.0, 8.0, 9.0, 2.0, 0.0),
+    guard_height=0.165,
 )
 
 KICK_SPECS = (FRONT_KICK, LOW_KICK, RISING_KICK)
 
 
+def _find_action_exact(name: str) -> bpy.types.Action:
+    exact = next((action for action in bpy.data.actions if action.name == name), None)
+    if exact is not None:
+        return exact
+    raise RuntimeError(f"Required action {name!r} missing; available: {[a.name for a in bpy.data.actions]}")
+
+
 def body_axes(scene: bpy.types.Scene, armature: bpy.types.Object) -> Tuple[Vector, Vector, Vector]:
-    """Infer forward from Punch_Cross so move specs remain axis-agnostic."""
-    action = next((a for a in bpy.data.actions if "Punch_Cross" in a.name), None)
-    if action is None:
-        raise RuntimeError("Punch_Cross is required to infer the fighter forward axis")
-    armature.animation_data.action = action
-    start, end = action.frame_range
+    """Derive anatomical left from shoulders, then choose orthogonal forward sign from Cross."""
+    idle = _find_action_exact("Idle_Loop_Armature")
+    armature.animation_data.action = idle
+    rig.v1.set_scene_frame(scene, idle.frame_range[0])
+    left_shoulder = rig.v1.pose_head(armature, "upperarm_l")
+    right_shoulder = rig.v1.pose_head(armature, "upperarm_r")
+    left = left_shoulder - right_shoulder
+    left.z = 0.0
+    if left.length < 1e-4:
+        raise RuntimeError("Shoulder span did not provide a usable anatomical left axis")
+    left.normalize()
+    up = Vector((0.0, 0.0, 1.0))
+    forward = left.cross(up)
+    if forward.length < 1e-4:
+        raise RuntimeError("Shoulder axis did not provide a usable forward axis")
+    forward.normalize()
+
+    cross = next((a for a in bpy.data.actions if a.name == "Punch_Cross_Armature"), None)
+    if cross is None:
+        cross = next((a for a in bpy.data.actions if "Punch_Cross" in a.name), None)
+    if cross is None:
+        raise RuntimeError("Punch_Cross is required to choose forward sign")
+    armature.animation_data.action = cross
+    start, end = cross.frame_range
     rig.v1.set_scene_frame(scene, start)
     start_hand = rig.v1.pose_head(armature, "hand_r")
-    best = Vector((0.0, 1.0, 0.0))
-    best_len = 0.0
-    for i in range(17):
-        frame = start + (end - start) * i / 16
+    best = Vector((0.0, 0.0, 0.0))
+    best_forward_projection = -1.0
+    for i in range(25):
+        frame = start + (end - start) * i / 24
         rig.v1.set_scene_frame(scene, frame)
         delta = rig.v1.pose_head(armature, "hand_r") - start_hand
         delta.z = 0.0
-        if delta.length > best_len:
+        projection = abs(delta.dot(forward))
+        if projection > best_forward_projection:
             best = delta.copy()
-            best_len = delta.length
-    if best_len < 1e-4:
-        raise RuntimeError("Punch_Cross did not provide a usable planar forward axis")
-    forward = best.normalized()
-    up = Vector((0.0, 0.0, 1.0))
-    left = up.cross(forward).normalized()
+            best_forward_projection = projection
+    if best.dot(forward) < 0.0:
+        forward.negate()
     return forward, left, up
 
 
 def ensure_kick_bones(armature: bpy.types.Object, spec: KickSpec) -> None:
     required = (
         "pelvis", "spine_02", "spine_03",
+        "upperarm_l", "lowerarm_l", "hand_l",
+        "upperarm_r", "lowerarm_r", "hand_r",
         f"thigh_{spec.strike_suffix}", f"calf_{spec.strike_suffix}", f"foot_{spec.strike_suffix}",
         f"thigh_{spec.support_suffix}", f"calf_{spec.support_suffix}", f"foot_{spec.support_suffix}",
     )
@@ -324,12 +353,81 @@ def add_kick_controls(
     return [strike_target, knee_pole, strike_orientation, support_target, support_pole, support_orientation]
 
 
+def add_guard_controls(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    base_action: bpy.types.Action,
+    spec: KickSpec,
+    forward: Vector,
+    left: Vector,
+    up: Vector,
+):
+    names = (
+        "spine_03",
+        "upperarm_l", "lowerarm_l", "hand_l",
+        "upperarm_r", "lowerarm_r", "hand_r",
+    )
+    armature.animation_data.action = base_action
+    positions = rig.v1.evaluated_positions(scene, armature, spec.phases, names)
+    controls = []
+    for side in ("l", "r"):
+        upper = f"upperarm_{side}"
+        lower = f"lowerarm_{side}"
+        hand = f"hand_{side}"
+        side_sign = 1.0 if side == "l" else -1.0
+        start_hand = positions[spec.start_frame][hand]
+        target = rig.v1.make_control(f"{spec.action_name}_CTRL_guard_hand_{side}", armature, start_hand)
+        keys = []
+        for frame in spec.phases:
+            chest = positions[frame]["spine_03"]
+            guard = chest + forward * spec.guard_forward + left * (spec.guard_width * side_sign) + up * spec.guard_height
+            keys.append((frame, guard))
+        rig.v1.set_control_keys(target, armature, keys)
+
+        shoulder = positions[spec.impact_frame][upper]
+        elbow = positions[spec.impact_frame][lower]
+        wrist = positions[spec.impact_frame][hand]
+        pole = rig.v1.make_control(
+            f"{spec.action_name}_CTRL_guard_elbow_{side}",
+            armature,
+            rig.v1.chain_pole(shoulder, elbow, wrist, scale=2.0),
+        )
+        ik = armature.pose.bones[lower].constraints.new(type="IK")
+        ik.name = f"{spec.action_name}_{'Left' if side == 'l' else 'Right'}GuardHandIK"
+        ik.target = target
+        ik.pole_target = pole
+        ik.chain_count = 2
+        for frame, influence in zip(spec.phases, spec.guard_influences):
+            ik.influence = influence
+            ik.keyframe_insert(data_path="influence", frame=frame)
+        controls.extend((target, pole))
+    return controls
+
+
 def foot_travel(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
     foot = f"foot_{spec.strike_suffix}"
     scene.frame_set(spec.start_frame); bpy.context.view_layer.update()
     start = rig.v1.pose_head(armature, foot)
     scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
     return (rig.v1.pose_head(armature, foot) - start).length
+
+
+def foot_forward_reach(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, forward: Vector) -> float:
+    foot = f"foot_{spec.strike_suffix}"
+    scene.frame_set(spec.start_frame); bpy.context.view_layer.update()
+    start = rig.v1.pose_head(armature, foot)
+    scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
+    delta = rig.v1.pose_head(armature, foot) - start
+    return delta.dot(forward)
+
+
+def guard_distance(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
+    scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
+    chest = rig.v1.pose_head(armature, "spine_03")
+    return max(
+        (rig.v1.pose_head(armature, "hand_l") - chest).length,
+        (rig.v1.pose_head(armature, "hand_r") - chest).length,
+    )
 
 
 def support_drift(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
@@ -363,12 +461,16 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     samples = rig.v1.sample_source_basis(scene, armature, source)
     base = rig.v1.key_pose_basis(scene, armature, f"{spec.action_name}_BASE", samples)
     armature.animation_data.action = base
-    controls = add_kick_controls(scene, armature, base, spec, *axes)
+
     strike_world = armature.matrix_world.to_3x3() @ axes[0]
     masters = rig.add_master_controls(scene, armature, base, strike_world, spec)
+    controls = add_kick_controls(scene, armature, base, spec, *axes)
+    guards = add_guard_controls(scene, armature, base, spec, *axes)
 
     constrained = {
         "constrainedStrikeFootTravel": foot_travel(scene, armature, spec),
+        "constrainedStrikeFootForwardReach": foot_forward_reach(scene, armature, spec, axes[0]),
+        "constrainedGuardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "constrainedSupportFootLockMaxDrift": support_drift(scene, armature, spec),
         "constrainedSupportFootLockMaxAngularDriftDegrees": support_angle(scene, armature, spec),
         "constrainedPelvisTravel": rig.pelvis_travel(scene, armature, spec),
@@ -376,7 +478,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     }
     final_action = rig.v1.bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
-    rig.v1.remove_controls([*controls, *masters])
+    rig.v1.remove_controls([*controls, *guards, *masters])
     metrics = {
         "version": spec.version,
         "action": spec.action_name,
@@ -389,6 +491,8 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "strikeSide": spec.strike_side.upper(),
         "supportSide": spec.support_side.upper(),
         "strikeFootTravel": foot_travel(scene, armature, spec),
+        "strikeFootForwardReach": foot_forward_reach(scene, armature, spec, axes[0]),
+        "guardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "supportFootLockMaxDrift": support_drift(scene, armature, spec),
         "supportFootLockMaxAngularDriftDegrees": support_angle(scene, armature, spec),
         "pelvisTravel": rig.pelvis_travel(scene, armature, spec),
@@ -399,9 +503,11 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "pipeline": [
             "Idle_Loop whole-body base",
+            "shoulder-orthogonal anatomical forward axis",
             "shared COG/pelvis and staged torso masters",
             f"{spec.strike_side.upper()} strike-leg two-bone IK",
             "move-specific strike-foot orientation",
+            "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",
             f"world-space {spec.support_side.upper()} support-foot orientation lock",
             "Blender native NLA visual-keying bake",

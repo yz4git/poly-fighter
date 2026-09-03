@@ -155,6 +155,11 @@ export class CombatSystem {
   onHit: ((event: HitEvent) => void) | null = null;
 
   resolve(attacker: FighterRuntime, defender: FighterRuntime): HitEvent | null {
+    // PolyFightGame resolves p1->p2 and p2->p1 every tick. Use the stable id
+    // ordering to perform the body separation exactly once before either hit
+    // test, including ticks where neither fighter is attacking.
+    if (attacker.id.localeCompare(defender.id) < 0) resolveFighterPushboxes(attacker, defender);
+
     const move = attacker.currentMove;
     if (
       !move ||

@@ -1,0 +1,44 @@
+name: Fix reaction Vector API once
+on:
+  push:
+    branches:
+      - feature/blender-motion-foundry-v2-reactions-20260903
+    paths:
+      - .github/workflows/fix-reaction-vector-once.yml
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/blender-motion-foundry-v2-reactions-20260903
+      - name: Replace unsupported Vector.distance_to calls
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/blender/build-fight-motion-foundry-v2-reactions.py')
+          s = path.read_text()
+          replacements = {
+            'start_sep = world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r"))': 'start_sep = (world_position(armature, "hand_l") - world_position(armature, "hand_r")).length',
+            'left_foot_drift = max(left_foot_drift, world_position(armature, "foot_l").distance_to(start_left_foot))': 'left_foot_drift = max(left_foot_drift, (world_position(armature, "foot_l") - start_left_foot).length)',
+            'right_foot_drift = max(right_foot_drift, world_position(armature, "foot_r").distance_to(start_right_foot))': 'right_foot_drift = max(right_foot_drift, (world_position(armature, "foot_r") - start_right_foot).length)',
+            'max_hand_sep = max(max_hand_sep, world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r")))': 'max_hand_sep = max(max_hand_sep, (world_position(armature, "hand_l") - world_position(armature, "hand_r")).length)',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing patch anchor: {old}')
+              s = s.replace(old, new, 1)
+          if '.distance_to(' in s:
+              raise SystemExit('unexpected Vector.distance_to remains')
+          path.write_text(s)
+          PY
+      - name: Commit fix and remove one-shot workflow
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add tools/blender/build-fight-motion-foundry-v2-reactions.py
+          git rm .github/workflows/fix-reaction-vector-once.yml
+          git commit -m "Fix reaction Vector distance metrics"
+          git push origin HEAD:feature/blender-motion-foundry-v2-reactions-20260903

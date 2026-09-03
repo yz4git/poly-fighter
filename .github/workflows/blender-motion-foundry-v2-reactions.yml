@@ -8,14 +8,20 @@ on:
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/motion_foundry_v2_rig.py
       - tools/blender/build-fight-motion-foundry-v2-reactions.py
+      - tools/blender/build-fight-motion-foundry-v2-reactions-directional.py
       - scripts/apply-blender-motion-foundry-v2-reactions.mjs
+      - scripts/apply-blender-motion-foundry-v2-reactions-directional.mjs
+      - src/game/fighter.ts
+      - src/game/combat.ts
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
+      - package.json
       - public/models/quaternius/blender-reactions-core.glb
       - public/models/quaternius/blender-reactions-core.metrics.json
       - public/models/quaternius/blender-reactions-core.generator.sha256
       - tests/blender-motion-foundry-v2-reactions.test.mjs
+      - tests/blender-motion-foundry-v2-reactions-directional.test.mjs
       - .github/workflows/blender-motion-foundry-v2-reactions.yml
   workflow_dispatch:
 
@@ -37,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          reaction_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-reactions.py | sha256sum | awk '{print $1}')"
+          reaction_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-reactions.py tools/blender/build-fight-motion-foundry-v2-reactions-directional.py | sha256sum | awk '{print $1}')"
           echo "reaction_hash=$reaction_hash" >> "$GITHUB_OUTPUT"
           if [ -s public/models/quaternius/blender-reactions-core.glb ] \
             && [ -s public/models/quaternius/blender-reactions-core.metrics.json ] \
@@ -67,7 +73,7 @@ jobs:
           export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
           blender --background --python-use-system-env --python-expr "import numpy; print('BLENDER_NUMPY', numpy.__version__)"
 
-      - name: Generate Blender reaction pack
+      - name: Generate Blender directional reaction pack
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
           set -euo pipefail
@@ -77,7 +83,7 @@ jobs:
           xvfb-run -a blender --background \
             --python-use-system-env \
             --python-exit-code 1 \
-            --python tools/blender/build-fight-motion-foundry-v2-reactions.py \
+            --python tools/blender/build-fight-motion-foundry-v2-reactions-directional.py \
             -- \
             --source .tmp-quaternius/ual1-full.glb \
             --output-dir "$out"
@@ -94,24 +100,40 @@ jobs:
           from pathlib import Path
           root = Path('artifacts/blender-motion-foundry-v2-reactions')
           m = json.loads((root / 'blender-reactions-core.metrics.json').read_text())
-          expected = {'BF_HitHeavy', 'BF_GuardBreak'}
+          expected = {
+              'BF_HitHeavy', 'BF_GuardBreak',
+              'BF_HitLight_L', 'BF_HitLight_R',
+              'BF_HitMid_L', 'BF_HitMid_R',
+              'BF_CounterHit_L', 'BF_CounterHit_R',
+              'BF_EdgeStagger',
+          }
           assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V2_REACTIONS', m
           assert m['sharedRig'] == 'MOTION_FOUNDRY_V2_REACTION_RIG', m
           assert set(m['actions']) == expected, m
-          assert len(m['moves']) == 2, m
+          assert len(m['moves']) == len(expected), m
           by_action = {move['action']: move for move in m['moves']}
           for name, move in by_action.items():
               assert name in expected, move
               assert move['durationSeconds'] < 0.65, move
-              assert move['torsoExcursionDegrees'] > 10, move
-              assert move['headExcursionDegrees'] > 7, move
+              assert move['torsoExcursionDegrees'] > 5, move
+              assert move['headExcursionDegrees'] > 4, move
               assert move['leftFootDriftMax'] < 0.015, move
               assert move['rightFootDriftMax'] < 0.015, move
-              assert move['settleTorsoResidualDegrees'] < 20, move
+              assert move['leftFootAngularDriftDegrees'] < 1.0, move
+              assert move['rightFootAngularDriftDegrees'] < 1.0, move
+              assert move['settleTorsoResidualDegrees'] < 5, move
+              assert move['constrained']['settleTorsoResidualDegrees'] < 5, move
               assert move['boneCount'] >= 40, move
-          assert by_action['BF_HitHeavy']['torsoExcursionDegrees'] > 20, by_action['BF_HitHeavy']
-          assert by_action['BF_HitHeavy']['headExcursionDegrees'] > 12, by_action['BF_HitHeavy']
-          assert by_action['BF_GuardBreak']['handSeparationIncrease'] > 0.10, by_action['BF_GuardBreak']
+          for side in ('L', 'R'):
+              assert by_action[f'BF_HitLight_{side}']['reactionClass'] == 'LIGHT'
+              assert by_action[f'BF_HitMid_{side}']['reactionClass'] == 'MID'
+              assert by_action[f'BF_CounterHit_{side}']['reactionClass'] == 'COUNTER'
+              assert by_action[f'BF_CounterHit_{side}']['torsoExcursionDegrees'] > 20
+          assert by_action['BF_HitHeavy']['torsoExcursionDegrees'] > 20
+          assert by_action['BF_HitHeavy']['headExcursionDegrees'] > 12
+          assert by_action['BF_GuardBreak']['handSeparationIncrease'] > 0.10
+          assert by_action['BF_EdgeStagger']['reactionClass'] == 'EDGE'
+          assert by_action['BF_EdgeStagger']['edgeSafe'] is True
           raw = (root / 'blender-reactions-core.glb').read_bytes()
           assert raw[:4] == b'glTF' and len(raw) > 20
           json_len, json_type = struct.unpack_from('<II', raw, 12)
@@ -119,7 +141,7 @@ jobs:
           doc = json.loads(raw[20:20 + json_len].decode('utf-8').rstrip('\x00 '))
           names = {a.get('name') for a in doc.get('animations', [])}
           assert expected.issubset(names), {'expected': sorted(expected), 'animations': sorted(n for n in names if n)}
-          print('BLENDER_MOTION_FOUNDRY_V2_REACTIONS_OK', by_action)
+          print('BLENDER_MOTION_FOUNDRY_V2_DIRECTIONAL_REACTIONS_OK', by_action)
           PY
 
       - name: Stage generated reaction library
@@ -130,8 +152,8 @@ jobs:
           cp artifacts/blender-motion-foundry-v2-reactions/blender-reactions-core.metrics.json public/models/quaternius/blender-reactions-core.metrics.json
           printf '%s\n' '${{ steps.foundry.outputs.reaction_hash }}' > public/models/quaternius/blender-reactions-core.generator.sha256
 
-      - name: Apply reaction runtime integration
-        run: node scripts/apply-blender-motion-foundry-v2-reactions.mjs
+      - name: Apply directional reaction runtime integration
+        run: node scripts/apply-blender-motion-foundry-v2-reactions-directional.mjs
 
       - uses: actions/setup-node@v4
         with:
@@ -141,8 +163,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate reaction contract
-        run: node --test tests/blender-motion-foundry-v2-reactions.test.mjs
+      - name: Validate reaction contracts
+        run: node --test tests/blender-motion-foundry-v2-reactions.test.mjs tests/blender-motion-foundry-v2-reactions-directional.test.mjs
 
       - name: Build, rules and lint integrated game
         run: |
@@ -156,19 +178,22 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet --exit-code && [ -z "$(git status --porcelain)" ]; then
-            echo "Blender reaction branch is already current."
+            echo "Blender directional reaction branch is already current."
             exit 0
           fi
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "4189828+github-actions[bot]@users.noreply.github.com"
           git add \
             public/models/quaternius/blender-reactions-core.glb \
             public/models/quaternius/blender-reactions-core.metrics.json \
             public/models/quaternius/blender-reactions-core.generator.sha256 \
+            src/game/fighter.ts \
+            src/game/combat.ts \
             src/game/visual-quaternius-runtime.ts \
             src/game/model-viewer-motion.ts \
-            scripts/capture-model-view-audit.mjs
-          git commit -m "Generate Blender v2 reaction actions"
+            scripts/capture-model-view-audit.mjs \
+            package.json
+          git commit -m "Generate Blender directional reaction actions"
           git pull --rebase origin "${GITHUB_HEAD_REF}"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
 

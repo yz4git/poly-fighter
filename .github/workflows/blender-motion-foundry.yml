@@ -246,7 +246,12 @@ jobs:
 
       - name: Apply runtime integration
         run: |
-          node scripts/apply-blender-motion-foundry-v2.mjs
+          set -euo pipefail
+          if ! grep -q 'QUATERNIUS_BLENDER_CROSS_URL' src/game/visual-quaternius-runtime.ts; then
+            node scripts/apply-blender-motion-foundry-v2.mjs
+          else
+            echo 'Cross v2 runtime integration already present; preserving superset state.'
+          fi
           node scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
 
       - uses: actions/setup-node@v4

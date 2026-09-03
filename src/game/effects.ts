@@ -25,8 +25,11 @@ export class EffectsManager {
   readonly group = new THREE.Group();
   private readonly fragments: Particle[] = [];
   private readonly flashes: Flash[] = [];
-  private readonly fragmentGeometry = new THREE.TetrahedronGeometry(0.085, 0);
-  private readonly flashGeometry = new THREE.IcosahedronGeometry(0.18, 1);
+  private readonly fragmentGeometry = new THREE.TetrahedronGeometry(0.07, 0);
+  // A thin camera-facing ring preserves the exact fist/foot silhouette through
+  // the impact frame. The previous expanding icosahedron could cover most of a
+  // forearm or torso on strong hits at iPhone landscape scale.
+  private readonly flashGeometry = new THREE.TorusGeometry(0.18, 0.034, 5, 16);
   private readonly materials = new Map<number, THREE.MeshStandardMaterial>();
   onShake: ((amount: number) => void) | null = null;
 
@@ -43,7 +46,13 @@ export class EffectsManager {
     for (let index = 0; index < 10; index += 1) {
       const mesh = new THREE.Mesh(
         this.flashGeometry,
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.82,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
       );
       mesh.visible = false;
       this.group.add(mesh);
@@ -59,7 +68,11 @@ export class EffectsManager {
     const tier = event.blocked ? 1 : impactTier(event);
     const tierScale = tier === 3 ? 1.42 : tier === 2 ? 1.18 : 1;
     const strength = event.move.power * (event.blocked ? 0.72 : 1) * tierScale;
-    let remaining = Math.min(22, Math.round(5 + strength * (tier === 3 ? 6 : 4.5)));
+    const visualStrength = Math.min(2.15, strength);
+
+    // Keep the amount of debris proportional to hit strength, but cap both the
+    // count and individual size so the striking limb remains readable.
+    let remaining = Math.min(18, Math.round(4 + visualStrength * (tier === 3 ? 5 : 4)));
     for (const particle of this.fragments) {
       if (remaining <= 0) break;
       if (particle.life > 0) continue;
@@ -67,23 +80,33 @@ export class EffectsManager {
       particle.mesh.material = this.materialFor(color);
       particle.mesh.position.set(event.position.x, event.position.y, event.position.z);
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1.5 + Math.random() * 3.6 * strength;
-      particle.velocity.set(Math.cos(angle) * speed, 1 + Math.random() * 3.2 * strength, Math.sin(angle) * speed * 0.65);
-      particle.life = 0.22 + Math.random() * 0.3 + (tier - 1) * 0.035;
+      const speed = 1.35 + Math.random() * 3.15 * visualStrength;
+      particle.velocity.set(
+        Math.cos(angle) * speed,
+        0.9 + Math.random() * 2.75 * visualStrength,
+        Math.sin(angle) * speed * 0.58,
+      );
+      particle.life = 0.18 + Math.random() * 0.24 + (tier - 1) * 0.025;
       particle.maxLife = particle.life;
-      particle.mesh.scale.setScalar((0.65 + Math.random() * 1.25 * strength) * (tier === 3 ? 1.12 : 1));
+      const size = (0.52 + Math.random() * 0.52 * visualStrength) * (tier === 3 ? 1.06 : 1);
+      particle.mesh.scale.setScalar(size);
       remaining -= 1;
     }
+
     const flash = this.flashes.find((item) => item.life <= 0);
     if (flash) {
       flash.mesh.visible = true;
-      flash.mesh.position.set(event.position.x, event.position.y, event.position.z);
-      flash.mesh.scale.setScalar((0.7 + strength * 0.56) * (tier === 3 ? 1.18 : 1));
+      flash.mesh.position.set(event.position.x, event.position.y, event.position.z + 0.035);
+      flash.mesh.rotation.set(0, 0, Math.random() * Math.PI);
+      flash.mesh.scale.setScalar((0.72 + visualStrength * 0.22) * (tier === 3 ? 1.08 : 1));
       const flashMaterial = flash.mesh.material as THREE.MeshBasicMaterial;
       flashMaterial.color.setHex(color);
-      flashMaterial.opacity = event.blocked ? 0.62 : tier === 3 ? 1 : 0.94;
-      flash.life = 0.16 + strength * 0.04 + (tier - 1) * 0.02;
+      flashMaterial.opacity = event.blocked ? 0.52 : tier === 3 ? 0.86 : 0.76;
+      flash.life = 0.105 + visualStrength * 0.022 + (tier - 1) * 0.012;
     }
+
+    // Preserve impact weight primarily through hit-stop, reaction motion and
+    // camera impulse rather than by making the contact sprite cover the model.
     const shake = event.blocked ? 0.035 : (0.07 + strength * 0.04) * (tier === 3 ? 1.22 : tier === 2 ? 1.08 : 1);
     this.onShake?.(shake);
   }
@@ -91,7 +114,13 @@ export class EffectsManager {
   private materialFor(color: number): THREE.MeshStandardMaterial {
     const existing = this.materials.get(color);
     if (existing) return existing;
-    const created = new THREE.MeshStandardMaterial({ color, flatShading: true, emissive: color, emissiveIntensity: 0.3 });
+    const created = new THREE.MeshStandardMaterial({
+      color,
+      flatShading: true,
+      emissive: color,
+      emissiveIntensity: 0.3,
+      roughness: 0.72,
+    });
     this.materials.set(color, created);
     return created;
   }
@@ -104,15 +133,15 @@ export class EffectsManager {
       particle.mesh.position.addScaledVector(particle.velocity, deltaSeconds);
       particle.mesh.rotation.x += deltaSeconds * 8;
       particle.mesh.rotation.y += deltaSeconds * 11;
-      particle.mesh.scale.multiplyScalar(0.985);
+      particle.mesh.scale.multiplyScalar(0.982);
       if (particle.life <= 0) particle.mesh.visible = false;
     }
     for (const flash of this.flashes) {
       if (flash.life <= 0) continue;
       flash.life -= deltaSeconds;
-      flash.mesh.scale.multiplyScalar(1.12);
+      flash.mesh.scale.multiplyScalar(1.08);
       const material = flash.mesh.material as THREE.MeshBasicMaterial;
-      material.opacity = Math.max(0, flash.life * 5);
+      material.opacity = Math.max(0, flash.life * 5.8);
       if (flash.life <= 0) flash.mesh.visible = false;
     }
   }

@@ -12,6 +12,73 @@ import { attackHitboxCenter } from "./rig";
 const VISUAL_EDGE_X = 5.35;
 const VISUAL_EDGE_Z = 2.95;
 
+// Standing fighters previously had no body/push collision at all, so walking or
+// attacking at close range could place both character meshes almost on the same
+// root position. Keep this deliberately smaller than strike reach: it prevents
+// torso overlap without turning the game into a rigid invisible-wall fighter.
+const POWER_PUSH_RADIUS = 0.48;
+const SPEED_PUSH_RADIUS = 0.42;
+const MAX_PUSH_CORRECTION = 0.12;
+const PUSH_VERTICAL_TOLERANCE = 0.9;
+const PUSH_EPSILON = 1e-6;
+const PUSH_PASSIVE_STATES = new Set(["KNOCKDOWN", "THROW", "KO", "RING_OUT"]);
+
+function pushRadius(fighter: FighterRuntime): number {
+  return fighter.definition.archetype === "POWER" ? POWER_PUSH_RADIUS : SPEED_PUSH_RADIUS;
+}
+
+function pushMobility(fighter: FighterRuntime): number {
+  if (PUSH_PASSIVE_STATES.has(fighter.state)) return 0;
+  if (fighter.state === "HIT" || fighter.state === "BLOCK_STUN") return 0.35;
+  return 1;
+}
+
+/**
+ * Resolves only horizontal root overlap. Hit boxes, damage and knockback stay
+ * untouched. The correction is capped per simulation tick so close-range
+ * contact reads as body pressure rather than a visible teleport.
+ */
+export function resolveFighterPushboxes(first: FighterRuntime, second: FighterRuntime): boolean {
+  if (first.hitStop > 0 || second.hitStop > 0) return false;
+  if (Math.abs(first.position.y - second.position.y) > PUSH_VERTICAL_TOLERANCE) return false;
+
+  const firstMobility = pushMobility(first);
+  const secondMobility = pushMobility(second);
+  if (firstMobility <= 0 && secondMobility <= 0) return false;
+
+  let deltaX = second.position.x - first.position.x;
+  let deltaZ = second.position.z - first.position.z;
+  const minimumDistance = pushRadius(first) + pushRadius(second);
+  const minimumDistanceSq = minimumDistance * minimumDistance;
+  const distanceSq = deltaX * deltaX + deltaZ * deltaZ;
+  if (distanceSq >= minimumDistanceSq) return false;
+
+  let distance = Math.sqrt(distanceSq);
+  let separationDistance = distance;
+  if (distance < PUSH_EPSILON) {
+    deltaX = first.facing >= 0 ? 1 : -1;
+    deltaZ = 0;
+    distance = 1;
+    separationDistance = 0;
+  }
+
+  const normalX = deltaX / distance;
+  const normalZ = deltaZ / distance;
+  const penetration = minimumDistance - separationDistance;
+  const correction = Math.min(MAX_PUSH_CORRECTION, Math.max(0, penetration));
+  if (correction <= 0) return false;
+
+  const mobilityTotal = firstMobility + secondMobility;
+  const firstShare = mobilityTotal > 0 ? firstMobility / mobilityTotal : 0.5;
+  const secondShare = mobilityTotal > 0 ? secondMobility / mobilityTotal : 0.5;
+
+  first.position.x -= normalX * correction * firstShare;
+  first.position.z -= normalZ * correction * firstShare;
+  second.position.x += normalX * correction * secondShare;
+  second.position.z += normalZ * correction * secondShare;
+  return true;
+}
+
 export interface Hitbox {
   centerX: number;
   centerY: number;
@@ -89,6 +156,11 @@ export class CombatSystem {
   onHit: ((event: HitEvent) => void) | null = null;
 
   resolve(attacker: FighterRuntime, defender: FighterRuntime): HitEvent | null {
+    // PolyFightGame resolves p1->p2 and p2->p1 every tick. Use the stable id
+    // ordering to perform the body separation exactly once before either hit
+    // test, including ticks where neither fighter is attacking.
+    if (attacker.id.localeCompare(defender.id) < 0) resolveFighterPushboxes(attacker, defender);
+
     const move = attacker.currentMove;
     if (
       !move ||

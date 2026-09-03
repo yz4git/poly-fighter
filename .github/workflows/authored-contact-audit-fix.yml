@@ -1,0 +1,44 @@
+name: One-shot authored contact audit fix
+
+on:
+  push:
+    branches: [motion-onoff-review]
+    paths:
+      - .github/workflows/authored-contact-audit-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-onoff-review
+          fetch-depth: 0
+
+      - name: Capture authored attacks at final active contact frame
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/capture-motion-readability-audit.mjs')
+          s = p.read_text()
+          old = '''        const policy = game.p1.visual.root.userData.motionCorrectionPolicy;\n        const phase = game.p1.visual.root.userData.motionExpansionPhase;\n        if (game.p1.state === 'ATTACK' && (policy === 'AUTHORED_ATTACK_PRESERVE' ? game.p1.isActive() : phase === 'ACTIVE')) {\n          activeReached = true;\n          break;\n        }\n'''
+          new = '''        const policy = game.p1.visual.root.userData.motionCorrectionPolicy;\n        const phase = game.p1.visual.root.userData.motionExpansionPhase;\n        const authoredContactTick = move.startup + move.active - 1;\n        const authoredContactReady = game.p1.isActive() && game.p1.moveTick >= authoredContactTick;\n        if (game.p1.state === 'ATTACK' && (policy === 'AUTHORED_ATTACK_PRESERVE' ? authoredContactReady : phase === 'ACTIVE')) {\n          activeReached = true;\n          break;\n        }\n'''
+          if old not in s:
+              raise SystemExit('authored active capture anchor missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          node --check scripts/capture-motion-readability-audit.mjs
+
+      - name: Commit repair and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/authored-contact-audit-fix.yml
+          git add scripts/capture-motion-readability-audit.mjs
+          git commit -m "Audit authored attacks at final active contact frame"
+          git push origin HEAD:motion-onoff-review

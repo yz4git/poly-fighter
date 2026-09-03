@@ -1,0 +1,71 @@
+name: One-shot authored intent audit fix
+
+on:
+  push:
+    branches: [motion-onoff-review]
+    paths:
+      - .github/workflows/fix-authored-intent-audit.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-onoff-review
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Make motion intent audit correction-policy aware
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match in {path}, got {count}: {old[:120]!r}")
+              p.write_text(s.replace(old, new, 1))
+
+          path = 'scripts/capture-motion-intent-audit.mjs'
+          replace_once(path,
+            '''  { fighter: "p1", name: "kairo", move: "backfist", clip: "PF_Backfist_R", contact: "RIGHT_FIST" },\n  { fighter: "p1", name: "kairo", move: "bodyBlow", clip: "PF_BodyBlow_L", contact: "LEFT_FIST" },\n  { fighter: "p1", name: "kairo", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST" },\n  { fighter: "p2", name: "sera", move: "backfist", clip: "PF_Backfist_L", contact: "LEFT_FIST" },\n  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "PF_BodyBlow_R", contact: "RIGHT_FIST" },\n  { fighter: "p2", name: "sera", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST" },''',
+            '''  { fighter: "p1", name: "kairo", move: "backfist", clip: "BF_Backfist_R", contact: "RIGHT_FIST", authored: true },\n  { fighter: "p1", name: "kairo", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "LEFT_FIST", authored: true },\n  { fighter: "p1", name: "kairo", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },\n  { fighter: "p2", name: "sera", move: "backfist", clip: "BF_Backfist_R", contact: "LEFT_FIST", authored: true },\n  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "RIGHT_FIST", authored: true },\n  { fighter: "p2", name: "sera", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },''')
+
+          old = '''return {active:a.visual.root.userData.motionExpansionPhase==='ACTIVE',state:a.state,move:c.move,clip:a.visual.root.userData.motionExpansionCurrentClip??null,phase:a.visual.root.userData.motionExpansionPhase??null,contact,currentMove:a.visual.root.userData.motionExpansionCurrentMove??null,visible:a.visual.root.userData.motionExpansionTargetsVisibleQuaternius===true,startup:move.startup,activeFrames:move.active,moveTick:a.moveTick};`, [c]);\n    if (result?.error || !result?.active || result.phase !== "ACTIVE" || result.state !== "ATTACK") throw new Error(`Intent case failed to reach ACTIVE: ${JSON.stringify({ c, result })}`);\n    if (result.clip !== c.clip || result.contact !== c.contact || result.currentMove !== c.move || !result.visible) throw new Error(`Intent mismatch: ${JSON.stringify({ c, result })}`);'''
+          new = '''const host=a.visual.root.children.find((child)=>child.name?.startsWith('quaternius-ubc-')&&child.name?.endsWith('-runtime'));const gameplayActive=a.state==='ATTACK'&&a.moveTick>=move.startup&&a.moveTick<move.startup+move.active;return {active:a.visual.root.userData.motionExpansionPhase==='ACTIVE',gameplayActive,state:a.state,move:c.move,clip:a.visual.root.userData.motionExpansionCurrentClip??null,baselineClip:host?.userData?.quaterniusCurrentClip??null,phase:a.visual.root.userData.motionExpansionPhase??null,policy:a.visual.root.userData.motionCorrectionPolicy??null,contact,currentMove:a.visual.root.userData.motionExpansionCurrentMove??null,visible:a.visual.root.userData.motionExpansionTargetsVisibleQuaternius===true,startup:move.startup,activeFrames:move.active,moveTick:a.moveTick};`, [c]);\n    if (result?.error || !result?.gameplayActive || result.state !== "ATTACK") throw new Error(`Intent case failed to reach gameplay ACTIVE: ${JSON.stringify({ c, result })}`);\n    if (result.contact !== c.contact) throw new Error(`Intent contact mismatch: ${JSON.stringify({ c, result })}`);\n    if (c.authored) {\n      if (result.policy !== "AUTHORED_ATTACK_PRESERVE" || result.baselineClip !== c.clip) throw new Error(`Authored intent mismatch: ${JSON.stringify({ c, result })}`);\n      if (result.clip !== null || result.phase !== null || result.currentMove !== null) throw new Error(`Authored intent unexpectedly re-entered Motion Expansion: ${JSON.stringify({ c, result })}`);\n    } else if (!result.active || result.phase !== "ACTIVE" || result.clip !== c.clip || result.currentMove !== c.move || !result.visible || result.policy !== "PROCEDURAL_ASSIST") {\n      throw new Error(`Procedural intent mismatch: ${JSON.stringify({ c, result })}`);\n    }'''
+          replace_once(path, old, new)
+
+          path = 'tests/tps-audit-motion-policy.test.mjs'
+          p = Path(path)
+          s = p.read_text()
+          marker = '''test("V10 visual audit accepts compact guard assistance while preserving strong punch and kick floors", async () => {'''
+          addition = '''test("motion intent audit preserves authored Blender strikes and keeps procedural counters strict", async () => {\n  const source = await readFile(new URL("../scripts/capture-motion-intent-audit.mjs", import.meta.url), "utf8");\n  assert.match(source, /clip: "BF_Backfist_R"/);\n  assert.match(source, /clip: "BF_BodyBlow_L"/);\n  assert.match(source, /gameplayActive/);\n  assert.match(source, /AUTHORED_ATTACK_PRESERVE/);\n  assert.match(source, /baselineClip/);\n  assert.match(source, /result\\.clip !== null \\|\\| result\\.phase !== null \\|\\| result\\.currentMove !== null/);\n  assert.match(source, /PROCEDURAL_ASSIST/);\n});\n\n'''
+          if addition not in s:
+              if marker not in s:
+                  raise SystemExit('test insertion marker missing')
+              p.write_text(s.replace(marker, addition + marker, 1))
+          PY
+      - name: Validate audit policy
+        run: |
+          npm ci --no-audit --no-fund
+          npm run test:ci:tps
+          npm run lint
+      - name: Commit audit repair and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-authored-intent-audit.yml
+          git add scripts/capture-motion-intent-audit.mjs tests/tps-audit-motion-policy.test.mjs
+          git commit -m "Make motion intent audit authored-clip aware"
+          git push origin HEAD:motion-onoff-review

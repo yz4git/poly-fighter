@@ -50,20 +50,21 @@ export function resolveFighterPushboxes(first: FighterRuntime, second: FighterRu
   let deltaZ = second.position.z - first.position.z;
   const minimumDistance = pushRadius(first) + pushRadius(second);
   const minimumDistanceSq = minimumDistance * minimumDistance;
-  let distanceSq = deltaX * deltaX + deltaZ * deltaZ;
+  const distanceSq = deltaX * deltaX + deltaZ * deltaZ;
   if (distanceSq >= minimumDistanceSq) return false;
 
   let distance = Math.sqrt(distanceSq);
+  let separationDistance = distance;
   if (distance < PUSH_EPSILON) {
     deltaX = first.facing >= 0 ? 1 : -1;
     deltaZ = 0;
     distance = 1;
-    distanceSq = 1;
+    separationDistance = 0;
   }
 
   const normalX = deltaX / distance;
   const normalZ = deltaZ / distance;
-  const penetration = minimumDistance - Math.sqrt(Math.max(PUSH_EPSILON, distanceSq));
+  const penetration = minimumDistance - separationDistance;
   const correction = Math.min(MAX_PUSH_CORRECTION, Math.max(0, penetration));
   if (correction <= 0) return false;
 

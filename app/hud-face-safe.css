@@ -165,7 +165,7 @@
 
 
 /* Face-safe TPS combo readout: keep combo feedback away from both fighter heads. */
-.tps-badge.tps-combo-badge {
+.tps-badge.tps-face-safe-badge {
   left: max(24px, calc(env(safe-area-inset-left) + 10px));
   right: auto;
   transform: none;
@@ -173,30 +173,41 @@
   min-width: 0;
   padding: 4px 9px;
   border-color: rgba(255, 221, 100, .34);
-  color: #ffe473;
-  background: rgba(8, 14, 25, .82);
+  color: #bfeeff;
+  background: rgba(8, 14, 25, .84);
   box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
   pointer-events: none;
 }
-.tps-badge.tps-combo-badge strong {
-  color: #ffe473;
+.tps-badge.tps-face-safe-badge strong {
+  color: inherit;
   font-size: 10px;
   letter-spacing: .14em;
 }
+
+.tps-badge.tps-combo-badge {
+  border-color: rgba(255, 221, 100, .38);
+  color: #ffe473;
+}
+.tps-badge.tps-ko-badge {
+  border-color: rgba(255, 91, 123, .46);
+  color: #ff8aa2;
+  background: rgba(24, 6, 14, .88);
+}
+
 .tps-face-safe-active .round-readout small {
   visibility: hidden;
 }
 @media (orientation: landscape) and (max-height: 560px) {
-  .tps-badge.tps-combo-badge {
+  .tps-badge.tps-face-safe-badge {
     left: max(24px, calc(env(safe-area-inset-left) + 10px));
     top: max(34px, calc(env(safe-area-inset-top) + 29px));
     padding: 3px 8px;
   }
 }
 @media (orientation: landscape) and (max-height: 430px) {
-  .tps-badge.tps-combo-badge {
+  .tps-badge.tps-face-safe-badge {
     top: max(30px, calc(env(safe-area-inset-top) + 25px));
     font-size: 7px;
   }
-  .tps-badge.tps-combo-badge strong { font-size: 8px; }
+  .tps-badge.tps-face-safe-badge strong { font-size: 8px; }
 }

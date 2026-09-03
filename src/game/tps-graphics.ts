@@ -375,19 +375,19 @@ export class TpsGraphicsDirector {
 
     for (let index = 0; index < waveCount; index += 1) {
       const wave = this.waves.find((item) => item.life <= 0) ?? this.waves[index % this.waves.length];
-      wave.life = 0.18 + strength * 0.035 + index * 0.018;
+      wave.life = 0.15 + strength * 0.028 + index * 0.014;
       wave.maxLife = wave.life;
       wave.mesh.visible = true;
       wave.mesh.position.copy(visualPoint);
       wave.mesh.scale.setScalar(0.54 + strength * 0.12 + index * 0.10);
       wave.mesh.material.color.setHex(color);
       wave.baseOpacity = event.blocked
-        ? 0.28
+        ? 0.24
         : visualTier === 3
-          ? Math.max(0.30, 0.44 - index * 0.09)
+          ? Math.max(0.27, 0.38 - index * 0.08)
           : visualTier === 2
-            ? 0.34
-            : 0.27;
+            ? 0.29
+            : 0.24;
       wave.mesh.material.opacity = wave.baseOpacity;
       wave.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
       wave.mesh.rotateZ(index * 0.52);
@@ -493,7 +493,7 @@ export class TpsGraphicsDirector {
       if (trail.life <= 0) continue;
       trail.life -= delta;
       const progress = 1 - Math.max(0, trail.life) / Math.max(1e-4, trail.maxLife);
-      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.32);
+      trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.22);
       trail.mesh.scale.multiplyScalar(1 + delta * 1.35);
       if (trail.life <= 0) {
         trail.mesh.visible = false;
@@ -565,7 +565,7 @@ export class TpsGraphicsDirector {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move) return;
     const lastSpawn = p1 ? this.lastP1TrailSpawn : this.lastP2TrailSpawn;
-    if (time - lastSpawn < 0.09) return;
+    if (time - lastSpawn < 0.12) return;
     if (move.animation === "throw") return;
     if (attacker.moveTick > move.startup + move.active + 1) return;
     if (p1) this.lastP1TrailSpawn = time;
@@ -577,7 +577,7 @@ export class TpsGraphicsDirector {
     const kick = move.animation === "kick" || move.visualContact === "LEFT_FOOT" || move.visualContact === "RIGHT_FOOT";
     const active = attacker.isActive();
     const tier = tpsImpactTier(move.id, move.power);
-    trail.life = active ? 0.11 + (tier - 1) * 0.018 : 0.08 + (tier - 1) * 0.01;
+    trail.life = active ? 0.09 + (tier - 1) * 0.012 : 0.065 + (tier - 1) * 0.008;
     trail.maxLife = trail.life;
     trail.mesh.visible = true;
     const contactSide = move.visualContact === "LEFT_FIST" || move.visualContact === "LEFT_FOOT" ? -1 : move.visualContact === "RIGHT_FIST" || move.visualContact === "RIGHT_FOOT" ? 1 : 0;
@@ -590,7 +590,7 @@ export class TpsGraphicsDirector {
     const tierScale = 1 + (tier - 1) * 0.12;
     trail.mesh.scale.set((kick ? 1.08 : 0.74) * tierScale, (kick ? 0.74 : 0.52) * tierScale, 1);
     trail.mesh.material.color.setHex(attacker.definition.colors.glow);
-    trail.mesh.material.opacity = active ? 0.24 + (tier - 1) * 0.07 : 0.12 + (tier - 1) * 0.035;
+    trail.mesh.material.opacity = active ? 0.20 + (tier - 1) * 0.045 : 0.09 + (tier - 1) * 0.022;
   }
 
   private spawnQuickstepGhost(fighter: FighterRuntime, opponent: FighterRuntime, motion: THREE.Vector3): void {

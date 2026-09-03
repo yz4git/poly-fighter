@@ -72,3 +72,12 @@ test("TPS impact visuals stay offset from the torso collision stack", async () =
   assert.match(source, /lastImpactVisualSideOffset/);
   assert.match(source, /wave\.mesh\.scale\.setScalar\(0\.54 \+ strength \* 0\.12/);
 });
+
+
+test("TPS close-range FX keep strike silhouettes readable during combos", async () => {
+  const source = await readFile(new URL("../src/game/tps-graphics.ts", import.meta.url), "utf8");
+  assert.match(source, /time - lastSpawn < 0\.12/);
+  assert.match(source, /trail\.life = active \? 0\.09/);
+  assert.match(source, /\(1 - progress\) \* 0\.22/);
+  assert.match(source, /wave\.life = 0\.15/);
+});

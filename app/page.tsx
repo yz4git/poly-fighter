@@ -335,12 +335,12 @@ export default function Home() {
 
   const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
-  const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH" || screen === "RESULT";
+  const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH";
   const tpsIncoming = battleMode === "TPS" && hud?.message === "INCOMING";
   const tpsStrikeRange = battleMode === "TPS" && ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
   const tpsComboMessage = battleMode === "TPS" && (hud?.message ?? "").startsWith("COMBO ");
   const tpsKoMessage = battleMode === "TPS" && hud?.message === "KO";
-  const tpsFaceSafeMessage = tpsComboMessage || tpsKoMessage;
+  const tpsFaceSafeMessage = battleMode === "TPS" && Boolean(hud?.message);
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
 
@@ -430,7 +430,7 @@ export default function Home() {
             <div className="round-readout"><span>ROUND {hud?.round ?? 1}</span><b>{String(hud?.timer ?? 60).padStart(2, "0")}</b><small>{hud?.message ?? "ROUND 1"}</small></div>
             <div className="hud-player right-player"><div className="hud-name"><span>CPU // PLAYER 2</span><strong>{hud?.p2Name ?? p2.name}</strong></div><HealthBar value={hud?.p2Health ?? 100} reverse /><div className="win-pips"><i className={(hud?.p2Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p2Wins ?? 0) > 1 ? "won" : ""} /></div></div>
           </section>
-          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-combo-badge" : ""}`}>{battleMode === "TPS" ? (tpsFaceSafeMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
+          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-face-safe-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""} ${tpsKoMessage ? "tps-ko-badge" : ""}`}>{battleMode === "TPS" ? (tpsFaceSafeMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
           <button type="button" className={`pause-button ${battleMode === "TPS" ? "tps-pause-button" : ""}`} aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />

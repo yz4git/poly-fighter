@@ -159,7 +159,7 @@ test("TPS KO presentation waits for the defeated fighter to land before RESULT",
   assert.doesNotMatch(source, /setTimeout\(\(\) => this\.options\.onResult/);
 });
 
-test("TPS combo and KO readouts use a face-safe HUD lane instead of the center lane", async () => {
+test("TPS messages use a face-safe HUD lane and RESULT removes live fight controls", async () => {
   const [page, css] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/hud-face-safe.css", import.meta.url), "utf8"),
@@ -167,9 +167,15 @@ test("TPS combo and KO readouts use a face-safe HUD lane instead of the center l
   assert.match(page, /tpsComboMessage/);
   assert.match(page, /tpsKoMessage/);
   assert.match(page, /tpsFaceSafeMessage/);
+  assert.match(page, /Boolean\(hud\?\.message\)/);
+  assert.match(page, /tps-face-safe-badge/);
   assert.match(page, /tps-combo-badge/);
+  assert.match(page, /tps-ko-badge/);
+  assert.match(page, /const isGameSurface = screen === "MATCH" \|\| screen === "TPS_MATCH";/);
   assert.match(page, /tps-face-safe-active/);
+  assert.match(css, /\.tps-badge\.tps-face-safe-badge/);
   assert.match(css, /\.tps-badge\.tps-combo-badge/);
+  assert.match(css, /\.tps-badge\.tps-ko-badge/);
   assert.match(css, /left: max\(24px/);
   assert.match(css, /transform: none/);
   assert.match(css, /\.tps-face-safe-active \.round-readout small/);

@@ -515,7 +515,7 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
     case "CROUCH": return { name: "Crouch_Idle_Loop", loop: true, speed: 1 };
     case "GUARD": return { name: "Idle_Loop", loop: true, speed: 0.82 };
     case "BLOCK_STUN": return { name: "BF_GuardBreak", loop: false, speed: 1.35 };
-    case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };
+    case "SIDESTEP": return { name: "Walk_Loop", loop: true, speed: 1.55 };
     case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
     case "HIT": {
       const side = fighter.reactionSide === "LEFT" ? "L" : "R";

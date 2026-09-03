@@ -38,6 +38,8 @@ test("generated reaction pack has distinct readable reactions with planted feet"
     assert.ok(move.headExcursionDegrees > 7, `${move.action}: head ${move.headExcursionDegrees}`);
     assert.ok(move.leftFootDriftMax < 0.015, `${move.action}: left foot ${move.leftFootDriftMax}`);
     assert.ok(move.rightFootDriftMax < 0.015, `${move.action}: right foot ${move.rightFootDriftMax}`);
+    assert.ok(move.leftFootAngularDriftDegrees < 1.0, `${move.action}: left foot angle ${move.leftFootAngularDriftDegrees}`);
+    assert.ok(move.rightFootAngularDriftDegrees < 1.0, `${move.action}: right foot angle ${move.rightFootAngularDriftDegrees}`);
     assert.ok(move.settleTorsoResidualDegrees < 20, `${move.action}: settle ${move.settleTorsoResidualDegrees}`);
     assert.ok(move.boneCount >= 40, `${move.action}: bones ${move.boneCount}`);
   }

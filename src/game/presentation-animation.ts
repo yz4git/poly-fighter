@@ -7,6 +7,25 @@ import { updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
 const KAIRO_READY_STATES = new Set(["IDLE", "WALK", "CROUCH", "SIDESTEP"]);
 
+// These moves already come from Blender Motion Foundry packs with authored COG,
+// torso, pole-vector and support-foot work. Running the older procedural
+// full-body correction stack over them was visibly re-solving a second motion on
+// top of the authored one: body blows folded at the waist, backfists corkscrewed
+// the torso and kicks lost their clean silhouette. Correction ON therefore keeps
+// these clips authoritative and reserves Motion Expansion for procedural-only
+// moves, reactions, falls and evasive states.
+const BLENDER_AUTHORED_ATTACKS = new Set([
+  "jab",
+  "straight",
+  "bodyBlow",
+  "backfist",
+  "power",
+  "kick",
+  "lowKick",
+  "risingKick",
+  "dashKick",
+]);
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -62,19 +81,25 @@ export class PresentationAnimationController extends FighterAnimationController 
       visual.root.updateMatrixWorld(true);
     }
 
-    // Motion Readability v2 owns attacks, hit reactions, launches, falls,
-    // downs, wakeups and evasive movement. It also receives the opponent so
-    // strike IK can bias toward a real head/body/leg target instead of copying
-    // the older procedural rig's own fist/foot pose.
-    if (correctionsEnabled) {
+    const authoredAttack = fighter.state === "ATTACK"
+      && Boolean(fighter.currentMove)
+      && BLENDER_AUTHORED_ATTACKS.has(fighter.currentMove?.id ?? "");
+
+    if (correctionsEnabled && !authoredAttack) {
       if (!updateMotionExpansionSkin(fighter, opponent, timeSeconds)) {
         updateQuaterniusModelSkin(fighter, timeSeconds);
       }
     } else {
-      // Raw-motion diagnostic mode: keep authored clip selection/playback, but
-      // bypass every post-playback IK, pose, COM, foot-lock and contact correction.
+      // OFF is raw playback. ON uses the same authored Blender attack pose for
+      // Motion Foundry moves so correction cannot overwrite the animator's
+      // silhouette; safe neutral/guard assistance remains inside Quaternius.
       updateQuaterniusModelSkin(fighter, timeSeconds);
     }
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
+    fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled
+      ? authoredAttack
+        ? "AUTHORED_ATTACK_PRESERVE"
+        : "PROCEDURAL_ASSIST"
+      : "RAW_CLIP_PLAYBACK";
   }
 }

@@ -1,0 +1,132 @@
+name: One-shot KO presentation and face-safe combo HUD pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ko-presentation-combo-hud-pass.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Implement face-safe combo HUD and KO landing presentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          base = Path('src/game/tps-game-base.ts')
+          text = base.read_text()
+          text = replace_once(
+              text,
+              'const TPS_PERFECT_EVADE_TICKS = 18;\nconst ENEMY_TACTIC_INTERVAL = 72;',
+              'const TPS_PERFECT_EVADE_TICKS = 18;\nconst TPS_KO_MIN_SHOW_TICKS = 24;\nconst TPS_KO_SETTLED_HOLD_TICKS = 30;\nconst TPS_KO_MAX_SHOW_TICKS = 150;\nconst ENEMY_TACTIC_INTERVAL = 72;',
+              'KO timing constants',
+          )
+          text = replace_once(
+              text,
+              '  private finished = false;\n  private resultWinner: "p1" | "p2" | "draw" | null = null;\n  private lastHudTick = -1;',
+              '  private finished = false;\n  private finishPending = false;\n  private finishTicks = 0;\n  private finishSettledTicks = 0;\n  private resultWinner: "p1" | "p2" | "draw" | null = null;\n  private lastHudTick = -1;',
+              'finish state fields',
+          )
+          text = replace_once(
+              text,
+              '  private step(): void {\n    if (this.paused || this.finished) return;\n    this.simulationTicks += 1;\n    this.timerTicks = Math.max(0, this.timerTicks - 1);',
+              '''  private step(): void {\n    if (this.paused || this.finished) return;\n    if (this.finishPending) {\n      this.simulationTicks += 1;\n      this.finishTicks += 1;\n      this.input.clear();\n\n      // A KO must remain visible as a physical event. Stop all new combat/input,\n      // but keep deterministic passive physics and presentation alive until the\n      // defeated fighter has actually landed and rested on the floor.\n      this.p1.updatePhysics(FIXED_STEP);\n      this.p2.updatePhysics(FIXED_STEP);\n      clampToArena(this.p1.position);\n      clampToArena(this.p2.position);\n      this.updateVisual(this.p1, this.p2, this.renderTime);\n      this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);\n\n      const defeated = this.resultWinner === "p1"\n        ? this.p2\n        : this.resultWinner === "p2"\n          ? this.p1\n          : null;\n      const settled = !defeated || (defeated.grounded && defeated.position.y <= 0.001 && Math.abs(defeated.velocity.y) <= 0.001);\n      this.finishSettledTicks = settled ? this.finishSettledTicks + 1 : 0;\n\n      const landingShown = this.finishTicks >= TPS_KO_MIN_SHOW_TICKS\n        && this.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS;\n      if (landingShown || this.finishTicks >= TPS_KO_MAX_SHOW_TICKS) {\n        this.finishPending = false;\n        this.finished = true;\n        const winner = this.resultWinner ?? "draw";\n        this.publishHud(true);\n        this.options.onResult?.(winner);\n      } else {\n        this.publishHud(false);\n      }\n      return;\n    }\n    this.simulationTicks += 1;\n    this.timerTicks = Math.max(0, this.timerTicks - 1);''',
+              'step KO presentation phase',
+          )
+          text = replace_once(
+              text,
+              '''  private checkFinish(): void {\n    if (this.finished) return;\n    if (this.p1.health > 0 && this.p2.health > 0 && this.timerTicks > 0) return;\n    this.finished = true;\n    this.input.clear();\n    const winner = this.p1.health === this.p2.health ? "draw" : this.p1.health > this.p2.health ? "p1" : "p2";\n    this.resultWinner = winner;\n    this.publishHud(true);\n    this.audio.ko();\n    window.setTimeout(() => this.options.onResult?.(winner), 520);\n  }''',
+              '''  private checkFinish(): void {\n    if (this.finished || this.finishPending) return;\n    if (this.p1.health > 0 && this.p2.health > 0 && this.timerTicks > 0) return;\n    this.finishPending = true;\n    this.finishTicks = 0;\n    this.finishSettledTicks = 0;\n    this.input.clear();\n    const winner = this.p1.health === this.p2.health ? "draw" : this.p1.health > this.p2.health ? "p1" : "p2";\n    this.resultWinner = winner;\n    this.publishHud(true);\n    this.audio.ko();\n  }''',
+              'checkFinish',
+          )
+          text = replace_once(
+              text,
+              '    this.timerTicks = ROUND_TICKS;\n    this.resultWinner = null;\n    this.graphics.reset();',
+              '    this.timerTicks = ROUND_TICKS;\n    this.finishPending = false;\n    this.finishTicks = 0;\n    this.finishSettledTicks = 0;\n    this.resultWinner = null;\n    this.graphics.reset();',
+              'reset finish state',
+          )
+          text = replace_once(
+              text,
+              '      p1Wins: this.resultWinner === "p1" ? 1 : 0,\n      p2Wins: this.resultWinner === "p2" ? 1 : 0,',
+              '      p1Wins: this.finished && this.resultWinner === "p1" ? 1 : 0,\n      p2Wins: this.finished && this.resultWinner === "p2" ? 1 : 0,',
+              'defer winner pips',
+          )
+          text = replace_once(
+              text,
+              '      message: this.finished\n        ? "BATTLE COMPLETE"\n        : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"',
+              '      message: this.finished\n        ? "BATTLE COMPLETE"\n        : this.finishPending\n          ? "KO"\n          : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"',
+              'KO HUD message',
+          )
+          base.write_text(text)
+
+          page = Path('app/page.tsx')
+          text = page.read_text()
+          text = replace_once(
+              text,
+              '  const tpsStrikeRange = battleMode === "TPS" && ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");',
+              '  const tpsStrikeRange = battleMode === "TPS" && ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");\n  const tpsComboMessage = battleMode === "TPS" && (hud?.message ?? "").startsWith("COMBO ");',
+              'combo state selector',
+          )
+          text = replace_once(
+              text,
+              '<section className="fight-hud" aria-live="polite">',
+              '<section className={`fight-hud ${tpsComboMessage ? "tps-combo-active" : ""}`} aria-live="polite">',
+              'fight HUD combo class',
+          )
+          text = replace_once(
+              text,
+              '<div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""}`}>{battleMode === "TPS" ? <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></> : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>',
+              '<div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""}`}>{battleMode === "TPS" ? (tpsComboMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>',
+              'face-safe combo badge',
+          )
+          page.write_text(text)
+
+          css = Path('app/hud-face-safe.css')
+          css_text = css.read_text()
+          marker = '/* Face-safe TPS combo readout: keep combo feedback away from both fighter heads. */'
+          if marker not in css_text:
+              css_text += '''\n\n/* Face-safe TPS combo readout: keep combo feedback away from both fighter heads. */\n.tps-badge.tps-combo-badge {\n  left: max(24px, calc(env(safe-area-inset-left) + 10px));\n  right: auto;\n  transform: none;\n  top: max(48px, calc(env(safe-area-inset-top) + 40px));\n  min-width: 0;\n  padding: 4px 9px;\n  border-color: rgba(255, 221, 100, .34);\n  color: #ffe473;\n  background: rgba(8, 14, 25, .82);\n  box-shadow: 0 5px 16px rgba(0, 0, 0, .22);\n  pointer-events: none;\n}\n.tps-badge.tps-combo-badge strong {\n  color: #ffe473;\n  font-size: 10px;\n  letter-spacing: .14em;\n}\n.tps-combo-active .round-readout small {\n  visibility: hidden;\n}\n@media (orientation: landscape) and (max-height: 560px) {\n  .tps-badge.tps-combo-badge {\n    left: max(24px, calc(env(safe-area-inset-left) + 10px));\n    top: max(34px, calc(env(safe-area-inset-top) + 29px));\n    padding: 3px 8px;\n  }\n}\n@media (orientation: landscape) and (max-height: 430px) {\n  .tps-badge.tps-combo-badge {\n    top: max(30px, calc(env(safe-area-inset-top) + 25px));\n    font-size: 7px;\n  }\n  .tps-badge.tps-combo-badge strong { font-size: 8px; }\n}\n'''
+          css.write_text(css_text)
+
+          tests = Path('tests/tps-mode.test.ts')
+          test_text = tests.read_text()
+          marker = 'test("TPS KO presentation waits for the defeated fighter to land before RESULT"'
+          if marker not in test_text:
+              test_text += '''\n\ntest("TPS KO presentation waits for the defeated fighter to land before RESULT", async () => {\n  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");\n  assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 24/);\n  assert.match(source, /TPS_KO_SETTLED_HOLD_TICKS = 30/);\n  assert.match(source, /finishPending/);\n  assert.match(source, /this\\.p1\\.updatePhysics\\(FIXED_STEP\\)/);\n  assert.match(source, /this\\.p2\\.updatePhysics\\(FIXED_STEP\\)/);\n  assert.match(source, /defeated\\.grounded/);\n  assert.match(source, /this\\.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS/);\n  assert.match(source, /this\\.options\\.onResult\\?\\.\\(winner\\)/);\n  assert.doesNotMatch(source, /setTimeout\\(\\(\\) => this\\.options\\.onResult/);\n});\n\ntest("TPS combo readout uses a face-safe HUD lane instead of the center lane", async () => {\n  const [page, css] = await Promise.all([\n    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),\n    readFile(new URL("../app/hud-face-safe.css", import.meta.url), "utf8"),\n  ]);\n  assert.match(page, /tpsComboMessage/);\n  assert.match(page, /tps-combo-badge/);\n  assert.match(page, /tps-combo-active/);\n  assert.match(css, /\\.tps-badge\\.tps-combo-badge/);\n  assert.match(css, /left: max\\(24px/);\n  assert.match(css, /transform: none/);\n  assert.match(css, /\\.tps-combo-active \\.round-readout small/);\n});\n'''
+          tests.write_text(test_text)
+          PY
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate gameplay and production build
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit implementation and remove one-shot workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/ko-presentation-combo-hud-pass.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game-base.ts app/page.tsx app/hud-face-safe.css tests/tps-mode.test.ts .github/workflows/ko-presentation-combo-hud-pass.yml
+          git commit -m "Show KO landing before TPS result and move combo HUD"
+          git push origin HEAD:main

@@ -58,6 +58,9 @@ test("recalibrated shared strikes retain useful reach while the support foot sta
   assert.ok(jab.strikeHandTravel > 0.30, jab.strikeHandTravel);
   assert.ok(bodyBlow.strikeHandTravel > 0.38, bodyBlow.strikeHandTravel);
   assert.ok(backfist.strikeHandTravel > 0.45, backfist.strikeHandTravel);
+  assert.ok(jab.durationSeconds < bodyBlow.durationSeconds, `${jab.durationSeconds} !< ${bodyBlow.durationSeconds}`);
+  assert.ok(jab.torsoTwistDegrees < bodyBlow.torsoTwistDegrees, `${jab.torsoTwistDegrees} !< ${bodyBlow.torsoTwistDegrees}`);
+  assert.ok(bodyBlow.torsoTwistDegrees < backfist.torsoTwistDegrees, `${bodyBlow.torsoTwistDegrees} !< ${backfist.torsoTwistDegrees}`);
   for (const move of [jab, bodyBlow, backfist]) {
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);

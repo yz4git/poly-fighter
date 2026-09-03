@@ -24,6 +24,17 @@ test("motion readability audit measures the rendered Rising Kick peak without le
   assert.match(source, /risingY > kickY \+ 0\.08/);
 });
 
+test("motion intent audit preserves authored Blender strikes and keeps procedural counters strict", async () => {
+  const source = await readFile(new URL("../scripts/capture-motion-intent-audit.mjs", import.meta.url), "utf8");
+  assert.match(source, /clip: "BF_Backfist_R"/);
+  assert.match(source, /clip: "BF_BodyBlow_L"/);
+  assert.match(source, /gameplayActive/);
+  assert.match(source, /AUTHORED_ATTACK_PRESERVE/);
+  assert.match(source, /baselineClip/);
+  assert.match(source, /result\.clip !== null \|\| result\.phase !== null \|\| result\.currentMove !== null/);
+  assert.match(source, /PROCEDURAL_ASSIST/);
+});
+
 test("V10 visual audit accepts compact guard assistance while preserving strong punch and kick floors", async () => {
   const source = await readFile(new URL("../scripts/capture-v10-visual-audit.mjs", import.meta.url), "utf8");
   assert.match(source, /metrics\.guardFistWorld < 0\.18 \|\| metrics\.guardFistScreen < 12/);

@@ -11,16 +11,18 @@ test("imported arm swing is shared through the clavicle", () => {
   assert.ok(source.includes("solveImportedArm(runtime, chain.suffix"));
 });
 
-test("imported neutral and guard hands stay forward with elbows on a lateral shoulder-height plane", () => {
-  assert.ok(source.includes("function importedReadyArmPose("));
-  assert.ok(source.includes("IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.72"));
-  assert.ok(source.includes("IMPORTED_GUARD_FORWARD_CLEARANCE = 1.98"));
-  assert.ok(source.includes("IMPORTED_NEUTRAL_HAND_LIFT = 0.035"));
-  assert.ok(source.includes("IMPORTED_GUARD_HAND_LIFT = 0.082"));
+test("imported neutral and guard hands stay compact with elbows on a lateral shoulder-height plane", () => {
+  assert.match(source, /function\s+importedReadyArmPose\s*\(/);
+  assert.ok(source.includes("IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.58"));
+  assert.ok(source.includes("IMPORTED_GUARD_FORWARD_CLEARANCE = 0.88"));
+  assert.ok(source.includes("IMPORTED_NEUTRAL_HAND_LIFT = -0.085"));
+  assert.ok(source.includes("IMPORTED_GUARD_HAND_LIFT = -0.015"));
   assert.ok(source.includes("targetLocal.z += layout.chestDepth"));
   assert.ok(source.includes("poleLocal.x += side * layout.shoulderWidth * (guard ? 0.86 : 0.82)"));
   assert.ok(source.includes("poleLocal.y += guard ? 0.010 : 0.0"));
   assert.equal(source.includes("poleLocal.y += guard ? 0.015 : -0.075"), false);
+  assert.ok(source.includes("pose.target, pose.pole, 0.05"));
+  assert.ok(source.includes("pose.target, pose.pole, 0.08"));
 });
 
 test("neutral and guard corrections no longer reuse legacy fist targets", () => {

@@ -13,6 +13,7 @@ export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/pr
 export const QUATERNIUS_BLENDER_CORE_URL = `${BASE_PATH}/models/quaternius/blender-fight-core.glb`;
 export const QUATERNIUS_BLENDER_CROSS_URL = `${BASE_PATH}/models/quaternius/blender-cross-core.glb`;
 export const QUATERNIUS_BLENDER_STRIKES_URL = `${BASE_PATH}/models/quaternius/blender-strikes-core.glb`;
+export const QUATERNIUS_BLENDER_KICKS_URL = `${BASE_PATH}/models/quaternius/blender-kicks-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -27,6 +28,7 @@ type MotionResources = {
   blender: MotionClipSource | null;
   blenderCross: MotionClipSource | null;
   blenderStrikes: MotionClipSource | null;
+  blenderKicks: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -82,13 +84,15 @@ function loadMotion(): Promise<MotionResources> {
   const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
   const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
   const blenderStrikeMotion = loader.loadAsync(QUATERNIUS_BLENDER_STRIKES_URL).catch(() => null);
+  const blenderKickMotion = loader.loadAsync(QUATERNIUS_BLENDER_KICKS_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
     blenderMotion,
     blenderCrossMotion,
     blenderStrikeMotion,
-  ]).then(([base, procedural, blender, blenderCross, blenderStrikes]) => ({
+    blenderKickMotion,
+  ]).then(([base, procedural, blender, blenderCross, blenderStrikes, blenderKicks]) => ({
     // Each Blender Foundry pack is optional and falls back independently.
     // The shared strike pack carries Jab / Body Blow / Backfist in one GLB.
     base: { source: base.scene, clips: base.animations },
@@ -96,6 +100,7 @@ function loadMotion(): Promise<MotionResources> {
     blender: blender ? { source: blender.scene, clips: blender.animations } : null,
     blenderCross: blenderCross ? { source: blenderCross.scene, clips: blenderCross.animations } : null,
     blenderStrikes: blenderStrikes ? { source: blenderStrikes.scene, clips: blenderStrikes.animations } : null,
+    blenderKicks: blenderKicks ? { source: blenderKicks.scene, clips: blenderKicks.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -450,9 +455,9 @@ const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
   backfist: "BF_Backfist_R",
   bodyBlow: "BF_BodyBlow_L",
   power: "BF_Power_R",
-  kick: "PF_FrontKick_R",
-  lowKick: "PF_LowKick_L",
-  risingKick: "PF_RisingKick_R",
+  kick: "BF_FrontKick_R",
+  lowKick: "BF_LowKick_L",
+  risingKick: "BF_RisingKick_R",
   dashKick: "PF_DashKick_R",
   throw: "PF_Throw",
   counter: "PF_Counter_R",
@@ -544,12 +549,16 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     const blenderStrikeClips = resources.motion.blenderStrikes
       ? retargetMotionClips(resources.motion.blenderStrikes.source, styled.model, resources.motion.blenderStrikes.clips)
       : new Map<string, THREE.AnimationClip>();
+    const blenderKickClips = resources.motion.blenderKicks
+      ? retargetMotionClips(resources.motion.blenderKicks.source, styled.model, resources.motion.blenderKicks.clips)
+      : new Map<string, THREE.AnimationClip>();
     const retargetedClips = new Map<string, THREE.AnimationClip>([
       ...baseClips,
       ...proceduralClips,
       ...blenderClips,
       ...blenderCrossClips,
       ...blenderStrikeClips,
+      ...blenderKickClips,
     ]);
     if (!retargetedClips.has("BF_Power_R")) {
       const fallback = proceduralClips.get("PF_Power_R");
@@ -571,6 +580,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ["BF_Jab_L", "PF_Jab_L"],
       ["BF_BodyBlow_L", "PF_BodyBlow_L"],
       ["BF_Backfist_R", "PF_Backfist_R"],
+      ["BF_FrontKick_R", "PF_FrontKick_R"],
+      ["BF_LowKick_L", "PF_LowKick_L"],
+      ["BF_RisingKick_R", "PF_RisingKick_R"],
     ] as const) {
       if (retargetedClips.has(authored)) continue;
       const fallback = proceduralClips.get(procedural);
@@ -599,9 +611,10 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
-    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size;
     visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
     visual.root.userData.quaterniusBlenderStrikeClipCount = blenderStrikeClips.size;
+    visual.root.userData.quaterniusBlenderKickClipCount = blenderKickClips.size;
     visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
       ? "BLENDER_MOTION_FOUNDRY_V1"
       : "PROCEDURAL_FALLBACK";
@@ -614,6 +627,12 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusJabMotionSource = sharedStrikeSource("BF_Jab_L");
     visual.root.userData.quaterniusBodyBlowMotionSource = sharedStrikeSource("BF_BodyBlow_L");
     visual.root.userData.quaterniusBackfistMotionSource = sharedStrikeSource("BF_Backfist_R");
+    const kickSource = (name: string) => blenderKickClips.has(name)
+      ? "BLENDER_MOTION_FOUNDRY_V2_KICKS"
+      : "PROCEDURAL_FALLBACK";
+    visual.root.userData.quaterniusFrontKickMotionSource = kickSource("BF_FrontKick_R");
+    visual.root.userData.quaterniusLowKickMotionSource = kickSource("BF_LowKick_L");
+    visual.root.userData.quaterniusRisingKickMotionSource = kickSource("BF_RisingKick_R");
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

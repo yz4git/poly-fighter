@@ -11,7 +11,7 @@ test("TPS visual audit accepts raw and authored-preserve combo playback without 
   assert.match(source, /comboLinkProbe\.motionMove === 'backfist'/);
 });
 
-test("motion readability audit samples authored kicks at representative contact frames without legacy IK exaggeration", async () => {
+test("motion readability audit measures the rendered Rising Kick peak without legacy IK exaggeration", async () => {
   const source = await readFile(new URL("../scripts/capture-motion-readability-audit.mjs", import.meta.url), "utf8");
   assert.match(source, /const authoredContactTick = move\.startup \+ move\.active - 1/);
   assert.match(source, /const lateContactSample = moveId === 'risingKick'/);

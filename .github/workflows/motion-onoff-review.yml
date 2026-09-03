@@ -1,5 +1,5 @@
 name: POLY FIGHTER Motion ON-OFF Review
-# review-pass: safe-authored-motion-v2
+# review-pass: compact-ready-pose-v3
 
 on:
   push:

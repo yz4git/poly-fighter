@@ -1,0 +1,37 @@
+name: POLY FIGHTER Airborne Integration One Shot
+
+on:
+  push:
+    branches:
+      - feature/blender-motion-foundry-v2-airborne-dash-20260903
+    paths:
+      - .github/workflows/airborne-integration-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/blender-motion-foundry-v2-airborne-dash-20260903
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Materialize integration and remove one-shot workflow
+        run: |
+          set -euo pipefail
+          node scripts/apply-blender-motion-foundry-v2-airborne.mjs
+          grep -F 'export const QUATERNIUS_BLENDER_AIRBORNE_URL' src/game/visual-quaternius-runtime.ts
+          grep -F 'dashKick: "BF_DashKick_R"' src/game/visual-quaternius-runtime.ts
+          grep -F 'QUATERNIUS_BLENDER_AIRBORNE_URL' src/game/model-viewer-motion.ts
+          grep -F 'model-view-motion-blender-dash-kick.png' scripts/capture-model-view-audit.mjs
+          git rm .github/workflows/airborne-integration-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/visual-quaternius-runtime.ts src/game/model-viewer-motion.ts scripts/capture-model-view-audit.mjs
+          git commit -m "Materialize Blender airborne runtime integration"
+          git push origin HEAD:feature/blender-motion-foundry-v2-airborne-dash-20260903

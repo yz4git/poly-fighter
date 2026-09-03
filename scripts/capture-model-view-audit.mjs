@@ -96,11 +96,17 @@ async function waitForMotionViewer(sessionId) {
         hasProceduralPower: options.some((option) => option.value === 'PF_Power_R'),
         hasBlenderCross: options.some((option) => option.value === 'BF_Cross_R'),
         hasProceduralCross: options.some((option) => option.value === 'PF_Cross_R'),
+        hasBlenderJab: options.some((option) => option.value === 'BF_Jab_L'),
+        hasProceduralJab: options.some((option) => option.value === 'PF_Jab_L'),
+        hasBlenderBodyBlow: options.some((option) => option.value === 'BF_BodyBlow_L'),
+        hasProceduralBodyBlow: options.some((option) => option.value === 'PF_BodyBlow_L'),
+        hasBlenderBackfist: options.some((option) => option.value === 'BF_Backfist_R'),
+        hasProceduralBackfist: options.some((option) => option.value === 'PF_Backfist_R'),
         optionCount: options.length,
         options: options.slice(0, 80),
       };
     `);
-    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower && state?.hasBlenderCross && state?.hasProceduralCross) return state;
+    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower && state?.hasBlenderCross && state?.hasProceduralCross && state?.hasBlenderJab && state?.hasProceduralJab && state?.hasBlenderBodyBlow && state?.hasProceduralBodyBlow && state?.hasBlenderBackfist && state?.hasProceduralBackfist) return state;
     await delay(100);
   }
   throw new Error("MODEL VIEW Motion Viewer did not become ready");
@@ -214,6 +220,21 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/model-view-motion-blender-cross.png`);
 
+  const proceduralJab = await poseMotionViewer(sessionId, "PF_Jab_L", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-jab.png`);
+  const blenderJab = await poseMotionViewer(sessionId, "BF_Jab_L", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-jab.png`);
+
+  const proceduralBodyBlow = await poseMotionViewer(sessionId, "PF_BodyBlow_L", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-body-blow.png`);
+  const blenderBodyBlow = await poseMotionViewer(sessionId, "BF_BodyBlow_L", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-body-blow.png`);
+
+  const proceduralBackfist = await poseMotionViewer(sessionId, "PF_Backfist_R", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-backfist.png`);
+  const blenderBackfist = await poseMotionViewer(sessionId, "BF_Backfist_R", 0.5);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-backfist.png`);
+
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);
   const kairo = await waitForModelView(sessionId, "KAIRO");
@@ -229,9 +250,9 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, kairo, kairoMotionReady, titleState }, null, 2));
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, kairo, kairoMotionReady, titleState }, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, kairo, kairoMotionReady, titleState }));
+  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, kairo, kairoMotionReady, titleState }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

@@ -59,6 +59,7 @@ test('motion viewer retargets Blender, procedural and base packs on an isolated 
   assert.match(motionViewer, /QUATERNIUS_PROCEDURAL_CORE_URL/);
   assert.match(motionViewer, /QUATERNIUS_BLENDER_CORE_URL/);
   assert.match(motionViewer, /QUATERNIUS_BLENDER_CROSS_URL/);
+  assert.match(motionViewer, /QUATERNIUS_BLENDER_STRIKES_URL/);
   assert.match(motionViewer, /new THREE\.AnimationMixer\(target\)/);
   assert.match(motionViewer, /targetNode\.quaternion/);
   assert.match(motionViewer, /sourceRestInverse/);

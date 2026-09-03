@@ -12,6 +12,7 @@ export const QUATERNIUS_UAL_CORE_URL = `${BASE_PATH}/models/quaternius/ual-fight
 export const QUATERNIUS_PROCEDURAL_CORE_URL = `${BASE_PATH}/models/quaternius/procedural-fight-core.glb`;
 export const QUATERNIUS_BLENDER_CORE_URL = `${BASE_PATH}/models/quaternius/blender-fight-core.glb`;
 export const QUATERNIUS_BLENDER_CROSS_URL = `${BASE_PATH}/models/quaternius/blender-cross-core.glb`;
+export const QUATERNIUS_BLENDER_STRIKES_URL = `${BASE_PATH}/models/quaternius/blender-strikes-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -25,6 +26,7 @@ type MotionResources = {
   procedural: MotionClipSource;
   blender: MotionClipSource | null;
   blenderCross: MotionClipSource | null;
+  blenderStrikes: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -79,18 +81,21 @@ function loadMotion(): Promise<MotionResources> {
   const loader = new GLTFLoader();
   const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
   const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
+  const blenderStrikeMotion = loader.loadAsync(QUATERNIUS_BLENDER_STRIKES_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
     blenderMotion,
     blenderCrossMotion,
-  ]).then(([base, procedural, blender, blenderCross]) => ({
-    // Each Blender Foundry slice is optional and falls back independently.
-    // This lets v2 Cross ship without destabilising the proven v1 Power asset.
+    blenderStrikeMotion,
+  ]).then(([base, procedural, blender, blenderCross, blenderStrikes]) => ({
+    // Each Blender Foundry pack is optional and falls back independently.
+    // The shared strike pack carries Jab / Body Blow / Backfist in one GLB.
     base: { source: base.scene, clips: base.animations },
     procedural: { source: procedural.scene, clips: procedural.animations },
     blender: blender ? { source: blender.scene, clips: blender.animations } : null,
     blenderCross: blenderCross ? { source: blenderCross.scene, clips: blenderCross.animations } : null,
+    blenderStrikes: blenderStrikes ? { source: blenderStrikes.scene, clips: blenderStrikes.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -440,10 +445,10 @@ function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime
 }
 
 const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
-  jab: "PF_Jab_L",
+  jab: "BF_Jab_L",
   straight: "BF_Cross_R",
-  backfist: "PF_Backfist_R",
-  bodyBlow: "PF_BodyBlow_L",
+  backfist: "BF_Backfist_R",
+  bodyBlow: "BF_BodyBlow_L",
   power: "BF_Power_R",
   kick: "PF_FrontKick_R",
   lowKick: "PF_LowKick_L",
@@ -536,7 +541,16 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     const blenderCrossClips = resources.motion.blenderCross
       ? retargetMotionClips(resources.motion.blenderCross.source, styled.model, resources.motion.blenderCross.clips)
       : new Map<string, THREE.AnimationClip>();
-    const retargetedClips = new Map<string, THREE.AnimationClip>([...baseClips, ...proceduralClips, ...blenderClips, ...blenderCrossClips]);
+    const blenderStrikeClips = resources.motion.blenderStrikes
+      ? retargetMotionClips(resources.motion.blenderStrikes.source, styled.model, resources.motion.blenderStrikes.clips)
+      : new Map<string, THREE.AnimationClip>();
+    const retargetedClips = new Map<string, THREE.AnimationClip>([
+      ...baseClips,
+      ...proceduralClips,
+      ...blenderClips,
+      ...blenderCrossClips,
+      ...blenderStrikeClips,
+    ]);
     if (!retargetedClips.has("BF_Power_R")) {
       const fallback = proceduralClips.get("PF_Power_R");
       if (fallback) {
@@ -552,6 +566,18 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
         alias.name = "BF_Cross_R";
         retargetedClips.set(alias.name, alias);
       }
+    }
+    for (const [authored, procedural] of [
+      ["BF_Jab_L", "PF_Jab_L"],
+      ["BF_BodyBlow_L", "PF_BodyBlow_L"],
+      ["BF_Backfist_R", "PF_Backfist_R"],
+    ] as const) {
+      if (retargetedClips.has(authored)) continue;
+      const fallback = proceduralClips.get(procedural);
+      if (!fallback) continue;
+      const alias = fallback.clone();
+      alias.name = authored;
+      retargetedClips.set(alias.name, alias);
     }
     const runtime: QuaterniusRuntime = {
       ...styled,
@@ -573,14 +599,21 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
-    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size;
     visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
+    visual.root.userData.quaterniusBlenderStrikeClipCount = blenderStrikeClips.size;
     visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
       ? "BLENDER_MOTION_FOUNDRY_V1"
       : "PROCEDURAL_FALLBACK";
     visual.root.userData.quaterniusStraightMotionSource = blenderCrossClips.has("BF_Cross_R")
       ? "BLENDER_MOTION_FOUNDRY_V2_CROSS"
       : "PROCEDURAL_FALLBACK";
+    const sharedStrikeSource = (name: string) => blenderStrikeClips.has(name)
+      ? "BLENDER_MOTION_FOUNDRY_V2_SHARED_STRIKES"
+      : "PROCEDURAL_FALLBACK";
+    visual.root.userData.quaterniusJabMotionSource = sharedStrikeSource("BF_Jab_L");
+    visual.root.userData.quaterniusBodyBlowMotionSource = sharedStrikeSource("BF_BodyBlow_L");
+    visual.root.userData.quaterniusBackfistMotionSource = sharedStrikeSource("BF_Backfist_R");
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

@@ -6,9 +6,12 @@ on:
       - main
     paths:
       - tools/blender/build-fight-motion-foundry-v1.py
+      - tools/blender/motion_foundry_v2_rig.py
       - tools/blender/build-fight-motion-foundry-v2-cross.py
+      - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - scripts/apply-blender-motion-foundry-v1.mjs
       - scripts/apply-blender-motion-foundry-v2.mjs
+      - scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
       - tests/blender-motion-foundry.test.mjs
       - tests/blender-motion-foundry-v2.test.mjs
       - tests/quaternius-model-skin.test.ts
@@ -22,6 +25,9 @@ on:
       - public/models/quaternius/blender-cross-core.glb
       - public/models/quaternius/blender-cross-core.metrics.json
       - public/models/quaternius/blender-cross-core.generator.sha256
+      - public/models/quaternius/blender-strikes-core.glb
+      - public/models/quaternius/blender-strikes-core.metrics.json
+      - public/models/quaternius/blender-strikes-core.generator.sha256
       - .github/workflows/blender-motion-foundry.yml
   workflow_dispatch:
 
@@ -29,7 +35,7 @@ jobs:
   build-motion:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     permissions:
       contents: write
     steps:
@@ -44,9 +50,11 @@ jobs:
         run: |
           set -euo pipefail
           power_hash="$(sha256sum tools/blender/build-fight-motion-foundry-v1.py | awk '{print $1}')"
-          cross_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
+          cross_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
+          strikes_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-strikes.py | sha256sum | awk '{print $1}')"
           echo "power_hash=$power_hash" >> "$GITHUB_OUTPUT"
           echo "cross_hash=$cross_hash" >> "$GITHUB_OUTPUT"
+          echo "strikes_hash=$strikes_hash" >> "$GITHUB_OUTPUT"
           if [ -s public/models/quaternius/blender-fight-core.glb ] \
             && [ -s public/models/quaternius/blender-fight-core.generator.sha256 ] \
             && grep -qx "$power_hash" public/models/quaternius/blender-fight-core.generator.sha256; then
@@ -61,9 +69,16 @@ jobs:
           else
             echo "needs_cross=true" >> "$GITHUB_OUTPUT"
           fi
+          if [ -s public/models/quaternius/blender-strikes-core.glb ] \
+            && [ -s public/models/quaternius/blender-strikes-core.generator.sha256 ] \
+            && grep -qx "$strikes_hash" public/models/quaternius/blender-strikes-core.generator.sha256; then
+            echo "needs_strikes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_strikes=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Fetch pinned full UAL authoring source
-        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true'
+        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true' || steps.foundry.outputs.needs_strikes == 'true'
         run: |
           set -euxo pipefail
           mkdir -p .tmp-quaternius
@@ -73,7 +88,7 @@ jobs:
           echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1-full.glb' | sha256sum -c -
 
       - name: Install Blender
-        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true'
+        if: steps.foundry.outputs.needs_power == 'true' || steps.foundry.outputs.needs_cross == 'true' || steps.foundry.outputs.needs_strikes == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
@@ -98,7 +113,6 @@ jobs:
           test -s "$out/blender-fight-core.glb"
           test -s "$out/blender-fight-core.metrics.json"
           test -s "$out/blender-fight-core-v1.blend"
-          cat "$out/blender-fight-core.metrics.json"
 
       - name: Validate generated Power metrics
         if: steps.foundry.outputs.needs_power == 'true'
@@ -106,8 +120,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          p = Path('artifacts/blender-motion-foundry/blender-fight-core.metrics.json')
-          m = json.loads(p.read_text())
+          m = json.loads(Path('artifacts/blender-motion-foundry/blender-fight-core.metrics.json').read_text())
           assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V1', m
           assert m['action'] == 'BF_Power_R', m
           assert m['rightHandTravel'] > 0.03, m
@@ -150,13 +163,13 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          p = Path('artifacts/blender-motion-foundry-v2/blender-cross-core.metrics.json')
-          m = json.loads(p.read_text())
+          m = json.loads(Path('artifacts/blender-motion-foundry-v2/blender-cross-core.metrics.json').read_text())
           assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V2_CROSS', m
           assert m['action'] == 'BF_Cross_R', m
-          assert m['rightHandTravel'] > 0.08, m
-          assert m['leftFootLockMaxDrift'] < 0.01, m
-          assert m['leftFootLockMaxAngularDriftDegrees'] < 1.0, m
+          assert m['sharedRig'] == 'MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG', m
+          assert m['strikeHandTravel'] > 0.08, m
+          assert m['supportFootLockMaxDrift'] < 0.01, m
+          assert m['supportFootLockMaxAngularDriftDegrees'] < 1.0, m
           assert m['pelvisTravel'] > 0.005, m
           assert m['torsoTwistDegrees'] > 2.0, m
           assert m['boneCount'] >= 40, m
@@ -172,8 +185,74 @@ jobs:
           cp artifacts/blender-motion-foundry-v2/blender-cross-core.metrics.json public/models/quaternius/blender-cross-core.metrics.json
           printf '%s\n' '${{ steps.foundry.outputs.cross_hash }}' > public/models/quaternius/blender-cross-core.generator.sha256
 
+      - name: Generate shared v2 strikes in Blender
+        if: steps.foundry.outputs.needs_strikes == 'true'
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+          out="artifacts/blender-motion-foundry-v2-strikes"
+          mkdir -p "$out"
+          xvfb-run -a blender --background \
+            --python-use-system-env \
+            --python-exit-code 1 \
+            --python tools/blender/build-fight-motion-foundry-v2-strikes.py \
+            -- \
+            --source .tmp-quaternius/ual1-full.glb \
+            --output-dir "$out"
+          test -s "$out/blender-strikes-core.glb"
+          test -s "$out/blender-strikes-core.metrics.json"
+          test -s "$out/blender-strikes-core-v2.blend"
+          cat "$out/blender-strikes-core.metrics.json"
+
+      - name: Validate shared strike metrics and GLB actions
+        if: steps.foundry.outputs.needs_strikes == 'true'
+        run: |
+          python3 - <<'PY'
+          import json, struct
+          from pathlib import Path
+          p = Path('artifacts/blender-motion-foundry-v2-strikes/blender-strikes-core.metrics.json')
+          m = json.loads(p.read_text())
+          expected = {'BF_Jab_L', 'BF_BodyBlow_L', 'BF_Backfist_R'}
+          assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V2_SHARED_STRIKES', m
+          assert m['sharedRig'] == 'MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG', m
+          assert set(m['actions']) == expected, m
+          assert len(m['moves']) == 3, m
+          for move in m['moves']:
+              assert move['action'] in expected, move
+              assert move['strikeHandTravel'] > 0.05, move
+              assert move['supportFootLockMaxDrift'] < 0.01, move
+              assert move['supportFootLockMaxAngularDriftDegrees'] < 1.0, move
+              assert move['pelvisTravel'] > 0.002, move
+              assert move['torsoTwistDegrees'] > 2.0, move
+              assert move['boneCount'] >= 40, move
+          raw = Path('artifacts/blender-motion-foundry-v2-strikes/blender-strikes-core.glb').read_bytes()
+          assert raw[:4] == b'glTF' and len(raw) > 20
+          json_len, json_type = struct.unpack_from('<II', raw, 12)
+          assert json_type == 0x4E4F534A
+          doc = json.loads(raw[20:20 + json_len].decode('utf-8').rstrip('\x00 '))
+          names = {a.get('name') for a in doc.get('animations', [])}
+          assert expected.issubset(names), {'expected': sorted(expected), 'animations': sorted(n for n in names if n)}
+          print('BLENDER_MOTION_FOUNDRY_V2_SHARED_STRIKES_OK', sorted(names))
+          PY
+
+      - name: Stage generated shared strike library
+        if: steps.foundry.outputs.needs_strikes == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp artifacts/blender-motion-foundry-v2-strikes/blender-strikes-core.glb public/models/quaternius/blender-strikes-core.glb
+          cp artifacts/blender-motion-foundry-v2-strikes/blender-strikes-core.metrics.json public/models/quaternius/blender-strikes-core.metrics.json
+          printf '%s\n' '${{ steps.foundry.outputs.strikes_hash }}' > public/models/quaternius/blender-strikes-core.generator.sha256
+
       - name: Apply runtime integration
-        run: node scripts/apply-blender-motion-foundry-v2.mjs
+        run: |
+          set -euo pipefail
+          if ! grep -q 'QUATERNIUS_BLENDER_CROSS_URL' src/game/visual-quaternius-runtime.ts; then
+            node scripts/apply-blender-motion-foundry-v2.mjs
+          else
+            echo 'Cross v2 runtime integration already present; preserving superset state.'
+          fi
+          node scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
 
       - uses: actions/setup-node@v4
         with:
@@ -213,13 +292,16 @@ jobs:
             public/models/quaternius/blender-cross-core.glb \
             public/models/quaternius/blender-cross-core.metrics.json \
             public/models/quaternius/blender-cross-core.generator.sha256 \
+            public/models/quaternius/blender-strikes-core.glb \
+            public/models/quaternius/blender-strikes-core.metrics.json \
+            public/models/quaternius/blender-strikes-core.generator.sha256 \
             src/game/visual-quaternius-runtime.ts \
             src/game/model-viewer-motion.ts \
             scripts/capture-model-view-audit.mjs \
             tests/quaternius-model-skin.test.ts \
             tests/model-viewer.test.mjs \
             package.json
-          git commit -m "Generate Blender Motion Foundry v2 Cross action"
+          git commit -m "Generate shared Blender v2 strike actions"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - uses: actions/upload-artifact@v4
@@ -229,7 +311,9 @@ jobs:
           path: |
             artifacts/blender-motion-foundry
             artifacts/blender-motion-foundry-v2
+            artifacts/blender-motion-foundry-v2-strikes
             public/models/quaternius/blender-fight-core.metrics.json
             public/models/quaternius/blender-cross-core.metrics.json
+            public/models/quaternius/blender-strikes-core.metrics.json
           if-no-files-found: ignore
           retention-days: 14

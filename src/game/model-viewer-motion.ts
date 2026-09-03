@@ -4,6 +4,7 @@ import type { FighterVisual } from "./visual-entry";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
+  QUATERNIUS_BLENDER_STRIKES_URL,
   QUATERNIUS_PROCEDURAL_CORE_URL,
   QUATERNIUS_UAL_CORE_URL,
 } from "./visual-quaternius-runtime";
@@ -41,18 +42,21 @@ function loadMotionSources(): Promise<MotionSourcePack[]> {
   const loader = new GLTFLoader();
   const blenderMotion = loader.loadAsync(QUATERNIUS_BLENDER_CORE_URL).catch(() => null);
   const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
+  const blenderStrikeMotion = loader.loadAsync(QUATERNIUS_BLENDER_STRIKES_URL).catch(() => null);
   sourcePromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
     blenderMotion,
     blenderCrossMotion,
-  ]).then(([base, procedural, blender, blenderCross]) => {
+    blenderStrikeMotion,
+  ]).then(([base, procedural, blender, blenderCross, blenderStrikes]) => {
     const packs: MotionSourcePack[] = [
       { root: base.scene, clips: base.animations, source: "BASE" },
       { root: procedural.scene, clips: procedural.animations, source: "PROCEDURAL" },
     ];
     if (blender) packs.push({ root: blender.scene, clips: blender.animations, source: "BLENDER" });
     if (blenderCross) packs.push({ root: blenderCross.scene, clips: blenderCross.animations, source: "BLENDER" });
+    if (blenderStrikes) packs.push({ root: blenderStrikes.scene, clips: blenderStrikes.animations, source: "BLENDER" });
     return packs;
   }).catch((error) => {
     sourcePromise = null;

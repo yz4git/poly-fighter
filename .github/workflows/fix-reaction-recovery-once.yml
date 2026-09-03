@@ -1,0 +1,42 @@
+name: Tune reaction recovery once
+on:
+  push:
+    branches:
+      - feature/blender-motion-foundry-v2-reactions-20260903
+    paths:
+      - .github/workflows/fix-reaction-recovery-once.yml
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/blender-motion-foundry-v2-reactions-20260903
+      - name: Retarget late recovery toward neutral source pose
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/blender/build-fight-motion-foundry-v2-reactions.py')
+          s = path.read_text()
+          replacements = {
+            'source_knots=((0.00, 0.00), (0.14, 0.03), (0.28, 0.22), (0.50, 0.58), (0.76, 0.86), (1.00, 1.00)),':
+            'source_knots=((0.00, 0.00), (0.14, 0.03), (0.28, 0.22), (0.50, 0.58), (0.70, 0.76), (0.82, 0.46), (0.92, 0.18), (1.00, 0.00)),',
+            'source_knots=((0.00, 0.00), (0.12, 0.02), (0.27, 0.18), (0.48, 0.50), (0.76, 0.84), (1.00, 1.00)),':
+            'source_knots=((0.00, 0.00), (0.12, 0.02), (0.27, 0.18), (0.48, 0.50), (0.70, 0.74), (0.83, 0.46), (0.93, 0.18), (1.00, 0.00)),',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing recovery patch anchor: {old}')
+              s = s.replace(old, new, 1)
+          path.write_text(s)
+          PY
+      - name: Commit tune and remove one-shot workflow
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add tools/blender/build-fight-motion-foundry-v2-reactions.py
+          git rm .github/workflows/fix-reaction-recovery-once.yml
+          git commit -m "Return Blender reactions to neutral recovery"
+          git push origin HEAD:feature/blender-motion-foundry-v2-reactions-20260903

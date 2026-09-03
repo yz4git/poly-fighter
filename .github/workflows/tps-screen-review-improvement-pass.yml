@@ -1,0 +1,108 @@
+name: One-shot TPS screen review improvement pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tps-screen-review-improvement-pass.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply play-review improvements
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p=Path(path); s=p.read_text();
+              if old not in s: raise SystemExit(f'missing pattern in {path}: {old[:100]}')
+              p.write_text(s.replace(old,new,1))
+
+          replace('app/page.tsx',
+            'const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH" || screen === "RESULT";',
+            'const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH";')
+          replace('app/page.tsx',
+            'const tpsFaceSafeMessage = tpsComboMessage || tpsKoMessage;',
+            'const tpsFaceSafeMessage = battleMode === "TPS" && Boolean(hud?.message);')
+          replace('app/page.tsx',
+            'className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-combo-badge" : ""}`}',
+            'className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-face-safe-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""} ${tpsKoMessage ? "tps-ko-badge" : ""}`}')
+
+          css=Path('app/hud-face-safe.css'); s=css.read_text()
+          s=s.replace('.tps-badge.tps-combo-badge {', '.tps-badge.tps-face-safe-badge {', 1)
+          s=s.replace('.tps-badge.tps-combo-badge strong {', '.tps-badge.tps-face-safe-badge strong {', 1)
+          s=s.replace('  color: #ffe473;\n  background: rgba(8, 14, 25, .82);', '  color: #bfeeff;\n  background: rgba(8, 14, 25, .84);', 1)
+          s=s.replace('  color: #ffe473;\n  font-size: 10px;', '  color: inherit;\n  font-size: 10px;', 1)
+          s=s.replace('  .tps-badge.tps-combo-badge {', '  .tps-badge.tps-face-safe-badge {', 1)
+          s=s.replace('  .tps-badge.tps-combo-badge {', '  .tps-badge.tps-face-safe-badge {', 1)
+          s=s.replace('  .tps-badge.tps-combo-badge strong { font-size: 8px; }', '  .tps-badge.tps-face-safe-badge strong { font-size: 8px; }', 1)
+          insert='''\n.tps-badge.tps-combo-badge {\n  border-color: rgba(255, 221, 100, .38);\n  color: #ffe473;\n}\n.tps-badge.tps-ko-badge {\n  border-color: rgba(255, 91, 123, .46);\n  color: #ff8aa2;\n  background: rgba(24, 6, 14, .88);\n}\n'''
+          marker='.tps-face-safe-active .round-readout small {'
+          if marker not in s: raise SystemExit('missing css marker')
+          s=s.replace(marker, insert+'\n'+marker,1)
+          css.write_text(s)
+
+          replace('src/game/visual-quaternius-runtime.ts',
+            'case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };',
+            'case "SIDESTEP": return { name: "Walk_Loop", loop: true, speed: 1.55 };')
+
+          replace('src/game/tps-graphics.ts', 'if (time - lastSpawn < 0.09) return;', 'if (time - lastSpawn < 0.12) return;')
+          replace('src/game/tps-graphics.ts',
+            'trail.life = active ? 0.11 + (tier - 1) * 0.018 : 0.08 + (tier - 1) * 0.01;',
+            'trail.life = active ? 0.09 + (tier - 1) * 0.012 : 0.065 + (tier - 1) * 0.008;')
+          replace('src/game/tps-graphics.ts',
+            'trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.32);',
+            'trail.mesh.material.opacity = Math.max(0, (1 - progress) * 0.22);')
+          replace('src/game/tps-graphics.ts',
+            'trail.mesh.material.opacity = active ? 0.24 + (tier - 1) * 0.07 : 0.12 + (tier - 1) * 0.035;',
+            'trail.mesh.material.opacity = active ? 0.20 + (tier - 1) * 0.045 : 0.09 + (tier - 1) * 0.022;')
+          replace('src/game/tps-graphics.ts',
+            'wave.life = 0.18 + strength * 0.035 + index * 0.018;',
+            'wave.life = 0.15 + strength * 0.028 + index * 0.014;')
+          replace('src/game/tps-graphics.ts',
+            '''      wave.baseOpacity = event.blocked\n        ? 0.28\n        : visualTier === 3\n          ? Math.max(0.30, 0.44 - index * 0.09)\n          : visualTier === 2\n            ? 0.34\n            : 0.27;''',
+            '''      wave.baseOpacity = event.blocked\n        ? 0.24\n        : visualTier === 3\n          ? Math.max(0.27, 0.38 - index * 0.08)\n          : visualTier === 2\n            ? 0.29\n            : 0.24;''')
+
+          test=Path('tests/tps-mode.test.ts'); s=test.read_text()
+          s=s.replace('test("TPS combo and KO readouts use a face-safe HUD lane instead of the center lane", async () => {', 'test("TPS messages use a face-safe HUD lane and RESULT removes live fight controls", async () => {',1)
+          s=s.replace('  assert.match(page, /tpsFaceSafeMessage/);\n  assert.match(page, /tps-combo-badge/);', '  assert.match(page, /tpsFaceSafeMessage/);\n  assert.match(page, /Boolean\\(hud\\?\\.message\\)/);\n  assert.match(page, /tps-face-safe-badge/);\n  assert.match(page, /tps-combo-badge/);\n  assert.match(page, /tps-ko-badge/);\n  assert.match(page, /const isGameSurface = screen === "MATCH" \\|\\| screen === "TPS_MATCH";/);',1)
+          s=s.replace('  assert.match(css, /\\.tps-badge\\.tps-combo-badge/);', '  assert.match(css, /\\.tps-badge\\.tps-face-safe-badge/);\n  assert.match(css, /\\.tps-badge\\.tps-combo-badge/);\n  assert.match(css, /\\.tps-badge\\.tps-ko-badge/);',1)
+          test.write_text(s)
+
+          q=Path('tests/quaternius-model-skin.test.ts'); s=q.read_text()
+          needle='  assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);\n'
+          if needle not in s: raise SystemExit('missing quaternius test marker')
+          s=s.replace(needle, needle+'  assert.match(runtime, /case "SIDESTEP": return \\{ name: "Walk_Loop", loop: true, speed: 1\\.55 \\};/);\n  assert.doesNotMatch(runtime, /case "SIDESTEP": return \\{ name: "Roll"/);\n',1)
+          q.write_text(s)
+
+          g=Path('tests/tps-graphics.test.ts'); s=g.read_text()
+          s += '''\n\ntest("TPS close-range FX keep strike silhouettes readable during combos", async () => {\n  const source = await readFile(new URL("../src/game/tps-graphics.ts", import.meta.url), "utf8");\n  assert.match(source, /time - lastSpawn < 0\\.12/);\n  assert.match(source, /trail\\.life = active \\? 0\\.09/);\n  assert.match(source, /\\(1 - progress\\) \\* 0\\.22/);\n  assert.match(source, /wave\\.life = 0\\.15/);\n});\n'''
+          g.write_text(s)
+          PY
+      - run: npm ci --no-audit --no-fund
+      - name: Validate TPS, lint, and production build
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit implementation and clean one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/tps-screen-review-improvement-pass.yml .github/workflows/tps-ko-realtime-screen-review.yml 2>/dev/null || true
+          git add app/page.tsx app/hud-face-safe.css src/game/visual-quaternius-runtime.ts src/game/tps-graphics.ts tests/tps-mode.test.ts tests/quaternius-model-skin.test.ts tests/tps-graphics.test.ts
+          git commit -m 'Improve TPS screen readability from live play review'
+          git push

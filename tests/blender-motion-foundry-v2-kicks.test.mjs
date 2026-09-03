@@ -59,7 +59,9 @@ test("runtime prefers authored grounded kicks with independent PF fallbacks whil
   assert.match(runtime, /\["BF_RisingKick_R", "PF_RisingKick_R"\]/);
   assert.match(runtime, /quaterniusBlenderKickClipCount/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_KICKS/);
-  assert.match(integrator, /dashKick: \\"PF_DashKick_R\\"|dashKick: "PF_DashKick_R"/);
+  assert.match(integrator, /kick: \\"BF_FrontKick_R\\"|kick: "BF_FrontKick_R"/);
+  assert.match(integrator, /lowKick: \\"BF_LowKick_L\\"|lowKick: "BF_LowKick_L"/);
+  assert.match(integrator, /risingKick: \\"BF_RisingKick_R\\"|risingKick: "BF_RisingKick_R"/);
 });
 
 test("Model Viewer audit captures PF versus BF kick impact poses at 55 percent", () => {

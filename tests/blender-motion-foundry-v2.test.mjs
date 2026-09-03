@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+// Keep this contract on a user-authored commit so V8/WebGL CI evaluates the generated shared-strike assets.
 const sharedRig = await readFile(new URL("../tools/blender/motion_foundry_v2_rig.py", import.meta.url), "utf8");
 const crossGenerator = await readFile(new URL("../tools/blender/build-fight-motion-foundry-v2-cross.py", import.meta.url), "utf8");
 const strikeGenerator = await readFile(new URL("../tools/blender/build-fight-motion-foundry-v2-strikes.py", import.meta.url), "utf8");

@@ -101,9 +101,9 @@ FRONT_KICK = KickSpec(
     foot_offsets=(
         (0.00, 0.00, 0.00),
         (-0.05, 0.00, 0.18),
-        (0.27, 0.00, 0.31),
-        (0.56, 0.00, 0.33),
-        (0.60, 0.00, 0.31),
+        (0.34, 0.00, 0.34),
+        (0.72, 0.00, 0.37),
+        (0.76, 0.00, 0.35),
         (0.04, 0.00, 0.18),
         (0.00, 0.00, 0.00),
     ),
@@ -166,16 +166,16 @@ RISING_KICK = KickSpec(
     foot_offsets=(
         (0.00, 0.00, 0.00),
         (-0.06, 0.00, 0.19),
-        (0.24, 0.00, 0.42),
-        (0.50, 0.00, 0.66),
-        (0.53, 0.00, 0.72),
+        (0.32, 0.00, 0.48),
+        (0.68, 0.00, 0.78),
+        (0.72, 0.00, 0.84),
         (0.02, 0.00, 0.22),
         (0.00, 0.00, 0.00),
     ),
     foot_pitch=(0.0, 12.0, -10.0, -35.0, -43.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 2.0, 4.0, 5.0, 1.0, 0.0),
     ik_influences=(0.0, 0.72, 0.96, 1.0, 1.0, 0.74, 0.0),
-    pelvis_forward=(0.000, -0.012, 0.004, 0.020, 0.022, 0.000, 0.000),
+    pelvis_forward=(0.000, -0.012, 0.006, 0.028, 0.032, 0.000, 0.000),
     pelvis_drop=(0.000, -0.040, -0.024, -0.006, -0.001, -0.018, 0.000),
     pelvis_yaw=(0.0, -3.0, 3.0, 7.0, 8.0, 2.0, 0.0),
     lower_yaw=(0.0, -4.0, 4.0, 9.0, 10.0, 2.0, 0.0),
@@ -422,6 +422,22 @@ def foot_axis_reach(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Ki
     return delta.dot(axis)
 
 
+def strike_knee_extension_degrees(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
+    """Return the impact knee angle; 180 degrees is a fully extended strike leg."""
+    thigh = f"thigh_{spec.strike_suffix}"
+    calf = f"calf_{spec.strike_suffix}"
+    foot = f"foot_{spec.strike_suffix}"
+    scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
+    hip = rig.v1.pose_head(armature, thigh)
+    knee = rig.v1.pose_head(armature, calf)
+    ankle = rig.v1.pose_head(armature, foot)
+    upper = hip - knee
+    lower = ankle - knee
+    if upper.length < 1e-6 or lower.length < 1e-6:
+        return 0.0
+    return math.degrees(upper.angle(lower))
+
+
 def guard_distance(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
     scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
     chest = rig.v1.pose_head(armature, "spine_03")
@@ -481,6 +497,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "constrainedStrikeFootTravel": foot_travel(scene, armature, spec),
         "constrainedStrikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
         "constrainedStrikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
+        "constrainedStrikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "constrainedGuardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "constrainedGuardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "constrainedSupportFootLockMaxDrift": support_drift(scene, armature, spec),
@@ -505,6 +522,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "strikeFootTravel": foot_travel(scene, armature, spec),
         "strikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
         "strikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
+        "strikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "guardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "guardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "supportFootLockMaxDrift": support_drift(scene, armature, spec),
@@ -521,6 +539,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             "Cross max hand-to-pelvis reach chooses forward sign",
             "shared COG/pelvis and staged torso masters",
             f"{spec.strike_side.upper()} strike-leg two-bone IK",
+            "impact knee-extension quality gate",
             "move-specific strike-foot orientation",
             "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",

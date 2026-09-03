@@ -18,17 +18,20 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /action_name="BF_LowKick_L"/);
   assert.match(generator, /action_name="BF_RisingKick_R"/);
   assert.match(generator, /Shoulder span did not provide a usable anatomical left axis/);
+  assert.match(generator, /max Cross hand-to-pelvis reach|max hand-to-pelvis reach/);
   assert.match(generator, /StrikeLegIK/);
   assert.match(generator, /StrikeFootOrientation/);
   assert.match(generator, /GuardHandIK/);
   assert.match(generator, /SupportFootPositionLockIK/);
   assert.match(generator, /SupportFootOrientationLock/);
   assert.match(generator, /strikeFootForwardReach/);
+  assert.match(generator, /strikeFootVerticalRise/);
+  assert.match(generator, /guardHandMinChestHeight/);
   assert.match(generator, /rig\.add_master_controls/);
   assert.match(generator, /blender-kicks-core\.glb/);
 });
 
-test("generated kick pack uses standing Idle, reaches forward and holds a high guard on planted support feet", () => {
+test("generated kick pack reaches its intended line with a high guard on planted support feet", () => {
   assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V2_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
@@ -41,18 +44,22 @@ test("generated kick pack uses standing Idle, reaches forward and holds a high g
     assert.equal(move.sourceAction, "Idle_Loop_Armature");
     assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
     assert.ok(move.guardHandMaxChestDistance < 0.34, `${move.action}: ${move.guardHandMaxChestDistance}`);
+    assert.ok(move.guardHandMinChestHeight > 0.08, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
-  assert.ok(front.strikeFootTravel > 0.45, front.strikeFootTravel);
-  assert.ok(front.strikeFootForwardReach > 0.38, front.strikeFootForwardReach);
-  assert.ok(low.strikeFootTravel > 0.32, low.strikeFootTravel);
-  assert.ok(low.strikeFootForwardReach > 0.24, low.strikeFootForwardReach);
-  assert.ok(rising.strikeFootTravel > 0.58, rising.strikeFootTravel);
-  assert.ok(rising.strikeFootForwardReach > 0.24, rising.strikeFootForwardReach);
+  assert.ok(front.strikeFootTravel > 0.58, front.strikeFootTravel);
+  assert.ok(front.strikeFootForwardReach > 0.48, front.strikeFootForwardReach);
+  assert.ok(front.strikeFootVerticalRise > 0.27, front.strikeFootVerticalRise);
+  assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
+  assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
+  assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);
+  assert.ok(rising.strikeFootTravel > 0.68, rising.strikeFootTravel);
+  assert.ok(rising.strikeFootForwardReach > 0.34, rising.strikeFootForwardReach);
+  assert.ok(rising.strikeFootVerticalRise > 0.52, rising.strikeFootVerticalRise);
   assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
-  assert.ok(rising.strikeFootTravel > front.strikeFootTravel, `${rising.strikeFootTravel} !> ${front.strikeFootTravel}`);
+  assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });
 
 test("runtime prefers authored grounded kicks with independent PF fallbacks while Dash Kick stays procedural", () => {
@@ -73,15 +80,15 @@ test("runtime prefers authored grounded kicks with independent PF fallbacks whil
   assert.match(integrator, /risingKick: \\"BF_RisingKick_R\\"|risingKick: "BF_RisingKick_R"/);
 });
 
-test("Model Viewer audit captures PF versus BF kick impact poses at 55 percent", () => {
+test("Model Viewer audit captures PF versus BF grounded kicks", () => {
   assert.match(viewer, /QUATERNIUS_BLENDER_KICKS_URL/);
   for (const [procedural, blender, slug] of [
     ["PF_FrontKick_R", "BF_FrontKick_R", "front-kick"],
     ["PF_LowKick_L", "BF_LowKick_L", "low-kick"],
     ["PF_RisingKick_R", "BF_RisingKick_R", "rising-kick"],
   ]) {
-    assert.match(audit, new RegExp(`poseMotionViewer\\(sessionId, "${procedural}", 0\\.55\\)`));
-    assert.match(audit, new RegExp(`poseMotionViewer\\(sessionId, "${blender}", 0\\.55\\)`));
+    assert.match(audit, new RegExp(`poseMotionViewer\\(sessionId, "${procedural}"`));
+    assert.match(audit, new RegExp(`poseMotionViewer\\(sessionId, "${blender}"`));
     assert.match(audit, new RegExp(`model-view-motion-procedural-${slug}\\.png`));
     assert.match(audit, new RegExp(`model-view-motion-blender-${slug}\\.png`));
   }

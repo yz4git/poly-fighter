@@ -306,7 +306,7 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
     start_right_foot = world_position(armature, "foot_r")
     start_left_foot_q = rig.pose_world_matrix(armature, "foot_l").to_quaternion()
     start_right_foot_q = rig.pose_world_matrix(armature, "foot_r").to_quaternion()
-    start_sep = world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r"))
+    start_sep = (world_position(armature, "hand_l") - world_position(armature, "hand_r")).length
     torso_excursion = 0.0
     head_excursion = 0.0
     pelvis_vertical = 0.0
@@ -321,11 +321,11 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
         torso_excursion = max(torso_excursion, math.degrees(start_torso.rotation_difference(rig.pose_world_matrix(armature, "spine_03").to_quaternion()).angle))
         head_excursion = max(head_excursion, math.degrees(start_head.rotation_difference(rig.pose_world_matrix(armature, HEAD_BONE).to_quaternion()).angle))
         pelvis_vertical = max(pelvis_vertical, abs(world_position(armature, "pelvis").z - start_pelvis.z))
-        left_foot_drift = max(left_foot_drift, world_position(armature, "foot_l").distance_to(start_left_foot))
-        right_foot_drift = max(right_foot_drift, world_position(armature, "foot_r").distance_to(start_right_foot))
+        left_foot_drift = max(left_foot_drift, (world_position(armature, "foot_l") - start_left_foot).length)
+        right_foot_drift = max(right_foot_drift, (world_position(armature, "foot_r") - start_right_foot).length)
         left_foot_angle = max(left_foot_angle, math.degrees(start_left_foot_q.rotation_difference(rig.pose_world_matrix(armature, "foot_l").to_quaternion()).angle))
         right_foot_angle = max(right_foot_angle, math.degrees(start_right_foot_q.rotation_difference(rig.pose_world_matrix(armature, "foot_r").to_quaternion()).angle))
-        max_hand_sep = max(max_hand_sep, world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r")))
+        max_hand_sep = max(max_hand_sep, (world_position(armature, "hand_l") - world_position(armature, "hand_r")).length)
     scene.frame_set(spec.end_frame)
     bpy.context.view_layer.update()
     settle_residual = math.degrees(start_torso.rotation_difference(rig.pose_world_matrix(armature, "spine_03").to_quaternion()).angle)

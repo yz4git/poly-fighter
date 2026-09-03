@@ -61,10 +61,10 @@ test("throw escape is accepted inside the throw window", () => {
   assert.equal(p2.health, 100);
 });
 
-test("standing pushboxes recover close-range overlap without changing vertical position", () => {
+test("standing pushboxes recover even exact close-range root overlap without changing vertical position", () => {
   const { p1, p2 } = fighters();
-  p1.position.set(-0.12, 0, 0.04);
-  p2.position.set(0.12, 0, -0.04);
+  p1.position.set(0, 0, 0);
+  p2.position.set(0, 0, 0);
   const before = Math.hypot(p2.position.x - p1.position.x, p2.position.z - p1.position.z);
 
   for (let index = 0; index < 8; index += 1) resolveFighterPushboxes(p1, p2);

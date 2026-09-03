@@ -16,9 +16,9 @@ test("Blender Motion Foundry attacks preserve authored silhouettes when correcti
 
 test("ready-pose assists stay compact instead of reaching into the opponent", async () => {
   const source = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
-  assert.match(source, /IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0\.82/);
-  assert.match(source, /IMPORTED_GUARD_FORWARD_CLEARANCE = 1\.16/);
-  assert.match(source, /IMPORTED_NEUTRAL_HAND_LIFT = -0\.055/);
+  assert.match(source, /IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0\.58/);
+  assert.match(source, /IMPORTED_GUARD_FORWARD_CLEARANCE = 0\.88/);
+  assert.match(source, /IMPORTED_NEUTRAL_HAND_LIFT = -0\.085/);
+  assert.match(source, /pose\.target, pose\.pole, 0\.05/);
   assert.match(source, /pose\.target, pose\.pole, 0\.08/);
-  assert.match(source, /pose\.target, pose\.pole, 0\.12/);
 });

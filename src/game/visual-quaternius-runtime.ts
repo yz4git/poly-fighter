@@ -419,10 +419,10 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
 // the imported arms through the chest. Build a compact fighting guard from the
 // actual imported shoulder position and keep both hands explicitly in front of
 // the torso. Active attacks still use deterministic gameplay contact targets.
-const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.82;
-const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.16;
-const IMPORTED_NEUTRAL_HAND_LIFT = -0.055;
-const IMPORTED_GUARD_HAND_LIFT = 0.012;
+const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.58;
+const IMPORTED_GUARD_FORWARD_CLEARANCE = 0.88;
+const IMPORTED_NEUTRAL_HAND_LIFT = -0.085;
+const IMPORTED_GUARD_HAND_LIFT = -0.015;
 
 function importedReadyArmPose(
   fighter: FighterRuntime,
@@ -465,7 +465,7 @@ function neutralPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRunti
     const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
     const pose = importedReadyArmPose(fighter, suffix, root, false);
-    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.08);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.05);
   }
 }
 
@@ -477,7 +477,7 @@ function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime
     const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
     const pose = importedReadyArmPose(fighter, suffix, root, true);
-    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.12);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.08);
   }
 }
 

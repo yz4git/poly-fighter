@@ -19,12 +19,12 @@ async function clickButton(id, text) { return execute(id, `const b=[...document.
 const lookup = `function findGame(){const host=document.querySelector('main.poly-app');if(!host)return null;const key=Object.keys(host).find(k=>k.startsWith('__reactFiber$'));let f=key?host[key]:null;const seen=new Set();while(f&&!seen.has(f)){seen.add(f);let h=f.memoizedState;while(h){const v=h.memoizedState;const c=v&&typeof v==='object'&&'current'in v?v.current:null;if(c&&c.p1&&c.p2&&c.renderer&&c.camera&&c.scene)return c;h=h.next;}f=f.return;}return null;}`;
 const reset = `function resetFighter(f){f.currentMove=null;f.moveTick=0;f.hitStop=0;f.hitStun=0;f.blockStun=0;f.knockdownTicks=0;f.guardDamage=0;f.velocity.set(0,0,0);f.hitTargets.clear();f.health=100;f.state='IDLE';f.grounded=true;const n={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};f.input={...n};f.previousInput={...n};}`;
 const cases = [
-  { fighter: "p1", name: "kairo", move: "backfist", clip: "PF_Backfist_R", contact: "RIGHT_FIST" },
-  { fighter: "p1", name: "kairo", move: "bodyBlow", clip: "PF_BodyBlow_L", contact: "LEFT_FIST" },
-  { fighter: "p1", name: "kairo", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST" },
-  { fighter: "p2", name: "sera", move: "backfist", clip: "PF_Backfist_L", contact: "LEFT_FIST" },
-  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "PF_BodyBlow_R", contact: "RIGHT_FIST" },
-  { fighter: "p2", name: "sera", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST" },
+  { fighter: "p1", name: "kairo", move: "backfist", clip: "BF_Backfist_R", contact: "RIGHT_FIST", authored: true },
+  { fighter: "p1", name: "kairo", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "LEFT_FIST", authored: true },
+  { fighter: "p1", name: "kairo", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },
+  { fighter: "p2", name: "sera", move: "backfist", clip: "BF_Backfist_R", contact: "LEFT_FIST", authored: true },
+  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "RIGHT_FIST", authored: true },
+  { fighter: "p2", name: "sera", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },
 ];
 let sessionId = null;
 try {
@@ -54,9 +54,15 @@ try {
   await execute(sessionId, `${lookup}const g=findGame();cancelAnimationFrame(g.raf);g.running=false;g.finished=false;g.input.clear();g.enemyOpeningGraceTicks=9999;return true;`);
   const results = [];
   for (const c of cases) {
-    const result = await execute(sessionId, `${lookup}${reset}const c=arguments[0];const g=findGame();resetFighter(g.p1);resetFighter(g.p2);g.finished=false;g.input.clear();g.p1.position.set(0,0,0.74);g.p2.position.set(0,0,-0.48);g.p1.facing=1;g.p2.facing=-1;const a=g[c.fighter],o=c.fighter==='p1'?g.p2:g.p1;if(!a.beginMove(c.move))return {error:'move-not-found'};const move=a.currentMove;const contact=move?.visualContact??null;if(!move)return {error:'move-missing-after-begin'};a.state='ATTACK';a.hitStop=0;a.moveTick=move.startup+Math.max(0,Math.floor(Math.max(1,move.active)/2));let t=performance.now()/1000;for(let i=0;i<12;i+=1){a.hitStop=0;o.hitStop=0;t+=1/60;g.updateVisual(o,a,t+0.007);g.updateVisual(a,o,t);}g.updateCamera(1/60);g.updateLockOn();g.renderer.render(g.scene,g.camera);return {active:a.visual.root.userData.motionExpansionPhase==='ACTIVE',state:a.state,move:c.move,clip:a.visual.root.userData.motionExpansionCurrentClip??null,phase:a.visual.root.userData.motionExpansionPhase??null,contact,currentMove:a.visual.root.userData.motionExpansionCurrentMove??null,visible:a.visual.root.userData.motionExpansionTargetsVisibleQuaternius===true,startup:move.startup,activeFrames:move.active,moveTick:a.moveTick};`, [c]);
-    if (result?.error || !result?.active || result.phase !== "ACTIVE" || result.state !== "ATTACK") throw new Error(`Intent case failed to reach ACTIVE: ${JSON.stringify({ c, result })}`);
-    if (result.clip !== c.clip || result.contact !== c.contact || result.currentMove !== c.move || !result.visible) throw new Error(`Intent mismatch: ${JSON.stringify({ c, result })}`);
+    const result = await execute(sessionId, `${lookup}${reset}const c=arguments[0];const g=findGame();resetFighter(g.p1);resetFighter(g.p2);g.finished=false;g.input.clear();g.p1.position.set(0,0,0.74);g.p2.position.set(0,0,-0.48);g.p1.facing=1;g.p2.facing=-1;const a=g[c.fighter],o=c.fighter==='p1'?g.p2:g.p1;if(!a.beginMove(c.move))return {error:'move-not-found'};const move=a.currentMove;const contact=move?.visualContact??null;if(!move)return {error:'move-missing-after-begin'};a.state='ATTACK';a.hitStop=0;a.moveTick=move.startup+Math.max(0,Math.floor(Math.max(1,move.active)/2));let t=performance.now()/1000;for(let i=0;i<12;i+=1){a.hitStop=0;o.hitStop=0;t+=1/60;g.updateVisual(o,a,t+0.007);g.updateVisual(a,o,t);}g.updateCamera(1/60);g.updateLockOn();g.renderer.render(g.scene,g.camera);const host=a.visual.root.children.find((child)=>child.name?.startsWith('quaternius-ubc-')&&child.name?.endsWith('-runtime'));const gameplayActive=a.state==='ATTACK'&&a.moveTick>=move.startup&&a.moveTick<move.startup+move.active;return {active:a.visual.root.userData.motionExpansionPhase==='ACTIVE',gameplayActive,state:a.state,move:c.move,clip:a.visual.root.userData.motionExpansionCurrentClip??null,baselineClip:host?.userData?.quaterniusCurrentClip??null,phase:a.visual.root.userData.motionExpansionPhase??null,policy:a.visual.root.userData.motionCorrectionPolicy??null,contact,currentMove:a.visual.root.userData.motionExpansionCurrentMove??null,visible:a.visual.root.userData.motionExpansionTargetsVisibleQuaternius===true,startup:move.startup,activeFrames:move.active,moveTick:a.moveTick};`, [c]);
+    if (result?.error || !result?.gameplayActive || result.state !== "ATTACK") throw new Error(`Intent case failed to reach gameplay ACTIVE: ${JSON.stringify({ c, result })}`);
+    if (result.contact !== c.contact) throw new Error(`Intent contact mismatch: ${JSON.stringify({ c, result })}`);
+    if (c.authored) {
+      if (result.policy !== "AUTHORED_ATTACK_PRESERVE" || result.baselineClip !== c.clip) throw new Error(`Authored intent mismatch: ${JSON.stringify({ c, result })}`);
+      if (result.clip !== null || result.phase !== null || result.currentMove !== null) throw new Error(`Authored intent unexpectedly re-entered Motion Expansion: ${JSON.stringify({ c, result })}`);
+    } else if (!result.active || result.phase !== "ACTIVE" || result.clip !== c.clip || result.currentMove !== c.move || !result.visible || result.policy !== "PROCEDURAL_ASSIST") {
+      throw new Error(`Procedural intent mismatch: ${JSON.stringify({ c, result })}`);
+    }
     results.push({ ...c, ...result });
     await screenshot(sessionId, `${outputDir}/tps-intent-${c.name}-${c.move.toLowerCase()}.png`);
   }

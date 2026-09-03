@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { TPS_GRAPHICS_PROFILE, TPS_IMPACT_FEEL_PROFILE, tpsImpactTier } from "../src/game/tps-graphics";
 import {
@@ -61,4 +62,13 @@ test("TPS exhilaration pass adds fast confirms, cinematic finishers and bounded 
   assert.ok(TPS_HYPE_PROFILE.impactDepthBias >= 0.05);
   assert.ok(TPS_HYPE_PROFILE.heavyImpactFovPunch >= -8.5);
   assert.ok(TPS_HYPE_PROFILE.perfectStepFovRush <= 5);
+});
+
+
+test("TPS impact visuals stay offset from the torso collision stack", async () => {
+  const source = await readFile(new URL("../src/game/tps-graphics.ts", import.meta.url), "utf8");
+  assert.match(source, /addScaledVector\(facing, 0\.12\)/);
+  assert.match(source, /addScaledVector\(cameraRight, contactSide \* 0\.12\)/);
+  assert.match(source, /lastImpactVisualSideOffset/);
+  assert.match(source, /wave\.mesh\.scale\.setScalar\(0\.54 \+ strength \* 0\.12/);
 });

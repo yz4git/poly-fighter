@@ -17,13 +17,15 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /horizontalDirection\(this\.p1\.position, this\.p2\.position\)/);
   assert.match(source, /new THREE\.Vector3\(-toEnemy\.z, 0, toEnemy\.x\)/);
   assert.match(source, /fighter\.visual\.root\.quaternion\.setFromUnitVectors\(MODEL_FORWARD, forward\)/);
-  assert.match(source, /cameraTarget\.copy\(this\.p2\.position\)/);
+  assert.match(source, /cameraTarget\.copy\(this\.cameraFocus\)/);
   assert.match(source, /closeFactor = THREE\.MathUtils\.clamp/);
   assert.match(source, /aspect < 2\.4 \? 52 : 47/);
   assert.match(source, /compactLandscapeFactor/);
-  assert.match(source, /TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2\.55/);
-  assert.match(source, /TPS_CAMERA_CLOSE_BACK_DELTA = -0\.58/);
-  assert.match(source, /TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0\.30/);
+  assert.match(source, /TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3\.50/);
+  assert.match(source, /TPS_CAMERA_CLOSE_BACK_DELTA = -1\.05/);
+  assert.match(source, /TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0\.88/);
+  assert.match(source, /TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0\.42/);
+  assert.match(source, /TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0\.42/);
   assert.match(source, /TPS_CAMERA_CLOSE_TARGET_LIFT = 0\.14/);
   assert.match(source, /TPS_CAMERA_IMPACT_BACK_DELTA = 0\.24/);
   assert.match(source, /TPS_CAMERA_IMPACT_SHOULDER = 0\.38/);
@@ -37,6 +39,9 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /impactReadabilityFactor/);
   assert.match(source, /tpsImpactReadabilityFactor/);
   assert.match(source, /tpsCloseReadabilityFactor/);
+  assert.match(source, /tpsCloseAnchorBlend/);
+  assert.match(source, /cameraAnchor\.copy\(this\.p1\.position\)\.lerp\(this\.cameraPairMidpoint/);
+  assert.match(source, /lockLift = inStrikeRange \? 0\.62 : 0\.46/);
   assert.match(source, /tps-target-ground-ring/);
 });
 

@@ -35,9 +35,11 @@ const TPS_COMBO_GRACE_TICKS = 34;
 const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.55;
-const TPS_CAMERA_CLOSE_BACK_DELTA = -0.58;
-const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.30;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.50;
+const TPS_CAMERA_CLOSE_BACK_DELTA = -1.05;
+const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
+const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
+const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.42;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
@@ -234,6 +236,9 @@ export class TpsFightGame {
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
+  private readonly cameraPairMidpoint = new THREE.Vector3();
+  private readonly cameraAnchor = new THREE.Vector3();
+  private readonly cameraFocus = new THREE.Vector3();
   // `guard` remains the internal STEP input so the shared input layer and keyboard mapping stay compatible.
   // The TPS UI exposes only ATTACK + STEP.
   private playerEvadeTicks = 0;
@@ -319,8 +324,8 @@ export class TpsFightGame {
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
     this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
 
-    const lockGeometry = new THREE.TorusGeometry(0.46, 0.022, 8, 48);
-    const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.96, depthTest: true, depthWrite: false });
+    const lockGeometry = new THREE.TorusGeometry(0.38, 0.018, 8, 48);
+    const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.82, depthTest: true, depthWrite: false });
     this.lockRing = new THREE.Mesh(lockGeometry, lockMaterial);
     this.lockRing.renderOrder = 20;
     this.scene.add(this.lockRing);
@@ -940,14 +945,25 @@ export class TpsFightGame {
       + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER;
     const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035;
     const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
-    this.cameraTarget.copy(this.p2.position)
+    // At melee range, orbit around the pair instead of keeping the camera rooted
+    // directly behind the foreground player. This reduces foreground occlusion
+    // without changing simulation positions, hitboxes, reach, or authored clips.
+    this.cameraPairMidpoint.copy(this.p1.position).lerp(this.p2.position, 0.5);
+    const closeAnchorBlend = closeFactor * TPS_CAMERA_CLOSE_ANCHOR_BLEND;
+    const closeTargetBlend = closeFactor * TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND;
+    this.cameraAnchor.copy(this.p1.position).lerp(this.cameraPairMidpoint, closeAnchorBlend);
+    this.cameraFocus.copy(this.p2.position).lerp(this.cameraPairMidpoint, closeTargetBlend);
+    this.cameraTarget.copy(this.cameraFocus)
       .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift + impactReadabilityFactor * 0.080)
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
+    this.camera.userData.tpsCloseAnchorBlend = closeAnchorBlend;
+    this.camera.userData.tpsCloseTargetBlend = closeTargetBlend;
     this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;
     this.camera.userData.tpsShoulderOffset = shoulderOffset;
+    this.camera.userData.tpsBackDistance = backDistance;
     this.camera.userData.tpsTargetHeight = targetHeight;
-    this.cameraDesired.copy(this.p1.position)
+    this.cameraDesired.copy(this.cameraAnchor)
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
       .add(new THREE.Vector3(0, cameraHeight, 0));
@@ -963,10 +979,13 @@ export class TpsFightGame {
 
   private updateLockOn(): void {
     this.p2.visual.root.updateMatrixWorld(true);
-    const target = this.p2.visual.root.localToWorld(new THREE.Vector3(0, this.p2.visual.layout.ribY + 0.04, 0));
     const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const threat = this.p2.state === "ATTACK";
     const inStrikeRange = distance < TPS_STRIKE_RANGE;
+    // Keep the lock cue above the torso at melee range so authored arms, chest
+    // rotation, and hit reactions remain visible instead of sitting under a ring.
+    const lockLift = inStrikeRange ? 0.62 : 0.46;
+    const target = this.p2.visual.root.localToWorld(new THREE.Vector3(0, this.p2.visual.layout.ribY + lockLift, 0));
     const perfectEvade = this.playerPerfectEvadeTicks > 0;
     const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;
     this.lockRing.material.color.setHex(lockColor);
@@ -975,14 +994,14 @@ export class TpsFightGame {
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
     const pulseRate = threat ? 11.5 : 5.5;
-    const pulse = (threat ? 1.04 : inStrikeRange ? 0.96 : 0.9) + Math.sin(this.renderTime * pulseRate) * 0.055;
+    const pulse = (threat ? 0.94 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * 0.045;
     this.lockRing.scale.setScalar(pulse);
     this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.30, 0));
     this.lockStem.lookAt(this.camera.position);
     this.targetGroundRing.position.set(this.p2.position.x, 0.035, this.p2.position.z);
     const groundPulse = 0.95 + Math.sin(this.renderTime * pulseRate) * 0.06;
     this.targetGroundRing.scale.setScalar(groundPulse);
-    this.targetGroundRing.material.opacity = threat ? 0.58 : inStrikeRange ? 0.46 : 0.28;
+    this.targetGroundRing.material.opacity = threat ? 0.48 : inStrikeRange ? 0.34 : 0.22;
   }
 
   private checkFinish(): void {

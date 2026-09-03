@@ -16,6 +16,10 @@ import motion_foundry_v2_rig as rig
 
 ZERO_OFFSETS = ((0.0, 0.0, 0.0),) * 7
 
+# Punch_Jab's imported left-hand source track carries only a small lead-hand
+# displacement. The shared rig deliberately leaves move intent in these specs,
+# so Jab/Body Blow amplify that valid direction vector instead of baking a
+# world-axis assumption into the common IK/COG implementation.
 JAB_SPEC = rig.StrikeSpec(
     action_name="BF_Jab_L",
     version="BLENDER_MOTION_FOUNDRY_V2_JAB",
@@ -38,9 +42,9 @@ JAB_SPEC = rig.StrikeSpec(
         (0.79, 0.93),
         (1.00, 1.00),
     ),
-    hand_scales=(0.00, -0.015, 0.84, 1.02, 1.04, None, None),
+    hand_scales=(0.00, -0.05, 3.15, 4.00, 4.15, None, None),
     hand_offsets=ZERO_OFFSETS,
-    ik_influences=(0.00, 0.06, 0.72, 1.00, 0.62, 0.08, 0.00),
+    ik_influences=(0.00, 0.06, 0.78, 1.00, 0.70, 0.08, 0.00),
     pelvis_forward=(0.000, -0.005, 0.006, 0.014, 0.016, 0.004, 0.000),
     pelvis_drop=(0.000, -0.004, -0.002, 0.000, 0.000, -0.002, 0.000),
     pelvis_yaw=(0.0, -1.5, 1.0, 3.5, 4.0, 1.0, 0.0),
@@ -71,17 +75,17 @@ BODY_BLOW_SPEC = rig.StrikeSpec(
         (0.81, 0.92),
         (1.00, 1.00),
     ),
-    hand_scales=(0.00, -0.055, 0.70, 0.99, 1.04, None, None),
+    hand_scales=(0.00, -0.12, 2.45, 3.25, 3.45, None, None),
     hand_offsets=(
         (0.0, 0.0, 0.0),
-        (0.0, 0.0, -0.020),
-        (0.0, 0.0, -0.095),
-        (0.0, 0.0, -0.145),
-        (0.0, 0.0, -0.155),
-        (0.0, 0.0, -0.040),
+        (0.0, 0.0, -0.025),
+        (0.0, 0.0, -0.115),
+        (0.0, 0.0, -0.180),
+        (0.0, 0.0, -0.190),
+        (0.0, 0.0, -0.050),
         (0.0, 0.0, 0.0),
     ),
-    ik_influences=(0.00, 0.10, 0.78, 1.00, 0.82, 0.14, 0.00),
+    ik_influences=(0.00, 0.10, 0.82, 1.00, 0.86, 0.14, 0.00),
     pelvis_forward=(0.000, -0.012, 0.006, 0.026, 0.031, 0.008, 0.000),
     pelvis_drop=(0.000, -0.026, -0.048, -0.058, -0.052, -0.018, 0.000),
     pelvis_yaw=(0.0, -3.0, 2.0, 7.0, 9.0, 2.0, 0.0),

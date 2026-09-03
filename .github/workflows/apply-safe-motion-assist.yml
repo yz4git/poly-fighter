@@ -25,7 +25,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
 
-      - name: Apply conservative correction policy
+      - name: Tighten ready-pose assistance
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -36,49 +36,28 @@ jobs:
               if new in text:
                   return
               if old not in text:
-                  raise SystemExit(f'missing anchor in {path}: {old[:100]!r}')
+                  raise SystemExit(f'missing anchor in {path}: {old!r}')
               p.write_text(text.replace(old, new, 1))
 
           path = 'src/game/visual-quaternius-runtime.ts'
-          replace(
-              path,
-              'function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {\n',
-              '''const BLENDER_AUTHORED_CONTACT_SAFE_MOVES = new Set([\n  "jab",\n  "straight",\n  "bodyBlow",\n  "backfist",\n  "power",\n  "kick",\n  "lowKick",\n  "risingKick",\n  "dashKick",\n]);\n\nfunction attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {\n''',
-          )
-          replace(
-              path,
-              '  if (fighter.state !== "ATTACK" || !move || !fighter.isActive()) return;\n  if (!move.visualContact || move.visualContact === "BODY") return;\n',
-              '''  if (fighter.state !== "ATTACK" || !move || !fighter.isActive()) return;\n  if (!move.visualContact || move.visualContact === "BODY") return;\n  // Motion Foundry clips already contain authored hand/foot targets, pole vectors\n  // and support-foot work. A second exact end-effector solve visibly destroyed\n  // those silhouettes in the ON/OFF review, so preserve them verbatim.\n  if (BLENDER_AUTHORED_CONTACT_SAFE_MOVES.has(move.id)) {\n    fighter.visual.root.userData.quaterniusAttackCorrectionPolicy = "AUTHORED_CONTACT_PRESERVE";\n    return;\n  }\n  fighter.visual.root.userData.quaterniusAttackCorrectionPolicy = "PROCEDURAL_CONTACT_ASSIST";\n''',
-          )
-          replace(path, 'const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.72;', 'const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.82;')
-          replace(path, 'const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.98;', 'const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.16;')
-          replace(path, 'const IMPORTED_NEUTRAL_HAND_LIFT = 0.035;', 'const IMPORTED_NEUTRAL_HAND_LIFT = -0.055;')
-          replace(path, 'const IMPORTED_GUARD_HAND_LIFT = 0.082;', 'const IMPORTED_GUARD_HAND_LIFT = 0.012;')
-          replace(
-              path,
-              '    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.18);',
-              '    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.08);',
-          )
-          replace(
-              path,
-              '    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.24);',
-              '    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.12);',
-          )
+          replace(path, 'const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.82;', 'const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.58;')
+          replace(path, 'const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.16;', 'const IMPORTED_GUARD_FORWARD_CLEARANCE = 0.88;')
+          replace(path, 'const IMPORTED_NEUTRAL_HAND_LIFT = -0.055;', 'const IMPORTED_NEUTRAL_HAND_LIFT = -0.085;')
+          replace(path, 'const IMPORTED_GUARD_HAND_LIFT = 0.012;', 'const IMPORTED_GUARD_HAND_LIFT = -0.015;')
+          replace(path, 'pose.target, pose.pole, 0.08);', 'pose.target, pose.pole, 0.05);')
+          replace(path, 'pose.target, pose.pole, 0.12);', 'pose.target, pose.pole, 0.08);')
 
           test = Path('tests/motion-correction-safe-assist.test.mjs')
-          test.write_text('''import assert from "node:assert/strict";\nimport { readFile } from "node:fs/promises";\nimport test from "node:test";\n\ntest("Blender Motion Foundry attacks preserve authored silhouettes when correction is ON", async () => {\n  const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");\n  const quaternius = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");\n  for (const move of ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick"]) {\n    assert.match(presentation, new RegExp(`\\"${move}\\"`));\n    assert.match(quaternius, new RegExp(`\\"${move}\\"`));\n  }\n  assert.match(presentation, /AUTHORED_ATTACK_PRESERVE/);\n  assert.match(quaternius, /AUTHORED_CONTACT_PRESERVE/);\n  assert.match(quaternius, /BLENDER_AUTHORED_CONTACT_SAFE_MOVES\.has\(move\.id\)/);\n});\n\ntest("ready-pose assists stay compact instead of reaching into the opponent", async () => {\n  const source = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");\n  assert.match(source, /IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0\.82/);\n  assert.match(source, /IMPORTED_GUARD_FORWARD_CLEARANCE = 1\.16/);\n  assert.match(source, /IMPORTED_NEUTRAL_HAND_LIFT = -0\.055/);\n  assert.match(source, /pose\.target, pose\.pole, 0\.08/);\n  assert.match(source, /pose\.target, pose\.pole, 0\.12/);\n});\n''')
-
-          package = Path('package.json')
-          content = package.read_text()
-          old = 'tests/motion-correction-toggle.test.ts"'
-          new = 'tests/motion-correction-toggle.test.ts tests/motion-correction-safe-assist.test.mjs"'
-          if new not in content:
-              if old not in content:
-                  raise SystemExit('package test anchor missing')
-              package.write_text(content.replace(old, new, 1))
+          text = test.read_text()
+          text = text.replace('IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0\\.82', 'IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0\\.58')
+          text = text.replace('IMPORTED_GUARD_FORWARD_CLEARANCE = 1\\.16', 'IMPORTED_GUARD_FORWARD_CLEARANCE = 0\\.88')
+          text = text.replace('IMPORTED_NEUTRAL_HAND_LIFT = -0\\.055', 'IMPORTED_NEUTRAL_HAND_LIFT = -0\\.085')
+          text = text.replace('pose\\.target, pose\\.pole, 0\\.08', 'pose\\.target, pose\\.pole, 0\\.05', 1)
+          text = text.replace('pose\\.target, pose\\.pole, 0\\.12', 'pose\\.target, pose\\.pole, 0\\.08', 1)
+          test.write_text(text)
           PY
 
-      - name: Validate safe assist
+      - name: Validate compact assist
         run: |
           npm ci --no-audit --no-fund
           node --test tests/motion-correction-safe-assist.test.mjs
@@ -89,10 +68,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/game/presentation-animation.ts src/game/visual-quaternius-runtime.ts tests/motion-correction-safe-assist.test.mjs package.json
+          git add src/game/visual-quaternius-runtime.ts tests/motion-correction-safe-assist.test.mjs
           if git diff --cached --quiet; then
             echo "No implementation changes"
             exit 0
           fi
-          git commit -m "Make motion correction preserve authored attacks"
+          git commit -m "Compact corrected ready pose"
           git push origin HEAD:motion-onoff-review

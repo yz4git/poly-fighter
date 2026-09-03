@@ -10,3 +10,18 @@ test("TPS visual audit accepts raw and authored-preserve combo playback without 
   assert.match(source, /comboLinkProbe\.motionMove === null/);
   assert.match(source, /comboLinkProbe\.motionMove === 'backfist'/);
 });
+
+test("motion readability audit keeps authored low kick visibly below front kick without legacy IK exaggeration", async () => {
+  const source = await readFile(new URL("../scripts/capture-motion-readability-audit.mjs", import.meta.url), "utf8");
+  assert.match(source, /const minimumLowKickDrop = 0\.04/);
+  assert.match(source, /lowY < kickY - minimumLowKickDrop/);
+  assert.match(source, /risingY > kickY \+ 0\.08/);
+});
+
+test("V10 visual audit accepts compact guard assistance while preserving strong punch and kick floors", async () => {
+  const source = await readFile(new URL("../scripts/capture-v10-visual-audit.mjs", import.meta.url), "utf8");
+  assert.match(source, /metrics\.guardFistWorld < 0\.18 \|\| metrics\.guardFistScreen < 12/);
+  assert.match(source, /GUARD: \{ meanAbs: 0\.75, changedFraction: 0\.012 \}/);
+  assert.match(source, /PUNCH: \{ meanAbs: 2\.5, changedFraction: 0\.035 \}/);
+  assert.match(source, /KICK: \{ meanAbs: 2\.5, changedFraction: 0\.035 \}/);
+});

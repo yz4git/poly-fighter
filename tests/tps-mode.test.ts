@@ -122,8 +122,8 @@ test("TPS result records a visible winner instead of a zero-zero duel score", as
   const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
   assert.match(source, /resultWinner/);
   assert.match(source, /this\.resultWinner = winner/);
-  assert.match(source, /p1Wins: this\.resultWinner === "p1" \? 1 : 0/);
-  assert.match(source, /p2Wins: this\.resultWinner === "p2" \? 1 : 0/);
+  assert.match(source, /p1Wins: this\.finished && this\.resultWinner === "p1" \? 1 : 0/);
+  assert.match(source, /p2Wins: this\.finished && this\.resultWinner === "p2" \? 1 : 0/);
 });
 
 test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps legacy controls", async () => {
@@ -143,4 +143,32 @@ test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps leg
   assert.doesNotMatch(page, /G\+P/);
   assert.doesNotMatch(page, /P\+K/);
   assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
+});
+
+
+test("TPS KO presentation waits for the defeated fighter to land before RESULT", async () => {
+  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 24/);
+  assert.match(source, /TPS_KO_SETTLED_HOLD_TICKS = 30/);
+  assert.match(source, /finishPending/);
+  assert.match(source, /this\.p1\.updatePhysics\(FIXED_STEP\)/);
+  assert.match(source, /this\.p2\.updatePhysics\(FIXED_STEP\)/);
+  assert.match(source, /defeated\.grounded/);
+  assert.match(source, /this\.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS/);
+  assert.match(source, /this\.options\.onResult\?\.\(winner\)/);
+  assert.doesNotMatch(source, /setTimeout\(\(\) => this\.options\.onResult/);
+});
+
+test("TPS combo readout uses a face-safe HUD lane instead of the center lane", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/hud-face-safe.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /tpsComboMessage/);
+  assert.match(page, /tps-combo-badge/);
+  assert.match(page, /tps-combo-active/);
+  assert.match(css, /\.tps-badge\.tps-combo-badge/);
+  assert.match(css, /left: max\(24px/);
+  assert.match(css, /transform: none/);
+  assert.match(css, /\.tps-combo-active \.round-readout small/);
 });

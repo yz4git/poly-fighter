@@ -34,6 +34,9 @@ const TPS_STEP_COOLDOWN_TICKS = 18;
 const TPS_COMBO_GRACE_TICKS = 34;
 const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
+const TPS_KO_MIN_SHOW_TICKS = 24;
+const TPS_KO_SETTLED_HOLD_TICKS = 30;
+const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
 const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.50;
 const TPS_CAMERA_CLOSE_BACK_DELTA = -1.05;
@@ -231,6 +234,9 @@ export class TpsFightGame {
   // The CPU may reposition or guard during this window, but it cannot open with an attack.
   private enemyOpeningGraceTicks = 132;
   private finished = false;
+  private finishPending = false;
+  private finishTicks = 0;
+  private finishSettledTicks = 0;
   private resultWinner: "p1" | "p2" | "draw" | null = null;
   private lastHudTick = -1;
   private runtimeFailureReported = false;
@@ -430,6 +436,42 @@ export class TpsFightGame {
 
   private step(): void {
     if (this.paused || this.finished) return;
+    if (this.finishPending) {
+      this.simulationTicks += 1;
+      this.finishTicks += 1;
+      this.input.clear();
+
+      // A KO must remain visible as a physical event. Stop all new combat/input,
+      // but keep deterministic passive physics and presentation alive until the
+      // defeated fighter has actually landed and rested on the floor.
+      this.p1.updatePhysics(FIXED_STEP);
+      this.p2.updatePhysics(FIXED_STEP);
+      clampToArena(this.p1.position);
+      clampToArena(this.p2.position);
+      this.updateVisual(this.p1, this.p2, this.renderTime);
+      this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
+
+      const defeated = this.resultWinner === "p1"
+        ? this.p2
+        : this.resultWinner === "p2"
+          ? this.p1
+          : null;
+      const settled = !defeated || (defeated.grounded && defeated.position.y <= 0.001 && Math.abs(defeated.velocity.y) <= 0.001);
+      this.finishSettledTicks = settled ? this.finishSettledTicks + 1 : 0;
+
+      const landingShown = this.finishTicks >= TPS_KO_MIN_SHOW_TICKS
+        && this.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS;
+      if (landingShown || this.finishTicks >= TPS_KO_MAX_SHOW_TICKS) {
+        this.finishPending = false;
+        this.finished = true;
+        const winner = this.resultWinner ?? "draw";
+        this.publishHud(true);
+        this.options.onResult?.(winner);
+      } else {
+        this.publishHud(false);
+      }
+      return;
+    }
     this.simulationTicks += 1;
     this.timerTicks = Math.max(0, this.timerTicks - 1);
     const input = this.input.frame();
@@ -1005,15 +1047,16 @@ export class TpsFightGame {
   }
 
   private checkFinish(): void {
-    if (this.finished) return;
+    if (this.finished || this.finishPending) return;
     if (this.p1.health > 0 && this.p2.health > 0 && this.timerTicks > 0) return;
-    this.finished = true;
+    this.finishPending = true;
+    this.finishTicks = 0;
+    this.finishSettledTicks = 0;
     this.input.clear();
     const winner = this.p1.health === this.p2.health ? "draw" : this.p1.health > this.p2.health ? "p1" : "p2";
     this.resultWinner = winner;
     this.publishHud(true);
     this.audio.ko();
-    window.setTimeout(() => this.options.onResult?.(winner), 520);
   }
 
   private resetRound(): void {
@@ -1045,6 +1088,9 @@ export class TpsFightGame {
     this.simulationTicks = 0;
     this.cameraImpact = 0;
     this.timerTicks = ROUND_TICKS;
+    this.finishPending = false;
+    this.finishTicks = 0;
+    this.finishSettledTicks = 0;
     this.resultWinner = null;
     this.graphics.reset();
     this.updateVisual(this.p1, this.p2, 0);
@@ -1069,13 +1115,15 @@ export class TpsFightGame {
       timer: Math.ceil(this.timerTicks / 60),
       p1Health: this.p1.health,
       p2Health: this.p2.health,
-      p1Wins: this.resultWinner === "p1" ? 1 : 0,
-      p2Wins: this.resultWinner === "p2" ? 1 : 0,
+      p1Wins: this.finished && this.resultWinner === "p1" ? 1 : 0,
+      p2Wins: this.finished && this.resultWinner === "p2" ? 1 : 0,
       p1Name: this.p1.definition.name,
       p2Name: this.p2.definition.name,
       message: this.finished
         ? "BATTLE COMPLETE"
-        : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"
+        : this.finishPending
+          ? "KO"
+          : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"
           ? "DASH ATTACK"
           : this.playerPerfectEvadeTicks > 0
             ? "PERFECT STEP"

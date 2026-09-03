@@ -387,7 +387,9 @@ try {
         game.updateVisual(game.p2, game.p1, auditTime + 0.007);
         const policy = game.p1.visual.root.userData.motionCorrectionPolicy;
         const phase = game.p1.visual.root.userData.motionExpansionPhase;
-        if (game.p1.state === 'ATTACK' && (policy === 'AUTHORED_ATTACK_PRESERVE' ? game.p1.isActive() : phase === 'ACTIVE')) {
+        const authoredContactTick = move.startup + move.active - 1;
+        const authoredContactReady = game.p1.isActive() && game.p1.moveTick >= authoredContactTick;
+        if (game.p1.state === 'ATTACK' && (policy === 'AUTHORED_ATTACK_PRESERVE' ? authoredContactReady : phase === 'ACTIVE')) {
           activeReached = true;
           break;
         }

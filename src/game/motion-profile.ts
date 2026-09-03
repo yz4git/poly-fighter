@@ -72,23 +72,27 @@ const MOVE_TIMINGS: Readonly<Record<string, MotionTimingProfile>> = {
   counter:    { load: .06, hold: .12, launch: .22, pre: .42, impact: .55, over: .63, recoil: .75, settle: .88 },
 };
 
+// v4 exaggerates presentation identity only. Gameplay frame data remains in
+// definitions.ts; these values feed bounded COM/torso offsets in the visual rig.
 const MOTION_DNA: Readonly<Record<FighterDefinition["archetype"], MotionDna>> = {
-  POWER: { id: "KAIRO_POWER", hipLead: 1.18, chestFollow: 1.10, recoil: 1.14, lateral: 0.82, guardDiscipline: 1.00 },
-  SPEED: { id: "SERA_SPEED", hipLead: 1.04, chestFollow: 0.94, recoil: 0.82, lateral: 1.22, guardDiscipline: 0.92 },
+  POWER: { id: "KAIRO_POWER", hipLead: 1.30, chestFollow: 1.20, recoil: 1.28, lateral: 0.70, guardDiscipline: 1.06 },
+  SPEED: { id: "SERA_SPEED", hipLead: 0.96, chestFollow: 0.86, recoil: 0.68, lateral: 1.38, guardDiscipline: 0.88 },
 };
 
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
   jab: { clip: "PF_Jab_L", style: "JAB", speedScale: 1.08, contactBlend: 0.24, plantFoot: "RIGHT" },
   straight: { clip: "PF_Cross_R", style: "CROSS", speedScale: 1.02, contactBlend: 0.28, plantFoot: "LEFT" },
-  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.31, plantFoot: "LEFT" },
-  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.38, plantFoot: "RIGHT" },
+  // Keep the authored clips dominant, but pull these three visually ambiguous
+  // punches farther toward their distinct head-arc/body-line/counter targets.
+  backfist: { clip: "PF_Backfist_R", recoveryClip: "PF_HeavyRecover", style: "HOOK", speedScale: 1.0, contactBlend: 0.39, plantFoot: "LEFT" },
+  bodyBlow: { clip: "PF_BodyBlow_L", style: "BODY_BLOW", speedScale: 1.05, contactBlend: 0.54, plantFoot: "RIGHT" },
   power: { clip: "PF_Power_R", recoveryClip: "PF_HeavyRecover", style: "HEAVY", speedScale: 0.92, contactBlend: 0.36, plantFoot: "LEFT" },
   kick: { clip: "PF_FrontKick_R", style: "FRONT_KICK", speedScale: 1.0, contactBlend: 0.84, plantFoot: "LEFT" },
   lowKick: { clip: "PF_LowKick_L", style: "LOW_KICK", speedScale: 1.02, contactBlend: 0.82, plantFoot: "RIGHT" },
   risingKick: { clip: "PF_RisingKick_R", style: "RISING_KICK", speedScale: 0.94, contactBlend: 0.90, plantFoot: "LEFT" },
   dashKick: { clip: "PF_DashKick_R", style: "DASH_KICK", speedScale: 0.9, contactBlend: 0.90, plantFoot: "AIR" },
   throw: { clip: "PF_Throw", style: "THROW", speedScale: 0.92, contactBlend: 0.28, plantFoot: "BOTH" },
-  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.29, plantFoot: "RIGHT" },
+  counter: { clip: "PF_Counter_L", style: "COUNTER", speedScale: 1.08, contactBlend: 0.44, plantFoot: "RIGHT" },
 };
 
 const REACTION_CLIPS: Readonly<Record<Exclude<ReactionKind, "NONE">, string>> = {

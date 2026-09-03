@@ -52,7 +52,9 @@ class KickSpec:
     pelvis_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     lower_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     upper_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-    source_action_hint: str = "Idle_Loop"
+    # Blender imports UAL actions with the armature suffix. Be explicit here so
+    # v1.find_source_action() cannot partially match Crouch_Idle_Loop first.
+    source_action_hint: str = "Idle_Loop_Armature"
     source_knots: Tuple[Tuple[float, float], ...] = ((0.0, 0.0), (1.0, 1.0))
     hand_scales: rig.HandScales = (None, None, None, None, None, None, None)
     hand_offsets: rig.HandOffsets = ((0.0, 0.0, 0.0),) * 7

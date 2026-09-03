@@ -153,7 +153,19 @@ jobs:
           printf '%s\n' '${{ steps.foundry.outputs.reaction_hash }}' > public/models/quaternius/blender-reactions-core.generator.sha256
 
       - name: Apply directional reaction runtime integration
-        run: node scripts/apply-blender-motion-foundry-v2-reactions-directional.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q 'quaterniusDirectionalReactionMotionSource' src/game/visual-quaternius-runtime.ts \
+            && grep -q 'BF_CounterHit_L' src/game/visual-quaternius-runtime.ts \
+            && grep -q 'setHitReactionVisual' src/game/fighter.ts \
+            && grep -q 'VISUAL_EDGE_X' src/game/combat.ts \
+            && grep -q 'hasBlenderCounterHitL' scripts/capture-model-view-audit.mjs \
+            && grep -q 'blender-motion-foundry-v2-reactions-directional.test.mjs' package.json; then
+            echo 'Blender directional reaction integration is already current.'
+          else
+            node scripts/apply-blender-motion-foundry-v2-reactions-directional.mjs
+          fi
 
       - uses: actions/setup-node@v4
         with:

@@ -1,0 +1,120 @@
+name: One-shot KO full-down readability pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ko-full-down-readability-pass.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Extend KO presentation and make KO HUD face-safe
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          base = Path('src/game/tps-game-base.ts')
+          text = base.read_text()
+          text = replace_once(
+              text,
+              'const TPS_KO_MIN_SHOW_TICKS = 24;',
+              'const TPS_KO_MIN_SHOW_TICKS = 72;',
+              'minimum KO presentation',
+          )
+          base.write_text(text)
+
+          page = Path('app/page.tsx')
+          text = page.read_text()
+          text = replace_once(
+              text,
+              '  const tpsComboMessage = battleMode === "TPS" && (hud?.message ?? "").startsWith("COMBO ");',
+              '  const tpsComboMessage = battleMode === "TPS" && (hud?.message ?? "").startsWith("COMBO ");\n  const tpsKoMessage = battleMode === "TPS" && hud?.message === "KO";\n  const tpsFaceSafeMessage = tpsComboMessage || tpsKoMessage;',
+              'face-safe message selectors',
+          )
+          text = replace_once(
+              text,
+              '<section className={`fight-hud ${tpsComboMessage ? "tps-combo-active" : ""}`} aria-live="polite">',
+              '<section className={`fight-hud ${tpsFaceSafeMessage ? "tps-face-safe-active" : ""}`} aria-live="polite">',
+              'face-safe hud state',
+          )
+          text = replace_once(
+              text,
+              '<div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""}`}>{battleMode === "TPS" ? (tpsComboMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>',
+              '<div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-combo-badge" : ""}`}>{battleMode === "TPS" ? (tpsFaceSafeMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>',
+              'face-safe match badge',
+          )
+          page.write_text(text)
+
+          css = Path('app/hud-face-safe.css')
+          css_text = css.read_text()
+          css_text = replace_once(
+              css_text,
+              '.tps-combo-active .round-readout small {',
+              '.tps-face-safe-active .round-readout small {',
+              'face-safe center HUD suppression',
+          )
+          css.write_text(css_text)
+
+          tests = Path('tests/tps-mode.test.ts')
+          test_text = tests.read_text()
+          test_text = replace_once(
+              test_text,
+              'assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 24/);',
+              'assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 72/);',
+              'KO minimum regression',
+          )
+          test_text = replace_once(
+              test_text,
+              'test("TPS combo readout uses a face-safe HUD lane instead of the center lane", async () => {',
+              'test("TPS combo and KO readouts use a face-safe HUD lane instead of the center lane", async () => {',
+              'face-safe test title',
+          )
+          test_text = replace_once(
+              test_text,
+              '  assert.match(page, /tpsComboMessage/);\n  assert.match(page, /tps-combo-badge/);\n  assert.match(page, /tps-combo-active/);',
+              '  assert.match(page, /tpsComboMessage/);\n  assert.match(page, /tpsKoMessage/);\n  assert.match(page, /tpsFaceSafeMessage/);\n  assert.match(page, /tps-combo-badge/);\n  assert.match(page, /tps-face-safe-active/);',
+              'face-safe selectors regression',
+          )
+          test_text = replace_once(
+              test_text,
+              '  assert.match(css, /\\.tps-combo-active \\.round-readout small/);',
+              '  assert.match(css, /\\.tps-face-safe-active \\.round-readout small/);',
+              'face-safe css regression',
+          )
+          tests.write_text(test_text)
+          PY
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TPS, lint, and production build
+        run: |
+          npm run test:ci:tps
+          npm run lint
+          npm run build
+      - name: Commit implementation and remove temporary workflows
+        shell: bash
+        run: |
+          rm -f .github/workflows/tps-ko-realtime-screen-review.yml .github/workflows/ko-full-down-readability-pass.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Hold TPS KO through full down presentation"
+          git push origin HEAD:main

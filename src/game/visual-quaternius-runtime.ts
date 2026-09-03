@@ -372,10 +372,30 @@ function solveImportedArm(
   solveImportedLimb(upperArm, forearm, hand, target, pole);
 }
 
+const BLENDER_AUTHORED_CONTACT_SAFE_MOVES = new Set([
+  "jab",
+  "straight",
+  "bodyBlow",
+  "backfist",
+  "power",
+  "kick",
+  "lowKick",
+  "risingKick",
+  "dashKick",
+]);
+
 function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
   const move = fighter.currentMove;
   if (fighter.state !== "ATTACK" || !move || !fighter.isActive()) return;
   if (!move.visualContact || move.visualContact === "BODY") return;
+  // Motion Foundry clips already contain authored hand/foot targets, pole vectors
+  // and support-foot work. A second exact end-effector solve visibly destroyed
+  // those silhouettes in the ON/OFF review, so preserve them verbatim.
+  if (BLENDER_AUTHORED_CONTACT_SAFE_MOVES.has(move.id)) {
+    fighter.visual.root.userData.quaterniusAttackCorrectionPolicy = "AUTHORED_CONTACT_PRESERVE";
+    return;
+  }
+  fighter.visual.root.userData.quaterniusAttackCorrectionPolicy = "PROCEDURAL_CONTACT_ASSIST";
   const target = getVisualContactPoint(fighter.visual, move.visualContact);
   const isFoot = move.visualContact.endsWith("FOOT");
   const candidates = (["l", "r"] as const).map((suffix) => {
@@ -399,10 +419,10 @@ function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRun
 // the imported arms through the chest. Build a compact fighting guard from the
 // actual imported shoulder position and keep both hands explicitly in front of
 // the torso. Active attacks still use deterministic gameplay contact targets.
-const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 1.72;
-const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.98;
-const IMPORTED_NEUTRAL_HAND_LIFT = 0.035;
-const IMPORTED_GUARD_HAND_LIFT = 0.082;
+const IMPORTED_NEUTRAL_FORWARD_CLEARANCE = 0.82;
+const IMPORTED_GUARD_FORWARD_CLEARANCE = 1.16;
+const IMPORTED_NEUTRAL_HAND_LIFT = -0.055;
+const IMPORTED_GUARD_HAND_LIFT = 0.012;
 
 function importedReadyArmPose(
   fighter: FighterRuntime,
@@ -445,7 +465,7 @@ function neutralPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRunti
     const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
     const pose = importedReadyArmPose(fighter, suffix, root, false);
-    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.18);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.08);
   }
 }
 
@@ -457,7 +477,7 @@ function guardPoseCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime
     const end = runtime.bones.get(`hand_${suffix}`);
     if (!root || !mid || !end) continue;
     const pose = importedReadyArmPose(fighter, suffix, root, true);
-    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.24);
+    solveImportedArm(runtime, suffix, root, mid, end, pose.target, pose.pole, 0.12);
   }
 }
 

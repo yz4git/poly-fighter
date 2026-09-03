@@ -114,11 +114,18 @@ async function waitForMotionViewer(sessionId) {
         hasProceduralHitHeavy: options.some((option) => option.value === 'PF_HitHeavy'),
         hasBlenderGuardBreak: options.some((option) => option.value === 'BF_GuardBreak'),
         hasProceduralGuardBreak: options.some((option) => option.value === 'PF_GuardBreak'),
+        hasBlenderHitLightL: options.some((option) => option.value === 'BF_HitLight_L'),
+        hasBlenderHitLightR: options.some((option) => option.value === 'BF_HitLight_R'),
+        hasBlenderHitMidL: options.some((option) => option.value === 'BF_HitMid_L'),
+        hasBlenderHitMidR: options.some((option) => option.value === 'BF_HitMid_R'),
+        hasBlenderCounterHitL: options.some((option) => option.value === 'BF_CounterHit_L'),
+        hasBlenderCounterHitR: options.some((option) => option.value === 'BF_CounterHit_R'),
+        hasBlenderEdgeStagger: options.some((option) => option.value === 'BF_EdgeStagger'),
         optionCount: options.length,
         options: options.slice(0, 80),
       };
     `);
-    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower && state?.hasBlenderCross && state?.hasProceduralCross && state?.hasBlenderJab && state?.hasProceduralJab && state?.hasBlenderBodyBlow && state?.hasProceduralBodyBlow && state?.hasBlenderBackfist && state?.hasProceduralBackfist && state?.hasBlenderFrontKick && state?.hasProceduralFrontKick && state?.hasBlenderLowKick && state?.hasProceduralLowKick && state?.hasBlenderRisingKick && state?.hasProceduralRisingKick && state?.hasBlenderDashKick && state?.hasProceduralDashKick && state?.hasBlenderHitHeavy && state?.hasProceduralHitHeavy && state?.hasBlenderGuardBreak && state?.hasProceduralGuardBreak) return state;
+    if (state?.viewer && state?.select && state?.timeline && !state?.timelineDisabled && state?.hasBlenderPower && state?.hasProceduralPower && state?.hasBlenderCross && state?.hasProceduralCross && state?.hasBlenderJab && state?.hasProceduralJab && state?.hasBlenderBodyBlow && state?.hasProceduralBodyBlow && state?.hasBlenderBackfist && state?.hasProceduralBackfist && state?.hasBlenderFrontKick && state?.hasProceduralFrontKick && state?.hasBlenderLowKick && state?.hasProceduralLowKick && state?.hasBlenderRisingKick && state?.hasProceduralRisingKick && state?.hasBlenderDashKick && state?.hasProceduralDashKick && state?.hasBlenderHitHeavy && state?.hasProceduralHitHeavy && state?.hasBlenderGuardBreak && state?.hasProceduralGuardBreak && state?.hasBlenderHitLightL && state?.hasBlenderHitLightR && state?.hasBlenderHitMidL && state?.hasBlenderHitMidR && state?.hasBlenderCounterHitL && state?.hasBlenderCounterHitR && state?.hasBlenderEdgeStagger) return state;
     await delay(100);
   }
   throw new Error("MODEL VIEW Motion Viewer did not become ready");
@@ -276,6 +283,21 @@ try {
   await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-guard-break.png`);
   const blenderGuardBreak = await poseMotionViewer(sessionId, "BF_GuardBreak", 0.34);
   await screenshot(sessionId, `${outputDir}/model-view-motion-blender-guard-break.png`);
+
+  await poseMotionViewer(sessionId, "BF_HitLight_L", 0.30);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-hit-light-left.png`);
+  await poseMotionViewer(sessionId, "BF_HitLight_R", 0.30);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-hit-light-right.png`);
+  await poseMotionViewer(sessionId, "BF_HitMid_L", 0.30);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-hit-mid-left.png`);
+  await poseMotionViewer(sessionId, "BF_HitMid_R", 0.30);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-hit-mid-right.png`);
+  await poseMotionViewer(sessionId, "BF_CounterHit_L", 0.24);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-counter-hit-left.png`);
+  await poseMotionViewer(sessionId, "BF_CounterHit_R", 0.24);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-counter-hit-right.png`);
+  await poseMotionViewer(sessionId, "BF_EdgeStagger", 0.30);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-blender-edge-stagger.png`);
 
   const kairoClick = await clickButton(sessionId, "KAIRO");
   if (!kairoClick?.clicked) throw new Error(`KAIRO Model View selector not found: ${JSON.stringify(kairoClick)}`);

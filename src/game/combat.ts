@@ -7,6 +7,11 @@ import type {
 import { FighterRuntime } from "./fighter";
 import { attackHitboxCenter } from "./rig";
 
+// Visual-only edge thresholds sit safely inside the actual 6.25 x 3.55 ring.
+// They select a compact stagger pose but never change hit logic or knockback.
+const VISUAL_EDGE_X = 5.35;
+const VISUAL_EDGE_Z = 2.95;
+
 export interface Hitbox {
   centerX: number;
   centerY: number;
@@ -124,6 +129,16 @@ export class CombatSystem {
     if (blocked) {
       defender.receiveBlock(move.guardDamage, move.blockStun, Math.max(2, move.hitStop - 1));
     } else {
+      const reactionSide = (move.visualContact ?? "BODY").startsWith("LEFT_") ? "LEFT" : "RIGHT";
+      const reactionKind = counter
+        ? "COUNTER"
+        : damage <= 7
+          ? "LIGHT"
+          : damage <= 13
+            ? "MID"
+            : "HEAVY";
+      const reactionAtEdge = Math.abs(defender.position.x) >= VISUAL_EDGE_X || Math.abs(defender.position.z) >= VISUAL_EDGE_Z;
+      defender.setHitReactionVisual(reactionKind, reactionSide, reactionAtEdge);
       defender.receiveDamage(
         damage,
         move.hitStun,

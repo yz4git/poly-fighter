@@ -52,6 +52,7 @@ type QuaterniusRuntime = {
   currentAction: THREE.AnimationAction | null;
   lastTime: number;
   lastMoveTick: number;
+  lastReactionSerial: number;
   ownedMaterials: THREE.Material[];
   bodyType: QuaterniusBodyType;
   modelUrl: string;
@@ -495,7 +496,14 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
     case "BLOCK_STUN": return { name: "BF_GuardBreak", loop: false, speed: 1.35 };
     case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };
     case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
-    case "HIT": return { name: "BF_HitHeavy", loop: false, speed: 1.35 };
+    case "HIT": {
+      const side = fighter.reactionSide === "LEFT" ? "L" : "R";
+      if (fighter.reactionAtEdge) return { name: "BF_EdgeStagger", loop: false, speed: 1.35 };
+      if (fighter.reactionKind === "COUNTER") return { name: `BF_CounterHit_${side}`, loop: false, speed: 1.34 };
+      if (fighter.reactionKind === "LIGHT") return { name: `BF_HitLight_${side}`, loop: false, speed: 1.48 };
+      if (fighter.reactionKind === "MID") return { name: `BF_HitMid_${side}`, loop: false, speed: 1.40 };
+      return { name: "BF_HitHeavy", loop: false, speed: 1.35 };
+    }
     case "KNOCKDOWN":
     case "KO":
     case "RING_OUT": return { name: "PF_DownBack", loop: false, speed: 1 };
@@ -506,9 +514,16 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
 }
 
 function transitionFadeSeconds(previous: string, next: string): number {
-  const reactionClips = new Set(["BF_HitHeavy", "BF_GuardBreak", "PF_HitHeavy", "PF_GuardBreak"]);
-  if (reactionClips.has(next)) return 0.025;
-  if (reactionClips.has(previous)) return 0.12;
+  const isReactionClip = (name: string) =>
+    name === "BF_GuardBreak" ||
+    name === "BF_EdgeStagger" ||
+    name === "PF_HitHeavy" ||
+    name === "PF_GuardBreak" ||
+    name.startsWith("BF_Hit") ||
+    name.startsWith("BF_CounterHit");
+  if (next.startsWith("BF_CounterHit")) return 0.018;
+  if (isReactionClip(next)) return 0.025;
+  if (isReactionClip(previous)) return 0.11;
   if (previous.startsWith("BF_") && (next === "Idle_Loop" || next === "Walk_Loop")) return 0.09;
   return 0.06;
 }
@@ -614,6 +629,13 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ["BF_RisingKick_R", "PF_RisingKick_R"],
       ["BF_DashKick_R", "PF_DashKick_R"],
       ["BF_HitHeavy", "PF_HitHeavy"],
+      ["BF_HitLight_L", "PF_HitHeavy"],
+      ["BF_HitLight_R", "PF_HitHeavy"],
+      ["BF_HitMid_L", "PF_HitHeavy"],
+      ["BF_HitMid_R", "PF_HitHeavy"],
+      ["BF_CounterHit_L", "PF_HitHeavy"],
+      ["BF_CounterHit_R", "PF_HitHeavy"],
+      ["BF_EdgeStagger", "PF_HitHeavy"],
       ["BF_GuardBreak", "PF_GuardBreak"],
     ] as const) {
       if (retargetedClips.has(authored)) continue;
@@ -631,6 +653,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       currentAction: null,
       lastTime: 0,
       lastMoveTick: -1,
+      lastReactionSerial: -1,
       bodyType: resources.bodyType,
       modelUrl: resources.modelUrl,
     };
@@ -674,6 +697,10 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ? "BLENDER_MOTION_FOUNDRY_V2_REACTIONS"
       : "PROCEDURAL_FALLBACK";
     visual.root.userData.quaterniusHitReactionMotionSource = reactionSource("BF_HitHeavy");
+    const directionalReactions = ["BF_HitLight_L", "BF_HitLight_R", "BF_HitMid_L", "BF_HitMid_R", "BF_CounterHit_L", "BF_CounterHit_R", "BF_EdgeStagger"];
+    visual.root.userData.quaterniusDirectionalReactionMotionSource = directionalReactions.every((name) => blenderReactionClips.has(name))
+      ? "BLENDER_MOTION_FOUNDRY_V2_DIRECTIONAL_REACTIONS"
+      : "PROCEDURAL_FALLBACK";
     visual.root.userData.quaterniusGuardBreakMotionSource = reactionSource("BF_GuardBreak");
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
@@ -687,8 +714,10 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   if (!runtime) return;
   const desired = desiredClip(fighter);
   const restartingAttack = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
+  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;
   runtime.lastMoveTick = fighter.moveTick;
-  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack);
+  runtime.lastReactionSerial = fighter.reactionSerial;
+  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction);
   advance(runtime, timeSeconds, fighter.hitStop > 0);
   neutralPoseCorrection(runtime, fighter);
   guardPoseCorrection(runtime, fighter);

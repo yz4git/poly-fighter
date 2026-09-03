@@ -1,0 +1,73 @@
+name: Apply motion toggle audit compatibility
+
+on:
+  push:
+    branches: [motion-corrections-toggle]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-corrections-toggle
+          fetch-depth: 0
+
+      - name: Make audits correction-mode aware
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('scripts/capture-tps-visual-audit.mjs')
+          text = p.read_text()
+          text = text.replace(
+              "      clip: data.motionExpansionCurrentClip ?? null,\n    };",
+              "      clip: data.motionExpansionCurrentClip ?? null,\n      correctionsEnabled: data.motionCorrectionsEnabled ?? false,\n    };",
+          )
+          text = text.replace(
+              "  if (damageAfterfeelProbe.state !== 'IDLE' || !damageAfterfeelProbe.canAct || damageAfterfeelProbe.phase !== 'SETTLE' || damageAfterfeelProbe.tailKind !== 'REACTION' || !(damageAfterfeelProbe.tailRemaining > 0)) {\n    throw new Error(`TPS damage reaction did not retain presentation-only afterfeel after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);\n  }",
+              "  if (damageAfterfeelProbe.state !== 'IDLE' || !damageAfterfeelProbe.canAct || (damageAfterfeelProbe.correctionsEnabled && (damageAfterfeelProbe.phase !== 'SETTLE' || damageAfterfeelProbe.tailKind !== 'REACTION' || !(damageAfterfeelProbe.tailRemaining > 0)))) {\n    throw new Error(`TPS damage reaction mode mismatch after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);\n  }",
+          )
+          text = text.replace(
+              "  if (attackAfterfeelProbe.error || attackAfterfeelProbe.state !== 'IDLE' || !attackAfterfeelProbe.canAct || attackAfterfeelProbe.phase !== 'SETTLE' || attackAfterfeelProbe.tailKind !== 'ATTACK' || !(attackAfterfeelProbe.tailRemaining > 0)) {\n    throw new Error(`TPS attack did not retain presentation-only follow-through after gameplay recovery: ${JSON.stringify(attackAfterfeelProbe)}`);\n  }",
+              "  if (attackAfterfeelProbe.error || attackAfterfeelProbe.state !== 'IDLE' || !attackAfterfeelProbe.canAct || (attackAfterfeelProbe.correctionsEnabled && (attackAfterfeelProbe.phase !== 'SETTLE' || attackAfterfeelProbe.tailKind !== 'ATTACK' || !(attackAfterfeelProbe.tailRemaining > 0)))) {\n    throw new Error(`TPS attack follow-through mode mismatch after gameplay recovery: ${JSON.stringify(attackAfterfeelProbe)}`);\n  }",
+          )
+          p.write_text(text)
+
+          enable = """  await execute(sessionId, `\n    const current = JSON.parse(window.localStorage.getItem('poly-fighter-settings-v1') ?? '{}');\n    window.localStorage.setItem('poly-fighter-settings-v1', JSON.stringify({ ...current, motionCorrections: true }));\n    window.location.reload();\n    return true;\n  `);\n  await delay(650);\n"""
+          for name in ['scripts/capture-motion-readability-audit.mjs', 'scripts/capture-motion-intent-audit.mjs']:
+              q = Path(name)
+              source = q.read_text()
+              anchor = "  await command(`/session/${sessionId}/url`, \"POST\", { url });\n  await delay(650);\n"
+              if 'motionCorrections: true' not in source:
+                  if anchor not in source:
+                      raise SystemExit(f'missing navigation anchor in {name}')
+                  source = source.replace(anchor, anchor + enable, 1)
+              q.write_text(source)
+
+          # Sanity checks: fail before committing if the compatibility patch did not land.
+          tps = Path('scripts/capture-tps-visual-audit.mjs').read_text()
+          readable = Path('scripts/capture-motion-readability-audit.mjs').read_text()
+          intent = Path('scripts/capture-motion-intent-audit.mjs').read_text()
+          assert 'damageAfterfeelProbe.correctionsEnabled' in tps
+          assert 'attackAfterfeelProbe.correctionsEnabled' in tps
+          assert 'motionCorrections: true' in readable
+          assert 'motionCorrections: true' in intent
+          PY
+
+      - name: Commit audit compatibility
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-tps-visual-audit.mjs scripts/capture-motion-readability-audit.mjs scripts/capture-motion-intent-audit.mjs
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Make motion audits correction-mode aware"
+          git push origin HEAD:motion-corrections-toggle

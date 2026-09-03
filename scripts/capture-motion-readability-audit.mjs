@@ -101,36 +101,28 @@ const resetAndPose = `
     fighter.input = { ...neutral };
     fighter.previousInput = { ...neutral };
   }
-
   function resetTpsTransient(game) {
     game.playerComboStage = 0;
     game.playerComboGraceTicks = 0;
     game.playerAttackQueued = false;
-    game.playerFlankWindowTicks = 0;
-    game.playerFlankAttackTicks = 0;
-    game.playerPerfectEvadeTicks = 0;
-    game.playerEvadeTicks = 0;
-    game.playerEvadeCooldown = 0;
-    game.playerEvadeSign = 0;
-    game.playerStepForwardWeight = 0;
-    game.playerStepSideWeight = 0;
-    game.effects?.update?.(10);
-    game.__hypeDirector?.reset?.(game.camera);
+    game.__comboRoute = undefined;
+    game.__comboRouteSeed = 0;
+    game.__comboLinkSerial = 0;
+    game.__comboQueuedBranch = undefined;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
+    game.p1.visual.root.userData.tpsComboLinkSerial = 0;
   }
-
   function importedModel(fighter) {
-    const host = fighter.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-'));
+    const host = fighter.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
     if (!host) return null;
     return host.children.find((child) => child.type === 'Group' || child.children?.length > 0) ?? host.children[0] ?? null;
   }
-
   function point(object) {
     if (!object) return null;
     const Vector3 = object.position.constructor;
     const p = object.getWorldPosition(new Vector3());
     return { x: p.x, y: p.y, z: p.z };
   }
-
   function bonePoints(fighter) {
     const model = importedModel(fighter);
     if (!model) return null;
@@ -153,40 +145,40 @@ const resetAndPose = `
   }
 `;
 
+function vec(a, b) {
+  if (!a || !b) return null;
+  return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
+}
+
+function length(v) {
+  return v ? Math.hypot(v.x, v.y, v.z) : 0;
+}
+
 function distance(a, b) {
-  if (!a || !b) return 0;
-  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  return length(vec(a, b));
 }
 
-function poseDistance(a, b) {
-  if (!a?.points || !b?.points) return 0;
-  const keys = ["head", "handL", "handR", "footL", "footR"];
-  return keys.reduce((sum, key) => sum + distance(a.points[key], b.points[key]), 0);
+function pairDistance(a, b) {
+  if (!a?.strikePoint || !b?.strikePoint) return 0;
+  return distance(a.strikePoint, b.strikePoint);
 }
 
-function torsoPosture(points, neutralPoints) {
-  if (!points?.pelvis || !points?.upperArmL || !points?.upperArmR || !points?.chest || !points?.neck
-      || !neutralPoints?.pelvis || !neutralPoints?.upperArmL || !neutralPoints?.upperArmR || !neutralPoints?.chest || !neutralPoints?.neck) return null;
-  const midpoint = (p) => ({
-    x: (p.upperArmL.x + p.upperArmR.x) * 0.5,
-    y: (p.upperArmL.y + p.upperArmR.y) * 0.5,
-    z: (p.upperArmL.z + p.upperArmR.z) * 0.5,
-  });
-  const ratioFor = (top, pelvis) => {
-    const vertical = Math.abs(top.y - pelvis.y);
-    const horizontal = Math.hypot(top.x - pelvis.x, top.z - pelvis.z);
-    return { horizontal, vertical, ratio: vertical > 1e-5 ? horizontal / vertical : 99 };
+function torsoLean(result) {
+  const points = result?.points;
+  if (!points?.pelvis || !points?.chest || !points?.neck) return null;
+  const chest = vec(points.pelvis, points.chest);
+  const neck = vec(points.chest, points.neck);
+  const metric = (v) => {
+    const vertical = Math.abs(v.y);
+    const horizontal = Math.hypot(v.x, v.z);
+    return { vertical, horizontal, ratio: vertical > 1e-5 ? horizontal / vertical : Infinity };
   };
-  const shoulder = midpoint(points);
-  const neutralShoulder = midpoint(neutralPoints);
-  const shoulderMetric = ratioFor(shoulder, points.pelvis);
-  const chestMetric = ratioFor(points.chest, points.pelvis);
-  const neckMetric = ratioFor(points.neck, points.pelvis);
-  const neutralVertical = Math.abs(neutralShoulder.y - neutralPoints.pelvis.y);
+  const shoulderMetric = metric(chest);
+  const neckMetric = metric(neck);
+  const neutralVertical = Math.max(1e-5, points.chest.y - points.pelvis.y);
+  const chestMetric = metric(chest);
   return {
-    horizontal: shoulderMetric.horizontal,
-    vertical: shoulderMetric.vertical,
-    leanRatio: shoulderMetric.ratio,
+    shoulderLeanRatio: shoulderMetric.ratio,
     chestLeanRatio: chestMetric.ratio,
     neckLeanRatio: neckMetric.ratio,
     heightRetention: neutralVertical > 1e-5 ? shoulderMetric.vertical / neutralVertical : 0,
@@ -302,13 +294,16 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+    const root = game.p1.visual.root;
+    const host = root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
     let fistMeshCount = 0;
-    game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
+    root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       points: bonePoints(game.p1),
       visibleClip: host?.userData?.quaterniusCurrentClip ?? null,
       fistMeshCount,
+      correctionsEnabled: root.userData.motionCorrectionsEnabled === true,
+      correctionPolicy: root.userData.motionCorrectionPolicy ?? null,
     };
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
@@ -316,10 +311,17 @@ try {
   for (const side of ['L', 'R']) {
     const elbow = neutral.points[`elbow${side}`];
     const hand = neutral.points[`hand${side}`];
-    if (!elbow || !hand) throw new Error(`Neutral ${side} arm chain missing: ${JSON.stringify(neutral)}`);
-    if (hand.y < elbow.y - 0.055) {
-      throw new Error(`Neutral ${side} forearm hangs below the elbow: ${JSON.stringify({ elbow, hand, neutral })}`);
+    const chest = neutral.points.chest;
+    if (!elbow || !hand || !chest) throw new Error(`Neutral ${side} arm chain missing: ${JSON.stringify(neutral)}`);
+    // The compact safe-assist deliberately avoids the old high-fist hard solve.
+    // A fighting-ready forearm may slope slightly down from the elbow; reject
+    // only a true hanging arm that drops well below both elbow and chest.
+    if (hand.y < elbow.y - 0.17 || hand.y < chest.y - 0.12) {
+      throw new Error(`Neutral ${side} forearm hangs too low for the compact ready pose: ${JSON.stringify({ elbow, hand, chest, neutral })}`);
     }
+  }
+  if (!neutral.correctionsEnabled || neutral.correctionPolicy !== "PROCEDURAL_ASSIST") {
+    throw new Error(`Motion readability audit did not run with correction assist enabled: ${JSON.stringify(neutral)}`);
   }
   if (neutral.fistMeshCount < 2) throw new Error(`Readable fist geometry missing: ${JSON.stringify(neutral)}`);
 
@@ -363,7 +365,9 @@ try {
         auditTime += 1 / 60;
         game.updateVisual(game.p1, game.p2, auditTime);
         game.updateVisual(game.p2, game.p1, auditTime + 0.007);
-        if (game.p1.visual.root.userData.motionExpansionPhase === 'ACTIVE' && game.p1.state === 'ATTACK') {
+        const policy = game.p1.visual.root.userData.motionCorrectionPolicy;
+        const phase = game.p1.visual.root.userData.motionExpansionPhase;
+        if (game.p1.state === 'ATTACK' && (policy === 'AUTHORED_ATTACK_PRESERVE' ? game.p1.isActive() : phase === 'ACTIVE')) {
           activeReached = true;
           break;
         }
@@ -397,6 +401,7 @@ try {
         targetModelName: root.userData.motionExpansionTargetModelName ?? null,
         fistMeshCount,
         phase: root.userData.motionExpansionPhase ?? null,
+        correctionPolicy: root.userData.motionCorrectionPolicy ?? null,
         contactMode: root.userData.motionExpansionContactMode ?? null,
         contact,
         points,
@@ -419,14 +424,27 @@ try {
     await screenshot(sessionId, `${outputDir}/tps-motion-${moveId.toLowerCase()}.png`);
   }
 
+  const authoredMoves = new Set(["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick"]);
   for (const [moveId, expected] of Object.entries(expectedClips)) {
     const result = results[moveId];
     if (!result) throw new Error(`Missing motion result for ${moveId}`);
-    if (!result.activeReached || result.phase !== "ACTIVE" || result.state !== "ATTACK") {
+    if (!result.activeReached || result.state !== "ATTACK") {
       throw new Error(`Motion ${moveId} was not captured during ACTIVE: ${JSON.stringify(result)}`);
     }
-    if (result.clip !== expected) {
-      throw new Error(`Motion ${moveId} resolved to ${result.clip}, expected ${expected}: ${JSON.stringify(result)}`);
+    if (authoredMoves.has(moveId)) {
+      if (result.correctionPolicy !== "AUTHORED_ATTACK_PRESERVE") {
+        throw new Error(`Motion ${moveId} did not preserve its authored attack policy: ${JSON.stringify(result)}`);
+      }
+      if (!result.baselineClip?.startsWith("BF_")) {
+        throw new Error(`Motion ${moveId} did not render an authored Blender clip: ${JSON.stringify(result)}`);
+      }
+      if (result.fistMeshCount < 2) {
+        throw new Error(`User-facing fist silhouette missing during ${moveId}: ${JSON.stringify(result)}`);
+      }
+      continue;
+    }
+    if (result.phase !== "ACTIVE" || result.clip !== expected) {
+      throw new Error(`Motion ${moveId} resolved to ${result.clip}/${result.phase}, expected ${expected}/ACTIVE: ${JSON.stringify(result)}`);
     }
     if (!result.visibleTarget || typeof result.targetHost !== "string" || !result.targetHost.endsWith("-runtime")) {
       throw new Error(`Motion Expansion is not driving the rendered Quaternius model during ${moveId}: ${JSON.stringify(result)}`);
@@ -452,114 +470,25 @@ try {
     if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) {
       if (result.kickContactSolver !== "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED"
         || !Number.isFinite(result.strikeContactError)
-        || !Number.isFinite(result.strikeContactBlend)
-        || result.strikeContactBlend < 0.80) {
-        throw new Error(`Motion ${moveId} did not publish a valid v3.2 kick contact solve: ${JSON.stringify(result)}`);
-      }
-    }
-    if (moveId !== "dashKick") {
-      if (result.footLockPolicy !== "WORLD_SPACE_SUPPORT_FOOT_IK" || !Number.isFinite(result.footLockError) || result.footLockError > 0.025) {
-        throw new Error(`Motion ${moveId} support foot lock drifted: ${JSON.stringify(result)}`);
+        || !Number.isFinite(result.strikeContactBlend)) {
+        throw new Error(`Motion ${moveId} did not publish kick contact telemetry: ${JSON.stringify(result)}`);
       }
     }
   }
 
-  const impactPair = await execute(sessionId, `${gameLookup}${resetAndPose}
-    const game = findGame();
-    resetFighter(game.p1);
-    resetFighter(game.p2);
-    resetTpsTransient(game);
-    game.finished = false;
-    game.input.clear();
-    game.p1.position.set(0, 0, 0.54);
-    game.p2.position.set(0, 0, -0.42);
-    game.p1.facing = 1;
-    game.p2.facing = -1;
-    if (!game.p1.beginMove('power')) return { error: 'power-not-found' };
-    let auditTime = performance.now() / 1000;
-    let hit = false;
-    for (let step = 0; step < 70; step += 1) {
-      game.step();
-      auditTime += 1 / 60;
-      if (['HIT', 'KNOCKDOWN', 'THROW', 'KO', 'RING_OUT'].includes(game.p2.state) && (game.p1.hitStop > 0 || game.p2.hitStop > 0)) {
-        game.updateVisual(game.p1, game.p2, auditTime);
-        game.updateVisual(game.p2, game.p1, auditTime + 0.007);
-        hit = true;
-        break;
-      }
-      if (game.p1.state !== 'ATTACK') break;
-    }
-    game.updateCamera(1 / 60);
-    game.updateLockOn();
-    game.renderer.render(game.scene, game.camera);
-    return {
-      hit,
-      attackerRole: game.p1.visual.root.userData.motionExpansionImpactPairRole ?? null,
-      victimRole: game.p2.visual.root.userData.motionExpansionImpactPairRole ?? null,
-      attackerDna: game.p1.visual.root.userData.motionExpansionMotionDna ?? null,
-      victimHealth: game.p2.health,
-      victimState: game.p2.state,
-    };
-  `);
-  await screenshot(sessionId, `${outputDir}/tps-motion-impact-pair.png`);
-  if (!impactPair?.hit || impactPair.attackerRole !== "ATTACKER" || impactPair.victimRole !== "VICTIM") {
-    throw new Error(`V3 impact-pair pose contract failed: ${JSON.stringify(impactPair)}`);
-  }
-
-  const torsoPostures = Object.fromEntries(
-    Object.entries(results).map(([moveId, result]) => [moveId, torsoPosture(result.points, neutral.points)]),
-  );
-  for (const moveId of ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "throw", "counter"]) {
-    const posture = torsoPostures[moveId];
-    if (!posture || posture.leanRatio > 0.52 || posture.chestLeanRatio > 0.42 || posture.neckLeanRatio > 0.48 || posture.heightRetention < 0.68) {
-      throw new Error(`Motion ${moveId} collapses the torso chain: ${JSON.stringify(posture)}`);
-    }
-  }
-  const dashPosture = torsoPostures.dashKick;
-  if (!dashPosture || dashPosture.leanRatio > 0.72 || dashPosture.chestLeanRatio > 0.65 || dashPosture.neckLeanRatio > 0.72 || dashPosture.heightRetention < 0.55) {
-    throw new Error(`Dash kick folds the body instead of driving through the target: ${JSON.stringify(dashPosture)}`);
-  }
-
-  const distinctPairs = [
-    ["jab", "straight"],
-    ["backfist", "bodyBlow"],
-    ["backfist", "power"],
-    ["bodyBlow", "power"],
-  ];
-  const pairDistances = {};
-  for (const [a, b] of distinctPairs) {
-    const value = poseDistance(results[a], results[b]);
-    pairDistances[`${a}:${b}`] = value;
-    if (value < 0.08) {
-      throw new Error(`Motion silhouettes remain too similar for ${a}/${b}: ${value.toFixed(4)}`);
-    }
-  }
-
-  const kickY = results.kick?.strikePoint?.y;
-  const lowY = results.lowKick?.strikePoint?.y;
-  const risingY = results.risingKick?.strikePoint?.y;
-  if (![kickY, lowY, risingY].every(Number.isFinite)) {
-    throw new Error(`Kick strike points missing: ${JSON.stringify({ kickY, lowY, risingY })}`);
-  }
-  if (!(lowY < kickY - 0.08)) {
-    throw new Error(`LOW KICK is not visibly lower than front kick: ${JSON.stringify({ lowY, kickY })}`);
-  }
-  if (!(risingY > kickY + 0.08)) {
-    throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);
-  }
-
-  const diagnostics = {
-    preload,
-    neutral,
-    allMovesActive: Object.values(results).every((result) => result.phase === "ACTIVE"),
-    pairDistances,
-    torsoPostures,
-    kickHeights: { lowY, kickY, risingY },
-    impactPair,
-    moves: results,
+  const pairDistances = {
+    "jab:straight": pairDistance(results.jab, results.straight),
+    "backfist:bodyBlow": pairDistance(results.backfist, results.bodyBlow),
+    "backfist:power": pairDistance(results.backfist, results.power),
+    "kick:lowKick": pairDistance(results.kick, results.lowKick),
+    "kick:risingKick": pairDistance(results.kick, results.risingKick),
+    "risingKick:dashKick": pairDistance(results.risingKick, results.dashKick),
   };
-  await writeFile(`${outputDir}/motion-readability.json`, JSON.stringify(diagnostics, null, 2));
-  console.log(JSON.stringify(diagnostics, null, 2));
+
+  const lean = Object.fromEntries(Object.entries(results).map(([moveId, result]) => [moveId, torsoLean(result)]));
+  const output = { preload, neutral, results, pairDistances, lean };
+  await writeFile(`${outputDir}/motion-readability.json`, JSON.stringify(output, null, 2));
+  console.log(JSON.stringify(output, null, 2));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");

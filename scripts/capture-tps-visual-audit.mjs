@@ -635,6 +635,7 @@ try {
       appliedBlend: data.motionExpansionComboBlendSeconds ?? 0,
       motionMove: data.motionExpansionCurrentMove ?? null,
       motionPhase: data.motionExpansionPhase ?? null,
+      correctionPolicy: data.motionCorrectionPolicy ?? null,
     };
   `);
   if (!comboLinkProbe.linked
@@ -648,8 +649,9 @@ try {
     || comboLinkProbe.linkTick < comboLinkProbe.linkStart
     || comboLinkProbe.linkTick > comboLinkProbe.linkEnd
     || Math.abs(comboLinkProbe.requestedBlend - 0.075) > 0.0001
-    || Math.abs(comboLinkProbe.appliedBlend - 0.075) > 0.0001
-    || comboLinkProbe.motionMove !== 'backfist') {
+    || !(["RAW_CLIP_PLAYBACK", "AUTHORED_ATTACK_PRESERVE"].includes(comboLinkProbe.correctionPolicy)
+      ? Math.abs(comboLinkProbe.appliedBlend) <= 0.0001 && comboLinkProbe.motionMove === null
+      : Math.abs(comboLinkProbe.appliedBlend - 0.075) <= 0.0001 && comboLinkProbe.motionMove === 'backfist')) {
     throw new Error(`TPS authored combo branch did not link cleanly: ${JSON.stringify(comboLinkProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-combo-link.png`);

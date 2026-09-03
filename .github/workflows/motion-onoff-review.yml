@@ -1,0 +1,74 @@
+name: POLY FIGHTER Motion ON-OFF Review
+
+on:
+  push:
+    branches: [motion-onoff-review]
+    paths:
+      - app/**
+      - src/**
+      - public/**
+      - scripts/capture-motion-onoff-review.mjs
+      - package.json
+      - package-lock.json
+      - .github/workflows/motion-onoff-review.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build production preview
+        run: npm run build
+
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-motion-review.log 2>&1 &
+          echo $! > /tmp/poly-fighter-motion-review.pid
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-motion-review.log
+          exit 1
+
+      - name: Capture correction OFF and ON at identical poses
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            AUDIT_DIR="artifacts/motion-onoff-review" \
+            node scripts/capture-motion-onoff-review.mjs
+
+      - name: Preserve server log
+        if: always()
+        run: |
+          mkdir -p artifacts/motion-onoff-review
+          cp /tmp/poly-fighter-motion-review.log artifacts/motion-onoff-review/server.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-motion-onoff-review
+          path: artifacts/motion-onoff-review
+          if-no-files-found: error
+          retention-days: 14

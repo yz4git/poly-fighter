@@ -20,11 +20,19 @@ test("settings expose persistent motion correction switch with OFF default", asy
   assert.match(page, /motionCorrections: !settings\.motionCorrections/);
 });
 
-test("raw mode bypasses post-playback arm and body corrections", async () => {
+test("motion correction policy separates raw, authored-preserve and procedural-assist paths", async () => {
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
   const quaternius = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
-  assert.match(presentation, /if \(correctionsEnabled\) \{[\s\S]*updateMotionExpansionSkin/);
-  assert.match(presentation, /else \{[\s\S]*updateQuaterniusModelSkin/);
+
+  assert.match(presentation, /const BLENDER_AUTHORED_ATTACKS = new Set/);
+  assert.match(presentation, /if \(correctionsEnabled && !authoredAttack\)/);
+  assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
+  assert.match(presentation, /else \{[\s\S]*updateQuaterniusModelSkin\(fighter, timeSeconds\)/);
+  assert.match(presentation, /RAW_CLIP_PLAYBACK/);
+  assert.match(presentation, /AUTHORED_ATTACK_PRESERVE/);
+  assert.match(presentation, /PROCEDURAL_ASSIST/);
+
   assert.match(quaternius, /if \(correctionsEnabled\) \{[\s\S]*neutralPoseCorrection[\s\S]*guardPoseCorrection[\s\S]*attackContactCorrection/);
-  assert.match(quaternius, /RAW_CLIP_PLAYBACK/);
+  assert.match(quaternius, /BLENDER_AUTHORED_CONTACT_SAFE_MOVES\.has\(move\.id\)/);
+  assert.match(quaternius, /AUTHORED_CONTACT_PRESERVE/);
 });

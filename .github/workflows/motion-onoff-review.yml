@@ -54,16 +54,7 @@ jobs:
           p = Path('scripts/capture-motion-onoff-review.mjs')
           text = p.read_text()
           anchor = '  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");\n\n  let ready = null;'
-          replacement = '''  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");
-  await delay(120);
-  await execute(sessionId, `${gameLookup}
-    const game = findGame();
-    if (!game) return false;
-    game.updateSettings({ motionCorrections: true });
-    return true;
-  `);
-
-  let ready = null;'''
+          replacement = '  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");\n  await delay(120);\n  await execute(sessionId, `${gameLookup}\\n    const game = findGame();\\n    if (!game) return false;\\n    game.updateSettings({ motionCorrections: true });\\n    return true;\\n  `);\n\n  let ready = null;'
           if anchor not in text:
               raise SystemExit('capture prime anchor missing')
           p.write_text(text.replace(anchor, replacement, 1))

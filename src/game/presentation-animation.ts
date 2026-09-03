@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FighterAnimationController, type FighterRuntime } from "./fighter";
 import { updateMotionExpansionSkin } from "./motion-expansion-runtime";
+import { motionCorrectionsEnabled } from "./motion-correction-state";
 import { fighterBasis, orientBoneForward, solveTwoBoneIK } from "./rig";
 import { updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
@@ -14,8 +15,9 @@ const KAIRO_READY_STATES = new Set(["IDLE", "WALK", "CROUCH", "SIDESTEP"]);
 export class PresentationAnimationController extends FighterAnimationController {
   override update(fighter: FighterRuntime, opponent: FighterRuntime, timeSeconds: number): void {
     super.update(fighter, opponent, timeSeconds);
+    const correctionsEnabled = motionCorrectionsEnabled();
 
-    if (fighter.visual.root.userData.visualVersion === "KAIRO_V1" && KAIRO_READY_STATES.has(fighter.state)) {
+    if (correctionsEnabled && fighter.visual.root.userData.visualVersion === "KAIRO_V1" && KAIRO_READY_STATES.has(fighter.state)) {
       const visual = fighter.visual;
       const layout = visual.layout;
       const scale = visual.root.scale.x;
@@ -64,8 +66,15 @@ export class PresentationAnimationController extends FighterAnimationController 
     // downs, wakeups and evasive movement. It also receives the opponent so
     // strike IK can bias toward a real head/body/leg target instead of copying
     // the older procedural rig's own fist/foot pose.
-    if (!updateMotionExpansionSkin(fighter, opponent, timeSeconds)) {
+    if (correctionsEnabled) {
+      if (!updateMotionExpansionSkin(fighter, opponent, timeSeconds)) {
+        updateQuaterniusModelSkin(fighter, timeSeconds);
+      }
+    } else {
+      // Raw-motion diagnostic mode: keep authored clip selection/playback, but
+      // bypass every post-playback IK, pose, COM, foot-lock and contact correction.
       updateQuaterniusModelSkin(fighter, timeSeconds);
     }
+    fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
   }
 }

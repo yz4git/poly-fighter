@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-// User-authored checkpoint: regenerate the airborne Dash Kick after Python 3.12 helper registration.
+// User-authored checkpoint: runtime integration must exist in the real source tree, not only in the patch script.
 const generator = await readFile(new URL("../tools/blender/build-fight-motion-foundry-v2-airborne.py", import.meta.url), "utf8");
 const integrator = await readFile(new URL("../scripts/apply-blender-motion-foundry-v2-airborne.mjs", import.meta.url), "utf8");
 const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
@@ -32,23 +32,39 @@ test("airborne Dash Kick uses a dedicated no-support-lock Blender rig", () => {
   assert.match(generator, /trailKneeAngleDegrees/);
 });
 
-test("runtime and Model Viewer prefer BF_DashKick_R with an independent PF fallback", () => {
-  const combined = `${runtime}\n${integrator}`;
-  assert.match(combined, /QUATERNIUS_BLENDER_AIRBORNE_URL/);
-  assert.match(combined, /blenderAirborne/);
-  assert.match(combined, /dashKick: \"BF_DashKick_R\"/);
-  assert.match(combined, /\[\"BF_DashKick_R\", \"PF_DashKick_R\"\]/);
-  assert.match(combined, /quaterniusDashKickMotionSource/);
-  assert.match(combined, /BLENDER_MOTION_FOUNDRY_V2_AIRBORNE/);
-  assert.match(`${viewer}\n${integrator}`, /QUATERNIUS_BLENDER_AIRBORNE_URL/);
+test("runtime source itself exports and routes the Blender airborne pack with PF fallback", () => {
+  assert.match(runtime, /export const QUATERNIUS_BLENDER_AIRBORNE_URL =/);
+  assert.match(runtime, /blenderAirborne: MotionClipSource \| null/);
+  assert.match(runtime, /const blenderAirborneMotion = loader\.loadAsync\(QUATERNIUS_BLENDER_AIRBORNE_URL\)/);
+  assert.match(runtime, /const blenderAirborneClips = resources\.motion\.blenderAirborne/);
+  assert.match(runtime, /dashKick: "BF_DashKick_R"/);
+  assert.match(runtime, /\["BF_DashKick_R", "PF_DashKick_R"\]/);
+  assert.match(runtime, /quaterniusBlenderAirborneClipCount/);
+  assert.match(runtime, /quaterniusDashKickMotionSource/);
+  assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_AIRBORNE/);
 });
 
-test("WebGL audit captures procedural and Blender Dash Kick at the same phase", () => {
-  const combined = `${audit}\n${integrator}`;
-  assert.match(combined, /PF_DashKick_R/);
-  assert.match(combined, /BF_DashKick_R/);
-  assert.match(combined, /model-view-motion-procedural-dash-kick\.png/);
-  assert.match(combined, /model-view-motion-blender-dash-kick\.png/);
+test("Model Viewer source itself loads the Blender airborne pack", () => {
+  assert.match(viewer, /QUATERNIUS_BLENDER_AIRBORNE_URL/);
+  assert.match(viewer, /const blenderAirborneMotion = loader\.loadAsync\(QUATERNIUS_BLENDER_AIRBORNE_URL\)/);
+  assert.match(viewer, /blenderAirborne/);
+  assert.match(viewer, /source: "BLENDER"/);
+});
+
+test("WebGL audit source itself captures procedural and Blender Dash Kick at the same phase", () => {
+  assert.match(audit, /hasBlenderDashKick/);
+  assert.match(audit, /hasProceduralDashKick/);
+  assert.match(audit, /poseMotionViewer\(sessionId, "PF_DashKick_R", 0\.52\)/);
+  assert.match(audit, /poseMotionViewer\(sessionId, "BF_DashKick_R", 0\.52\)/);
+  assert.match(audit, /model-view-motion-procedural-dash-kick\.png/);
+  assert.match(audit, /model-view-motion-blender-dash-kick\.png/);
+});
+
+test("integration script remains idempotent against the materialized source tree", () => {
+  assert.match(integrator, /runtime airborne URL/);
+  assert.match(integrator, /runtime airborne fallback/);
+  assert.match(integrator, /viewer airborne pack/);
+  assert.match(integrator, /audit airborne A-B captures/);
 });
 
 test("generated airborne metrics satisfy the authored flight contract when present", async (t) => {

@@ -360,7 +360,18 @@ export class TpsGraphicsDirector {
     const waveCount = event.blocked ? 1 : visualTier === 3 ? 2 : 1;
     const contactPoint = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
     const facing = camera.position.clone().sub(contactPoint).normalize();
-    const visualPoint = contactPoint.clone().addScaledVector(facing, -0.055);
+    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    const contactSide = event.move.visualContact === "LEFT_FIST" || event.move.visualContact === "LEFT_FOOT"
+      ? -1
+      : event.move.visualContact === "RIGHT_FIST" || event.move.visualContact === "RIGHT_FOOT"
+        ? 1
+        : event.attacker === "p1" ? -1 : 1;
+    // Float the ring slightly toward the camera and toward the striking limb.
+    // This keeps impact feedback strong without painting an opaque target over
+    // the two overlapping torsos at close range.
+    const visualPoint = contactPoint.clone()
+      .addScaledVector(facing, 0.12)
+      .addScaledVector(cameraRight, contactSide * 0.12);
 
     for (let index = 0; index < waveCount; index += 1) {
       const wave = this.waves.find((item) => item.life <= 0) ?? this.waves[index % this.waves.length];
@@ -368,15 +379,15 @@ export class TpsGraphicsDirector {
       wave.maxLife = wave.life;
       wave.mesh.visible = true;
       wave.mesh.position.copy(visualPoint);
-      wave.mesh.scale.setScalar(0.60 + strength * 0.14 + index * 0.12);
+      wave.mesh.scale.setScalar(0.54 + strength * 0.12 + index * 0.10);
       wave.mesh.material.color.setHex(color);
       wave.baseOpacity = event.blocked
         ? 0.28
         : visualTier === 3
-          ? Math.max(0.34, 0.50 - index * 0.10)
+          ? Math.max(0.30, 0.44 - index * 0.09)
           : visualTier === 2
-            ? 0.38
-            : 0.30;
+            ? 0.34
+            : 0.27;
       wave.mesh.material.opacity = wave.baseOpacity;
       wave.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
       wave.mesh.rotateZ(index * 0.52);
@@ -414,6 +425,8 @@ export class TpsGraphicsDirector {
     this.group.userData.lastImpactHeight = event.position.y;
     this.group.userData.lastSharedAttackerHitStop = sharedHitStop;
     this.group.userData.lastImpactWaveCount = waveCount;
+    this.group.userData.lastImpactVisualSideOffset = contactSide * 0.12;
+    this.group.userData.lastImpactVisualDepthOffset = 0.12;
   }
 
   update(p1: FighterRuntime, p2: FighterRuntime, time: number, delta: number): void {

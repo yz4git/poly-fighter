@@ -15,6 +15,7 @@ export const QUATERNIUS_BLENDER_CROSS_URL = `${BASE_PATH}/models/quaternius/blen
 export const QUATERNIUS_BLENDER_STRIKES_URL = `${BASE_PATH}/models/quaternius/blender-strikes-core.glb`;
 export const QUATERNIUS_BLENDER_KICKS_URL = `${BASE_PATH}/models/quaternius/blender-kicks-core.glb`;
 export const QUATERNIUS_BLENDER_AIRBORNE_URL = `${BASE_PATH}/models/quaternius/blender-airborne-core.glb`;
+export const QUATERNIUS_BLENDER_REACTIONS_URL = `${BASE_PATH}/models/quaternius/blender-reactions-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -31,6 +32,7 @@ type MotionResources = {
   blenderStrikes: MotionClipSource | null;
   blenderKicks: MotionClipSource | null;
   blenderAirborne: MotionClipSource | null;
+  blenderReactions: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -88,6 +90,7 @@ function loadMotion(): Promise<MotionResources> {
   const blenderStrikeMotion = loader.loadAsync(QUATERNIUS_BLENDER_STRIKES_URL).catch(() => null);
   const blenderKickMotion = loader.loadAsync(QUATERNIUS_BLENDER_KICKS_URL).catch(() => null);
   const blenderAirborneMotion = loader.loadAsync(QUATERNIUS_BLENDER_AIRBORNE_URL).catch(() => null);
+  const blenderReactionMotion = loader.loadAsync(QUATERNIUS_BLENDER_REACTIONS_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
@@ -96,7 +99,8 @@ function loadMotion(): Promise<MotionResources> {
     blenderStrikeMotion,
     blenderKickMotion,
     blenderAirborneMotion,
-  ]).then(([base, procedural, blender, blenderCross, blenderStrikes, blenderKicks, blenderAirborne]) => ({
+    blenderReactionMotion,
+  ]).then(([base, procedural, blender, blenderCross, blenderStrikes, blenderKicks, blenderAirborne, blenderReactions]) => ({
     // Each Blender Foundry pack is optional and falls back independently.
     // The shared strike pack carries Jab / Body Blow / Backfist in one GLB.
     base: { source: base.scene, clips: base.animations },
@@ -106,6 +110,7 @@ function loadMotion(): Promise<MotionResources> {
     blenderStrikes: blenderStrikes ? { source: blenderStrikes.scene, clips: blenderStrikes.animations } : null,
     blenderKicks: blenderKicks ? { source: blenderKicks.scene, clips: blenderKicks.animations } : null,
     blenderAirborne: blenderAirborne ? { source: blenderAirborne.scene, clips: blenderAirborne.animations } : null,
+    blenderReactions: blenderReactions ? { source: blenderReactions.scene, clips: blenderReactions.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -487,10 +492,10 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
     case "WALK": return { name: "Walk_Loop", loop: true, speed: 1 };
     case "CROUCH": return { name: "Crouch_Idle_Loop", loop: true, speed: 1 };
     case "GUARD": return { name: "Idle_Loop", loop: true, speed: 0.82 };
-    case "BLOCK_STUN": return { name: "PF_GuardBreak", loop: false, speed: 1.35 };
+    case "BLOCK_STUN": return { name: "BF_GuardBreak", loop: false, speed: 1.35 };
     case "SIDESTEP": return { name: "Roll", loop: false, speed: 1.2 };
     case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
-    case "HIT": return { name: "PF_HitHeavy", loop: false, speed: 1.35 };
+    case "HIT": return { name: "BF_HitHeavy", loop: false, speed: 1.35 };
     case "KNOCKDOWN":
     case "KO":
     case "RING_OUT": return { name: "PF_DownBack", loop: false, speed: 1 };
@@ -500,27 +505,38 @@ function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; sp
   }
 }
 
+function transitionFadeSeconds(previous: string, next: string): number {
+  const reactionClips = new Set(["BF_HitHeavy", "BF_GuardBreak", "PF_HitHeavy", "PF_GuardBreak"]);
+  if (reactionClips.has(next)) return 0.025;
+  if (reactionClips.has(previous)) return 0.12;
+  if (previous.startsWith("BF_") && (next === "Idle_Loop" || next === "Walk_Loop")) return 0.09;
+  return 0.06;
+}
+
 function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false): void {
   if (runtime.currentClip === name && !restart) return;
   const clip = runtime.clips.get(name) ?? runtime.clips.get("Idle_Loop");
   if (!clip) return;
-  runtime.currentAction?.fadeOut(0.06);
+  const fade = transitionFadeSeconds(runtime.currentClip, name);
+  runtime.currentAction?.fadeOut(fade);
   const action = runtime.mixer.clipAction(clip, runtime.model);
   action.reset();
   action.enabled = true;
   action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
   action.clampWhenFinished = !loop;
   action.timeScale = loop ? speed : Math.max(0.25, clip.duration * speed);
-  action.fadeIn(0.06).play();
+  action.fadeIn(fade).play();
   runtime.currentClip = name;
   runtime.currentAction = action;
   runtime.host.userData.quaterniusCurrentClip = clip.name;
 }
 
-function advance(runtime: QuaterniusRuntime, timeSeconds: number): void {
+function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false): void {
   const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
+  // Always advance the wall-clock cursor so releasing hitstop cannot accumulate
+  // a large mixer delta. Only the animation pose itself freezes on impact.
   runtime.lastTime = timeSeconds;
-  runtime.mixer.update(delta);
+  if (!frozen) runtime.mixer.update(delta);
   runtime.model.updateMatrixWorld(true);
 }
 
@@ -560,6 +576,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     const blenderAirborneClips = resources.motion.blenderAirborne
       ? retargetMotionClips(resources.motion.blenderAirborne.source, styled.model, resources.motion.blenderAirborne.clips)
       : new Map<string, THREE.AnimationClip>();
+    const blenderReactionClips = resources.motion.blenderReactions
+      ? retargetMotionClips(resources.motion.blenderReactions.source, styled.model, resources.motion.blenderReactions.clips)
+      : new Map<string, THREE.AnimationClip>();
     const retargetedClips = new Map<string, THREE.AnimationClip>([
       ...baseClips,
       ...proceduralClips,
@@ -568,6 +587,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ...blenderStrikeClips,
       ...blenderKickClips,
       ...blenderAirborneClips,
+      ...blenderReactionClips,
     ]);
     if (!retargetedClips.has("BF_Power_R")) {
       const fallback = proceduralClips.get("PF_Power_R");
@@ -593,6 +613,8 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ["BF_LowKick_L", "PF_LowKick_L"],
       ["BF_RisingKick_R", "PF_RisingKick_R"],
       ["BF_DashKick_R", "PF_DashKick_R"],
+      ["BF_HitHeavy", "PF_HitHeavy"],
+      ["BF_GuardBreak", "PF_GuardBreak"],
     ] as const) {
       if (retargetedClips.has(authored)) continue;
       const fallback = proceduralClips.get(procedural);
@@ -621,11 +643,12 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
-    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size + blenderAirborneClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size + blenderAirborneClips.size + blenderReactionClips.size;
     visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
     visual.root.userData.quaterniusBlenderStrikeClipCount = blenderStrikeClips.size;
     visual.root.userData.quaterniusBlenderKickClipCount = blenderKickClips.size;
     visual.root.userData.quaterniusBlenderAirborneClipCount = blenderAirborneClips.size;
+    visual.root.userData.quaterniusBlenderReactionClipCount = blenderReactionClips.size;
     visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
       ? "BLENDER_MOTION_FOUNDRY_V1"
       : "PROCEDURAL_FALLBACK";
@@ -647,6 +670,11 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusDashKickMotionSource = blenderAirborneClips.has("BF_DashKick_R")
       ? "BLENDER_MOTION_FOUNDRY_V2_AIRBORNE"
       : "PROCEDURAL_FALLBACK";
+    const reactionSource = (name: string) => blenderReactionClips.has(name)
+      ? "BLENDER_MOTION_FOUNDRY_V2_REACTIONS"
+      : "PROCEDURAL_FALLBACK";
+    visual.root.userData.quaterniusHitReactionMotionSource = reactionSource("BF_HitHeavy");
+    visual.root.userData.quaterniusGuardBreakMotionSource = reactionSource("BF_GuardBreak");
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";
@@ -661,7 +689,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   const restartingAttack = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
   runtime.lastMoveTick = fighter.moveTick;
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack);
-  advance(runtime, timeSeconds);
+  advance(runtime, timeSeconds, fighter.hitStop > 0);
   neutralPoseCorrection(runtime, fighter);
   guardPoseCorrection(runtime, fighter);
   attackContactCorrection(runtime, fighter);

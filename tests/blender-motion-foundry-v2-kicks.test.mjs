@@ -16,15 +16,18 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /action_name="BF_FrontKick_R"/);
   assert.match(generator, /action_name="BF_LowKick_L"/);
   assert.match(generator, /action_name="BF_RisingKick_R"/);
+  assert.match(generator, /Shoulder span did not provide a usable anatomical left axis/);
   assert.match(generator, /StrikeLegIK/);
   assert.match(generator, /StrikeFootOrientation/);
+  assert.match(generator, /GuardHandIK/);
   assert.match(generator, /SupportFootPositionLockIK/);
   assert.match(generator, /SupportFootOrientationLock/);
+  assert.match(generator, /strikeFootForwardReach/);
   assert.match(generator, /rig\.add_master_controls/);
   assert.match(generator, /blender-kicks-core\.glb/);
 });
 
-test("generated kick pack uses standing Idle and keeps strong travel with fully planted support feet", () => {
+test("generated kick pack uses standing Idle, reaches forward and holds a high guard on planted support feet", () => {
   assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V2_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
@@ -35,13 +38,18 @@ test("generated kick pack uses standing Idle and keeps strong travel with fully 
   assert.ok(front && low && rising);
   for (const move of [front, low, rising]) {
     assert.equal(move.sourceAction, "Idle_Loop_Armature");
+    assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
+    assert.ok(move.guardHandMaxChestDistance < 0.34, `${move.action}: ${move.guardHandMaxChestDistance}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
-  assert.ok(front.strikeFootTravel > 0.40, front.strikeFootTravel);
-  assert.ok(low.strikeFootTravel > 0.30, low.strikeFootTravel);
-  assert.ok(rising.strikeFootTravel > 0.55, rising.strikeFootTravel);
+  assert.ok(front.strikeFootTravel > 0.45, front.strikeFootTravel);
+  assert.ok(front.strikeFootForwardReach > 0.38, front.strikeFootForwardReach);
+  assert.ok(low.strikeFootTravel > 0.32, low.strikeFootTravel);
+  assert.ok(low.strikeFootForwardReach > 0.24, low.strikeFootForwardReach);
+  assert.ok(rising.strikeFootTravel > 0.58, rising.strikeFootTravel);
+  assert.ok(rising.strikeFootForwardReach > 0.24, rising.strikeFootForwardReach);
   assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
   assert.ok(rising.strikeFootTravel > front.strikeFootTravel, `${rising.strikeFootTravel} !> ${front.strikeFootTravel}`);
 });

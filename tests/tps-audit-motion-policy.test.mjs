@@ -18,6 +18,9 @@ test("motion readability audit samples authored kicks at representative contact 
   assert.match(source, /game\.p1\.isActive\(\) && \(!lateContactSample \|\| game\.p1\.moveTick >= authoredContactTick\)/);
   assert.match(source, /const minimumLowKickDrop = 0\.04/);
   assert.match(source, /lowY < kickY - minimumLowKickDrop/);
+  assert.match(source, /peakStrikeY = -Infinity/);
+  assert.match(source, /peakStrikeY = Math\.max\(peakStrikeY, frameStrikeY\)/);
+  assert.match(source, /risingY = results\.risingKick\?\.peakStrikeY \?\?/);
   assert.match(source, /risingY > kickY \+ 0\.08/);
 });
 

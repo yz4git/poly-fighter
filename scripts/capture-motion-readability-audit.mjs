@@ -372,6 +372,7 @@ try {
       if (!game.p1.beginMove(moveId)) return { error: 'move-not-found', moveId };
       const move = game.p1.currentMove;
       let activeReached = false;
+      let peakStrikeY = -Infinity;
       let steps = 0;
       for (; steps < 90; steps += 1) {
         // Hits in the previous or current frame are allowed to create normal
@@ -385,6 +386,19 @@ try {
         auditTime += 1 / 60;
         game.updateVisual(game.p1, game.p2, auditTime);
         game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        // Gameplay ACTIVE ticks and the Blender-authored foot trajectory do not
+        // share the same normalized clock. Track the actual rendered striking
+        // foot through the sampled window instead of assuming the last ACTIVE
+        // tick is the visual apex.
+        if (moveId === 'risingKick') {
+          const framePoints = bonePoints(game.p1);
+          const frameStrikeY = move.visualContact === 'LEFT_FOOT'
+            ? framePoints?.footL?.y
+            : move.visualContact === 'RIGHT_FOOT'
+              ? framePoints?.footR?.y
+              : null;
+          if (Number.isFinite(frameStrikeY)) peakStrikeY = Math.max(peakStrikeY, frameStrikeY);
+        }
         const policy = game.p1.visual.root.userData.motionCorrectionPolicy;
         const phase = game.p1.visual.root.userData.motionExpansionPhase;
         const authoredContactTick = move.startup + move.active - 1;
@@ -429,6 +443,7 @@ try {
         contact,
         points,
         strikePoint,
+        peakStrikeY: Number.isFinite(peakStrikeY) ? peakStrikeY : null,
         targetHealth: game.p2.health,
         balanceVersion: root.userData.motionExpansionBalanceVersion ?? null,
         poseGraph: root.userData.motionExpansionPoseGraph ?? null,
@@ -579,7 +594,7 @@ try {
 
   const kickY = results.kick?.strikePoint?.y;
   const lowY = results.lowKick?.strikePoint?.y;
-  const risingY = results.risingKick?.strikePoint?.y;
+  const risingY = results.risingKick?.peakStrikeY ?? results.risingKick?.strikePoint?.y;
   if (![kickY, lowY, risingY].every(Number.isFinite)) {
     throw new Error(`Kick strike points missing: ${JSON.stringify({ kickY, lowY, risingY })}`);
   }

@@ -409,10 +409,11 @@ try {
       tailKind: data.motionExpansionTailKind ?? null,
       tailRemaining: data.motionExpansionTailRemaining ?? 0,
       clip: data.motionExpansionCurrentClip ?? null,
+      correctionsEnabled: data.motionCorrectionsEnabled ?? false,
     };
   `);
-  if (damageAfterfeelProbe.state !== 'IDLE' || !damageAfterfeelProbe.canAct || damageAfterfeelProbe.phase !== 'SETTLE' || damageAfterfeelProbe.tailKind !== 'REACTION' || !(damageAfterfeelProbe.tailRemaining > 0)) {
-    throw new Error(`TPS damage reaction did not retain presentation-only afterfeel after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);
+  if (damageAfterfeelProbe.state !== 'IDLE' || !damageAfterfeelProbe.canAct || (damageAfterfeelProbe.correctionsEnabled && (damageAfterfeelProbe.phase !== 'SETTLE' || damageAfterfeelProbe.tailKind !== 'REACTION' || !(damageAfterfeelProbe.tailRemaining > 0)))) {
+    throw new Error(`TPS damage reaction mode mismatch after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-damage-afterfeel.png`);
 
@@ -453,10 +454,11 @@ try {
       tailKind: data.motionExpansionTailKind ?? null,
       tailRemaining: data.motionExpansionTailRemaining ?? 0,
       clip: data.motionExpansionCurrentClip ?? null,
+      correctionsEnabled: data.motionCorrectionsEnabled ?? false,
     };
   `);
-  if (attackAfterfeelProbe.error || attackAfterfeelProbe.state !== 'IDLE' || !attackAfterfeelProbe.canAct || attackAfterfeelProbe.phase !== 'SETTLE' || attackAfterfeelProbe.tailKind !== 'ATTACK' || !(attackAfterfeelProbe.tailRemaining > 0)) {
-    throw new Error(`TPS attack did not retain presentation-only follow-through after gameplay recovery: ${JSON.stringify(attackAfterfeelProbe)}`);
+  if (attackAfterfeelProbe.error || attackAfterfeelProbe.state !== 'IDLE' || !attackAfterfeelProbe.canAct || (attackAfterfeelProbe.correctionsEnabled && (attackAfterfeelProbe.phase !== 'SETTLE' || attackAfterfeelProbe.tailKind !== 'ATTACK' || !(attackAfterfeelProbe.tailRemaining > 0)))) {
+    throw new Error(`TPS attack follow-through mode mismatch after gameplay recovery: ${JSON.stringify(attackAfterfeelProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-attack-afterfeel.png`);
 

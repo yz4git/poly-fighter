@@ -33,6 +33,13 @@ try {
   sessionId = session.sessionId;
   await command(`/session/${sessionId}/url`, "POST", { url });
   await delay(650);
+  await execute(sessionId, `
+    const current = JSON.parse(window.localStorage.getItem('poly-fighter-settings-v1') ?? '{}');
+    window.localStorage.setItem('poly-fighter-settings-v1', JSON.stringify({ ...current, motionCorrections: true }));
+    window.location.reload();
+    return true;
+  `);
+  await delay(650);
   if (!(await clickButton(sessionId, "TPS LOCK-ON BATTLE"))) throw new Error("TPS title button not found");
   await delay(120);
   if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");

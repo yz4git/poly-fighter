@@ -25,6 +25,7 @@ type SettingsDraft = {
   cameraShake: boolean;
   audio: boolean;
   vibration: boolean;
+  motionCorrections: boolean;
 };
 
 const DEFAULT_SETTINGS: SettingsDraft = {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: SettingsDraft = {
   cameraShake: true,
   audio: true,
   vibration: true,
+  motionCorrections: false,
 };
 
 function requestLandscape(): void {
@@ -467,6 +469,7 @@ export default function Home() {
           <button type="button" className="setting-row" onClick={() => persistSettings({ cameraShake: !settings.cameraShake })}><span>CAMERA SHAKE</span><b>{settings.cameraShake ? "ON" : "OFF"}</b></button>
           <button type="button" className="setting-row" onClick={() => persistSettings({ audio: !settings.audio })}><span>SYNTH AUDIO</span><b>{settings.audio ? "ON" : "OFF"}</b></button>
           <button type="button" className="setting-row" onClick={() => persistSettings({ vibration: !settings.vibration })}><span>HAPTIC FEEDBACK</span><b>{settings.vibration ? "ON" : "OFF"}</b></button>
+          <button type="button" className="setting-row" onClick={() => persistSettings({ motionCorrections: !settings.motionCorrections })}><span>MOTION CORRECTION</span><b>{settings.motionCorrections ? "ON" : "OFF"}</b></button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(false)}>DONE</button>
         </section>
       )}

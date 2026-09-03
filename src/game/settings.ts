@@ -1,3 +1,5 @@
+import { setMotionCorrectionsEnabled } from "./motion-correction-state";
+
 export type Quality = "LOW" | "NORMAL" | "HIGH";
 
 export interface Settings {
@@ -5,6 +7,7 @@ export interface Settings {
   cameraShake: boolean;
   audio: boolean;
   vibration: boolean;
+  motionCorrections: boolean;
 }
 
 const KEY = "poly-fighter-settings-v1";
@@ -13,6 +16,7 @@ const DEFAULTS: Settings = {
   cameraShake: true,
   audio: true,
   vibration: true,
+  motionCorrections: false,
 };
 
 export class SettingsManager {
@@ -26,6 +30,7 @@ export class SettingsManager {
     } catch {
       this.value = { ...DEFAULTS };
     }
+    setMotionCorrectionsEnabled(this.value.motionCorrections);
     return { ...this.value };
   }
 
@@ -35,6 +40,7 @@ export class SettingsManager {
 
   update(patch: Partial<Settings>): Settings {
     this.value = { ...this.value, ...patch };
+    setMotionCorrectionsEnabled(this.value.motionCorrections);
     if (typeof window !== "undefined") {
       try {
         window.localStorage.setItem(KEY, JSON.stringify(this.value));

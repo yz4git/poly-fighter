@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterRuntime } from "./fighter";
+import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 
@@ -719,9 +720,14 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.lastReactionSerial = fighter.reactionSerial;
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction);
   advance(runtime, timeSeconds, fighter.hitStop > 0);
-  neutralPoseCorrection(runtime, fighter);
-  guardPoseCorrection(runtime, fighter);
-  attackContactCorrection(runtime, fighter);
+  const correctionsEnabled = motionCorrectionsEnabled();
+  if (correctionsEnabled) {
+    neutralPoseCorrection(runtime, fighter);
+    guardPoseCorrection(runtime, fighter);
+    attackContactCorrection(runtime, fighter);
+  }
+  runtime.host.userData.quaterniusMotionCorrectionsEnabled = correctionsEnabled;
+  runtime.host.userData.quaterniusMotionMode = correctionsEnabled ? "CORRECTED" : "RAW_CLIP_PLAYBACK";
   runtime.model.updateMatrixWorld(true);
 }
 

@@ -1,0 +1,64 @@
+name: One-shot real-time TPS KO screen review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tps-ko-realtime-screen-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start preview
+        run: |
+          PORT=3000 npm start >/tmp/pf-ko-live.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/pf-ko-live.log; exit 1
+      - name: Capture live KO timeline
+        shell: bash
+        run: |
+          mkdir -p artifacts/tps-ko-realtime
+          cat >/tmp/ko-live.mjs <<'EOF'
+          import { spawn } from 'node:child_process';
+          import { writeFile } from 'node:fs/promises';
+          const driver=process.env.WEBDRIVER_BIN;if(!driver)throw new Error('no chromedriver');const port=9532;const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          const p=spawn(driver,[`--port=${port}`,'--allowed-ips='],{stdio:['ignore','pipe','pipe']});let dl='';p.stdout.on('data',c=>dl+=c);p.stderr.on('data',c=>dl+=c);
+          async function c(path,method='GET',body){const r=await fetch(`http://127.0.0.1:${port}${path}`,{method,headers:body===undefined?undefined:{'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok||j?.value?.error)throw new Error(`${r.status} ${JSON.stringify(j)}`);return j.value}
+          async function x(id,script,args=[]){return c(`/session/${id}/execute/sync`,'POST',{script,args})}async function ss(id,n){const b=await c(`/session/${id}/screenshot`);await writeFile(`artifacts/tps-ko-realtime/${n}.png`,Buffer.from(b,'base64'))}
+          async function click(id,t){return x(id,`const b=[...document.querySelectorAll('button')].find(e=>e.textContent?.includes(arguments[0]));if(!b)return false;b.click();return true`,[t])}
+          const lookup=`function fg(){const h=document.querySelector('main.poly-app');if(!h)return null;const k=Object.keys(h).find(k=>k.startsWith('__reactFiber$'));let f=k?h[k]:null,s=new Set;while(f&&!s.has(f)){s.add(f);let q=f.memoizedState;while(q){const v=q.memoizedState,c=v&&typeof v==='object'&&'current'in v?v.current:null;if(c&&c.p1&&c.p2&&c.renderer&&c.camera)return c;q=q.next}f=f.return}return null}`;
+          for(let i=0;i<120;i++){try{if((await fetch(`http://127.0.0.1:${port}/status`)).ok)break}catch{}await sleep(100)}let id;
+          try{const s=await c('/session','POST',{capabilities:{alwaysMatch:{browserName:'chrome','goog:chromeOptions':{args:['--headless=new','--no-sandbox','--disable-dev-shm-usage','--enable-webgl','--use-angle=swiftshader','--window-size=932,430','--hide-scrollbars']}}}});id=s.sessionId;await c(`/session/${id}/url`,'POST',{url:'http://127.0.0.1:3000/'});await sleep(900);if(!await click(id,'TPS LOCK-ON BATTLE'))throw new Error('title');await sleep(160);if(!await click(id,'ENGAGE TPS'))throw new Error('engage');await sleep(1500);
+            let ok=false;for(let i=0;i<80;i++){ok=await x(id,`${lookup}return !!fg()`);if(ok)break;await sleep(100)}if(!ok)throw new Error('game');
+            const start=await x(id,`${lookup}const g=fg();g.enemyOpeningGraceTicks=9999;g.input.clear();g.p1.health=100;g.p2.health=1;g.p1.position.set(0,0,1.1);g.p2.position.set(0,0,-0.4);g.p2.receiveDamage(20,18,0.7,1,true,4);g.checkFinish();return {pending:g.finishPending,state:g.p2.state}`);if(!start.pending)throw new Error('no pending');
+            await sleep(180);const a=await x(id,`${lookup}const g=fg();return {pending:g.finishPending,finished:g.finished,y:g.p2.position.y,grounded:g.p2.grounded,state:g.p2.state,clip:g.p2.visual.root.userData.quaterniusCurrentClip??null,badge:document.querySelector('.tps-badge')?.textContent??null}`);await ss(id,'01-live-ko-180ms');
+            await sleep(370);const b=await x(id,`${lookup}const g=fg();return {pending:g.finishPending,finished:g.finished,y:g.p2.position.y,grounded:g.p2.grounded,state:g.p2.state,clip:g.p2.visual.root.userData.quaterniusCurrentClip??null,badge:document.querySelector('.tps-badge')?.textContent??null}`);await ss(id,'02-live-ko-550ms');
+            await sleep(600);const d=await x(id,`${lookup}const g=fg();return g?{pending:g.finishPending,finished:g.finished,y:g.p2.position.y,grounded:g.p2.grounded,state:g.p2.state,clip:g.p2.visual.root.userData.quaterniusCurrentClip??null}:null`);await ss(id,'03-live-result-1150ms');const dom=await x(id,`return document.body.innerText.slice(0,1600)`);await writeFile('artifacts/tps-ko-realtime/live.json',JSON.stringify({start,a,b,d,dom},null,2));console.log(JSON.stringify({a,b,d},null,2));
+          }finally{if(id)await c(`/session/${id}`,'DELETE').catch(()=>{});p.kill('SIGTERM')}
+          EOF
+          DRIVER="$(command -v chromedriver || true)"; if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          WEBDRIVER_BIN="$DRIVER" node /tmp/ko-live.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tps-ko-realtime-screen-review
+          path: artifacts/tps-ko-realtime
+          retention-days: 14
+      - name: Remove one-shot workflow
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/tps-ko-realtime-screen-review.yml
+          git commit -m "Remove one-shot real-time TPS KO screen review"
+          git push

@@ -126,7 +126,22 @@ jobs:
           printf '%s\n' '${{ steps.foundry.outputs.kick_hash }}' > public/models/quaternius/blender-kicks-core.generator.sha256
 
       - name: Apply kick runtime integration
-        run: node scripts/apply-blender-motion-foundry-v2-kicks.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq 'QUATERNIUS_BLENDER_KICKS_URL' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'blenderKicks: MotionClipSource | null;' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'kick: "BF_FrontKick_R"' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'lowKick: "BF_LowKick_L"' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'risingKick: "BF_RisingKick_R"' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'quaterniusBlenderKickClipCount' src/game/visual-quaternius-runtime.ts \
+            && grep -Fq 'QUATERNIUS_BLENDER_KICKS_URL' src/game/model-viewer-motion.ts \
+            && grep -Fq 'hasBlenderFrontKick' scripts/capture-model-view-audit.mjs \
+            && grep -Fq 'model-view-motion-blender-rising-kick.png' scripts/capture-model-view-audit.mjs; then
+            echo 'Blender v2 grounded kick integration is already materialized; preserving later Foundry layers.'
+          else
+            node scripts/apply-blender-motion-foundry-v2-kicks.mjs
+          fi
 
       - uses: actions/setup-node@v4
         with:

@@ -183,7 +183,7 @@
   font-size: 10px;
   letter-spacing: .14em;
 }
-.tps-combo-active .round-readout small {
+.tps-face-safe-active .round-readout small {
   visibility: hidden;
 }
 @media (orientation: landscape) and (max-height: 560px) {

@@ -148,7 +148,7 @@ test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps leg
 
 test("TPS KO presentation waits for the defeated fighter to land before RESULT", async () => {
   const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
-  assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 24/);
+  assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 72/);
   assert.match(source, /TPS_KO_SETTLED_HOLD_TICKS = 30/);
   assert.match(source, /finishPending/);
   assert.match(source, /this\.p1\.updatePhysics\(FIXED_STEP\)/);
@@ -159,16 +159,18 @@ test("TPS KO presentation waits for the defeated fighter to land before RESULT",
   assert.doesNotMatch(source, /setTimeout\(\(\) => this\.options\.onResult/);
 });
 
-test("TPS combo readout uses a face-safe HUD lane instead of the center lane", async () => {
+test("TPS combo and KO readouts use a face-safe HUD lane instead of the center lane", async () => {
   const [page, css] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/hud-face-safe.css", import.meta.url), "utf8"),
   ]);
   assert.match(page, /tpsComboMessage/);
+  assert.match(page, /tpsKoMessage/);
+  assert.match(page, /tpsFaceSafeMessage/);
   assert.match(page, /tps-combo-badge/);
-  assert.match(page, /tps-combo-active/);
+  assert.match(page, /tps-face-safe-active/);
   assert.match(css, /\.tps-badge\.tps-combo-badge/);
   assert.match(css, /left: max\(24px/);
   assert.match(css, /transform: none/);
-  assert.match(css, /\.tps-combo-active \.round-readout small/);
+  assert.match(css, /\.tps-face-safe-active \.round-readout small/);
 });

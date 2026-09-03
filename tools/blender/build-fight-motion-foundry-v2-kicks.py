@@ -61,6 +61,8 @@ class KickSpec:
     guard_forward: float = 0.105
     guard_width: float = 0.105
     guard_height: float = 0.155
+    reach_ratios: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    reach_directions: PhaseOffsets = ((0.0, 0.0, 0.0),) * 7
 
     @property
     def start_frame(self) -> int:
@@ -118,6 +120,16 @@ FRONT_KICK = KickSpec(
     pelvis_pitch=(0.0, -2.0, -3.0, -5.0, -5.0, -1.0, 0.0),
     lower_pitch=(0.0, -2.0, -4.0, -6.0, -6.0, -1.0, 0.0),
     upper_pitch=(0.0, 1.0, 2.0, 3.0, 3.0, 1.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.90, 0.975, 0.982, 0.0, 0.0),
+    reach_directions=(
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.88, 0.0, 0.48),
+        (0.89, 0.0, 0.46),
+        (0.91, 0.0, 0.42),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+    ),
 )
 
 LOW_KICK = KickSpec(
@@ -184,6 +196,16 @@ RISING_KICK = KickSpec(
     lower_pitch=(0.0, -3.0, -7.0, -12.0, -13.0, -3.0, 0.0),
     upper_pitch=(0.0, 2.0, 5.0, 8.0, 9.0, 2.0, 0.0),
     guard_height=0.165,
+    reach_ratios=(0.0, 0.0, 0.88, 0.970, 0.978, 0.0, 0.0),
+    reach_directions=(
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.70, 0.0, 0.72),
+        (0.73, 0.0, 0.68),
+        (0.76, 0.0, 0.65),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+    ),
 )
 
 KICK_SPECS = (FRONT_KICK, LOW_KICK, RISING_KICK)
@@ -285,9 +307,28 @@ def add_kick_controls(
     strike_target = rig.v1.make_control(f"{spec.action_name}_CTRL_strike_foot", armature, strike_ankle)
     keys = []
     side_sign = 1.0 if strike == "l" else -1.0
-    for frame, (fwd, lateral, vertical) in zip(spec.phases, spec.foot_offsets):
-        offset = forward * fwd + left * (lateral * side_sign) + up * vertical
-        keys.append((frame, strike_ankle + offset))
+    start_hip = positions[spec.start_frame][thigh_name]
+    start_knee = positions[spec.start_frame][calf_name]
+    start_foot = positions[spec.start_frame][foot_name]
+    upper_leg_length = (start_hip - start_knee).length
+    lower_leg_length = (start_knee - start_foot).length
+    leg_length = upper_leg_length + lower_leg_length
+    if leg_length < 1e-4:
+        raise RuntimeError(f"{spec.action_name}: strike leg did not provide a usable authored length")
+    for frame, (fwd, lateral, vertical), reach_ratio, reach_direction in zip(
+        spec.phases, spec.foot_offsets, spec.reach_ratios, spec.reach_directions
+    ):
+        if reach_ratio > 0.0:
+            dir_fwd, dir_lateral, dir_up = reach_direction
+            direction = forward * dir_fwd + left * (dir_lateral * side_sign) + up * dir_up
+            if direction.length < 1e-4:
+                raise RuntimeError(f"{spec.action_name}: hip-relative reach direction is degenerate at frame {frame}")
+            direction.normalize()
+            target = positions[frame][thigh_name] + direction * (leg_length * reach_ratio)
+        else:
+            offset = forward * fwd + left * (lateral * side_sign) + up * vertical
+            target = strike_ankle + offset
+        keys.append((frame, target))
     rig.v1.set_control_keys(strike_target, armature, keys)
 
     hip = positions[spec.impact_frame][thigh_name]
@@ -438,6 +479,24 @@ def strike_knee_extension_degrees(scene: bpy.types.Scene, armature: bpy.types.Ob
     return math.degrees(upper.angle(lower))
 
 
+def strike_leg_reach_ratio(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
+    """Measure hip-to-ankle reach against the authored two-bone leg length at impact."""
+    thigh = f"thigh_{spec.strike_suffix}"
+    calf = f"calf_{spec.strike_suffix}"
+    foot = f"foot_{spec.strike_suffix}"
+    scene.frame_set(spec.start_frame); bpy.context.view_layer.update()
+    start_hip = rig.v1.pose_head(armature, thigh)
+    start_knee = rig.v1.pose_head(armature, calf)
+    start_ankle = rig.v1.pose_head(armature, foot)
+    leg_length = (start_hip - start_knee).length + (start_knee - start_ankle).length
+    if leg_length < 1e-6:
+        return 0.0
+    scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
+    hip = rig.v1.pose_head(armature, thigh)
+    ankle = rig.v1.pose_head(armature, foot)
+    return (hip - ankle).length / leg_length
+
+
 def guard_distance(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
     scene.frame_set(spec.impact_frame); bpy.context.view_layer.update()
     chest = rig.v1.pose_head(armature, "spine_03")
@@ -498,6 +557,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "constrainedStrikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
         "constrainedStrikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "constrainedStrikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
+        "constrainedStrikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),
         "constrainedGuardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "constrainedGuardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "constrainedSupportFootLockMaxDrift": support_drift(scene, armature, spec),
@@ -523,6 +583,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "strikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
         "strikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "strikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
+        "strikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),
         "guardHandMaxChestDistance": guard_distance(scene, armature, spec),
         "guardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "supportFootLockMaxDrift": support_drift(scene, armature, spec),
@@ -539,6 +600,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             "Cross max hand-to-pelvis reach chooses forward sign",
             "shared COG/pelvis and staged torso masters",
             f"{spec.strike_side.upper()} strike-leg two-bone IK",
+            "hip-relative impact reach from authored leg length",
             "impact knee-extension quality gate",
             "move-specific strike-foot orientation",
             "dual high-guard hand IK",

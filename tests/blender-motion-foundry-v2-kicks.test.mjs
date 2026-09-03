@@ -27,6 +27,8 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /strikeFootForwardReach/);
   assert.match(generator, /strikeFootVerticalRise/);
   assert.match(generator, /strikeKneeExtensionDegrees/);
+  assert.match(generator, /strikeLegReachRatio/);
+  assert.match(generator, /hip-relative reach direction is degenerate/);
   assert.match(generator, /guardHandMinChestHeight/);
   assert.match(generator, /rig\.add_master_controls/);
   assert.match(generator, /blender-kicks-core\.glb/);
@@ -46,6 +48,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
     assert.ok(move.guardHandMaxChestDistance < 0.34, `${move.action}: ${move.guardHandMaxChestDistance}`);
     assert.ok(move.strikeKneeExtensionDegrees > 135, `${move.action}: ${move.strikeKneeExtensionDegrees}`);
+    assert.ok(move.strikeLegReachRatio > 0.85, `${move.action}: ${move.strikeLegReachRatio}`);
     assert.ok(move.guardHandMinChestHeight > 0.08, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);
@@ -55,14 +58,17 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(front.strikeFootForwardReach > 0.48, front.strikeFootForwardReach);
   assert.ok(front.strikeFootVerticalRise > 0.27, front.strikeFootVerticalRise);
   assert.ok(front.strikeKneeExtensionDegrees > 150, front.strikeKneeExtensionDegrees);
+  assert.ok(front.strikeLegReachRatio > 0.96, front.strikeLegReachRatio);
   assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
   assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
   assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);
   assert.ok(low.strikeKneeExtensionDegrees > 145, low.strikeKneeExtensionDegrees);
+  assert.ok(low.strikeLegReachRatio > 0.90, low.strikeLegReachRatio);
   assert.ok(rising.strikeFootTravel > 0.68, rising.strikeFootTravel);
   assert.ok(rising.strikeFootForwardReach > 0.34, rising.strikeFootForwardReach);
   assert.ok(rising.strikeFootVerticalRise > 0.52, rising.strikeFootVerticalRise);
   assert.ok(rising.strikeKneeExtensionDegrees > 145, rising.strikeKneeExtensionDegrees);
+  assert.ok(rising.strikeLegReachRatio > 0.95, rising.strikeLegReachRatio);
   assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
   assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });

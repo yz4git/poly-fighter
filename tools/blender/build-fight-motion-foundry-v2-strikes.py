@@ -16,10 +16,11 @@ import motion_foundry_v2_rig as rig
 
 ZERO_OFFSETS = ((0.0, 0.0, 0.0),) * 7
 
-# Punch_Jab's imported left-hand source track carries only a small lead-hand
-# displacement. The shared rig deliberately leaves move intent in these specs,
-# so Jab/Body Blow amplify that valid direction vector instead of baking a
-# world-axis assumption into the common IK/COG implementation.
+# Punch_Jab's imported lead-hand track changes direction late in the source
+# action. Sampling too deep into that late arc makes a large IK multiplier wrap
+# the fist inward across the chest. Keep the authored Jab fast, but take impact
+# from the earlier direct portion of the same proven source path. This retains
+# the common rig and avoids a world-axis special case in shared IK code.
 JAB_SPEC = rig.StrikeSpec(
     action_name="BF_Jab_L",
     version="BLENDER_MOTION_FOUNDRY_V2_JAB",
@@ -34,15 +35,15 @@ JAB_SPEC = rig.StrikeSpec(
     support_side="r",
     source_knots=(
         (0.00, 0.00),
-        (0.12, 0.07),
-        (0.28, 0.23),
-        (0.42, 0.48),
-        (0.52, 0.72),
-        (0.60, 0.82),
-        (0.79, 0.93),
+        (0.12, 0.06),
+        (0.28, 0.17),
+        (0.40, 0.35),
+        (0.50, 0.64),
+        (0.60, 0.78),
+        (0.79, 0.92),
         (1.00, 1.00),
     ),
-    hand_scales=(0.00, -0.05, 3.15, 4.00, 4.15, None, None),
+    hand_scales=(0.00, -0.05, 2.40, 3.20, 3.32, None, None),
     hand_offsets=ZERO_OFFSETS,
     ik_influences=(0.00, 0.06, 0.78, 1.00, 0.70, 0.08, 0.00),
     pelvis_forward=(0.000, -0.005, 0.006, 0.014, 0.016, 0.004, 0.000),

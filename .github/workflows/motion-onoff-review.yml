@@ -47,6 +47,28 @@ jobs:
           cat /tmp/poly-fighter-motion-review.log
           exit 1
 
+      - name: Prime correction assets for deterministic A-B capture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/capture-motion-onoff-review.mjs')
+          text = p.read_text()
+          anchor = '  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");\n\n  let ready = null;'
+          replacement = '''  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");
+  await delay(120);
+  await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    if (!game) return false;
+    game.updateSettings({ motionCorrections: true });
+    return true;
+  `);
+
+  let ready = null;'''
+          if anchor not in text:
+              raise SystemExit('capture prime anchor missing')
+          p.write_text(text.replace(anchor, replacement, 1))
+          PY
+
       - name: Capture correction OFF and ON at identical poses
         run: |
           DRIVER="$(command -v chromedriver || true)"

@@ -5,27 +5,29 @@ Authors grounded defensive reactions as baked UAL-compatible Actions:
 - BF_HitHeavy: planted full-body chest hit with delayed head/torso recoil.
 - BF_GuardBreak: high guard blown open while both feet remain planted.
 
-This is intentionally offline authoring. Runtime gameplay owns world movement,
-hit stun and knockback; this pack only improves readable full-body response.
+Runtime gameplay owns world movement, hit stun and knockback. This offline pack
+only improves the readable full-body reaction pose and recovery.
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 import math
 import os
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import List, Tuple
 
 import bpy
-from mathutils import Euler, Matrix, Quaternion, Vector
+from mathutils import Euler, Vector
 
 import motion_foundry_v2_rig as rig
 
 FPS = 60
 v1 = rig.v1
 Curve = Tuple[Tuple[float, float], ...]
+HEAD_BONE = ""
 
 
 def _argv_after_double_dash() -> List[str]:
@@ -136,9 +138,34 @@ def configure_source(spec: ReactionSpec) -> None:
     v1.source_u_for_destination_u = lambda u: rig.remap_u(spec.source_knots, u)
 
 
+def resolve_head_bone(armature: bpy.types.Object) -> str:
+    names = list(armature.pose.bones.keys())
+    for candidate in ("head", "head_01", "Head", "neck", "neck_01", "Neck"):
+        if candidate in armature.pose.bones:
+            return candidate
+    for needle in ("head", "neck"):
+        match = next((name for name in names if needle in name.lower()), None)
+        if match:
+            return match
+    spine = armature.pose.bones.get("spine_03")
+    if spine:
+        descendants = []
+        stack = list(spine.children)
+        while stack:
+            bone = stack.pop()
+            stack.extend(bone.children)
+            lower = bone.name.lower()
+            if not any(part in lower for part in ("arm", "clavicle", "shoulder", "hand", "finger")):
+                descendants.append(bone)
+        if descendants:
+            return max(descendants, key=lambda bone: bone.head.z).name
+    raise RuntimeError(f"Reaction Foundry could not resolve a head/neck bone. Available: {names}")
+
+
 def ensure_bones(armature: bpy.types.Object) -> None:
+    global HEAD_BONE
     required = (
-        "pelvis", "spine_02", "spine_03", "head",
+        "pelvis", "spine_02", "spine_03",
         "upperarm_l", "lowerarm_l", "hand_l",
         "upperarm_r", "lowerarm_r", "hand_r",
         "thigh_l", "calf_l", "foot_l",
@@ -147,6 +174,8 @@ def ensure_bones(armature: bpy.types.Object) -> None:
     missing = [name for name in required if name not in armature.pose.bones]
     if missing:
         raise RuntimeError(f"Reaction Foundry required bones missing: {missing}")
+    HEAD_BONE = resolve_head_bone(armature)
+    print("REACTION_HEAD_BONE", HEAD_BONE)
     for pose_bone in armature.pose.bones:
         pose_bone.rotation_mode = "QUATERNION"
 
@@ -169,21 +198,9 @@ def apply_body_direction(scene: bpy.types.Scene, armature: bpy.types.Object, spe
         pelvis.location.z += curve_value(spec.pelvis_drop, u)
         pelvis.keyframe_insert(data_path="location", frame=frame, group="pelvis")
         add_rotation_delta(pelvis, (0.0, 0.0, curve_value(spec.pelvis_roll, u)), frame)
-        add_rotation_delta(
-            armature.pose.bones["spine_02"],
-            (curve_value(spec.lower_pitch, u), 0.0, curve_value(spec.lower_roll, u)),
-            frame,
-        )
-        add_rotation_delta(
-            armature.pose.bones["spine_03"],
-            (curve_value(spec.upper_pitch, u), 0.0, curve_value(spec.upper_roll, u)),
-            frame,
-        )
-        add_rotation_delta(
-            armature.pose.bones["head"],
-            (curve_value(spec.head_pitch, u), 0.0, curve_value(spec.head_roll, u)),
-            frame,
-        )
+        add_rotation_delta(armature.pose.bones["spine_02"], (curve_value(spec.lower_pitch, u), 0.0, curve_value(spec.lower_roll, u)), frame)
+        add_rotation_delta(armature.pose.bones["spine_03"], (curve_value(spec.upper_pitch, u), 0.0, curve_value(spec.upper_roll, u)), frame)
+        add_rotation_delta(armature.pose.bones[HEAD_BONE], (curve_value(spec.head_pitch, u), 0.0, curve_value(spec.head_roll, u)), frame)
         if not spec.guard_break:
             arm = curve_value(spec.arm_open, u)
             add_rotation_delta(armature.pose.bones["upperarm_l"], (-arm * 0.22, 0.0, -arm), frame)
@@ -283,25 +300,31 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
     scene.frame_set(spec.start_frame)
     bpy.context.view_layer.update()
     start_torso = rig.pose_world_matrix(armature, "spine_03").to_quaternion()
-    start_head = rig.pose_world_matrix(armature, "head").to_quaternion()
+    start_head = rig.pose_world_matrix(armature, HEAD_BONE).to_quaternion()
     start_pelvis = world_position(armature, "pelvis")
     start_left_foot = world_position(armature, "foot_l")
     start_right_foot = world_position(armature, "foot_r")
+    start_left_foot_q = rig.pose_world_matrix(armature, "foot_l").to_quaternion()
+    start_right_foot_q = rig.pose_world_matrix(armature, "foot_r").to_quaternion()
     start_sep = world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r"))
     torso_excursion = 0.0
     head_excursion = 0.0
     pelvis_vertical = 0.0
     left_foot_drift = 0.0
     right_foot_drift = 0.0
+    left_foot_angle = 0.0
+    right_foot_angle = 0.0
     max_hand_sep = start_sep
     for frame in range(spec.start_frame, spec.end_frame + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         torso_excursion = max(torso_excursion, math.degrees(start_torso.rotation_difference(rig.pose_world_matrix(armature, "spine_03").to_quaternion()).angle))
-        head_excursion = max(head_excursion, math.degrees(start_head.rotation_difference(rig.pose_world_matrix(armature, "head").to_quaternion()).angle))
+        head_excursion = max(head_excursion, math.degrees(start_head.rotation_difference(rig.pose_world_matrix(armature, HEAD_BONE).to_quaternion()).angle))
         pelvis_vertical = max(pelvis_vertical, abs(world_position(armature, "pelvis").z - start_pelvis.z))
         left_foot_drift = max(left_foot_drift, world_position(armature, "foot_l").distance_to(start_left_foot))
         right_foot_drift = max(right_foot_drift, world_position(armature, "foot_r").distance_to(start_right_foot))
+        left_foot_angle = max(left_foot_angle, math.degrees(start_left_foot_q.rotation_difference(rig.pose_world_matrix(armature, "foot_l").to_quaternion()).angle))
+        right_foot_angle = max(right_foot_angle, math.degrees(start_right_foot_q.rotation_difference(rig.pose_world_matrix(armature, "foot_r").to_quaternion()).angle))
         max_hand_sep = max(max_hand_sep, world_position(armature, "hand_l").distance_to(world_position(armature, "hand_r")))
     scene.frame_set(spec.end_frame)
     bpy.context.view_layer.update()
@@ -310,6 +333,7 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
         "version": spec.version,
         "action": spec.action_name,
         "sourceAction": spec.source_action_hint,
+        "headBone": HEAD_BONE,
         "fps": FPS,
         "startFrame": spec.start_frame,
         "endFrame": spec.end_frame,
@@ -320,6 +344,8 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
         "pelvisVerticalExcursion": pelvis_vertical,
         "leftFootDriftMax": left_foot_drift,
         "rightFootDriftMax": right_foot_drift,
+        "leftFootAngularDriftDegrees": left_foot_angle,
+        "rightFootAngularDriftDegrees": right_foot_angle,
         "handSeparationIncrease": max_hand_sep - start_sep,
         "settleTorsoResidualDegrees": settle_residual,
         "boneCount": len(armature.pose.bones),
@@ -327,7 +353,7 @@ def action_metrics(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Rea
     }
 
 
-def build_reaction(scene: bpy.types.Scene, armature: bpy.types.Object, spec: ReactionSpec) -> Tuple[bpy.types.Action, dict]:
+def build_reaction(scene: bpy.types.Scene, armature: bpy.types.Object, spec: ReactionSpec):
     configure_source(spec)
     source = v1.find_source_action()
     source_name = source.name
@@ -367,8 +393,8 @@ def main() -> None:
     ensure_bones(armature)
     scene = bpy.context.scene
     scene.render.fps = FPS
-    actions: List[bpy.types.Action] = []
-    moves: List[dict] = []
+    actions = []
+    moves = []
     for spec in REACTIONS:
         action, metrics = build_reaction(scene, armature, spec)
         actions.append(action)
@@ -391,7 +417,7 @@ def main() -> None:
         blend_name="blender-reactions-core-v2.blend",
         metrics_name="blender-reactions-core.metrics.json",
     )
-    print(rig.json.dumps(summary, indent=2) if hasattr(rig, "json") else summary)
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

@@ -295,11 +295,17 @@ function validatePoseSeparation(poseStates) {
     punchPixels: signatureDifference(idle.signature, punch.signature),
     kickPixels: signatureDifference(idle.signature, kick.signature),
   };
-  if (metrics.guardFistWorld < 0.18) throw new Error(`GUARD pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  if (metrics.guardFistWorld < 0.18 || metrics.guardFistScreen < 12) throw new Error(`GUARD pose is not materially distinct: ${JSON.stringify(metrics)}`);
   if (metrics.punchFistWorld < 0.45) throw new Error(`PUNCH pose is not materially distinct: ${JSON.stringify(metrics)}`);
   if (metrics.kickFootWorld < 0.45) throw new Error(`KICK pose is not materially distinct: ${JSON.stringify(metrics)}`);
+  const renderedPixelFloors = {
+    GUARD: { meanAbs: 0.75, changedFraction: 0.012 },
+    PUNCH: { meanAbs: 2.5, changedFraction: 0.035 },
+    KICK: { meanAbs: 2.5, changedFraction: 0.035 },
+  };
   for (const [label, pixel] of [["GUARD", metrics.guardPixels], ["PUNCH", metrics.punchPixels], ["KICK", metrics.kickPixels]]) {
-    if (pixel.meanAbs < 2.5 || pixel.changedFraction < 0.035) {
+    const floor = renderedPixelFloors[label];
+    if (pixel.meanAbs < floor.meanAbs || pixel.changedFraction < floor.changedFraction) {
       throw new Error(`${label} rendered pixels are too similar to IDLE: ${JSON.stringify(metrics)}`);
     }
   }

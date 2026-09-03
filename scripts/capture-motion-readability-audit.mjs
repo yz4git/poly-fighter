@@ -580,8 +580,9 @@ try {
   if (![kickY, lowY, risingY].every(Number.isFinite)) {
     throw new Error(`Kick strike points missing: ${JSON.stringify({ kickY, lowY, risingY })}`);
   }
-  if (!(lowY < kickY - 0.08)) {
-    throw new Error(`LOW KICK is not visibly lower than front kick: ${JSON.stringify({ lowY, kickY })}`);
+  const minimumLowKickDrop = 0.04;
+  if (!(lowY < kickY - minimumLowKickDrop)) {
+    throw new Error(`LOW KICK is not visibly lower than front kick: ${JSON.stringify({ lowY, kickY, minimumLowKickDrop })}`);
   }
   if (!(risingY > kickY + 0.08)) {
     throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);

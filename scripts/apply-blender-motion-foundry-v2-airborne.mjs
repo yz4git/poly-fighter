@@ -6,8 +6,28 @@ async function patch(path, mutator) {
   if (after !== before) await writeFile(path, after);
 }
 
+const appliedMarkers = new Map([
+  ["runtime airborne URL", "QUATERNIUS_BLENDER_AIRBORNE_URL"],
+  ["runtime airborne resource", "blenderAirborne: MotionClipSource | null;"],
+  ["runtime airborne loader tuple", "const blenderAirborneMotion ="],
+  ["runtime airborne loader result", "blenderAirborne: blenderAirborne ?"],
+  ["Dash Kick routing", 'dashKick: "BF_DashKick_R"'],
+  ["runtime airborne clip merge", "const blenderAirborneClips ="],
+  ["runtime airborne fallback", '["BF_DashKick_R", "PF_DashKick_R"]'],
+  ["runtime airborne telemetry count", "quaterniusBlenderAirborneClipCount"],
+  ["runtime airborne telemetry source", "quaterniusDashKickMotionSource"],
+  ["viewer airborne import", "QUATERNIUS_BLENDER_AIRBORNE_URL,"],
+  ["viewer airborne loader tuple", "const blenderAirborneMotion ="],
+  ["viewer airborne pack", "if (blenderAirborne) packs.push"],
+  ["audit airborne readiness fields", "hasBlenderDashKick:"],
+  ["audit airborne readiness condition", "state?.hasBlenderDashKick"],
+  ["audit airborne A-B captures", "const proceduralDashKick ="],
+]);
+
 function replaceOnce(source, before, after, label) {
   if (source.includes(after)) return source;
+  const marker = appliedMarkers.get(label);
+  if (marker && source.includes(marker)) return source;
   if (!source.includes(before)) throw new Error(`Airborne Foundry patch anchor missing: ${label}`);
   return source.replace(before, after);
 }

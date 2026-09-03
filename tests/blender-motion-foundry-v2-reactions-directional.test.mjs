@@ -54,6 +54,9 @@ test("generated directional library contains all reaction classes with planted f
     assert.ok(move.boneCount >= 40, `${name}: bones ${move.boneCount}`);
   }
 
+  const lightPeaks = [];
+  const midPeaks = [];
+  const counterPeaks = [];
   for (const side of ["L", "R"]) {
     const light = byAction.get(`BF_HitLight_${side}`);
     const mid = byAction.get(`BF_HitMid_${side}`);
@@ -70,12 +73,23 @@ test("generated directional library contains all reaction classes with planted f
     assert.equal(light.reactionSide, side === "L" ? "LEFT" : "RIGHT");
     assert.equal(mid.reactionSide, side === "L" ? "LEFT" : "RIGHT");
     assert.equal(counter.reactionSide, side === "L" ? "LEFT" : "RIGHT");
+    lightPeaks.push(light.torsoExcursionDegrees);
+    midPeaks.push(mid.torsoExcursionDegrees);
+    counterPeaks.push(counter.torsoExcursionDegrees);
+  }
+
+  assert.ok(Math.max(...lightPeaks) < Math.min(...midPeaks), `Light/Mid hierarchy collapsed: ${lightPeaks} vs ${midPeaks}`);
+  assert.ok(Math.max(...midPeaks) < Math.min(...counterPeaks), `Mid/Counter hierarchy collapsed: ${midPeaks} vs ${counterPeaks}`);
+  for (const [label, pair] of [["light", lightPeaks], ["mid", midPeaks], ["counter", counterPeaks]]) {
+    const asymmetry = Math.abs(pair[0] - pair[1]) / Math.max(pair[0], pair[1]);
+    assert.ok(asymmetry < 0.18, `${label} L/R intensity imbalance ${asymmetry}`);
   }
 
   const edge = byAction.get("BF_EdgeStagger");
   assert.equal(edge.reactionClass, "EDGE");
   assert.equal(edge.edgeSafe, true);
   assert.ok(edge.torsoExcursionDegrees > 10, edge.torsoExcursionDegrees);
+  assert.ok(edge.torsoExcursionDegrees < Math.min(...counterPeaks), `Edge stagger is too explosive: ${edge.torsoExcursionDegrees}`);
 });
 
 test("combat classifies visual reactions without changing damage, stun, or knockback rules", () => {

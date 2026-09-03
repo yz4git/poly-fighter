@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-// User-authored checkpoint: regenerate and audit hip-relative Front/Rising kick reach geometry.
+// Final user-authored checkpoint: audit the generated hip-relative kick GLB in the real WebGL viewer.
 const generator = await readFile(new URL("../tools/blender/build-fight-motion-foundry-v2-kicks.py", import.meta.url), "utf8");
 const integrator = await readFile(new URL("../scripts/apply-blender-motion-foundry-v2-kicks.mjs", import.meta.url), "utf8");
 const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");

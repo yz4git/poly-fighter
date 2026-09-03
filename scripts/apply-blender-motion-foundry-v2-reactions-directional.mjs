@@ -44,7 +44,7 @@ await patch("src/game/combat.ts", (input) => {
   source = replaceOnce(
     source,
     "    if (blocked) {\n      defender.receiveBlock(move.guardDamage, move.blockStun, Math.max(2, move.hitStop - 1));\n    } else {\n      defender.receiveDamage(",
-    "    if (blocked) {\n      defender.receiveBlock(move.guardDamage, move.blockStun, Math.max(2, move.hitStop - 1));\n    } else {\n      const reactionSide = move.visualContact.startsWith(\"LEFT_\") ? \"LEFT\" : \"RIGHT\";\n      const reactionKind = counter\n        ? \"COUNTER\"\n        : damage <= 7\n          ? \"LIGHT\"\n          : damage <= 13\n            ? \"MID\"\n            : \"HEAVY\";\n      const reactionAtEdge = Math.abs(defender.position.x) >= VISUAL_EDGE_X || Math.abs(defender.position.z) >= VISUAL_EDGE_Z;\n      defender.setHitReactionVisual(reactionKind, reactionSide, reactionAtEdge);\n      defender.receiveDamage(",
+    "    if (blocked) {\n      defender.receiveBlock(move.guardDamage, move.blockStun, Math.max(2, move.hitStop - 1));\n    } else {\n      const reactionSide = (move.visualContact ?? \"BODY\").startsWith(\"LEFT_\") ? \"LEFT\" : \"RIGHT\";\n      const reactionKind = counter\n        ? \"COUNTER\"\n        : damage <= 7\n          ? \"LIGHT\"\n          : damage <= 13\n            ? \"MID\"\n            : \"HEAVY\";\n      const reactionAtEdge = Math.abs(defender.position.x) >= VISUAL_EDGE_X || Math.abs(defender.position.z) >= VISUAL_EDGE_Z;\n      defender.setHitReactionVisual(reactionKind, reactionSide, reactionAtEdge);\n      defender.receiveDamage(",
     "combat reaction visual classification",
   );
   return source;

@@ -13,6 +13,7 @@ const validationWorkflow = await readFile(new URL("../.github/workflows/blender-
 const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
 const viewer = await readFile(new URL("../src/game/model-viewer-motion.ts", import.meta.url), "utf8");
 const audit = await readFile(new URL("../scripts/capture-model-view-audit.mjs", import.meta.url), "utf8");
+const strikeMetrics = JSON.parse(await readFile(new URL("../public/models/quaternius/blender-strikes-core.metrics.json", import.meta.url), "utf8"));
 
 test("Foundry v2 centralises COG torso hand IK and full support-foot lock in one shared strike rig", () => {
   assert.match(sharedRig, /class StrikeSpec/);
@@ -46,6 +47,21 @@ test("shared strike pack authors Jab Body Blow and Backfist with move-specific t
   assert.match(strikeGenerator, /pelvis_pitch=/);
   assert.match(strikeGenerator, /blender-strikes-core\.glb/);
   assert.match(strikeGenerator, /rig\.export_action_library/);
+});
+
+test("recalibrated shared strikes retain useful reach while the support foot stays locked", () => {
+  const byAction = new Map(strikeMetrics.moves.map((move) => [move.action, move]));
+  const jab = byAction.get("BF_Jab_L");
+  const bodyBlow = byAction.get("BF_BodyBlow_L");
+  const backfist = byAction.get("BF_Backfist_R");
+  assert.ok(jab && bodyBlow && backfist);
+  assert.ok(jab.strikeHandTravel > 0.30, jab.strikeHandTravel);
+  assert.ok(bodyBlow.strikeHandTravel > 0.38, bodyBlow.strikeHandTravel);
+  assert.ok(backfist.strikeHandTravel > 0.45, backfist.strikeHandTravel);
+  for (const move of [jab, bodyBlow, backfist]) {
+    assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
+    assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);
+  }
 });
 
 test("runtime prefers authored shared strikes but keeps independent procedural fallbacks", () => {

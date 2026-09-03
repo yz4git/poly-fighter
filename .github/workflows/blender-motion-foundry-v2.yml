@@ -121,8 +121,16 @@ jobs:
           printf '%s\n' '${{ steps.foundry.outputs.script_hash }}' > public/models/quaternius/blender-cross-core.generator.sha256
 
       - name: Apply v2 runtime integration
+        shell: bash
         run: |
-          node scripts/apply-blender-motion-foundry-v2.mjs
+          set -euo pipefail
+          if grep -q 'QUATERNIUS_BLENDER_CROSS_URL' src/game/visual-quaternius-runtime.ts \
+            && grep -q 'straight: "BF_Cross_R"' src/game/visual-quaternius-runtime.ts \
+            && grep -q 'QUATERNIUS_BLENDER_CROSS_URL' src/game/model-viewer-motion.ts; then
+            echo 'Blender v2 Cross runtime integration already present; preserving shared-strike superset.'
+          else
+            node scripts/apply-blender-motion-foundry-v2.mjs
+          fi
           node scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
 
       - uses: actions/setup-node@v4

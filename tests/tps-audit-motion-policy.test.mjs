@@ -1,3 +1,4 @@
+// Policy regression tests intentionally cover both authored-preserve and procedural-assist paths.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";

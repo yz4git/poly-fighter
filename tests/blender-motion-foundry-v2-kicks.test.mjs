@@ -73,19 +73,26 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });
 
-test("runtime prefers authored grounded kicks with independent PF fallbacks while Dash Kick stays procedural", () => {
+test("runtime prefers authored grounded kicks and the dedicated airborne Dash Kick with independent PF fallbacks", () => {
   assert.match(runtime, /QUATERNIUS_BLENDER_KICKS_URL/);
+  assert.match(runtime, /QUATERNIUS_BLENDER_AIRBORNE_URL/);
   assert.match(runtime, /blenderKicks: MotionClipSource \| null/);
+  assert.match(runtime, /blenderAirborne: MotionClipSource \| null/);
   assert.match(runtime, /blenderKickClips/);
+  assert.match(runtime, /blenderAirborneClips/);
   assert.match(runtime, /kick: "BF_FrontKick_R"/);
   assert.match(runtime, /lowKick: "BF_LowKick_L"/);
   assert.match(runtime, /risingKick: "BF_RisingKick_R"/);
-  assert.match(runtime, /dashKick: "PF_DashKick_R"/);
+  assert.match(runtime, /dashKick: "BF_DashKick_R"/);
   assert.match(runtime, /\["BF_FrontKick_R", "PF_FrontKick_R"\]/);
   assert.match(runtime, /\["BF_LowKick_L", "PF_LowKick_L"\]/);
   assert.match(runtime, /\["BF_RisingKick_R", "PF_RisingKick_R"\]/);
+  assert.match(runtime, /\["BF_DashKick_R", "PF_DashKick_R"\]/);
   assert.match(runtime, /quaterniusBlenderKickClipCount/);
+  assert.match(runtime, /quaterniusBlenderAirborneClipCount/);
+  assert.match(runtime, /quaterniusDashKickMotionSource/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_KICKS/);
+  assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_AIRBORNE/);
   assert.match(integrator, /kick: \\"BF_FrontKick_R\\"|kick: "BF_FrontKick_R"/);
   assert.match(integrator, /lowKick: \\"BF_LowKick_L\\"|lowKick: "BF_LowKick_L"/);
   assert.match(integrator, /risingKick: \\"BF_RisingKick_R\\"|risingKick: "BF_RisingKick_R"/);

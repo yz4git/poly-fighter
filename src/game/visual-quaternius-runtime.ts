@@ -14,6 +14,7 @@ export const QUATERNIUS_BLENDER_CORE_URL = `${BASE_PATH}/models/quaternius/blend
 export const QUATERNIUS_BLENDER_CROSS_URL = `${BASE_PATH}/models/quaternius/blender-cross-core.glb`;
 export const QUATERNIUS_BLENDER_STRIKES_URL = `${BASE_PATH}/models/quaternius/blender-strikes-core.glb`;
 export const QUATERNIUS_BLENDER_KICKS_URL = `${BASE_PATH}/models/quaternius/blender-kicks-core.glb`;
+export const QUATERNIUS_BLENDER_AIRBORNE_URL = `${BASE_PATH}/models/quaternius/blender-airborne-core.glb`;
 
 export type QuaterniusBodyType = "MALE" | "FEMALE";
 
@@ -29,6 +30,7 @@ type MotionResources = {
   blenderCross: MotionClipSource | null;
   blenderStrikes: MotionClipSource | null;
   blenderKicks: MotionClipSource | null;
+  blenderAirborne: MotionClipSource | null;
 };
 
 type RuntimeResources = {
@@ -85,6 +87,7 @@ function loadMotion(): Promise<MotionResources> {
   const blenderCrossMotion = loader.loadAsync(QUATERNIUS_BLENDER_CROSS_URL).catch(() => null);
   const blenderStrikeMotion = loader.loadAsync(QUATERNIUS_BLENDER_STRIKES_URL).catch(() => null);
   const blenderKickMotion = loader.loadAsync(QUATERNIUS_BLENDER_KICKS_URL).catch(() => null);
+  const blenderAirborneMotion = loader.loadAsync(QUATERNIUS_BLENDER_AIRBORNE_URL).catch(() => null);
   motionPromise = Promise.all([
     loader.loadAsync(QUATERNIUS_UAL_CORE_URL),
     loader.loadAsync(QUATERNIUS_PROCEDURAL_CORE_URL),
@@ -92,7 +95,8 @@ function loadMotion(): Promise<MotionResources> {
     blenderCrossMotion,
     blenderStrikeMotion,
     blenderKickMotion,
-  ]).then(([base, procedural, blender, blenderCross, blenderStrikes, blenderKicks]) => ({
+    blenderAirborneMotion,
+  ]).then(([base, procedural, blender, blenderCross, blenderStrikes, blenderKicks, blenderAirborne]) => ({
     // Each Blender Foundry pack is optional and falls back independently.
     // The shared strike pack carries Jab / Body Blow / Backfist in one GLB.
     base: { source: base.scene, clips: base.animations },
@@ -101,6 +105,7 @@ function loadMotion(): Promise<MotionResources> {
     blenderCross: blenderCross ? { source: blenderCross.scene, clips: blenderCross.animations } : null,
     blenderStrikes: blenderStrikes ? { source: blenderStrikes.scene, clips: blenderStrikes.animations } : null,
     blenderKicks: blenderKicks ? { source: blenderKicks.scene, clips: blenderKicks.animations } : null,
+    blenderAirborne: blenderAirborne ? { source: blenderAirborne.scene, clips: blenderAirborne.animations } : null,
   })).catch((error) => {
     motionPromise = null;
     throw error;
@@ -458,7 +463,7 @@ const PROCEDURAL_ATTACK_CLIPS: Readonly<Record<string, string>> = {
   kick: "BF_FrontKick_R",
   lowKick: "BF_LowKick_L",
   risingKick: "BF_RisingKick_R",
-  dashKick: "PF_DashKick_R",
+  dashKick: "BF_DashKick_R",
   throw: "PF_Throw",
   counter: "PF_Counter_R",
 };
@@ -552,6 +557,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     const blenderKickClips = resources.motion.blenderKicks
       ? retargetMotionClips(resources.motion.blenderKicks.source, styled.model, resources.motion.blenderKicks.clips)
       : new Map<string, THREE.AnimationClip>();
+    const blenderAirborneClips = resources.motion.blenderAirborne
+      ? retargetMotionClips(resources.motion.blenderAirborne.source, styled.model, resources.motion.blenderAirborne.clips)
+      : new Map<string, THREE.AnimationClip>();
     const retargetedClips = new Map<string, THREE.AnimationClip>([
       ...baseClips,
       ...proceduralClips,
@@ -559,6 +567,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ...blenderCrossClips,
       ...blenderStrikeClips,
       ...blenderKickClips,
+      ...blenderAirborneClips,
     ]);
     if (!retargetedClips.has("BF_Power_R")) {
       const fallback = proceduralClips.get("PF_Power_R");
@@ -583,6 +592,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       ["BF_FrontKick_R", "PF_FrontKick_R"],
       ["BF_LowKick_L", "PF_LowKick_L"],
       ["BF_RisingKick_R", "PF_RisingKick_R"],
+      ["BF_DashKick_R", "PF_DashKick_R"],
     ] as const) {
       if (retargetedClips.has(authored)) continue;
       const fallback = proceduralClips.get(procedural);
@@ -611,10 +621,11 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
     visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
-    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size;
+    visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size + blenderAirborneClips.size;
     visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
     visual.root.userData.quaterniusBlenderStrikeClipCount = blenderStrikeClips.size;
     visual.root.userData.quaterniusBlenderKickClipCount = blenderKickClips.size;
+    visual.root.userData.quaterniusBlenderAirborneClipCount = blenderAirborneClips.size;
     visual.root.userData.quaterniusPowerMotionSource = blenderClips.has("BF_Power_R")
       ? "BLENDER_MOTION_FOUNDRY_V1"
       : "PROCEDURAL_FALLBACK";
@@ -633,6 +644,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusFrontKickMotionSource = kickSource("BF_FrontKick_R");
     visual.root.userData.quaterniusLowKickMotionSource = kickSource("BF_LowKick_L");
     visual.root.userData.quaterniusRisingKickMotionSource = kickSource("BF_RisingKick_R");
+    visual.root.userData.quaterniusDashKickMotionSource = blenderAirborneClips.has("BF_DashKick_R")
+      ? "BLENDER_MOTION_FOUNDRY_V2_AIRBORNE"
+      : "PROCEDURAL_FALLBACK";
   }).catch((error: unknown) => {
     if (installTokens.get(visual.root) !== token) return;
     visual.root.userData.quaterniusModelState = "failed";

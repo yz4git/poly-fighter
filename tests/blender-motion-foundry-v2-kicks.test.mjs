@@ -4,6 +4,7 @@ import test from "node:test";
 
 // Final user-authored checkpoint: audit the generated hip-relative kick GLB in the real WebGL viewer.
 const generator = await readFile(new URL("../tools/blender/build-fight-motion-foundry-v2-kicks.py", import.meta.url), "utf8");
+const mocapPrior = await readFile(new URL("../tools/blender/motion_foundry_v6_mocap.py", import.meta.url), "utf8");
 const integrator = await readFile(new URL("../scripts/apply-blender-motion-foundry-v2-kicks.mjs", import.meta.url), "utf8");
 const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
 const viewer = await readFile(new URL("../src/game/model-viewer-motion.ts", import.meta.url), "utf8");
@@ -17,6 +18,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /derive_reference_knots/);
   assert.match(generator, /motion_foundry_v6_mocap/);
   assert.match(generator, /CMU_MOCAP_WORLD_DELTA_V6/);
+  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);
   assert.match(generator, /IMPACT_WINDOW_ONLY/);
   assert.match(generator, /action_name="BF_FrontKick_R"/);
   assert.match(generator, /action_name="BF_LowKick_L"/);
@@ -115,6 +117,8 @@ test("runtime prefers authored grounded kicks and the dedicated airborne Dash Ki
   assert.match(runtime, /quaterniusBlenderAirborneClipCount/);
   assert.match(runtime, /quaterniusDashKickMotionSource/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS/);
+  assert.match(runtime, /V6_ACTIVE_CONTACT_SYNC/);
+  assert.match(runtime, /BF_LowKick_L: 0\.5333333333333333/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_AIRBORNE/);
   assert.match(integrator, /kick: \\"BF_FrontKick_R\\"|kick: "BF_FrontKick_R"/);
   assert.match(integrator, /lowKick: \\"BF_LowKick_L\\"|lowKick: "BF_LowKick_L"/);

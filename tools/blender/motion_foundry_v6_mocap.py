@@ -432,6 +432,18 @@ def build_mocap_prior(
             start_q = samples[0][actual_source].to_quaternion().normalized()
             current_q = sample[actual_source].to_quaternion().normalized()
             delta_q = _rotation_delta_in_target_space(start_q, current_q, source_basis, target_basis, mirrored)
+            # Mawashigeri carries useful hip/shoulder counter-rotation, but the raw
+            # CMU upper-torso lean is too large after UAL -> UBC rest-delta retargeting.
+            # Keep pelvis/legs untouched and retain a measured, progressively softer
+            # upper-body delta so the low kick stays athletic without folding the chest.
+            LOW_KICK_TORSO_DELTA_RETENTION = {
+                "spine_02": 0.55,
+                "spine_03": 0.55,
+                "neck_01": 0.70,
+            }
+            if spec.action_name == "BF_LowKick_L" and target_name in LOW_KICK_TORSO_DELTA_RETENTION:
+                retention = LOW_KICK_TORSO_DELTA_RETENTION[target_name]
+                delta_q = Quaternion((1.0, 0.0, 0.0, 0.0)).slerp(delta_q, retention).normalized()
             desired_q = (delta_q @ base_object_q[target_name]).normalized()
             pb = target.pose.bones[target_name]
             loc = pb.matrix.to_translation()

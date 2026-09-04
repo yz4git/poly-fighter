@@ -15,6 +15,7 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 import motion_foundry_v2_rig as rig
+import motion_foundry_v6_mocap as mocap_v6
 
 
 PhaseOffsets = Tuple[
@@ -373,6 +374,26 @@ def derive_reference_knots(
         (1.0, 1.0),
     )
     return knots, reference_impact_u, max(0.0, min(1.0, prior_score))
+
+
+def reference_knots_for_impact(spec: KickSpec, reference_impact_u: float):
+    """Build a nonlinear source-time map around a measured impact event."""
+    reference_impact_u = max(0.18, min(0.82, reference_impact_u))
+    def du(frame: int) -> float:
+        return (frame - spec.start_frame) / max(1, spec.end_frame - spec.start_frame)
+    src_load = max(0.0, reference_impact_u - 0.30)
+    src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
+    src_over = min(1.0, reference_impact_u + 0.075)
+    src_recovery = min(1.0, reference_impact_u + 0.31)
+    return (
+        (0.0, 0.0),
+        (du(spec.load_frame), src_load),
+        (du(spec.precontact_frame), src_pre),
+        (du(spec.impact_frame), reference_impact_u),
+        (du(spec.overtravel_frame), src_over),
+        (du(spec.recovery_frame), src_recovery),
+        (1.0, 1.0),
+    )
 
 
 def body_axes(scene: bpy.types.Scene, armature: bpy.types.Object) -> Tuple[Vector, Vector, Vector]:
@@ -746,16 +767,40 @@ def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object,
         })
     return poses
 
-def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes):
-    # Reference-driven V6: the full-body authored motion is primary.
-    # IK is only a contact-window constraint layered over that motion prior.
-    reference = choose_reference_action(spec)
-    spec = replace(spec, source_action_hint=reference.name)
+def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes, mocap_paths):
+    # Reference-driven V6: measured full-body human motion is primary.  The
+    # existing procedural rig is demoted to gameplay contact/support constraints.
+    mocap_path = mocap_paths.get(spec.action_name)
+    mocap_meta = None
+    if mocap_path:
+        reference, mocap_meta = mocap_v6.build_mocap_prior(scene, armature, spec, mocap_path, axes)
+        # The mocap already contains weight transfer and counter-rotation.  Keep
+        # only a small fraction of legacy master offsets to avoid double-driving.
+        spec = replace(
+            spec,
+            source_action_hint=reference.name,
+            pelvis_forward=tuple(value * 0.22 for value in spec.pelvis_forward),
+            pelvis_drop=tuple(value * 0.22 for value in spec.pelvis_drop),
+            pelvis_yaw=tuple(value * 0.12 for value in spec.pelvis_yaw),
+            lower_yaw=tuple(value * 0.10 for value in spec.lower_yaw),
+            upper_yaw=tuple(value * 0.10 for value in spec.upper_yaw),
+            pelvis_pitch=tuple(value * 0.12 for value in spec.pelvis_pitch),
+            lower_pitch=tuple(value * 0.10 for value in spec.lower_pitch),
+            upper_pitch=tuple(value * 0.10 for value in spec.upper_pitch),
+        )
+    else:
+        reference = choose_reference_action(spec)
+        spec = replace(spec, source_action_hint=reference.name)
     rig.configure_v1_for_spec(spec)
     ensure_kick_bones(armature, spec)
-    reference_knots, reference_impact_u, reference_prior_score = derive_reference_knots(
-        scene, armature, reference, spec, axes[2]
-    )
+    if mocap_meta is not None:
+        reference_impact_u = mocap_meta.impact_normalized_time
+        reference_prior_score = mocap_meta.activity_score
+        reference_knots = reference_knots_for_impact(spec, reference_impact_u)
+    else:
+        reference_knots, reference_impact_u, reference_prior_score = derive_reference_knots(
+            scene, armature, reference, spec, axes[2]
+        )
     spec = replace(spec, source_knots=reference_knots)
     rig.configure_v1_for_spec(spec)
     source = reference
@@ -797,6 +842,8 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "referencePriorActivityScore": reference_prior_score,
         "referenceTimeWarpKnots": [list(knot) for knot in spec.source_knots],
         "contactIKPolicy": "IMPACT_WINDOW_ONLY",
+        "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
+        **(mocap_meta.as_dict() if mocap_meta is not None else {}),
         "fps": rig.FPS,
         "startFrame": spec.start_frame,
         "endFrame": spec.end_frame,
@@ -824,7 +871,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
         "referencePoses": reference_poses,
         "pipeline": [
-            f"full-body authored reference base: {source_name}",
+            (f"measured CMU mocap full-body prior: {mocap_meta.source_file}" if mocap_meta is not None else f"full-body authored reference base: {source_name}"),
             "automatic kinetic-peak alignment to gameplay impact",
             "reference motion retained outside the contact window",
             "shoulder-orthogonal anatomical forward axis",
@@ -855,24 +902,35 @@ def _argv_after_double_dash() -> List[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--reference-source", required=True)
+    parser.add_argument("--reference-source")
+    parser.add_argument("--mocap-front")
+    parser.add_argument("--mocap-low")
+    parser.add_argument("--mocap-rising")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args(_argv_after_double_dash())
     rig.v1.reset_scene()
     armature = rig.v1.import_source(os.path.abspath(args.source))
     scene = bpy.context.scene
-    imported_reference_actions = import_reference_actions(args.reference_source)
-    print("MOTION_FOUNDRY_V6_REFERENCE_ACTIONS", imported_reference_actions)
+    imported_reference_actions = []
+    if args.reference_source:
+        imported_reference_actions = import_reference_actions(args.reference_source)
+        print("MOTION_FOUNDRY_V6_REFERENCE_ACTIONS", imported_reference_actions)
     axes = body_axes(scene, armature)
+    mocap_paths = {
+        "BF_FrontKick_R": args.mocap_front,
+        "BF_LowKick_L": args.mocap_low,
+        "BF_RisingKick_R": args.mocap_rising,
+    }
     actions, moves = [], []
     for spec in KICK_SPECS:
-        action, metrics = build_kick_action(scene, armature, spec, axes)
+        action, metrics = build_kick_action(scene, armature, spec, axes, mocap_paths)
         actions.append(action); moves.append(metrics)
     summary = {
         "version": "BLENDER_MOTION_FOUNDRY_V6_KICKS",
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "naturalnessPass": "REFERENCE_DRIVEN_V6",
         "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+        "motionPriorProvider": ("CMU_MOCAP_WORLD_DELTA_V6" if all(mocap_paths.values()) else "HYBRID_REFERENCE_V6"),
         "fps": rig.FPS,
         "actions": [s.action_name for s in KICK_SPECS],
         "moves": moves,

@@ -22,3 +22,9 @@ Generated clips remain ordinary 60 Hz glTF `AnimationClip`s. No neural network r
 ## Quality principle
 
 Human motion is primary; constraints are secondary. IK may correct the final centimeters around contact, but may not invent anticipation, weight transfer, counter-rotation, recovery or arm counterbalance.
+
+## Measured martial-arts prior
+
+The shipping V6 bootstrap uses measured motions from the Carnegie Mellon Graphics Lab Motion Capture Database, subject 135: trial 04 `Front Kick`, trial 07 `Mawashigeri`, and trial 11 `Yokogeri`. The CMU site permits copying, modification, redistribution and commercial use; the Bruce Hahne BVH conversion adds no further restrictions. The build pins the public `una-dinosauria/cmu-mocap` mirror by commit.
+
+The source BVH is build-time input only. Motion Foundry crops the strongest kick event, transfers full-body world-space rotation deltas into the universal game rig, mirrors anatomically when the measured strike side differs from the gameplay side, then bakes ordinary 60 Hz glTF clips.

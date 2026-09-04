@@ -15,6 +15,8 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /class KickSpec/);
   assert.match(generator, /reference_candidates/);
   assert.match(generator, /derive_reference_knots/);
+  assert.match(generator, /motion_foundry_v6_mocap/);
+  assert.match(generator, /CMU_MOCAP_WORLD_DELTA_V6/);
   assert.match(generator, /IMPACT_WINDOW_ONLY/);
   assert.match(generator, /action_name="BF_FrontKick_R"/);
   assert.match(generator, /action_name="BF_LowKick_L"/);
@@ -43,6 +45,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V6_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
   assert.equal(metrics.naturalnessPass, "REFERENCE_DRIVEN_V6");
+  assert.equal(metrics.motionPriorProvider, "CMU_MOCAP_WORLD_DELTA_V6");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
   const byAction = new Map(metrics.moves.map((move) => [move.action, move]));
   const front = byAction.get("BF_FrontKick_R");
@@ -53,6 +56,9 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.notEqual(move.sourceAction, "Idle_Loop_Armature");
     assert.ok(move.referencePriorActivityScore > 0.05, `${move.action}: ${move.referencePriorActivityScore}`);
     assert.equal(move.contactIKPolicy, "IMPACT_WINDOW_ONLY");
+    assert.equal(move.motionPriorProvider, "CMU_MOCAP_WORLD_DELTA_V6");
+    assert.match(move.mocapSourceFile, /^135_(04|07|11)\.bvh$/);
+    assert.ok(move.mocapSampleCount >= 20);
     assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
     assert.ok(move.guardHandMaxChestDistance < 0.55, `${move.action}: ${move.guardHandMaxChestDistance}`);
     assert.ok(move.strikeKneeExtensionDegrees > 135, `${move.action}: ${move.strikeKneeExtensionDegrees}`);

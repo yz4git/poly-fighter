@@ -1,0 +1,94 @@
+name: Temporary V6 low torso regenerate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tmp-v6-low-torso-regenerate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-foundry-v6-reference-driven
+          fetch-depth: 0
+      - name: Fetch pinned source assets
+        run: |
+          set -euxo pipefail
+          mkdir -p .tmp-quaternius .tmp-cmu-mocap
+          BASE_PIN=aa02a4e6d8337a0604d2da131bcbbeb1f01badf0
+          BASE_URL=https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/$BASE_PIN/public/assets/vendor/quaternius
+          curl -L --fail --retry 3 "$BASE_URL/universal-animation-library.glb" -o .tmp-quaternius/ual1-full.glb
+          CMU_PIN=09a07f54f3bbb58797325f009282d0b2048a2871
+          CMU_URL=https://raw.githubusercontent.com/una-dinosauria/cmu-mocap/$CMU_PIN/data/135
+          for file in 135_04.bvh 135_07.bvh 135_11.bvh; do
+            curl -L --fail --retry 3 "$CMU_URL/$file" -o ".tmp-cmu-mocap/$file"
+          done
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+          blender --version | head -n 2
+      - name: Generate V6 kick pack
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+          out="artifacts/motion-foundry-v6-kicks"
+          mkdir -p "$out"
+          xvfb-run -a blender --background \
+            --python-use-system-env \
+            --python-exit-code 1 \
+            --python tools/blender/build-fight-motion-foundry-v2-kicks.py \
+            -- \
+            --source .tmp-quaternius/ual1-full.glb \
+            --mocap-front .tmp-cmu-mocap/135_04.bvh \
+            --mocap-low .tmp-cmu-mocap/135_07.bvh \
+            --mocap-rising .tmp-cmu-mocap/135_11.bvh \
+            --output-dir "$out"
+          test -s "$out/blender-kicks-core.glb"
+          test -s "$out/blender-kicks-core.metrics.json"
+      - name: Stage generated V6 kicks
+        run: |
+          set -euo pipefail
+          CMU_PIN=09a07f54f3bbb58797325f009282d0b2048a2871
+          kick_hash="$( (cat \
+            tools/blender/build-fight-motion-foundry-v1.py \
+            tools/blender/motion_foundry_v2_rig.py \
+            tools/blender/motion_foundry_v6_mocap.py \
+            tools/blender/build-fight-motion-foundry-v2-kicks.py; \
+            printf '%s\n' "$CMU_PIN" '135_04.bvh' '135_07.bvh' '135_11.bvh') | sha256sum | awk '{print $1}')"
+          cp artifacts/motion-foundry-v6-kicks/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.glb
+          cp artifacts/motion-foundry-v6-kicks/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.metrics.json
+          printf '%s\n' "$kick_hash" > public/models/quaternius/blender-kicks-core.generator.sha256
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate generated contract and build
+        run: |
+          node --test tests/blender-motion-foundry-v2-kicks.test.mjs
+          npm run test:ci:tps
+          npm run build
+          npm run lint
+      - name: Publish generated GLB to PR branch
+        run: |
+          set -euo pipefail
+          git config user.name yz4git
+          git config user.email 65384484+yz4git@users.noreply.github.com
+          git add public/models/quaternius/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.generator.sha256
+          git commit -m 'Regenerate V6 kicks with stable low torso'
+          git push origin HEAD:motion-foundry-v6-reference-driven
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-v6-low-torso-regenerate
+          path: artifacts/motion-foundry-v6-kicks
+          if-no-files-found: warn
+          retention-days: 7

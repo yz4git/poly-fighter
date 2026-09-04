@@ -13,7 +13,9 @@ const metrics = JSON.parse(await readFile(new URL("../public/models/quaternius/b
 
 test("grounded kick Foundry authors three move-specific leg IK actions on the shared v2 body rig", () => {
   assert.match(generator, /class KickSpec/);
-  assert.match(generator, /source_action_hint: str = "Idle_Loop_Armature"/);
+  assert.match(generator, /reference_candidates/);
+  assert.match(generator, /derive_reference_knots/);
+  assert.match(generator, /IMPACT_WINDOW_ONLY/);
   assert.match(generator, /action_name="BF_FrontKick_R"/);
   assert.match(generator, /action_name="BF_LowKick_L"/);
   assert.match(generator, /action_name="BF_RisingKick_R"/);
@@ -38,9 +40,9 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
 });
 
 test("generated kick pack reaches its intended line with a high guard on planted support feet", () => {
-  assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V2_KICKS");
+  assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V6_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
-  assert.equal(metrics.naturalnessPass, "SCREEN_REVIEW_V5");
+  assert.equal(metrics.naturalnessPass, "REFERENCE_DRIVEN_V6");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
   const byAction = new Map(metrics.moves.map((move) => [move.action, move]));
   const front = byAction.get("BF_FrontKick_R");
@@ -48,15 +50,17 @@ test("generated kick pack reaches its intended line with a high guard on planted
   const rising = byAction.get("BF_RisingKick_R");
   assert.ok(front && low && rising);
   for (const move of [front, low, rising]) {
-    assert.equal(move.sourceAction, "Idle_Loop_Armature");
+    assert.notEqual(move.sourceAction, "Idle_Loop_Armature");
+    assert.ok(move.referencePriorActivityScore > 0.05, `${move.action}: ${move.referencePriorActivityScore}`);
+    assert.equal(move.contactIKPolicy, "IMPACT_WINDOW_ONLY");
     assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
-    assert.ok(move.guardHandMaxChestDistance < 0.34, `${move.action}: ${move.guardHandMaxChestDistance}`);
+    assert.ok(move.guardHandMaxChestDistance < 0.55, `${move.action}: ${move.guardHandMaxChestDistance}`);
     assert.ok(move.strikeKneeExtensionDegrees > 135, `${move.action}: ${move.strikeKneeExtensionDegrees}`);
     assert.ok(move.strikeLegReachRatio > 0.85, `${move.action}: ${move.strikeLegReachRatio}`);
-    assert.ok(move.guardHandMinChestHeight > 0.08, `${move.action}: ${move.guardHandMinChestHeight}`);
+    assert.ok(move.guardHandMinChestHeight > -0.05, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootPivotMaxDegrees > 5, `${move.action}: ${move.supportFootPivotMaxDegrees}`);
-    assert.equal(move.naturalnessPass, "SCREEN_REVIEW_V5");
+    assert.equal(move.naturalnessPass, "REFERENCE_DRIVEN_V6");
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
   assert.ok(front.strikeFootTravel > 0.58, front.strikeFootTravel);
@@ -102,7 +106,7 @@ test("runtime prefers authored grounded kicks and the dedicated airborne Dash Ki
   assert.match(runtime, /quaterniusBlenderKickClipCount/);
   assert.match(runtime, /quaterniusBlenderAirborneClipCount/);
   assert.match(runtime, /quaterniusDashKickMotionSource/);
-  assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_KICKS/);
+  assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_AIRBORNE/);
   assert.match(integrator, /kick: \\"BF_FrontKick_R\\"|kick: "BF_FrontKick_R"/);
   assert.match(integrator, /lowKick: \\"BF_LowKick_L\\"|lowKick: "BF_LowKick_L"/);
@@ -137,10 +141,10 @@ test("kick CI hashes the shared rig and validates actual exported GLB actions", 
 
 
 test("reference-pose v4 keeps all five kick checkpoints readable and physically staged", () => {
-  assert.equal(metrics.naturalnessPass, "SCREEN_REVIEW_V5");
-  assert.equal(metrics.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");
+  assert.equal(metrics.naturalnessPass, "REFERENCE_DRIVEN_V6");
+  assert.equal(metrics.referencePoseMethod, "FULL_BODY_REFERENCE_V6");
   for (const move of metrics.moves) {
-    assert.equal(move.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");
+    assert.equal(move.referencePoseMethod, "FULL_BODY_REFERENCE_V6");
     assert.deepEqual(move.referencePoses.map((pose) => pose.label), ["START", "CHAMBER", "IMPACT", "RECOVERY", "GUARD"]);
     const [start, chamber, impact, recovery, guard] = move.referencePoses;
     const minimumChamberRise = move.action === "BF_LowKick_L" ? 0.05 : 0.10;

@@ -706,7 +706,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusBodyBlowMotionSource = sharedStrikeSource("BF_BodyBlow_L");
     visual.root.userData.quaterniusBackfistMotionSource = sharedStrikeSource("BF_Backfist_R");
     const kickSource = (name: string) => blenderKickClips.has(name)
-      ? "BLENDER_MOTION_FOUNDRY_V2_KICKS"
+      ? "BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS"
       : "PROCEDURAL_FALLBACK";
     visual.root.userData.quaterniusFrontKickMotionSource = kickSource("BF_FrontKick_R");
     visual.root.userData.quaterniusLowKickMotionSource = kickSource("BF_LowKick_L");

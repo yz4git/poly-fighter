@@ -28,27 +28,34 @@ jobs:
         run: npm run build
       - name: Start production preview
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-v6-final-tps-audit.log 2>&1 &
+          PORT=3000 npm start > /tmp/poly-fighter-v6-final-readability.log 2>&1 &
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
               exit 0
             fi
             sleep 1
           done
-          cat /tmp/poly-fighter-v6-final-tps-audit.log
+          cat /tmp/poly-fighter-v6-final-readability.log
           exit 1
-      - name: Capture V6 TPS kicks
+      - name: Capture V6 kick readability frames
         run: |
-          mkdir -p artifacts/v6-final-kick-audit/tps
+          mkdir -p artifacts/v6-final-kick-readability
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
             DRIVER="$CHROMEWEBDRIVER/chromedriver"
           fi
           test -n "$DRIVER"
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/v6-final-kick-audit/tps" node scripts/capture-tps-visual-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" \
+            AUDIT_URL="http://127.0.0.1:3000/" \
+            TPS_AUDIT_DIR="artifacts/v6-final-kick-readability" \
+            node scripts/capture-motion-readability-audit.mjs
+          for image in tps-motion-kick tps-motion-lowkick tps-motion-risingkick tps-motion-dashkick; do
+            test -s "artifacts/v6-final-kick-readability/${image}.png"
+          done
+          test -s artifacts/v6-final-kick-readability/motion-readability.json
       - uses: actions/upload-artifact@v4
         with:
-          name: poly-fighter-v6-final-tps-audit
-          path: artifacts/v6-final-kick-audit/tps
+          name: poly-fighter-v6-final-kick-readability
+          path: artifacts/v6-final-kick-readability
           if-no-files-found: error
           retention-days: 7

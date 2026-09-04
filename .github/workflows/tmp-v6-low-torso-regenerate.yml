@@ -1,5 +1,5 @@
 name: Temporary V6 low torso regenerate
-# Final generation pass: Low spine_02/spine_03 retention = 0.35.
+# Final generation pass: Low spine_02/spine_03 retention = 0.30.
 
 on:
   push:

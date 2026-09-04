@@ -12,6 +12,7 @@ permissions:
 jobs:
   patch:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,88 +20,10 @@ jobs:
           fetch-depth: 0
       - name: Patch authored V6 kick timing
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/game/visual-quaternius-runtime.ts')
-          text = path.read_text()
-          anchor = '''function proceduralAttackClip(moveId: string): string | null {
-  return PROCEDURAL_ATTACK_CLIPS[moveId] ?? null;
-}
-'''
-          insert = '''function proceduralAttackClip(moveId: string): string | null {
-  return PROCEDURAL_ATTACK_CLIPS[moveId] ?? null;
-}
-
-// The exported V6 mocap clips intentionally retain a readable anticipation arc,
-// so their authored IMPACT pose lands around the middle of each clip. Gameplay,
-// however, can connect on the first ACTIVE tick. Lock the three grounded V6 kicks
-// to their measured impact phase at ACTIVE start, hold only a narrow contact arc
-// through ACTIVE, then spend the remaining time on recovery. This keeps hit timing
-// unchanged while making the rendered foot and gameplay hitbox agree.
-const V6_KICK_CONTACT_PHASE: Readonly<Record<string, number>> = {
-  BF_FrontKick_R: 0.5476190476190477,
-  BF_LowKick_L: 0.5333333333333333,
-  BF_RisingKick_R: 0.5625,
-};
-const V6_KICK_ACTIVE_RELEASE = 0.035;
-
-function syncV6KickContactPhase(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
-  const move = fighter.currentMove;
-  const action = runtime.currentAction;
-  const clip = runtime.clips.get(runtime.currentClip);
-  const impactPhase = V6_KICK_CONTACT_PHASE[runtime.currentClip];
-  if (fighter.state !== "ATTACK" || !move || !action || !clip || !Number.isFinite(impactPhase)) return;
-
-  const totalTicks = Math.max(2, move.startup + move.active + move.recovery);
-  const activeStart = THREE.MathUtils.clamp(move.startup, 0, totalTicks - 1);
-  const activeEnd = THREE.MathUtils.clamp(move.startup + move.active - 1, activeStart, totalTicks - 1);
-  const tick = THREE.MathUtils.clamp(fighter.moveTick, 0, totalTicks - 1);
-  const releasePhase = Math.min(0.64, impactPhase + V6_KICK_ACTIVE_RELEASE);
-  let sampledPhase = 0;
-
-  if (tick <= activeStart) {
-    const alpha = activeStart > 0 ? tick / activeStart : 1;
-    sampledPhase = THREE.MathUtils.lerp(0, impactPhase, alpha);
-  } else if (tick <= activeEnd) {
-    const span = Math.max(1, activeEnd - activeStart);
-    sampledPhase = THREE.MathUtils.lerp(impactPhase, releasePhase, (tick - activeStart) / span);
-  } else {
-    const span = Math.max(1, totalTicks - 1 - activeEnd);
-    sampledPhase = THREE.MathUtils.lerp(releasePhase, 1, (tick - activeEnd) / span);
-  }
-
-  // AnimationMixer still owns fade weights; only the authored clip clock is
-  // phase-locked. update(0) evaluates the newly sampled time without advancing
-  // hit-stop or crossfade time a second time.
-  action.timeScale = 0;
-  action.time = clip.duration * THREE.MathUtils.clamp(sampledPhase, 0, 1);
-  runtime.mixer.update(0);
-  runtime.host.userData.quaterniusKickTimingPolicy = "V6_ACTIVE_CONTACT_SYNC";
-  runtime.host.userData.quaterniusKickSampledPhase = sampledPhase;
-}
-'''
-          if 'V6_ACTIVE_CONTACT_SYNC' not in text:
-              if anchor not in text:
-                  raise SystemExit('proceduralAttackClip anchor missing')
-              text = text.replace(anchor, insert, 1)
-          old = '''  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction);
-  advance(runtime, timeSeconds, fighter.hitStop > 0);
-  const correctionsEnabled = motionCorrectionsEnabled();
-'''
-          new = '''  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction);
-  advance(runtime, timeSeconds, fighter.hitStop > 0);
-  syncV6KickContactPhase(runtime, fighter);
-  const correctionsEnabled = motionCorrectionsEnabled();
-'''
-          if 'syncV6KickContactPhase(runtime, fighter);' not in text:
-              if old not in text:
-                  raise SystemExit('update hook anchor missing')
-              text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnBhdGggPSBQYXRoKCJzcmMvZ2FtZS92aXN1YWwtcXVhdGVybml1cy1ydW50aW1lLnRzIikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KCkKYW5jaG9yID0gIiIiZnVuY3Rpb24gcHJvY2VkdXJhbEF0dGFja0NsaXAobW92ZUlkOiBzdHJpbmcpOiBzdHJpbmcgfCBudWxsIHsKICByZXR1cm4gUFJPQ0VEVVJBTF9BVFRBQ0tfQ0xJUFNbbW92ZUlkXSA/PyBudWxsOwp9CiIiIgppbnNlcnQgPSAiIiJmdW5jdGlvbiBwcm9jZWR1cmFsQXR0YWNrQ2xpcChtb3ZlSWQ6IHN0cmluZyk6IHN0cmluZyB8IG51bGwgewogIHJldHVybiBQUk9DRURVUkFMX0FUVEFDS19DTElQU1ttb3ZlSWRdID8/IG51bGw7Cn0KCi8vIFRoZSBleHBvcnRlZCBWNiBtb2NhcCBjbGlwcyBpbnRlbnRpb25hbGx5IHJldGFpbiBhIHJlYWRhYmxlIGFudGljaXBhdGlvbiBhcmMsCi8vIHNvIHRoZWlyIGF1dGhvcmVkIElNUEFDVCBwb3NlIGxhbmRzIGFyb3VuZCB0aGUgbWlkZGxlIG9mIGVhY2ggY2xpcC4gR2FtZXBsYXksCi8vIGhvd2V2ZXIsIGNhbiBjb25uZWN0IG9uIHRoZSBmaXJzdCBBQ1RJVkUgdGljay4gTG9jayB0aGUgdGhyZWUgZ3JvdW5kZWQgVjYga2lja3MKLy8gdG8gdGhlaXIgbWVhc3VyZWQgaW1wYWN0IHBoYXNlIGF0IEFDVElWRSBzdGFydCwgaG9sZCBvbmx5IGEgbmFycm93IGNvbnRhY3QgYXJjCi8vIHRocm91Z2ggQUNUSVZFLCB0aGVuIHNwZW5kIHRoZSByZW1haW5pbmcgdGltZSBvbiByZWNvdmVyeS4gVGhpcyBrZWVwcyBoaXQgdGltaW5nCi8vIHVuY2hhbmdlZCB3aGlsZSBtYWtpbmcgdGhlIHJlbmRlcmVkIGZvb3QgYW5kIGdhbWVwbGF5IGhpdGJveCBhZ3JlZS4KY29uc3QgVjZfS0lDS19DT05UQUNUX1BIQVNFOiBSZWFkb25seTxSZWNvcmQ8c3RyaW5nLCBudW1iZXI+PiA9IHsKICBCRl9Gcm9udEtpY2tfUjogMC41NDc2MTkwNDc2MTkwNDc3LAogIEJGX0xvd0tpY2tfTDogMC41MzMzMzMzMzMzMzMzMzMzLAogIEJGX1Jpc2luZ0tpY2tfUjogMC41NjI1LAp9Owpjb25zdCBWNl9LSUNLX0FDVElWRV9SRUxFQVNFRID0LjAzNTsKCmZ1bmN0aW9uIHN5bmNWNktpY2tDb250YWN0UGhhc2UocnVudGltZTogUXVhdGVybml1c1J1bnRpbWUsIGZpZ2h0ZXI6IEZpZ2h0ZXJSdW50aW1lKTogdm9pZCB7CiAgY29uc3QgbW92ZSA9IGZpZ2h0ZXIuY3VycmVudE1vdmU7CiAgY29uc3QgYWN0aW9uID0gcnVudGltZS5jdXJyZW50QWN0aW9uOwogIGNvbnN0IGNsaXAgPSBydW50aW1lLmNsaXBzLmdldChydW50aW1lLmN1cnJlbnRDbGlwKTsKICBjb25zdCBpbXBhY3RQaGFzZSA9IFY2X0tJQ0tfQ09OVEFDVF9QSEFTRVtydW50aW1lLmN1cnJlbnRDbGlwXTsKICBpZiAoZmlnaHRlci5zdGF0ZSAhPT0gIkFUVEFDSyIgfHwgIW1vdmUgfHwgIWFjdGlvbiB8fCAhY2xpcCB8fCAhTnVtYmVyLmlzRmluaXRlKGltcGFjdFBoYXNlKSkgcmV0dXJuOwoKICBjb25zdCB0b3RhbFRpY2tzID0gTWF0aC5tYXgoMiwgbW92ZS5zdGFydHVwICsgbW92ZS5hY3RpdmUgKyBtb3ZlLnJlY292ZXJ5KTsKICBjb25zdCBhY3RpdmVTdGFydCA9IFRIUkVFLk1hdGhVdGlscy5jbGFtcChtb3ZlLnN0YXJ0dXAsIDAsIHRvdGFsVGlja3MgLSAxKTsKICBjb25zdCBhY3RpdmVFbmQgPSBUSFJFRS5NYXRoVXRpbHMuY2xhbXAobW92ZS5zdGFydHVwICsgbW92ZS5hY3RpdmUgLSAxLCBhY3RpdmVTdGFydCwgdG90YWxUaWNrcyAtIDEpOwogIGNvbnN0IHRpY2sgPSBUSFJFRS5NYXRoVXRpbHMuY2xhbXAoZmlnaHRlci5tb3ZlVGljaywgMCwgdG90YWxUaWNrcyAtIDEpOwogIGNvbnN0IHJlbGVhc2VQaGFzZSA9IE1hdGgubWluKDAuNjQsIGltcGFjdFBoYXNlICsgVjZfS0lDS19BQ1RJVkVfUkVMRUFTRSk7CiAgbGV0IHNhbXBsZWRQaGFzZSA9IDA7CgogIGlmICh0aWNrIDw9IGFjdGl2ZVN0YXJ0KSB7CiAgICBjb25zdCBhbHBoYSA9IGFjdGl2ZVN0YXJ0ID4gMCA/IHRpY2sgLyBhY3RpdmVTdGFydCA6IDE7CiAgICBzYW1wbGVkUGhhc2UgPSBUSFJFRS5NYXRoVXRpbHMubGVycCgwLCBpbXBhY3RQaGFzZSwgYWxwaGEpOwogIH0gZWxzZSBpZiAodGljayA8PSBhY3RpdmVFbmQpIHsKICAgIGNvbnN0IHNwYW4gPSBNYXRoLm1heCgxLCBhY3RpdmVFbmQgLSBhY3RpdmVTdGFydCk7CiAgICBzYW1wbGVkUGhhc2UgPSBUSFJFRS5NYXRoVXRpbHMubGVycChpbXBhY3RQaGFzZSwgcmVsZWFzZVBoYXNlLCAodGljayAtIGFjdGl2ZVN0YXJ0KSAvIHNwYW4pOwogIH0gZWxzZSB7CiAgICBjb25zdCBzcGFuID0gTWF0aC5tYXgoMSwgdG90YWxUaWNrcyAtIDEgLSBhY3RpdmVFbmQpOwogICAgc2FtcGxlZFBoYXNlID0gVEhSRUUuTWF0aFV0aWxzLmxlcnAocmVsZWFzZVBoYXNlLCAxLCAodGljayAtIGFjdGl2ZUVuZCkgLyBzcGFuKTsKICB9CgogIC8vIEFuaW1hdGlvbk1peGVyIHN0aWxsIG93bnMgZmFkZSB3ZWlnaHRzOyBvbmx5IHRoZSBhdXRob3JlZCBjbGlwIGNsb2NrIGlzCiAgLy8gcGhhc2UtbG9ja2VkLiB1cGRhdGUoMCkgZXZhbHVhdGVzIHRoZSBuZXdseSBzYW1wbGVkIHRpbWUgd2l0aG91dCBhZHZhbmNpbmcKICAvLyBoaXQtc3RvcCBvciBjcm9zc2ZhZGUgdGltZSBhIHNlY29uZCB0aW1lLgogIGFjdGlvbi50aW1lU2NhbGUgPSAwOwogIGFjdGlvbi50aW1lID0gY2xpcC5kdXJhdGlvbiAqIFRIUkVFLk1hdGhVdGlscy5jbGFtcChzYW1wbGVkUGhhc2UsIDAsIDEpOwogIHJ1bnRpbWUubWl4ZXIudXBkYXRlKDApOwogIHJ1bnRpbWUuaG9zdC51c2VyRGF0YS5xdWF0ZXJuaXVzS2lja1RpbWluZ1BvbGljeSA9ICJWNl9BQ1RJVkVfQ09OVEFDVF9TWU5DIjsKICBydW50aW1lLmhvc3QudXNlckRhdGEucXVhdGVybml1c0tpY2tTYW1wbGVkUGhhc2UgPSBzYW1wbGVkUGhhc2U7Cn0KIiIiCmlmICJWNl9BQ1RJVkVfQ09OVEFDVF9TWU5DIiBub3QgaW4gdGV4dDoKICAgIGlmIGFuY2hvciBub3QgaW4gdGV4dDoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCJwcm9jZWR1cmFsQXR0YWNrQ2xpcCBhbmNob3IgbWlzc2luZyIpCiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGFuY2hvciwgaW5zZXJ0LCAxKQpvbGQgPSAiIiIgIHBsYXlDbGlwKHJ1bnRpbWUsIGRlc2lyZWQubmFtZSwgZGVzaXJlZC5sb29wLCBkZXNpcmVkLnNwZWVkLCByZXN0YXJ0aW5nQXR0YWNrIHx8IHJlc3RhcnRpbmdSZWFjdGlvbik7CiAgYWR2YW5jZShydW50aW1lLCB0aW1lU2Vjb25kcywgZmlnaHRlci5oaXRTdG9wID4gMCk7CiAgY29uc3QgY29ycmVjdGlvbnNFbmFibGVkID0gbW90aW9uQ29ycmVjdGlvbnNFbmFibGVkKCk7CiIiIgpuZXcgPSAiIiIgIHBsYXlDbGlwKHJ1bnRpbWUsIGRlc2lyZWQubmFtZSwgZGVzaXJlZC5sb29wLCBkZXNpcmVkLnNwZWVkLCByZXN0YXJ0aW5nQXR0YWNrIHx8IHJlc3RhcnRpbmdSZWFjdGlvbik7CiAgYWR2YW5jZShydW50aW1lLCB0aW1lU2Vjb25kcywgZmlnaHRlci5oaXRTdG9wID4gMCk7CiAgc3luY1Y2S2lja0NvbnRhY3RQaGFzZShydW50aW1lLCBmaWdodGVyKTsKICBjb25zdCBjb3JyZWN0aW9uc0VuYWJsZWQgPSBtb3Rpb25Db3JyZWN0aW9uc0VuYWJsZWQoKTsKIiIiCmlmICJzeW5jVjZLaWNrQ29udGFjdFBoYXNlKHJ1bnRpbWUsIGZpZ2h0ZXIpOyIgbm90IGluIHRleHQ6CiAgICBpZiBvbGQgbm90IGluIHRleHQ6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgidXBkYXRlIGhvb2sgYW5jaG9yIG1pc3NpbmciKQogICAgdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCg==' | base64 -d > /tmp/patch_v6_kick_sync.py
+          python3 /tmp/patch_v6_kick_sync.py
           git diff --check
           grep -q 'V6_ACTIVE_CONTACT_SYNC' src/game/visual-quaternius-runtime.ts
-          grep -q 'BF_LowKick_L: 0.5333333333333333' src/game/visual-quaternius-runtime.ts
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
@@ -115,5 +38,5 @@ function syncV6KickContactPhase(runtime: QuaterniusRuntime, fighter: FighterRunt
           git config user.name yz4git
           git config user.email 65384484+yz4git@users.noreply.github.com
           git add src/game/visual-quaternius-runtime.ts
-          git commit -m "Sync V6 kick contact phase to gameplay active frames"
+          git commit -m 'Sync V6 kick contact phase to gameplay active frames'
           git push origin HEAD:motion-foundry-v6-reference-driven

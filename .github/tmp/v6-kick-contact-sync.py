@@ -11,8 +11,8 @@ new = """            delta_q = _rotation_delta_in_target_space(start_q, current_
             # Keep pelvis/legs untouched and retain a measured, progressively softer
             # upper-body delta so the low kick stays athletic without folding the chest.
             LOW_KICK_TORSO_DELTA_RETENTION = {
-                \"spine_02\": 0.35,
-                \"spine_03\": 0.35,
+                \"spine_02\": 0.30,
+                \"spine_03\": 0.30,
                 \"neck_01\": 0.70,
             }
             if spec.action_name == \"BF_LowKick_L\" and target_name in LOW_KICK_TORSO_DELTA_RETENTION:
@@ -25,10 +25,9 @@ if "LOW_KICK_TORSO_DELTA_RETENTION" not in mocap:
         raise SystemExit("mocap delta anchor missing")
     mocap = mocap.replace(old, new, 1)
 else:
-    mocap = mocap.replace('"spine_02": 0.55', '"spine_02": 0.35')
-    mocap = mocap.replace('"spine_03": 0.55', '"spine_03": 0.35')
-    mocap = mocap.replace('"spine_02": 0.35', '"spine_02": 0.35', 1)
-    mocap = mocap.replace('"spine_03": 0.35', '"spine_03": 0.35', 1)
+    for prior in ("0.55", "0.35"):
+        mocap = mocap.replace(f'"spine_02": {prior}', '"spine_02": 0.30')
+        mocap = mocap.replace(f'"spine_03": {prior}', '"spine_03": 0.30')
 mocap_path.write_text(mocap)
 
 test_path = Path("tests/blender-motion-foundry-v2-kicks.test.mjs")
@@ -46,10 +45,13 @@ if "assert.match(mocapPrior" not in test:
     if assert_anchor not in test:
         raise SystemExit("test assertion anchor missing")
     test = test.replace(assert_anchor, assert_insert, 1)
-if 'spine_02\\": 0\\.35' not in test:
+for prior in ("0\\.35", "0\\.55"):
+    test = test.replace(f'spine_02\\": {prior}', 'spine_02\\": 0\\.30')
+    test = test.replace(f'spine_03\\": {prior}', 'spine_03\\": 0\\.30')
+if 'spine_02\\": 0\\.30' not in test:
     test = test.replace(
         '  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);\n',
-        '  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);\n  assert.match(mocapPrior, /spine_02\\": 0\\.35/);\n  assert.match(mocapPrior, /spine_03\\": 0\\.35/);\n',
+        '  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);\n  assert.match(mocapPrior, /spine_02\\": 0\\.30/);\n  assert.match(mocapPrior, /spine_03\\": 0\\.30/);\n',
         1,
     )
 

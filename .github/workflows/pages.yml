@@ -1,5 +1,6 @@
 name: Deploy POLY FIGHTER to GitHub Pages
 
+# Deployment trigger refreshed after verified Kick Reference Pose v4 main commit.
 on:
   push:
     branches: [main]

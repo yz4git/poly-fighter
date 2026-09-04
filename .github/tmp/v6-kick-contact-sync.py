@@ -11,8 +11,8 @@ new = """            delta_q = _rotation_delta_in_target_space(start_q, current_
             # Keep pelvis/legs untouched and retain a measured, progressively softer
             # upper-body delta so the low kick stays athletic without folding the chest.
             LOW_KICK_TORSO_DELTA_RETENTION = {
-                \"spine_02\": 0.55,
-                \"spine_03\": 0.55,
+                \"spine_02\": 0.35,
+                \"spine_03\": 0.35,
                 \"neck_01\": 0.70,
             }
             if spec.action_name == \"BF_LowKick_L\" and target_name in LOW_KICK_TORSO_DELTA_RETENTION:
@@ -24,7 +24,12 @@ if "LOW_KICK_TORSO_DELTA_RETENTION" not in mocap:
     if old not in mocap:
         raise SystemExit("mocap delta anchor missing")
     mocap = mocap.replace(old, new, 1)
-    mocap_path.write_text(mocap)
+else:
+    mocap = mocap.replace('"spine_02": 0.55', '"spine_02": 0.35')
+    mocap = mocap.replace('"spine_03": 0.55', '"spine_03": 0.35')
+    mocap = mocap.replace('"spine_02": 0.35', '"spine_02": 0.35', 1)
+    mocap = mocap.replace('"spine_03": 0.35', '"spine_03": 0.35', 1)
+mocap_path.write_text(mocap)
 
 test_path = Path("tests/blender-motion-foundry-v2-kicks.test.mjs")
 test = test_path.read_text()
@@ -41,6 +46,12 @@ if "assert.match(mocapPrior" not in test:
     if assert_anchor not in test:
         raise SystemExit("test assertion anchor missing")
     test = test.replace(assert_anchor, assert_insert, 1)
+if 'spine_02\\": 0\\.35' not in test:
+    test = test.replace(
+        '  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);\n',
+        '  assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);\n  assert.match(mocapPrior, /spine_02\\": 0\\.35/);\n  assert.match(mocapPrior, /spine_03\\": 0\\.35/);\n',
+        1,
+    )
 
 runtime_anchor = '  assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS/);\n'
 runtime_insert = runtime_anchor + '  assert.match(runtime, /V6_ACTIVE_CONTACT_SYNC/);\n  assert.match(runtime, /BF_LowKick_L: 0\\.5333333333333333/);\n'

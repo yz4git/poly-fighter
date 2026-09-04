@@ -437,8 +437,8 @@ def build_mocap_prior(
             # Keep pelvis/legs untouched and retain a measured, progressively softer
             # upper-body delta so the low kick stays athletic without folding the chest.
             LOW_KICK_TORSO_DELTA_RETENTION = {
-                "spine_02": 0.55,
-                "spine_03": 0.55,
+                "spine_02": 0.35,
+                "spine_03": 0.35,
                 "neck_01": 0.70,
             }
             if spec.action_name == "BF_LowKick_L" and target_name in LOW_KICK_TORSO_DELTA_RETENTION:

@@ -21,7 +21,7 @@ jobs:
       - name: Apply five-pose reconstruction patch
         run: python3 scripts/apply-kick-reference-pose-v4.py
 
-      - name: Repair reference property decorator and patcher source
+      - name: Repair and tune reference reconstruction
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -32,15 +32,27 @@ jobs:
           fixed = '    @property\n    def reference_pose_frames'
           if broken not in s:
               raise SystemExit('expected duplicate reference property decorator not found')
-          builder.write_text(s.replace(broken, fixed, 1))
+          s = s.replace(broken, fixed, 1)
+          front_reach = 'reach_ratios=(0.0, 0.0, 0.88, 0.960, 0.965, 0.0, 0.0)'
+          if front_reach not in s:
+              raise SystemExit('front kick reach-ratio anchor missing')
+          s = s.replace(front_reach, 'reach_ratios=(0.0, 0.0, 0.88, 0.962, 0.966, 0.0, 0.0)', 1)
+          builder.write_text(s)
+
+          tests = Path('tests/blender-motion-foundry-v2-kicks.test.mjs')
+          t = tests.read_text()
+          old_gate = '    assert.ok(chamber.strikeFootRise > 0.10, `${move.action} chamber rise ${chamber.strikeFootRise}`);'
+          new_gate = '    const minimumChamberRise = move.action === "BF_LowKick_L" ? 0.05 : 0.10;\n    assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);'
+          if old_gate not in t:
+              raise SystemExit('reference chamber gate anchor missing')
+          tests.write_text(t.replace(old_gate, new_gate, 1))
 
           patcher = Path('scripts/apply-kick-reference-pose-v4.py')
           p = patcher.read_text()
           old = 'phase_anchor = """    def strike_suffix(self) -> str:\n        return self.strike_side.lower()\n"""'
           new = 'phase_anchor = """    @property\n    def strike_suffix(self) -> str:\n        return self.strike_side.lower()\n"""'
-          if old not in p:
-              raise SystemExit('patcher phase anchor not found')
-          patcher.write_text(p.replace(old, new, 1))
+          if old in p:
+              patcher.write_text(p.replace(old, new, 1))
           PY
 
       - name: Fetch pinned UAL source
@@ -117,7 +129,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/kick-naturalness-v3-implementation.yml .github/workflows/kick-naturalness-v3-retry.yml .github/workflows/kick-naturalness-v3-retry2.yml .github/workflows/kick-reference-pose-v4.yml
-          git add scripts/apply-kick-reference-pose-v4.py tools/blender/build-fight-motion-foundry-v2-kicks.py tests/blender-motion-foundry-v2-kicks.test.mjs scripts/capture-model-view-audit.mjs .github/workflows/blender-motion-foundry-v2-kicks.yml docs/KICK_REFERENCE_POSE_V4.md public/models/quaternius/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.generator.sha256
+          git rm -f .github/workflows/kick-naturalness-v3-implementation.yml .github/workflows/kick-naturalness-v3-retry.yml .github/workflows/kick-naturalness-v3-retry2.yml .github/workflows/kick-reference-pose-v4.yml scripts/apply-kick-reference-pose-v4.py
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/blender-motion-foundry-v2-kicks.test.mjs scripts/capture-model-view-audit.mjs .github/workflows/blender-motion-foundry-v2-kicks.yml docs/KICK_REFERENCE_POSE_V4.md public/models/quaternius/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.generator.sha256
           git commit -m 'Reconstruct kicks from five-pose motion references'
           git push

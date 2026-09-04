@@ -1,0 +1,73 @@
+name: Temporary V6 kick visual audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tmp-v6-kick-visual-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-foundry-v6-reference-driven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify V6 kick contract
+        run: node --test tests/blender-motion-foundry-v2-kicks.test.mjs
+      - name: Build production preview
+        run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-v6-audit.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-v6-audit.log
+          exit 1
+      - name: Capture V6 Model View kick poses
+        run: |
+          mkdir -p artifacts/v6-kick-audit/model-view
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MODEL_VIEW_AUDIT_DIR="artifacts/v6-kick-audit/model-view" node scripts/capture-model-view-audit.mjs
+      - name: Capture V6 motion readability
+        run: |
+          mkdir -p artifacts/v6-kick-audit/readability
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_READABILITY_AUDIT_DIR="artifacts/v6-kick-audit/readability" node scripts/capture-motion-readability-audit.mjs
+      - name: Capture V6 TPS kicks
+        run: |
+          mkdir -p artifacts/v6-kick-audit/tps
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_VISUAL_AUDIT_DIR="artifacts/v6-kick-audit/tps" node scripts/capture-tps-visual-audit.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-v6-kick-visual-audit
+          path: artifacts/v6-kick-audit
+          if-no-files-found: warn
+          retention-days: 7

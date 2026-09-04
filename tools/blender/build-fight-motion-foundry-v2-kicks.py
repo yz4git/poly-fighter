@@ -787,6 +787,28 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             pelvis_pitch=tuple(value * 0.12 for value in spec.pelvis_pitch),
             lower_pitch=tuple(value * 0.10 for value in spec.lower_pitch),
             upper_pitch=tuple(value * 0.10 for value in spec.upper_pitch),
+            # Mocap remains the primary motion. These narrow controls only make
+            # the combat-readable chamber and high guard survive retargeting.
+            ik_influences=(
+                spec.ik_influences[0],
+                max(spec.ik_influences[1], 0.52),
+                max(spec.ik_influences[2], 0.62),
+                spec.ik_influences[3],
+                spec.ik_influences[4],
+                spec.ik_influences[5],
+                spec.ik_influences[6],
+            ),
+            guard_influences=(
+                spec.guard_influences[0],
+                max(spec.guard_influences[1], 0.52),
+                max(spec.guard_influences[2], 0.78),
+                max(spec.guard_influences[3], 0.90),
+                max(spec.guard_influences[4], 0.82),
+                max(spec.guard_influences[5], 0.46),
+                spec.guard_influences[6],
+            ),
+            guard_height=max(spec.guard_height, 0.245),
+            guard_forward=min(spec.guard_forward, 0.095),
         )
     else:
         reference = choose_reference_action(spec)

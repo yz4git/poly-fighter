@@ -254,6 +254,49 @@ def _source_leg_length(source: bpy.types.Object, side: str) -> float:
     return max(1e-4, source.data.bones[f"{prefix}UpLeg"].length + source.data.bones[f"{prefix}Leg"].length)
 
 
+def _smoothstep(value: float) -> float:
+    value = max(0.0, min(1.0, value))
+    return value * value * (3.0 - 2.0 * value)
+
+
+def _settle_to_guard(
+    scene: bpy.types.Scene,
+    target: bpy.types.Object,
+    action: bpy.types.Action,
+    base_basis: Mapping[str, Matrix],
+    sample_count: int,
+    settle_start_u: float = 0.72,
+) -> None:
+    """Blend the measured clip back into the authored fighting guard.
+
+    Raw mocap often finishes with a step after the kick. That is correct for the
+    capture but wrong for a reusable fighting-game attack clip. Preserve the
+    measured anticipation/contact/follow-through, then smoothly return every
+    target bone to the authored idle/guard basis in the final quarter. A support
+    anchor pass runs afterwards, so this cleanup cannot reintroduce foot slide.
+    """
+    target.animation_data.action = action
+    start_frame = max(2, int(math.floor((sample_count - 1) * settle_start_u)) + 1)
+    span = max(1, sample_count - start_frame)
+    for frame in range(start_frame, sample_count + 1):
+        _set_frame(scene, float(frame))
+        blend = _smoothstep((frame - start_frame) / span)
+        for pb in target.pose.bones:
+            base = base_basis.get(pb.name)
+            if base is None:
+                continue
+            current_loc, current_rot, current_scale = pb.matrix_basis.decompose()
+            base_loc, base_rot, base_scale = base.decompose()
+            loc = current_loc.lerp(base_loc, blend)
+            rot = current_rot.slerp(base_rot, blend)
+            scale = current_scale.lerp(base_scale, blend)
+            pb.matrix_basis = Matrix.LocRotScale(loc, rot, scale)
+            pb.keyframe_insert(data_path="location", frame=frame, group=pb.name)
+            pb.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=pb.name)
+            pb.keyframe_insert(data_path="scale", frame=frame, group=pb.name)
+        bpy.context.view_layer.update()
+
+
 def _anchor_support_foot(
     scene: bpy.types.Scene,
     target: bpy.types.Object,
@@ -421,6 +464,10 @@ def build_mocap_prior(
             key.handle_left_type = "AUTO_CLAMPED"
             key.handle_right_type = "AUTO_CLAMPED"
 
+    # A fighting-game attack must reconnect to locomotion/idle without a visible
+    # pop. Keep measured motion through follow-through, then settle to guard and
+    # finally re-anchor the planted foot in world space.
+    _settle_to_guard(scene, target, action, base_basis, sample_count)
     support_side = "L" if target_side == "R" else "R"
     anchor_before, anchor_after = _anchor_support_foot(
         scene, target, action, support_side, sample_count

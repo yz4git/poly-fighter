@@ -791,7 +791,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             # the combat-readable chamber and high guard survive retargeting.
             ik_influences=(
                 spec.ik_influences[0],
-                max(spec.ik_influences[1], 0.52),
+                max(spec.ik_influences[1], 0.66 if spec.action_name == "BF_RisingKick_R" else 0.52),
                 max(spec.ik_influences[2], 0.62),
                 spec.ik_influences[3],
                 spec.ik_influences[4],

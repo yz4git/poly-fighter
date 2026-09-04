@@ -100,11 +100,17 @@ jobs:
           assert set(m['actions']) == expected, m
           assert len(m['moves']) == 3, m
           minimum_travel = {'BF_FrontKick_R': 0.22, 'BF_LowKick_L': 0.18, 'BF_RisingKick_R': 0.35}
+          pivot_bounds = {
+              'BF_FrontKick_R': (8.0, 20.0),
+              'BF_LowKick_L': (24.0, 48.0),
+              'BF_RisingKick_R': (12.0, 30.0),
+          }
           for move in m['moves']:
               assert move['action'] in expected, move
               assert move['strikeFootTravel'] > minimum_travel[move['action']], move
               assert move['supportFootLockMaxDrift'] < 0.01, move
-              assert move['supportFootLockMaxAngularDriftDegrees'] < 1.0, move
+              low_pivot, high_pivot = pivot_bounds[move['action']]
+              assert low_pivot < move['supportFootPivotMaxDegrees'] < high_pivot, move
               assert move['pelvisTravel'] > 0.002, move
               assert move['boneCount'] >= 40, move
           raw = (root / 'blender-kicks-core.glb').read_bytes()

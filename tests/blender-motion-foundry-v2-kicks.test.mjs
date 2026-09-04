@@ -25,6 +25,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /SupportFootPositionLockIK/);
   assert.match(generator, /SupportFootOrientationLock/);
   assert.match(generator, /support_yaw/);
+  assert.match(generator, /knee_pole_bias/);
   assert.match(generator, /supportFootPivotMaxDegrees/);
   assert.match(generator, /strikeFootForwardReach/);
   assert.match(generator, /strikeFootVerticalRise/);
@@ -39,7 +40,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
 test("generated kick pack reaches its intended line with a high guard on planted support feet", () => {
   assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V2_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
-  assert.equal(metrics.naturalnessPass, "REFERENCE_POSE_V4");
+  assert.equal(metrics.naturalnessPass, "SCREEN_REVIEW_V5");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
   const byAction = new Map(metrics.moves.map((move) => [move.action, move]));
   const front = byAction.get("BF_FrontKick_R");
@@ -55,20 +56,20 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.ok(move.guardHandMinChestHeight > 0.08, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
     assert.ok(move.supportFootPivotMaxDegrees > 5, `${move.action}: ${move.supportFootPivotMaxDegrees}`);
-    assert.equal(move.naturalnessPass, "REFERENCE_POSE_V4");
+    assert.equal(move.naturalnessPass, "SCREEN_REVIEW_V5");
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
   assert.ok(front.strikeFootTravel > 0.58, front.strikeFootTravel);
   assert.ok(front.strikeFootForwardReach > 0.48, front.strikeFootForwardReach);
   assert.ok(front.strikeFootVerticalRise > 0.27, front.strikeFootVerticalRise);
-  assert.ok(front.strikeKneeExtensionDegrees > 145, front.strikeKneeExtensionDegrees);
+  assert.ok(front.strikeKneeExtensionDegrees > 150, front.strikeKneeExtensionDegrees);
   assert.ok(front.pelvisTravel > 0.055, front.pelvisTravel);
   assert.ok(front.supportFootPivotMaxDegrees > 8 && front.supportFootPivotMaxDegrees < 20, front.supportFootPivotMaxDegrees);
   assert.ok(front.strikeLegReachRatio > 0.96, front.strikeLegReachRatio);
   assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
   assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
-  assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);
-  assert.ok(low.strikeKneeExtensionDegrees > 145, low.strikeKneeExtensionDegrees);
+  assert.ok(low.strikeFootVerticalRise > 0.22 && low.strikeFootVerticalRise < 0.58, low.strikeFootVerticalRise);
+  assert.ok(low.strikeKneeExtensionDegrees > 145 && low.strikeKneeExtensionDegrees < 166, low.strikeKneeExtensionDegrees);
   assert.ok(low.strikeLegReachRatio > 0.90, low.strikeLegReachRatio);
   assert.ok(low.pelvisTravel > 0.045, low.pelvisTravel);
   assert.ok(low.supportFootPivotMaxDegrees > 24 && low.supportFootPivotMaxDegrees < 48, low.supportFootPivotMaxDegrees);
@@ -79,7 +80,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(rising.strikeLegReachRatio > 0.93, rising.strikeLegReachRatio);
   assert.ok(rising.pelvisTravel > 0.050, rising.pelvisTravel);
   assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30, rising.supportFootPivotMaxDegrees);
-  assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
+  assert.ok(low.supportFootPivotMaxDegrees > front.supportFootPivotMaxDegrees + 10, `${low.supportFootPivotMaxDegrees} !> ${front.supportFootPivotMaxDegrees} + 10`);
   assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });
 
@@ -136,7 +137,7 @@ test("kick CI hashes the shared rig and validates actual exported GLB actions", 
 
 
 test("reference-pose v4 keeps all five kick checkpoints readable and physically staged", () => {
-  assert.equal(metrics.naturalnessPass, "REFERENCE_POSE_V4");
+  assert.equal(metrics.naturalnessPass, "SCREEN_REVIEW_V5");
   assert.equal(metrics.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");
   for (const move of metrics.moves) {
     assert.equal(move.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");

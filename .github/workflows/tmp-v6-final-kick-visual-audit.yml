@@ -54,8 +54,9 @@ jobs:
           done
           test -s artifacts/v6-final-kick-readability/motion-readability.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poly-fighter-v6-final-kick-readability
           path: artifacts/v6-final-kick-readability
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7

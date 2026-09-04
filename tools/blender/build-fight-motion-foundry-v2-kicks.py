@@ -839,7 +839,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     constrained = {
         "constrainedStrikeFootTravel": foot_travel(scene, armature, spec),
         "constrainedStrikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
-        "constrainedStrikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (1.0 if spec.strike_suffix == "l" else -1.0),
+        "constrainedStrikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (-1.0 if spec.strike_suffix == "l" else 1.0),
         "constrainedStrikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "constrainedStrikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "constrainedStrikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),
@@ -876,7 +876,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "supportSide": spec.support_side.upper(),
         "strikeFootTravel": foot_travel(scene, armature, spec),
         "strikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
-        "strikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (1.0 if spec.strike_suffix == "l" else -1.0),
+        "strikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (-1.0 if spec.strike_suffix == "l" else 1.0),
         "strikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "strikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "strikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),

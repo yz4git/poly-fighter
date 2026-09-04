@@ -1,5 +1,5 @@
 name: Temporary V6 kick contact phase sync
-# Final Low chest retention pass: spine_02/spine_03 = 0.35.
+# Final Low chest retention pass: spine_02/spine_03 = 0.30.
 
 on:
   push:
@@ -26,8 +26,8 @@ jobs:
           python3 /tmp/v6-kick-contact-sync.py
           git diff --check
           grep -q 'LOW_KICK_TORSO_DELTA_RETENTION' tools/blender/motion_foundry_v6_mocap.py
-          grep -q '"spine_02": 0.35' tools/blender/motion_foundry_v6_mocap.py
-          grep -q '"spine_03": 0.35' tools/blender/motion_foundry_v6_mocap.py
+          grep -q '"spine_02": 0.30' tools/blender/motion_foundry_v6_mocap.py
+          grep -q '"spine_03": 0.30' tools/blender/motion_foundry_v6_mocap.py
           grep -q 'V6_ACTIVE_CONTACT_SYNC' src/game/visual-quaternius-runtime.ts
       - uses: actions/setup-node@v4
         with:
@@ -43,5 +43,5 @@ jobs:
           git config user.name yz4git
           git config user.email 65384484+yz4git@users.noreply.github.com
           git add tools/blender/motion_foundry_v6_mocap.py tests/blender-motion-foundry-v2-kicks.test.mjs
-          git commit -m 'Tighten low kick torso stabilization'
+          git commit -m 'Finalize low kick torso stabilization'
           git push origin HEAD:motion-foundry-v6-reference-driven

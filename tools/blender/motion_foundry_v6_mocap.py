@@ -254,6 +254,58 @@ def _source_leg_length(source: bpy.types.Object, side: str) -> float:
     return max(1e-4, source.data.bones[f"{prefix}UpLeg"].length + source.data.bones[f"{prefix}Leg"].length)
 
 
+def _anchor_support_foot(
+    scene: bpy.types.Scene,
+    target: bpy.types.Object,
+    action: bpy.types.Action,
+    support_side: str,
+    sample_count: int,
+) -> Tuple[float, float]:
+    """Remove retarget root drift while preserving measured joint rotations.
+
+    CMU root translation and a different target leg proportion can make an
+    otherwise measured kick require the planted leg to stretch beyond its
+    reachable sphere.  For every dense 60 Hz prior sample, move only the pelvis
+    root by the inverse support-ankle drift.  Descendant rotations stay exactly
+    as retargeted, so weight transfer/counter-rotation remain measured motion.
+    """
+    suffix = support_side.lower()
+    calf_name = f"calf_{suffix}"
+    if calf_name not in target.pose.bones:
+        raise RuntimeError(f"Support calf missing for V6 anchor: {calf_name}")
+    target.animation_data.action = action
+    _set_frame(scene, 1.0)
+    anchor_ankle = target.pose.bones[calf_name].tail.copy()
+    pelvis = target.pose.bones["pelvis"]
+    before = 0.0
+    for frame in range(1, sample_count + 1):
+        _set_frame(scene, float(frame))
+        ankle = target.pose.bones[calf_name].tail.copy()
+        drift = ankle - anchor_ankle
+        before = max(before, drift.length)
+        pelvis_matrix = pelvis.matrix.copy()
+        pelvis_matrix.translation -= drift
+        pelvis.matrix = pelvis_matrix
+        bpy.context.view_layer.update()
+        pelvis.keyframe_insert(data_path="location", frame=frame, group="pelvis")
+        pelvis.keyframe_insert(data_path="rotation_quaternion", frame=frame, group="pelvis")
+        pelvis.keyframe_insert(data_path="scale", frame=frame, group="pelvis")
+
+    # Source time-warp samples subframes. Dense linear root interpolation avoids
+    # Bezier overshoot reintroducing foot drift between the 60 Hz anchor samples.
+    pelvis_path = 'pose.bones["pelvis"].location'
+    for curve in action.fcurves:
+        if curve.data_path == pelvis_path:
+            for key in curve.keyframe_points:
+                key.interpolation = "LINEAR"
+
+    after = 0.0
+    for frame in range(1, sample_count + 1):
+        _set_frame(scene, float(frame))
+        after = max(after, (target.pose.bones[calf_name].tail - anchor_ankle).length)
+    return before, after
+
+
 def build_mocap_prior(
     scene: bpy.types.Scene,
     target: bpy.types.Object,
@@ -369,6 +421,11 @@ def build_mocap_prior(
             key.handle_left_type = "AUTO_CLAMPED"
             key.handle_right_type = "AUTO_CLAMPED"
 
+    support_side = "L" if target_side == "R" else "R"
+    anchor_before, anchor_after = _anchor_support_foot(
+        scene, target, action, support_side, sample_count
+    )
+
     action.use_fake_user = True
     action["motion_prior_provider"] = "CMU_MOCAP_WORLD_DELTA_V6"
     action["cmu_source_file"] = Path(bvh_path).name
@@ -377,6 +434,8 @@ def build_mocap_prior(
     action["cmu_mirrored"] = mirrored
     action["cmu_impact_u"] = impact_u
     action["cmu_activity_score"] = activity
+    action["cmu_support_anchor_before"] = anchor_before
+    action["cmu_support_anchor_after"] = anchor_after
 
     # Remove the temporary BVH skeleton; the measured motion now lives as a UAL
     # action and can be constrained/baked by the existing Foundry stack.

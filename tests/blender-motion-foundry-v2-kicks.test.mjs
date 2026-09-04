@@ -24,6 +24,8 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /GuardHandIK/);
   assert.match(generator, /SupportFootPositionLockIK/);
   assert.match(generator, /SupportFootOrientationLock/);
+  assert.match(generator, /support_yaw/);
+  assert.match(generator, /supportFootPivotMaxDegrees/);
   assert.match(generator, /strikeFootForwardReach/);
   assert.match(generator, /strikeFootVerticalRise/);
   assert.match(generator, /strikeKneeExtensionDegrees/);
@@ -37,6 +39,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
 test("generated kick pack reaches its intended line with a high guard on planted support feet", () => {
   assert.equal(metrics.version, "BLENDER_MOTION_FOUNDRY_V2_KICKS");
   assert.equal(metrics.sharedRig, "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG");
+  assert.equal(metrics.naturalnessPass, "REFERENCE_POSE_V4");
   assert.deepEqual(new Set(metrics.actions), new Set(["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R"]));
   const byAction = new Map(metrics.moves.map((move) => [move.action, move]));
   const front = byAction.get("BF_FrontKick_R");
@@ -51,24 +54,31 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.ok(move.strikeLegReachRatio > 0.85, `${move.action}: ${move.strikeLegReachRatio}`);
     assert.ok(move.guardHandMinChestHeight > 0.08, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
-    assert.ok(move.supportFootLockMaxAngularDriftDegrees < 1.0, `${move.action}: ${move.supportFootLockMaxAngularDriftDegrees}`);
+    assert.ok(move.supportFootPivotMaxDegrees > 5, `${move.action}: ${move.supportFootPivotMaxDegrees}`);
+    assert.equal(move.naturalnessPass, "REFERENCE_POSE_V4");
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
   assert.ok(front.strikeFootTravel > 0.58, front.strikeFootTravel);
   assert.ok(front.strikeFootForwardReach > 0.48, front.strikeFootForwardReach);
   assert.ok(front.strikeFootVerticalRise > 0.27, front.strikeFootVerticalRise);
-  assert.ok(front.strikeKneeExtensionDegrees > 150, front.strikeKneeExtensionDegrees);
+  assert.ok(front.strikeKneeExtensionDegrees > 145, front.strikeKneeExtensionDegrees);
+  assert.ok(front.pelvisTravel > 0.055, front.pelvisTravel);
+  assert.ok(front.supportFootPivotMaxDegrees > 8 && front.supportFootPivotMaxDegrees < 20, front.supportFootPivotMaxDegrees);
   assert.ok(front.strikeLegReachRatio > 0.96, front.strikeLegReachRatio);
   assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
   assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
   assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);
   assert.ok(low.strikeKneeExtensionDegrees > 145, low.strikeKneeExtensionDegrees);
   assert.ok(low.strikeLegReachRatio > 0.90, low.strikeLegReachRatio);
+  assert.ok(low.pelvisTravel > 0.045, low.pelvisTravel);
+  assert.ok(low.supportFootPivotMaxDegrees > 24 && low.supportFootPivotMaxDegrees < 48, low.supportFootPivotMaxDegrees);
   assert.ok(rising.strikeFootTravel > 0.68, rising.strikeFootTravel);
   assert.ok(rising.strikeFootForwardReach > 0.34, rising.strikeFootForwardReach);
   assert.ok(rising.strikeFootVerticalRise > 0.52, rising.strikeFootVerticalRise);
   assert.ok(rising.strikeKneeExtensionDegrees > 145, rising.strikeKneeExtensionDegrees);
-  assert.ok(rising.strikeLegReachRatio > 0.95, rising.strikeLegReachRatio);
+  assert.ok(rising.strikeLegReachRatio > 0.93, rising.strikeLegReachRatio);
+  assert.ok(rising.pelvisTravel > 0.050, rising.pelvisTravel);
+  assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30, rising.supportFootPivotMaxDegrees);
   assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
   assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });
@@ -119,7 +129,34 @@ test("kick CI hashes the shared rig and validates actual exported GLB actions", 
   assert.match(workflow, /BF_LowKick_L/);
   assert.match(workflow, /BF_RisingKick_R/);
   assert.match(workflow, /supportFootLockMaxDrift/);
-  assert.match(workflow, /supportFootLockMaxAngularDriftDegrees/);
+  assert.match(workflow, /supportFootPivotMaxDegrees/);
   assert.match(workflow, /animations/);
   assert.match(workflow, /apply-blender-motion-foundry-v2-kicks\.mjs/);
+});
+
+
+test("reference-pose v4 keeps all five kick checkpoints readable and physically staged", () => {
+  assert.equal(metrics.naturalnessPass, "REFERENCE_POSE_V4");
+  assert.equal(metrics.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");
+  for (const move of metrics.moves) {
+    assert.equal(move.referencePoseMethod, "FIVE_KEY_REFERENCE_V4");
+    assert.deepEqual(move.referencePoses.map((pose) => pose.label), ["START", "CHAMBER", "IMPACT", "RECOVERY", "GUARD"]);
+    const [start, chamber, impact, recovery, guard] = move.referencePoses;
+    const minimumChamberRise = move.action === "BF_LowKick_L" ? 0.05 : 0.10;
+    assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);
+    assert.ok(impact.strikeKneeExtensionDegrees > chamber.strikeKneeExtensionDegrees + 8, `${move.action} chamber->impact knee`);
+    assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
+    assert.ok(Math.abs(guard.strikeFootForward) < 0.09, `${move.action} guard forward ${guard.strikeFootForward}`);
+    assert.ok(Math.abs(guard.strikeFootRise) < 0.09, `${move.action} guard rise ${guard.strikeFootRise}`);
+    assert.ok(guard.supportFootPivotDegrees < 4.0, `${move.action} guard pivot ${guard.supportFootPivotDegrees}`);
+    assert.ok(start.supportFootPivotDegrees < 0.5, `${move.action} start pivot ${start.supportFootPivotDegrees}`);
+  }
+  const byAction = new Map(metrics.moves.map((move) => [move.action, move]));
+  const front = byAction.get("BF_FrontKick_R");
+  const low = byAction.get("BF_LowKick_L");
+  const rising = byAction.get("BF_RisingKick_R");
+  assert.ok(front.referencePoses[2].supportFootPivotDegrees > 8 && front.referencePoses[2].supportFootPivotDegrees < 20);
+  assert.ok(low.referencePoses[2].supportFootPivotDegrees > 18 && low.referencePoses[2].supportFootPivotDegrees < 38);
+  assert.ok(rising.referencePoses[2].supportFootPivotDegrees > 10 && rising.referencePoses[2].supportFootPivotDegrees < 28);
+  assert.ok(rising.referencePoses[2].strikeFootRise > front.referencePoses[2].strikeFootRise + 0.16);
 });

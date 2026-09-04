@@ -43,6 +43,7 @@ class KickSpec:
     foot_offsets: PhaseOffsets
     foot_pitch: rig.PhaseValues
     foot_yaw: rig.PhaseValues
+    support_yaw: rig.PhaseValues
     ik_influences: rig.PhaseValues
     pelvis_forward: rig.PhaseValues
     pelvis_drop: rig.PhaseValues
@@ -81,6 +82,11 @@ class KickSpec:
         )
 
     @property
+    def reference_pose_frames(self) -> Tuple[int, int, int, int, int]:
+        # Five readable checkpoints from the generated reference sheets.
+        return (self.start_frame, self.load_frame, self.impact_frame, self.recovery_frame, self.end_frame)
+
+    @property
     def strike_suffix(self) -> str:
         return self.strike_side.lower()
 
@@ -102,31 +108,32 @@ FRONT_KICK = KickSpec(
     support_side="l",
     foot_offsets=(
         (0.00, 0.00, 0.00),
-        (-0.05, 0.00, 0.18),
-        (0.34, 0.00, 0.34),
+        (-0.06, 0.00, 0.27),
+        (0.31, 0.00, 0.36),
         (0.72, 0.00, 0.37),
         (0.76, 0.00, 0.35),
-        (0.04, 0.00, 0.18),
+        (-0.02, 0.00, 0.25),
         (0.00, 0.00, 0.00),
     ),
     foot_pitch=(0.0, 10.0, -5.0, -20.0, -24.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    support_yaw=(0.0, -2.0, -7.0, -12.0, -14.0, -4.0, 0.0),
     ik_influences=(0.0, 0.74, 0.96, 1.0, 1.0, 0.76, 0.0),
-    pelvis_forward=(0.000, -0.010, 0.008, 0.028, 0.032, 0.002, 0.000),
-    pelvis_drop=(0.000, -0.026, -0.010, 0.002, 0.004, -0.010, 0.000),
+    pelvis_forward=(0.000, -0.015, 0.015, 0.065, 0.078, 0.008, 0.000),
+    pelvis_drop=(0.000, -0.045, -0.040, -0.032, -0.025, -0.020, 0.000),
     pelvis_yaw=(0.0, -2.0, 2.0, 4.0, 5.0, 1.0, 0.0),
     lower_yaw=(0.0, -3.0, 3.0, 6.0, 7.0, 1.5, 0.0),
     upper_yaw=(0.0, -3.0, 2.0, 4.0, 5.0, 1.0, 0.0),
-    pelvis_pitch=(0.0, -2.0, -3.0, -5.0, -5.0, -1.0, 0.0),
-    lower_pitch=(0.0, -2.0, -4.0, -6.0, -6.0, -1.0, 0.0),
-    upper_pitch=(0.0, 1.0, 2.0, 3.0, 3.0, 1.0, 0.0),
-    reach_ratios=(0.0, 0.0, 0.90, 0.975, 0.982, 0.0, 0.0),
+    pelvis_pitch=(0.0, -3.0, -6.0, -8.0, -8.0, -2.0, 0.0),
+    lower_pitch=(0.0, -4.0, -8.0, -10.0, -10.0, -3.0, 0.0),
+    upper_pitch=(0.0, -2.0, -5.0, -7.0, -7.0, -2.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.88, 0.962, 0.966, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
-        (0.88, 0.0, 0.48),
-        (0.89, 0.0, 0.46),
-        (0.91, 0.0, 0.42),
+        (0.92, 0.0, 0.39),
+        (0.94, 0.0, 0.34),
+        (0.95, 0.0, 0.31),
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
     ),
@@ -145,22 +152,25 @@ LOW_KICK = KickSpec(
     support_side="r",
     foot_offsets=(
         (0.00, 0.00, 0.00),
-        (-0.04, 0.05, 0.15),
-        (0.21, 0.10, 0.21),
-        (0.40, 0.16, 0.23),
-        (0.43, 0.21, 0.22),
-        (0.01, 0.05, 0.13),
+        (-0.05, 0.08, 0.18),
+        (0.18, 0.18, 0.20),
+        (0.34, 0.27, 0.18),
+        (0.36, 0.31, 0.17),
+        (0.02, 0.08, 0.14),
         (0.00, 0.00, 0.00),
     ),
     foot_pitch=(0.0, 8.0, 2.0, -8.0, -11.0, 5.0, 0.0),
-    foot_yaw=(0.0, 8.0, 28.0, 54.0, 68.0, 12.0, 0.0),
+    foot_yaw=(0.0, 10.0, 34.0, 66.0, 78.0, 16.0, 0.0),
+    support_yaw=(0.0, 3.0, 12.0, 26.0, 32.0, 8.0, 0.0),
     ik_influences=(0.0, 0.70, 0.94, 1.0, 1.0, 0.72, 0.0),
-    pelvis_forward=(0.000, -0.014, 0.006, 0.024, 0.027, 0.001, 0.000),
-    pelvis_drop=(0.000, -0.028, -0.014, -0.004, -0.002, -0.012, 0.000),
-    pelvis_yaw=(0.0, -5.0, 8.0, 18.0, 23.0, 4.0, 0.0),
-    lower_yaw=(0.0, -7.0, 12.0, 25.0, 31.0, 6.0, 0.0),
-    upper_yaw=(0.0, -5.0, 8.0, 16.0, 20.0, 4.0, 0.0),
-    pelvis_pitch=(0.0, -1.0, -2.0, -2.0, -1.0, 0.0, 0.0),
+    pelvis_forward=(0.000, -0.020, 0.012, 0.050, 0.060, 0.006, 0.000),
+    pelvis_drop=(0.000, -0.040, -0.038, -0.030, -0.026, -0.020, 0.000),
+    pelvis_yaw=(0.0, -8.0, 14.0, 28.0, 34.0, 7.0, 0.0),
+    lower_yaw=(0.0, -10.0, 20.0, 38.0, 46.0, 9.0, 0.0),
+    upper_yaw=(0.0, -6.0, 6.0, 8.0, 10.0, 3.0, 0.0),
+    pelvis_pitch=(0.0, -2.0, -4.0, -5.0, -5.0, -1.0, 0.0),
+    lower_pitch=(0.0, -2.0, -4.0, -5.0, -4.0, -1.0, 0.0),
+    upper_pitch=(0.0, -2.0, -4.0, -6.0, -6.0, -2.0, 0.0),
     guard_width=0.12,
 )
 
@@ -177,32 +187,33 @@ RISING_KICK = KickSpec(
     support_side="l",
     foot_offsets=(
         (0.00, 0.00, 0.00),
-        (-0.06, 0.00, 0.19),
-        (0.32, 0.00, 0.48),
+        (-0.07, 0.00, 0.29),
+        (0.29, 0.00, 0.52),
         (0.68, 0.00, 0.78),
         (0.72, 0.00, 0.84),
-        (0.02, 0.00, 0.22),
+        (-0.02, 0.00, 0.30),
         (0.00, 0.00, 0.00),
     ),
-    foot_pitch=(0.0, 12.0, -10.0, -35.0, -43.0, 5.0, 0.0),
+    foot_pitch=(0.0, 12.0, -8.0, -24.0, -30.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 2.0, 4.0, 5.0, 1.0, 0.0),
+    support_yaw=(0.0, -3.0, -9.0, -18.0, -22.0, -6.0, 0.0),
     ik_influences=(0.0, 0.72, 0.96, 1.0, 1.0, 0.74, 0.0),
-    pelvis_forward=(0.000, -0.012, 0.006, 0.028, 0.032, 0.000, 0.000),
-    pelvis_drop=(0.000, -0.040, -0.024, -0.006, -0.001, -0.018, 0.000),
+    pelvis_forward=(0.000, -0.016, 0.012, 0.055, 0.065, 0.006, 0.000),
+    pelvis_drop=(0.000, -0.050, -0.050, -0.040, -0.030, -0.024, 0.000),
     pelvis_yaw=(0.0, -3.0, 3.0, 7.0, 8.0, 2.0, 0.0),
     lower_yaw=(0.0, -4.0, 4.0, 9.0, 10.0, 2.0, 0.0),
     upper_yaw=(0.0, -3.0, 2.0, 5.0, 6.0, 1.0, 0.0),
-    pelvis_pitch=(0.0, -3.0, -6.0, -10.0, -11.0, -2.0, 0.0),
-    lower_pitch=(0.0, -3.0, -7.0, -12.0, -13.0, -3.0, 0.0),
-    upper_pitch=(0.0, 2.0, 5.0, 8.0, 9.0, 2.0, 0.0),
+    pelvis_pitch=(0.0, -4.0, -7.0, -10.0, -11.0, -3.0, 0.0),
+    lower_pitch=(0.0, -5.0, -9.0, -12.0, -13.0, -4.0, 0.0),
+    upper_pitch=(0.0, -3.0, -6.0, -9.0, -10.0, -3.0, 0.0),
     guard_height=0.165,
-    reach_ratios=(0.0, 0.0, 0.88, 0.970, 0.978, 0.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.88, 0.955, 0.962, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
-        (0.70, 0.0, 0.72),
-        (0.73, 0.0, 0.68),
-        (0.76, 0.0, 0.65),
+        (0.78, 0.0, 0.62),
+        (0.82, 0.0, 0.57),
+        (0.84, 0.0, 0.54),
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
     ),
@@ -390,7 +401,10 @@ def add_kick_controls(
     support_rot.owner_space = "WORLD"
     support_rot.target_space = "WORLD"
     support_rot.mix_mode = "REPLACE"
+    for frame, yaw in zip(spec.phases, spec.support_yaw):
+        key_orientation(support_orientation, support_world, frame, 0.0, yaw)
     support_rot.influence = 1.0
+    rig.smooth_control_curves(support_orientation)
 
     return [strike_target, knee_pole, strike_orientation, support_target, support_pole, support_orientation]
 
@@ -538,6 +552,51 @@ def support_angle(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Kick
     return maximum
 
 
+
+REFERENCE_POSE_LABELS = ("START", "CHAMBER", "IMPACT", "RECOVERY", "GUARD")
+
+
+def _knee_extension_at(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, frame: int) -> float:
+    thigh = f"thigh_{spec.strike_suffix}"
+    calf = f"calf_{spec.strike_suffix}"
+    foot = f"foot_{spec.strike_suffix}"
+    scene.frame_set(frame); bpy.context.view_layer.update()
+    hip = rig.v1.pose_head(armature, thigh)
+    knee = rig.v1.pose_head(armature, calf)
+    ankle = rig.v1.pose_head(armature, foot)
+    upper = hip - knee
+    lower = ankle - knee
+    if upper.length < 1e-6 or lower.length < 1e-6:
+        return 0.0
+    return math.degrees(upper.angle(lower))
+
+
+def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, forward: Vector, up: Vector):
+    strike_foot = f"foot_{spec.strike_suffix}"
+    support_foot = f"foot_{spec.support_suffix}"
+    scene.frame_set(spec.start_frame); bpy.context.view_layer.update()
+    start_strike = rig.v1.pose_head(armature, strike_foot)
+    start_pelvis = rig.v1.pose_head(armature, "pelvis")
+    start_support_q = rig.pose_world_matrix(armature, support_foot).to_quaternion()
+    poses = []
+    for label, frame in zip(REFERENCE_POSE_LABELS, spec.reference_pose_frames):
+        scene.frame_set(frame); bpy.context.view_layer.update()
+        foot = rig.v1.pose_head(armature, strike_foot)
+        pelvis = rig.v1.pose_head(armature, "pelvis")
+        support_q = rig.pose_world_matrix(armature, support_foot).to_quaternion()
+        poses.append({
+            "label": label,
+            "frame": frame,
+            "normalizedTime": (frame - spec.start_frame) / max(1, spec.end_frame - spec.start_frame),
+            "strikeFootForward": (foot - start_strike).dot(forward),
+            "strikeFootRise": (foot - start_strike).dot(up),
+            "strikeKneeExtensionDegrees": _knee_extension_at(scene, armature, spec, frame),
+            "pelvisForward": (pelvis - start_pelvis).dot(forward),
+            "pelvisRise": (pelvis - start_pelvis).dot(up),
+            "supportFootPivotDegrees": math.degrees(start_support_q.rotation_difference(support_q).angle),
+        })
+    return poses
+
 def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes):
     rig.configure_v1_for_spec(spec)
     ensure_kick_bones(armature, spec)
@@ -562,11 +621,14 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "constrainedGuardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "constrainedSupportFootLockMaxDrift": support_drift(scene, armature, spec),
         "constrainedSupportFootLockMaxAngularDriftDegrees": support_angle(scene, armature, spec),
+        "constrainedSupportFootPivotMaxDegrees": support_angle(scene, armature, spec),
         "constrainedPelvisTravel": rig.pelvis_travel(scene, armature, spec),
         "constrainedTorsoTwistDegrees": rig.torso_twist_degrees(scene, armature, spec),
     }
     final_action = rig.v1.bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
+    armature.animation_data.action = final_action
+    reference_poses = reference_pose_snapshots(scene, armature, spec, axes[0], axes[2])
     rig.v1.remove_controls([*controls, *guards, *masters])
     metrics = {
         "version": spec.version,
@@ -588,16 +650,21 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "guardHandMinChestHeight": guard_min_height(scene, armature, spec, axes[2]),
         "supportFootLockMaxDrift": support_drift(scene, armature, spec),
         "supportFootLockMaxAngularDriftDegrees": support_angle(scene, armature, spec),
+        "supportFootPivotMaxDegrees": support_angle(scene, armature, spec),
         "pelvisTravel": rig.pelvis_travel(scene, armature, spec),
         "torsoTwistDegrees": rig.torso_twist_degrees(scene, armature, spec),
         **constrained,
         "boneCount": len(armature.pose.bones),
         "meshCount": len([o for o in bpy.context.scene.objects if o.type == "MESH"]),
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+        "naturalnessPass": "REFERENCE_POSE_V4",
+        "referencePoseMethod": "FIVE_KEY_REFERENCE_V4",
+        "referencePoses": reference_poses,
         "pipeline": [
             "Idle_Loop whole-body base",
             "shoulder-orthogonal anatomical forward axis",
             "Cross max hand-to-pelvis reach chooses forward sign",
+            "five-pose visual reference: START / CHAMBER / IMPACT / RECOVERY / GUARD",
             "shared COG/pelvis and staged torso masters",
             f"{spec.strike_side.upper()} strike-leg two-bone IK",
             "hip-relative impact reach from authored leg length",
@@ -605,7 +672,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             "move-specific strike-foot orientation",
             "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",
-            f"world-space {spec.support_side.upper()} support-foot orientation lock",
+            f"controlled {spec.support_side.upper()} support-foot pivot",
             "Blender native NLA visual-keying bake",
             "glTF Action export",
         ],
@@ -636,6 +703,8 @@ def main() -> None:
     summary = {
         "version": "BLENDER_MOTION_FOUNDRY_V2_KICKS",
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+        "naturalnessPass": "REFERENCE_POSE_V4",
+        "referencePoseMethod": "FIVE_KEY_REFERENCE_V4",
         "fps": rig.FPS,
         "actions": [s.action_name for s in KICK_SPECS],
         "moves": moves,

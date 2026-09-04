@@ -269,6 +269,16 @@ try {
   const blenderRisingKick = await poseMotionViewer(sessionId, "BF_RisingKick_R", 0.55);
   await screenshot(sessionId, `${outputDir}/model-view-motion-blender-rising-kick.png`);
 
+  const referenceKickPoses = [
+    ["start", 0.02], ["chamber", 0.18], ["impact", 0.56], ["recovery", 0.82], ["guard", 0.98],
+  ];
+  for (const [clip, slug] of [["BF_FrontKick_R", "front"], ["BF_LowKick_L", "low"], ["BF_RisingKick_R", "rising"]]) {
+    for (const [phase, normalized] of referenceKickPoses) {
+      await poseMotionViewer(sessionId, clip, normalized);
+      await screenshot(sessionId, `${outputDir}/reference-v4-${slug}-${phase}.png`);
+    }
+  }
+
   const proceduralDashKick = await poseMotionViewer(sessionId, "PF_DashKick_R", 0.52);
   await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-dash-kick.png`);
   const blenderDashKick = await poseMotionViewer(sessionId, "BF_DashKick_R", 0.52);

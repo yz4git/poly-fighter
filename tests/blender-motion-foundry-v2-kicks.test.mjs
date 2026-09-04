@@ -68,7 +68,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(front.strikeLegReachRatio > 0.96, front.strikeLegReachRatio);
   assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
   assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
-  assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);
+  assert.ok(low.strikeFootVerticalRise > 0.22 && low.strikeFootVerticalRise < 0.58, low.strikeFootVerticalRise);
   assert.ok(low.strikeKneeExtensionDegrees > 145 && low.strikeKneeExtensionDegrees < 166, low.strikeKneeExtensionDegrees);
   assert.ok(low.strikeLegReachRatio > 0.90, low.strikeLegReachRatio);
   assert.ok(low.pelvisTravel > 0.045, low.pelvisTravel);
@@ -80,7 +80,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(rising.strikeLegReachRatio > 0.93, rising.strikeLegReachRatio);
   assert.ok(rising.pelvisTravel > 0.050, rising.pelvisTravel);
   assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30, rising.supportFootPivotMaxDegrees);
-  assert.ok(low.torsoTwistDegrees > front.torsoTwistDegrees, `${low.torsoTwistDegrees} !> ${front.torsoTwistDegrees}`);
+  assert.ok(low.supportFootPivotMaxDegrees > front.supportFootPivotMaxDegrees + 10, `${low.supportFootPivotMaxDegrees} !> ${front.supportFootPivotMaxDegrees} + 10`);
   assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
 });
 

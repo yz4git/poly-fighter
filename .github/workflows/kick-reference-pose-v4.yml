@@ -21,6 +21,28 @@ jobs:
       - name: Apply five-pose reconstruction patch
         run: python3 scripts/apply-kick-reference-pose-v4.py
 
+      - name: Repair reference property decorator and patcher source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          builder = Path('tools/blender/build-fight-motion-foundry-v2-kicks.py')
+          s = builder.read_text()
+          broken = '    @property\n    @property\n    def reference_pose_frames'
+          fixed = '    @property\n    def reference_pose_frames'
+          if broken not in s:
+              raise SystemExit('expected duplicate reference property decorator not found')
+          builder.write_text(s.replace(broken, fixed, 1))
+
+          patcher = Path('scripts/apply-kick-reference-pose-v4.py')
+          p = patcher.read_text()
+          old = 'phase_anchor = """    def strike_suffix(self) -> str:\n        return self.strike_side.lower()\n"""'
+          new = 'phase_anchor = """    @property\n    def strike_suffix(self) -> str:\n        return self.strike_side.lower()\n"""'
+          if old not in p:
+              raise SystemExit('patcher phase anchor not found')
+          patcher.write_text(p.replace(old, new, 1))
+          PY
+
       - name: Fetch pinned UAL source
         run: |
           mkdir -p .tmp-quaternius

@@ -22,19 +22,13 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           g = Path('tools/blender/build-fight-motion-foundry-v2-kicks.py')
           s = g.read_text()
-          old = '''        (0.80, 0.46, 0.18),
-        (0.83, 0.53, 0.15),
-        (0.82, 0.56, 0.12),'''
-          new = '''        (0.70, 0.45, -0.55),
-        (0.72, 0.52, -0.45),
-        (0.70, 0.58, -0.42),'''
+          old = "        (0.80, 0.46, 0.18),\n        (0.83, 0.53, 0.15),\n        (0.82, 0.56, 0.12),"
+          new = "        (0.70, 0.45, -0.55),\n        (0.72, 0.52, -0.45),\n        (0.70, 0.58, -0.42),"
           if old not in s:
               raise SystemExit('low-kick direction anchor missing')
           g.write_text(s.replace(old, new, 1))
-
           t = Path('tests/blender-motion-foundry-v2-kicks.test.mjs')
           s = t.read_text()
           old = '  assert.ok(low.strikeFootVerticalRise > 0.18, low.strikeFootVerticalRise);'

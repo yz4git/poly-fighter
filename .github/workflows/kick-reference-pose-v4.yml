@@ -127,9 +127,17 @@ jobs:
       - name: Commit reconstructed kicks and clean one-shot workflows
         if: success()
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/kick-naturalness-v3-implementation.yml .github/workflows/kick-naturalness-v3-retry.yml .github/workflows/kick-naturalness-v3-retry2.yml .github/workflows/kick-reference-pose-v4.yml scripts/apply-kick-reference-pose-v4.py
+          git rm -f --ignore-unmatch .github/workflows/kick-naturalness-v3-implementation.yml .github/workflows/kick-naturalness-v3-retry.yml .github/workflows/kick-naturalness-v3-retry2.yml .github/workflows/kick-reference-pose-v4.yml scripts/apply-kick-reference-pose-v4.py
           git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/blender-motion-foundry-v2-kicks.test.mjs scripts/capture-model-view-audit.mjs .github/workflows/blender-motion-foundry-v2-kicks.yml docs/KICK_REFERENCE_POSE_V4.md public/models/quaternius/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.generator.sha256
           git commit -m 'Reconstruct kicks from five-pose motion references'
-          git push
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            git fetch origin main
+            git rebase origin/main
+          done
+          exit 1

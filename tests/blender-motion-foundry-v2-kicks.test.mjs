@@ -32,6 +32,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /knee_pole_bias/);
   assert.match(generator, /supportFootPivotMaxDegrees/);
   assert.match(generator, /strikeFootForwardReach/);
+  assert.match(generator, /strikeFootOutwardReach/);
   assert.match(generator, /strikeFootVerticalRise/);
   assert.match(generator, /strikeKneeExtensionDegrees/);
   assert.match(generator, /strikeLegReachRatio/);
@@ -85,6 +86,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
   assert.ok(low.supportFootPivotMaxDegrees > 24 && low.supportFootPivotMaxDegrees < 48, low.supportFootPivotMaxDegrees);
   assert.ok(rising.strikeFootTravel > 0.68, rising.strikeFootTravel);
   assert.ok(rising.strikeFootForwardReach > 0.34, rising.strikeFootForwardReach);
+  assert.ok(rising.strikeFootOutwardReach > 0.16, rising.strikeFootOutwardReach);
   assert.ok(rising.strikeFootVerticalRise > 0.52, rising.strikeFootVerticalRise);
   assert.ok(rising.strikeKneeExtensionDegrees > 145, rising.strikeKneeExtensionDegrees);
   assert.ok(rising.strikeLegReachRatio > 0.93, rising.strikeLegReachRatio);

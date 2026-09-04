@@ -1,4 +1,4 @@
-name: Kick v4 Source Harvest
+name: Kick v4 Source Bundle
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  harvest:
+  bundle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,28 +22,36 @@ jobs:
           from pathlib import Path
           builder = Path('tools/blender/build-fight-motion-foundry-v2-kicks.py')
           s = builder.read_text()
-          s = s.replace('    @property\n    @property\n    def reference_pose_frames', '    @property\n    def reference_pose_frames', 1)
-          s = s.replace('reach_ratios=(0.0, 0.0, 0.88, 0.960, 0.965, 0.0, 0.0)', 'reach_ratios=(0.0, 0.0, 0.88, 0.962, 0.966, 0.0, 0.0)', 1)
+          broken = '    @property\n    @property\n    def reference_pose_frames'
+          if broken not in s:
+              raise SystemExit('verified property anchor missing')
+          s = s.replace(broken, '    @property\n    def reference_pose_frames', 1)
+          old_reach = 'reach_ratios=(0.0, 0.0, 0.88, 0.960, 0.965, 0.0, 0.0)'
+          if old_reach not in s:
+              raise SystemExit('verified front reach anchor missing')
+          s = s.replace(old_reach, 'reach_ratios=(0.0, 0.0, 0.88, 0.962, 0.966, 0.0, 0.0)', 1)
           builder.write_text(s)
           tests = Path('tests/blender-motion-foundry-v2-kicks.test.mjs')
           t = tests.read_text()
           old = '    assert.ok(chamber.strikeFootRise > 0.10, `${move.action} chamber rise ${chamber.strikeFootRise}`);'
           new = '    const minimumChamberRise = move.action === "BF_LowKick_L" ? 0.05 : 0.10;\n    assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);'
           if old not in t:
-              raise SystemExit('verified test gate anchor missing')
+              raise SystemExit('verified chamber gate anchor missing')
           tests.write_text(t.replace(old, new, 1))
           PY
-      - name: Stage exact verified source set
+      - name: Bundle exact source and generator hash
         run: |
-          mkdir -p harvest/tools/blender harvest/tests harvest/scripts harvest/.github/workflows harvest/docs
-          cp tools/blender/build-fight-motion-foundry-v2-kicks.py harvest/tools/blender/
-          cp tests/blender-motion-foundry-v2-kicks.test.mjs harvest/tests/
-          cp scripts/capture-model-view-audit.mjs harvest/scripts/
-          cp .github/workflows/blender-motion-foundry-v2-kicks.yml harvest/.github/workflows/
-          cp docs/KICK_REFERENCE_POSE_V4.md harvest/docs/
+          mkdir -p bundle/public/models/quaternius bundle/tools/blender bundle/tests bundle/scripts bundle/.github/workflows bundle/docs
+          cp tools/blender/build-fight-motion-foundry-v2-kicks.py bundle/tools/blender/
+          cp tests/blender-motion-foundry-v2-kicks.test.mjs bundle/tests/
+          cp scripts/capture-model-view-audit.mjs bundle/scripts/
+          cp .github/workflows/blender-motion-foundry-v2-kicks.yml bundle/.github/workflows/
+          cp docs/KICK_REFERENCE_POSE_V4.md bundle/docs/
+          cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-kicks.py | sha256sum | awk '{print $1}' > bundle/public/models/quaternius/blender-kicks-core.generator.sha256
+          tar -C bundle -czf kick-v4-source-bundle.tar.gz .
       - uses: actions/upload-artifact@v4
         with:
-          name: kick-v4-source-harvest
-          path: harvest
+          name: kick-v4-source-bundle
+          path: kick-v4-source-bundle.tar.gz
           if-no-files-found: error
           retention-days: 2

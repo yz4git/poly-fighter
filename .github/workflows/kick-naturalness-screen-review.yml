@@ -1,0 +1,69 @@
+name: One-shot kick naturalness screen review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/kick-naturalness-screen-review.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TPS regression
+        run: npm run test:ci:tps
+      - name: Production build
+        run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-kick-review-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-kick-review-server.log
+          exit 1
+      - name: Capture authored kick poses in MODEL VIEW
+        run: |
+          mkdir -p artifacts/kick-naturalness/model-view
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MODEL_VIEW_AUDIT_DIR="artifacts/kick-naturalness/model-view" node scripts/capture-model-view-audit.mjs
+      - name: Capture kick poses in real TPS composition
+        run: |
+          mkdir -p artifacts/kick-naturalness/tps
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/kick-naturalness/tps" node scripts/capture-motion-readability-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/kick-naturalness/tps-gameplay" node scripts/capture-tps-visual-audit.mjs
+      - name: Preserve kick metrics
+        run: |
+          cp public/models/quaternius/blender-kicks-core.metrics.json artifacts/kick-naturalness/blender-kicks-core.metrics.json
+          cp /tmp/poly-fighter-kick-review-server.log artifacts/kick-naturalness/server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kick-naturalness-screen-review
+          path: artifacts/kick-naturalness
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove one-shot workflow
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/kick-naturalness-screen-review.yml
+          git commit -m 'Remove kick naturalness screen review workflow'
+          git push

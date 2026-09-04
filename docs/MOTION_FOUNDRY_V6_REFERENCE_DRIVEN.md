@@ -23,6 +23,8 @@ Generated clips remain ordinary 60 Hz glTF `AnimationClip`s. No neural network r
 
 Human motion is primary; constraints are secondary. IK may correct the final centimeters around contact, but may not invent anticipation, weight transfer, counter-rotation, recovery or arm counterbalance.
 
+The visual quality gate is silhouette-aware as well as height/reach-aware. In particular, the rising kick keeps a high impact line while steering the strike ankle outside the torso projection. The generated metrics expose `strikeFootOutwardReach`, and the contract requires a positive outward separation for `BF_RisingKick_R` so a numerically high kick cannot regress into a body-occluded silhouette.
+
 ## Measured martial-arts prior
 
 The shipping V6 bootstrap uses measured motions from the Carnegie Mellon Graphics Lab Motion Capture Database, subject 135: trial 04 `Front Kick`, trial 07 `Mawashigeri`, and trial 11 `Yokogeri`. The CMU site permits copying, modification, redistribution and commercial use; the Bruce Hahne BVH conversion adds no further restrictions. The build pins the public `una-dinosauria/cmu-mocap` mirror by commit.

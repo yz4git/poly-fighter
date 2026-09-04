@@ -17,22 +17,28 @@ jobs:
         with:
           ref: motion-foundry-v6-reference-driven
           fetch-depth: 0
-      - name: Apply V6 migration to branch
+      - name: Apply measured-mocap V6 migration to branch
         run: |
           set -euo pipefail
-          python3 scripts/apply-motion-foundry-v6-reference.py
-          python3 -m py_compile scripts/apply-motion-foundry-v6-reference.py
+          python3 scripts/apply-motion-foundry-v6-cmu-mocap.py
+          python3 -m py_compile scripts/apply-motion-foundry-v6-cmu-mocap.py
+          python3 -m py_compile tools/blender/motion_foundry_v6_mocap.py
           python3 -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
           git diff --check
-      - name: Commit V6 source changes to branch
+      - name: Commit V6 mocap source changes to branch
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tools/blender/build-fight-motion-foundry-v2-kicks.py src/game/visual-quaternius-runtime.ts tests/blender-motion-foundry-v2-kicks.test.mjs docs/MOTION_FOUNDRY_V6_REFERENCE_DRIVEN.md
+          git add \
+            tools/blender/build-fight-motion-foundry-v2-kicks.py \
+            tools/blender/motion_foundry_v6_mocap.py \
+            src/game/visual-quaternius-runtime.ts \
+            tests/blender-motion-foundry-v2-kicks.test.mjs \
+            docs/MOTION_FOUNDRY_V6_REFERENCE_DRIVEN.md
           if git diff --cached --quiet; then
-            echo 'V6 source already applied'
+            echo 'V6 mocap source already applied'
             exit 0
           fi
-          git commit -m "Build reference-driven Motion Foundry V6 kicks"
+          git commit -m "Drive V6 kicks from measured martial arts mocap"
           git push origin HEAD:motion-foundry-v6-reference-driven

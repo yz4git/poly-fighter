@@ -1,0 +1,33 @@
+name: Temporary V6 outward sign runner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tmp-v6-outward-sign-runner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-foundry-v6-reference-driven
+          fetch-depth: 0
+      - name: Fix outward metric sign convention
+        run: |
+          set -euo pipefail
+          python3 scripts/patch-v6-outward-sign.py
+          python3 -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
+          git diff --check
+      - name: Commit metric sign fix
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py
+          git commit -m "Fix strike-foot outward metric sign"
+          git push origin HEAD:motion-foundry-v6-reference-driven

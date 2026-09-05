@@ -475,7 +475,7 @@ def key_orientation(
 
 KNEE_POLE_POLICY = "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3"
 FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
-POLE_ANGLE_POLICY = "AUTO_ROBUST_BEND_HEMISPHERE_V6_4"
+POLE_ANGLE_POLICY = "AUTO_DYNAMIC_BEND_HEMISPHERE_V6_5"
 
 
 def _knee_bend_offset(hip: Vector, knee: Vector, ankle: Vector) -> Tuple[Vector, float]:
@@ -670,6 +670,113 @@ def calibrate_ik_pole_angle(
     return best_angle, best_min
 
 
+def _unwrap_angle_near(angle: float, reference: float) -> float:
+    while angle - reference > math.pi:
+        angle -= math.tau
+    while angle - reference < -math.pi:
+        angle += math.tau
+    return angle
+
+
+def _best_pole_angle_for_frame(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    ik: bpy.types.Constraint,
+    source_positions,
+    frame: int,
+    thigh_name: str,
+    calf_name: str,
+    foot_name: str,
+    seed_angle: float,
+) -> Tuple[float, float]:
+    """Find the bend-correct pole angle for one frame, preferring continuity."""
+    best_angle = seed_angle
+    best_score = -2.0
+
+    # Full-circle coarse search is deterministic and avoids assuming rig bone roll.
+    for degree_offset in range(-180, 180, 10):
+        angle = seed_angle + math.radians(degree_offset)
+        ik.pole_angle = angle
+        score = _evaluated_knee_bend_dot(
+            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+        )
+        if score is not None and score > best_score:
+            best_score = score
+            best_angle = angle
+
+    # One-degree local refinement around the best coarse solution.
+    coarse = best_angle
+    for degree_offset in range(-10, 11):
+        angle = coarse + math.radians(degree_offset)
+        ik.pole_angle = angle
+        score = _evaluated_knee_bend_dot(
+            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+        )
+        if score is not None and score > best_score:
+            best_score = score
+            best_angle = angle
+
+    return _unwrap_angle_near(best_angle, seed_angle), best_score
+
+
+def calibrate_dynamic_ik_pole_angle(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    ik: bpy.types.Constraint,
+    source_positions,
+    start_frame: int,
+    end_frame: int,
+    thigh_name: str,
+    calf_name: str,
+    foot_name: str,
+    seed_angle: float,
+) -> Tuple[List[Tuple[int, float]], float]:
+    """Key pole_angle every frame when a static solution cannot preserve knee side.
+
+    The final animation is still baked to ordinary pose keys.  This solver only
+    runs offline in Blender and therefore adds no runtime work on iPhone.
+    """
+    keys: List[Tuple[int, float]] = []
+    previous = seed_angle
+    minimum = 1.0
+    for frame in range(start_frame, end_frame + 1):
+        angle, score = _best_pole_angle_for_frame(
+            scene, armature, ik, source_positions, frame,
+            thigh_name, calf_name, foot_name, previous,
+        )
+        if score <= -1.5:
+            # Near-straight/degenerate frame: retain the previous continuous angle.
+            angle = previous
+        else:
+            minimum = min(minimum, score)
+        keys.append((frame, angle))
+        previous = angle
+
+    # Insert only after all searches so animation evaluation cannot override trial values.
+    for frame, angle in keys:
+        scene.frame_set(frame)
+        ik.pole_angle = angle
+        ik.keyframe_insert(data_path="pole_angle", frame=frame)
+    action = armature.animation_data.action if armature.animation_data else None
+    if action:
+        data_path = ik.path_from_id("pole_angle")
+        for fcurve in action.fcurves:
+            if fcurve.data_path == data_path:
+                for point in fcurve.keyframe_points:
+                    point.interpolation = "LINEAR"
+    bpy.context.view_layer.update()
+
+    # Re-evaluate the keyed curve densely; this is the value used by the strict gate.
+    dense_scores = []
+    for frame in range(start_frame, end_frame + 1):
+        score = _evaluated_knee_bend_dot(
+            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+        )
+        if score is not None:
+            dense_scores.append(score)
+    return keys, (min(dense_scores) if dense_scores else minimum)
+
+
 def add_kick_controls(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
@@ -810,6 +917,16 @@ def add_kick_controls(
         scene, armature, support_ik, positions, spec.phases,
         s_thigh, s_calf, s_foot, None,
     )
+    support_pole_angle_keys = [(spec.start_frame, support_pole_angle)]
+    # Static pole-angle compensation is preferable when it works.  Only fall
+    # back to dense dynamic calibration for chains such as Rising support where
+    # Blender's correct bend solution crosses the bone-roll seam during motion.
+    if support_pole_calibration_min <= 0.05:
+        support_pole_angle_keys, support_pole_calibration_min = calibrate_dynamic_ik_pole_angle(
+            scene, armature, support_ik, positions, spec.start_frame, spec.end_frame,
+            s_thigh, s_calf, s_foot, support_pole_angle,
+        )
+        support_pole_angle = support_pole_angle_keys[0][1]
 
     support_world = rig.pose_world_matrix(armature, s_foot)
     support_orientation = rig.make_matrix_control(f"{spec.action_name}_CTRL_support_foot_orientation", support_world, 0.065)
@@ -833,6 +950,9 @@ def add_kick_controls(
             "strikePoleAngleDegrees": math.degrees(strike_pole_angle),
             "strikePoleCalibrationMinDot": strike_pole_calibration_min,
             "supportPoleAngleDegrees": math.degrees(support_pole_angle),
+            "supportPoleAngleKeysDegrees": [
+                [frame, math.degrees(angle)] for frame, angle in support_pole_angle_keys
+            ],
             "supportPoleCalibrationMinDot": support_pole_calibration_min,
         },
     )
@@ -969,6 +1089,14 @@ def support_drift(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Kick
     return maximum
 
 
+def _shortest_quaternion_angle_degrees(start: Quaternion, current: Quaternion) -> float:
+    angle = start.rotation_difference(current).angle
+    angle = angle % math.tau
+    if angle > math.pi:
+        angle = math.tau - angle
+    return math.degrees(abs(angle))
+
+
 def support_angle(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec) -> float:
     foot = f"foot_{spec.support_suffix}"
     scene.frame_set(spec.start_frame); bpy.context.view_layer.update()
@@ -977,7 +1105,7 @@ def support_angle(scene: bpy.types.Scene, armature: bpy.types.Object, spec: Kick
     for frame in range(spec.start_frame, spec.end_frame + 1):
         scene.frame_set(frame); bpy.context.view_layer.update()
         current = rig.pose_world_matrix(armature, foot).to_quaternion()
-        maximum = max(maximum, math.degrees(start.rotation_difference(current).angle))
+        maximum = max(maximum, _shortest_quaternion_angle_degrees(start, current))
     return maximum
 
 
@@ -1022,7 +1150,7 @@ def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object,
             "strikeKneeExtensionDegrees": _knee_extension_at(scene, armature, spec, frame),
             "pelvisForward": (pelvis - start_pelvis).dot(forward),
             "pelvisRise": (pelvis - start_pelvis).dot(up),
-            "supportFootPivotDegrees": math.degrees(start_support_q.rotation_difference(support_q).angle),
+            "supportFootPivotDegrees": _shortest_quaternion_angle_degrees(start_support_q, support_q),
         })
     return poses
 
@@ -1210,7 +1338,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             "impact knee-extension quality gate",
             "move-specific strike-foot orientation around anatomical body axes",
             "measured knee bend-plane hemisphere preservation",
-            "automatic Blender IK pole-angle calibration against evaluated bend hemisphere",
+            "automatic Blender IK pole-angle calibration with dense dynamic fallback",
             "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",
             f"controlled {spec.support_side.upper()} support-foot pivot",

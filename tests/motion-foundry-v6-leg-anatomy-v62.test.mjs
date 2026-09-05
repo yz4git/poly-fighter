@@ -20,9 +20,23 @@ test('V6.2 foot orientation follows fighter anatomical axes instead of world X',
 });
 
 test('V6.4 calibrates Blender IK pole angle from evaluated anatomical bend scores', () => {
-  assert.match(kicks, /AUTO_ROBUST_BEND_HEMISPHERE_V6_4/);
+  assert.match(kicks, /AUTO_DYNAMIC_BEND_HEMISPHERE_V6_5/);
   assert.match(kicks, /calibrate_ik_pole_angle/);
   assert.match(kicks, /robust_min \* 10\.0 \+ mean/);
   assert.match(kicks, /strikePoleCalibrationMinDot/);
   assert.match(kicks, /supportPoleCalibrationMinDot/);
+});
+
+test('V6.5 dynamically calibrates pole angle only when static knee-side preservation fails', () => {
+  assert.match(kicks, /calibrate_dynamic_ik_pole_angle/);
+  assert.match(kicks, /support_pole_calibration_min <= 0\.05/);
+  assert.match(kicks, /keyframe_insert\(data_path="pole_angle", frame=frame\)/);
+  assert.match(kicks, /point\.interpolation = "LINEAR"/);
+  assert.match(kicks, /supportPoleAngleKeysDegrees/);
+});
+
+test('support-foot pivot uses shortest quaternion angle instead of 360-degree wrap', () => {
+  assert.match(kicks, /_shortest_quaternion_angle_degrees/);
+  assert.match(kicks, /if angle > math\.pi:/);
+  assert.match(kicks, /angle = math\.tau - angle/);
 });

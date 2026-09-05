@@ -67,10 +67,11 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.equal(move.contactIKPolicy, "IMPACT_WINDOW_ONLY");
     assert.equal(move.kneePolePolicy, "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3");
     assert.equal(move.footOrientationPolicy, "ANATOMICAL_BODY_AXES_V6_2");
-    assert.equal(move.poleAnglePolicy, "AUTO_DYNAMIC_BEND_HEMISPHERE_V6_5");
+    assert.equal(move.poleAnglePolicy, "AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6");
     assert.ok(Number.isFinite(move.strikePoleAngleDegrees));
     assert.ok(Number.isFinite(move.supportPoleAngleDegrees));
     assert.ok(Array.isArray(move.supportPoleAngleKeysDegrees) && move.supportPoleAngleKeysDegrees.length >= 1);
+    assert.ok(move.supportPoleAngleMaxStepDegrees <= 45, `${move.action} support pole step ${move.supportPoleAngleMaxStepDegrees}`);
     assert.ok(move.strikePoleCalibrationMinDot > 0.05, `${move.action} strike pole calibration ${move.strikePoleCalibrationMinDot}`);
     assert.ok(move.supportPoleCalibrationMinDot > 0.05, `${move.action} support pole calibration ${move.supportPoleCalibrationMinDot}`);
     assert.ok(move.strikeKneePlaneMinDot > 0.05, `${move.action} strike knee plane ${move.strikeKneePlaneMinDot}`);

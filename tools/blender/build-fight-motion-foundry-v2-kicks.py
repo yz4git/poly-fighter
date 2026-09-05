@@ -475,7 +475,7 @@ def key_orientation(
 
 KNEE_POLE_POLICY = "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3"
 FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
-POLE_ANGLE_POLICY = "AUTO_DYNAMIC_BEND_HEMISPHERE_V6_5"
+POLE_ANGLE_POLICY = "AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6"
 
 
 def _knee_bend_offset(hip: Vector, knee: Vector, ankle: Vector) -> Tuple[Vector, float]:
@@ -678,45 +678,20 @@ def _unwrap_angle_near(angle: float, reference: float) -> float:
     return angle
 
 
-def _best_pole_angle_for_frame(
-    scene: bpy.types.Scene,
-    armature: bpy.types.Object,
-    ik: bpy.types.Constraint,
-    source_positions,
-    frame: int,
-    thigh_name: str,
-    calf_name: str,
-    foot_name: str,
-    seed_angle: float,
-) -> Tuple[float, float]:
-    """Find the bend-correct pole angle for one frame, preferring continuity."""
-    best_angle = seed_angle
-    best_score = -2.0
+DYNAMIC_TARGET_MIN_DOT = 0.10
+DYNAMIC_MAX_STEP_DEGREES = 45.0
 
-    # Full-circle coarse search is deterministic and avoids assuming rig bone roll.
-    for degree_offset in range(-180, 180, 10):
-        angle = seed_angle + math.radians(degree_offset)
-        ik.pole_angle = angle
-        score = _evaluated_knee_bend_dot(
-            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
-        )
-        if score is not None and score > best_score:
-            best_score = score
-            best_angle = angle
 
-    # One-degree local refinement around the best coarse solution.
-    coarse = best_angle
-    for degree_offset in range(-10, 11):
-        angle = coarse + math.radians(degree_offset)
-        ik.pole_angle = angle
-        score = _evaluated_knee_bend_dot(
-            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
-        )
-        if score is not None and score > best_score:
-            best_score = score
-            best_angle = angle
+def _wrapped_angle_delta(angle: float, reference: float) -> float:
+    """Return the shortest signed angular delta to reference."""
+    return _unwrap_angle_near(angle, reference) - reference
 
-    return _unwrap_angle_near(best_angle, seed_angle), best_score
+
+def _dynamic_score_cost(score: float | None) -> float:
+    """Make anatomical correctness a hard priority before smoothness/reward."""
+    if score is None:
+        return 0.0
+    return max(0.0, DYNAMIC_TARGET_MIN_DOT - score) * 220.0 - score * 0.24
 
 
 def calibrate_dynamic_ik_pole_angle(
@@ -730,29 +705,78 @@ def calibrate_dynamic_ik_pole_angle(
     calf_name: str,
     foot_name: str,
     seed_angle: float,
-) -> Tuple[List[Tuple[int, float]], float]:
-    """Key pole_angle every frame when a static solution cannot preserve knee side.
+) -> Tuple[List[Tuple[int, float]], float, float]:
+    """Find a globally continuous, bend-correct pole-angle path.
 
-    The final animation is still baked to ordinary pose keys.  This solver only
-    runs offline in Blender and therefore adds no runtime work on iPhone.
+    V6.5 maximized every frame independently.  Around Blender's bone-roll seam
+    that produced equally valid but visually discontinuous 140-170 degree jumps.
+    V6.6 evaluates the whole angle circle per frame, then uses dynamic programming
+    to prefer bend-correct neighboring states.  This is build-time only; the
+    result is baked to ordinary pose keys and adds zero runtime work on iPhone.
     """
+    frames = list(range(start_frame, end_frame + 1))
+    offsets = list(range(-180, 180, 5))
+    candidates = [seed_angle + math.radians(degree) for degree in offsets]
+    score_rows: List[List[float | None]] = []
+
+    # No pole-angle fcurve exists yet, so trial values are evaluated directly.
+    for frame in frames:
+        row: List[float | None] = []
+        for angle in candidates:
+            ik.pole_angle = angle
+            row.append(_evaluated_knee_bend_dot(
+                scene, armature, frame, source_positions,
+                thigh_name, calf_name, foot_name,
+            ))
+        score_rows.append(row)
+
+    # DP cost: bend correctness dominates.  Once above the target hemisphere
+    # margin, shortest wrapped transitions decide between equivalent IK branches.
+    continuity_weight = 0.070
+    previous_costs: List[float] = []
+    backrefs: List[List[int]] = []
+    for index, angle in enumerate(candidates):
+        delta_deg = abs(math.degrees(_wrapped_angle_delta(angle, seed_angle)))
+        previous_costs.append(
+            _dynamic_score_cost(score_rows[0][index])
+            + continuity_weight * (delta_deg / 30.0) ** 2
+        )
+    backrefs.append([-1] * len(candidates))
+
+    for row_index in range(1, len(frames)):
+        current_costs = [float('inf')] * len(candidates)
+        current_back = [-1] * len(candidates)
+        for current_index, current_angle in enumerate(candidates):
+            anatomical = _dynamic_score_cost(score_rows[row_index][current_index])
+            best_cost = float('inf')
+            best_prev = 0
+            for previous_index, previous_angle in enumerate(candidates):
+                delta_deg = abs(math.degrees(_wrapped_angle_delta(current_angle, previous_angle)))
+                transition = continuity_weight * (delta_deg / 30.0) ** 2
+                cost = previous_costs[previous_index] + anatomical + transition
+                if cost < best_cost:
+                    best_cost = cost
+                    best_prev = previous_index
+            current_costs[current_index] = best_cost
+            current_back[current_index] = best_prev
+        previous_costs = current_costs
+        backrefs.append(current_back)
+
+    state = min(range(len(candidates)), key=lambda index: previous_costs[index])
+    states = [state]
+    for row_index in range(len(frames) - 1, 0, -1):
+        state = backrefs[row_index][state]
+        states.append(state)
+    states.reverse()
+
     keys: List[Tuple[int, float]] = []
     previous = seed_angle
-    minimum = 1.0
-    for frame in range(start_frame, end_frame + 1):
-        angle, score = _best_pole_angle_for_frame(
-            scene, armature, ik, source_positions, frame,
-            thigh_name, calf_name, foot_name, previous,
-        )
-        if score <= -1.5:
-            # Near-straight/degenerate frame: retain the previous continuous angle.
-            angle = previous
-        else:
-            minimum = min(minimum, score)
+    for frame, state in zip(frames, states):
+        angle = _unwrap_angle_near(candidates[state], previous)
         keys.append((frame, angle))
         previous = angle
 
-    # Insert only after all searches so animation evaluation cannot override trial values.
+    # Insert only after global path selection so trial values never fight fcurves.
     for frame, angle in keys:
         scene.frame_set(frame)
         ik.pole_angle = angle
@@ -766,16 +790,23 @@ def calibrate_dynamic_ik_pole_angle(
                     point.interpolation = "LINEAR"
     bpy.context.view_layer.update()
 
-    # Re-evaluate the keyed curve densely; this is the value used by the strict gate.
+    # The strict diagnostic is measured from the FINAL keyed curve, not trial
+    # candidates.  This makes the gate describe exactly what will be baked.
     dense_scores = []
-    for frame in range(start_frame, end_frame + 1):
+    for frame in frames:
         score = _evaluated_knee_bend_dot(
-            scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+            scene, armature, frame, source_positions,
+            thigh_name, calf_name, foot_name,
         )
         if score is not None:
             dense_scores.append(score)
-    return keys, (min(dense_scores) if dense_scores else minimum)
-
+    final_min = min(dense_scores) if dense_scores else 1.0
+    max_step = max(
+        (abs(math.degrees(angle - prior_angle))
+         for (_, prior_angle), (_, angle) in zip(keys, keys[1:])),
+        default=0.0,
+    )
+    return keys, final_min, max_step
 
 def add_kick_controls(
     scene: bpy.types.Scene,
@@ -920,11 +951,12 @@ def add_kick_controls(
         s_thigh, s_calf, s_foot, None,
     )
     support_pole_angle_keys = [(spec.start_frame, support_pole_angle)]
+    support_pole_angle_max_step = 0.0
     # Static pole-angle compensation is preferable when it works.  Only fall
     # back to dense dynamic calibration for chains such as Rising support where
     # Blender's correct bend solution crosses the bone-roll seam during motion.
     if support_pole_calibration_min <= 0.05:
-        support_pole_angle_keys, support_pole_calibration_min = calibrate_dynamic_ik_pole_angle(
+        support_pole_angle_keys, support_pole_calibration_min, support_pole_angle_max_step = calibrate_dynamic_ik_pole_angle(
             scene, armature, support_ik, dense_positions, spec.start_frame, spec.end_frame,
             s_thigh, s_calf, s_foot, support_pole_angle,
         )
@@ -956,6 +988,7 @@ def add_kick_controls(
                 [frame, math.degrees(angle)] for frame, angle in support_pole_angle_keys
             ],
             "supportPoleCalibrationMinDot": support_pole_calibration_min,
+            "supportPoleAngleMaxStepDegrees": support_pole_angle_max_step,
         },
     )
 

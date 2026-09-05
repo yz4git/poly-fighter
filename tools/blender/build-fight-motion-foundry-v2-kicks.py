@@ -2,14 +2,14 @@
 """Motion Foundry V6.8 grounded-kick entrypoint.
 
 The V6.7/V6.8 shared implementation is kept in
-``build-fight-motion-foundry-v2-kicks-base.py``.  This thin entrypoint applies
-only the V6.8 frame-audit corrections before invoking the shared builder.
+``build-fight-motion-foundry-v2-kicks-base.py``. This thin entrypoint applies
+V6.8 frame-audit corrections before invoking the shared builder.
 
-Low Kick is intentionally constrained more strongly at contact than Front or
-Rising.  The measured CMU prior remains primary, but a low-line combat move
-must not drift into a waist-height side kick when contact assistance is reduced.
-The impact target stays short enough to preserve a bent knee rather than
-restoring V6.7's near-lockout silhouette.
+Low Kick is intentionally constrained more strongly through contact and
+post-contact overtravel than Front or Rising. The measured CMU prior remains
+primary, but a low-line combat move must not drift into a waist-height side
+kick between representative checkpoints. The impact target stays short enough
+to preserve a bent knee rather than restoring V6.7's near-lockout silhouette.
 
 Static audit lineage (implemented in the shared base): class KickSpec;
 reference_candidates; derive_reference_knots; motion_foundry_v6_mocap;
@@ -42,16 +42,23 @@ sys.modules[MODULE_NAME] = base
 module_spec.loader.exec_module(base)
 
 
-# V6.8 frame review: weak 0.58 contact IK let the CMU prior lift Low Kick to
-# roughly 0.72 m above its guard-relative start. Restore a strong contact
-# assist, but keep the shorter 0.90 reach target so the knee remains bent.
-# Keep a light recovery assist after contact as well: without it the CMU prior
-# continued carrying the foot forward after impact, which made the kick read as
-# an extended pose followed by a late snap instead of a deliberate retraction.
+# V6.8 all-frame review found a second problem after the impact-height repair:
+# frames 29-33 still drifted upward into a waist-height horizontal side kick.
+# Keep the measured prior, but hold the authored low-line target strongly through
+# OVERTRAVEL and into RECOVERY. The recovery offset is lowered as well so the
+# foot folds down rather than hovering before GUARD.
+_low_dirs = list(base.LOW_KICK.reach_directions)
+_low_dirs[3] = (0.72, 0.52, -0.45)  # impact: preserve the accepted contact shape
+_low_dirs[4] = (0.72, 0.58, -0.68)  # overtravel: force the continuation downward
+_low_offsets = list(base.LOW_KICK.foot_offsets)
+_low_offsets[5] = (0.02, 0.08, 0.08)  # recovery: lower fold before guard
+
 LOW_KICK = replace(
     base.LOW_KICK,
-    ik_influences=(0.0, 0.08, 0.30, 0.90, 0.58, 0.24, 0.0),
+    foot_offsets=tuple(_low_offsets),
+    ik_influences=(0.0, 0.08, 0.30, 0.94, 0.90, 0.55, 0.0),
     reach_ratios=(0.0, 0.0, 0.72, 0.900, 0.910, 0.0, 0.0),
+    reach_directions=tuple(_low_dirs),
 )
 base.LOW_KICK = LOW_KICK
 base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, base.RISING_KICK)
@@ -73,6 +80,43 @@ def reference_knots_for_impact(spec, reference_impact_u):
 
 
 base.reference_knots_for_impact = reference_knots_for_impact
+
+
+# Representative checkpoints were exactly what let the mid-animation Low drift
+# escape review. Measure the final baked action at every authored frame and put
+# those maxima into the generated metrics so CI can gate the true trajectory.
+_base_build_kick_action = base.build_kick_action
+
+
+def build_kick_action(scene, armature, spec, axes, mocap_paths):
+    action, metrics = _base_build_kick_action(scene, armature, spec, axes, mocap_paths)
+    armature.animation_data.action = action
+    foot_name = f"foot_{spec.strike_suffix}"
+    base.rig.v1.set_scene_frame(scene, spec.start_frame)
+    start_foot = base.rig.v1.pose_head(armature, foot_name)
+    max_rise = float("-inf")
+    max_rise_frame = spec.start_frame
+    max_forward = float("-inf")
+    max_forward_frame = spec.start_frame
+    for frame in range(spec.start_frame, spec.end_frame + 1):
+        base.rig.v1.set_scene_frame(scene, frame)
+        delta = base.rig.v1.pose_head(armature, foot_name) - start_foot
+        rise = delta.dot(axes[2])
+        forward = delta.dot(axes[0])
+        if rise > max_rise:
+            max_rise = rise
+            max_rise_frame = frame
+        if forward > max_forward:
+            max_forward = forward
+            max_forward_frame = frame
+    metrics["allFrameStrikeFootVerticalRiseMax"] = max_rise
+    metrics["allFrameStrikeFootVerticalRiseMaxFrame"] = max_rise_frame
+    metrics["allFrameStrikeFootForwardReachMax"] = max_forward
+    metrics["allFrameStrikeFootForwardReachMaxFrame"] = max_forward_frame
+    return action, metrics
+
+
+base.build_kick_action = build_kick_action
 
 
 if __name__ == "__main__":

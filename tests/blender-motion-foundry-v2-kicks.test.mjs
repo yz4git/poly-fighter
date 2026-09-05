@@ -20,7 +20,8 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /CMU_MOCAP_WORLD_DELTA_V6/);
   assert.match(mocapPrior, /LOW_KICK_TORSO_DELTA_RETENTION/);
   assert.match(mocapPrior, /RISING_KICK_TORSO_DELTA_RETENTION/);
-  assert.match(mocapPrior, /spine_01\": 0\.30/);
+  assert.match(mocapPrior, /spine_01\": 0\.20/);
+  assert.match(mocapPrior, /spine_02\": 0\.18/);
   assert.match(mocapPrior, /neck_01\": 0\.45/);
   assert.match(mocapPrior, /spine_02\": 0\.30/);
   assert.match(mocapPrior, /spine_03\": 0\.30/);

@@ -205,7 +205,7 @@ test("motion runtime uses bounded procedural center-of-mass motion and generated
   assert.match(source, /motionExpansionTargetHost = host\.name/);
   assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
   assert.doesNotMatch(source, /getVisualContactPoint/);
-  assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
+  assert.doesNotMatch(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
 });
 
 test("reaction selection distinguishes head, body, low, heavy and launch impacts", () => {

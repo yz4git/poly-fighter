@@ -217,6 +217,8 @@ const authoredExpectedClips = {
   lowKick: "BF_LowKick_L",
   risingKick: "BF_RisingKick_R",
   dashKick: "BF_DashKick_R",
+  counter: "CM_Counter_L",
+  throw: "CM_Throw",
 };
 
 const authoredMoves = new Set(Object.keys(authoredExpectedClips));
@@ -265,19 +267,15 @@ try {
       if (!game) return null;
       const root = game.p1.visual.root;
       return {
-        ready: root.userData.motionExpansionHasProcedural === true && root.userData.motionExpansionProceduralClipCount === 23,
-        clips: root.userData.motionExpansionClipCount ?? 0,
-        version: root.userData.motionExpansionVersion ?? null,
-        proceduralVersion: root.userData.motionExpansionProceduralVersion ?? null,
-        proceduralClips: root.userData.motionExpansionProceduralClipCount ?? 0,
-        procedural: root.userData.motionExpansionHasProcedural ?? false,
-        loading: root.userData.motionExpansionLoading ?? null,
+        ready: root.userData.combatMotionClipCount >= 27,
+        clips: root.userData.combatMotionClipCount ?? 0,
+        version: root.userData.combatMotionVersion ?? null,
       };
     `);
     if (preload?.ready) break;
     await delay(100);
   }
-  if (!preload?.ready || preload.version !== "MOTION_QUALITY_V3" || preload.proceduralVersion !== "PROCEDURAL_FIGHT_V3") {
+  if (!preload?.ready || preload.version !== "COMBAT_MOTION_V7") {
     throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
   }
 
@@ -543,7 +541,7 @@ try {
     return {
       hit,
       attackerRole: game.p1.visual.root.userData.motionExpansionImpactPairRole ?? null,
-      victimRole: game.p2.visual.root.userData.motionExpansionImpactPairRole ?? null,
+      victimRole: game.p2.visual.root.userData.combatMotionCurrentClip ?? null,
       attackerPolicy: game.p1.visual.root.userData.motionCorrectionPolicy ?? null,
       attackerDna: game.p1.visual.root.userData.motionExpansionMotionDna ?? null,
       victimHealth: game.p2.health,
@@ -554,7 +552,7 @@ try {
   if (!impactPair?.hit
       || impactPair.attackerPolicy !== "AUTHORED_ATTACK_PRESERVE"
       || impactPair.attackerRole === "ATTACKER"
-      || impactPair.victimRole !== "VICTIM") {
+      || !["CM_Down", "CM_Thrown", "CM_Launch"].includes(impactPair.victimRole)) {
     throw new Error(`Authored-impact / victim-reaction contract failed: ${JSON.stringify(impactPair)}`);
   }
 

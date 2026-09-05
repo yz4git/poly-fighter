@@ -1,0 +1,71 @@
+name: POLY FIGHTER Combat Motion Quality
+
+on:
+  push:
+    branches: [motion-production-tps-v7, main]
+    paths:
+      - src/game/**
+      - tests/combat-motion.test.ts
+      - scripts/capture-combat-motion-audit.mjs
+      - .github/workflows/combat-motion-quality.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - src/game/combat-motion-*.ts
+      - src/game/visual-quaternius-runtime.ts
+      - src/game/presentation-animation.ts
+      - .github/workflows/combat-motion-quality.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: combat-motion-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate both real character skeletons and all move clocks
+        run: node --import tsx --test tests/combat-motion.test.ts
+      - run: npm run test:ci:tps
+      - run: npm run lint
+      - run: npm run build
+      - name: Start production game
+        run: |
+          PORT=3000 npm start > /tmp/combat-motion-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/combat-motion-server.log
+          exit 1
+      - name: Capture TPS motions and exercise real controls
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -x "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" node scripts/capture-combat-motion-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" node scripts/capture-tps-visual-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" node scripts/touch-input-safety-audit.mjs
+      - name: Preserve logs
+        if: always()
+        run: |
+          mkdir -p artifacts/combat-motion-audit
+          cp /tmp/combat-motion-server.log artifacts/combat-motion-audit/server.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-combat-motion-audit
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14

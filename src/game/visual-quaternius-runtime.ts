@@ -5,6 +5,8 @@ import type { FighterRuntime } from "./fighter";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
+import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
+import { AUTHORED_CONTACT_PHASE, COMBAT_MOTION_VERSION, combatAttackPhase, combatFootCycle, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male-flat.glb`;
@@ -41,6 +43,7 @@ type RuntimeResources = {
   motion: MotionResources;
   bodyType: QuaterniusBodyType;
   modelUrl: string;
+
 };
 
 type QuaterniusRuntime = {
@@ -57,6 +60,22 @@ type QuaterniusRuntime = {
   ownedMaterials: THREE.Material[];
   bodyType: QuaterniusBodyType;
   modelUrl: string;
+  lastPosition: THREE.Vector3 | null;
+  motionX: number;
+  motionZ: number;
+  gaitPhase: number;
+  lastYaw: number | null;
+  turnRate: number;
+  lastState: string;
+  lastStateTicks: number;
+  stateDuration: number;
+  clock: number;
+  landingEnd: number;
+  transitionAge: number;
+  transitionDuration: number;
+  transitionPose: Map<string, { position: THREE.Vector3; rotation: THREE.Quaternion }>;
+  plantedFeet: { l: THREE.Vector3 | null; r: THREE.Vector3 | null };
+  finalTime: number;
 };
 
 const runtimes = new WeakMap<THREE.Group, QuaterniusRuntime>();
@@ -145,9 +164,9 @@ function nodeMap(root: THREE.Object3D): Map<string, THREE.Object3D> {
  * targetRest * inverse(sourceRest) * sourceAnimated.
  *
  * Bone positions/scales stay authored by the target model so limb lengths do
- * not collapse. Only pelvis Y delta is retained; gameplay owns world X/Z.
+ * not collapse. Local pelvis XYZ deltas retain authored weight transfer; gameplay still owns world X/Z.
  */
-function retargetMotionClips(
+export function retargetMotionClips(
   sourceRoot: THREE.Object3D,
   targetRoot: THREE.Object3D,
   clips: readonly THREE.AnimationClip[],
@@ -190,9 +209,9 @@ function retargetMotionClips(
       if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
         const values = new Float32Array(track.values.length);
         for (let offset = 0; offset < track.values.length; offset += 3) {
-          values[offset] = targetNode.position.x;
+          values[offset] = targetNode.position.x + (track.values[offset] - sourceNode.position.x);
           values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
-          values[offset + 2] = targetNode.position.z;
+          values[offset + 2] = targetNode.position.z + (track.values[offset + 2] - sourceNode.position.z);
         }
         const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
         next.setInterpolation(track.getInterpolation());
@@ -510,119 +529,161 @@ const V6_KICK_CONTACT_PHASE: Readonly<Record<string, number>> = {
   BF_LowKick_L: 0.5333333333333333,
   BF_RisingKick_R: 0.5625,
 };
-const V6_KICK_ACTIVE_RELEASE = 0.035;
-
-function syncV6KickContactPhase(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
-  const move = fighter.currentMove;
-  const action = runtime.currentAction;
-  const clip = runtime.clips.get(runtime.currentClip);
-  const impactPhase = V6_KICK_CONTACT_PHASE[runtime.currentClip];
-  if (fighter.state !== "ATTACK" || !move || !action || !clip || !Number.isFinite(impactPhase)) return;
-
-  const totalTicks = Math.max(2, move.startup + move.active + move.recovery);
-  const activeStart = THREE.MathUtils.clamp(move.startup, 0, totalTicks - 1);
-  const activeEnd = THREE.MathUtils.clamp(move.startup + move.active - 1, activeStart, totalTicks - 1);
-  const tick = THREE.MathUtils.clamp(fighter.moveTick, 0, totalTicks - 1);
-  const releasePhase = Math.min(0.64, impactPhase + V6_KICK_ACTIVE_RELEASE);
-  let sampledPhase = 0;
-
-  if (tick <= activeStart) {
-    const alpha = activeStart > 0 ? tick / activeStart : 1;
-    sampledPhase = THREE.MathUtils.lerp(0, impactPhase, alpha);
-  } else if (tick <= activeEnd) {
-    const span = Math.max(1, activeEnd - activeStart);
-    sampledPhase = THREE.MathUtils.lerp(impactPhase, releasePhase, (tick - activeStart) / span);
-  } else {
-    const span = Math.max(1, totalTicks - 1 - activeEnd);
-    sampledPhase = THREE.MathUtils.lerp(releasePhase, 1, (tick - activeEnd) / span);
+function observeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delta: number): void {
+  const forwardArray = fighter.visual.root.userData.combatMotionForward as number[] | undefined;
+  const forward = forwardArray ? new THREE.Vector3().fromArray(forwardArray) : new THREE.Vector3(0, 0, 1).applyQuaternion(fighter.visual.root.quaternion);
+  const yaw = Math.atan2(forward.x, forward.z);
+  if (runtime.lastYaw !== null && delta > 0) {
+    const difference = Math.atan2(Math.sin(yaw - runtime.lastYaw), Math.cos(yaw - runtime.lastYaw));
+    runtime.turnRate = THREE.MathUtils.damp(runtime.turnRate, difference / delta, 18, delta);
   }
-
-  // AnimationMixer still owns fade weights; only the authored clip clock is
-  // phase-locked. update(0) evaluates the newly sampled time without advancing
-  // hit-stop or crossfade time a second time.
-  action.timeScale = 0;
-  action.time = clip.duration * THREE.MathUtils.clamp(sampledPhase, 0, 1);
-  runtime.mixer.update(0);
-  runtime.host.userData.quaterniusKickTimingPolicy = "V6_ACTIVE_CONTACT_SYNC";
-  runtime.host.userData.quaterniusKickSampledPhase = sampledPhase;
+  runtime.lastYaw = yaw;
+  if (runtime.lastPosition && delta > 0 && fighter.hitStop <= 0) {
+    const step = fighter.position.clone().sub(runtime.lastPosition);
+    step.y = 0;
+    // A round reset/throw placement is a discontinuity, never a locomotion stride.
+    if (step.length() < .65 && fighter.state === "WALK") {
+      const right = new THREE.Vector3(forward.z, 0, -forward.x);
+      runtime.motionX = step.dot(right);
+      runtime.motionZ = step.dot(forward);
+      const stature = fighter.visual.root.scale.x;
+      runtime.gaitPhase = (runtime.gaitPhase + step.length() * .62 / Math.max(.1, stature * .38)) % 1;
+    }
+  }
+  runtime.lastPosition = fighter.position.clone();
 }
 
-function desiredClip(fighter: FighterRuntime): { name: string; loop: boolean; speed: number } {
+function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { name: string; loop: boolean; speed: number } {
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
-    const proceduralClip = proceduralAttackClip(move.id);
-    if (proceduralClip) return { name: proceduralClip, loop: false, speed: 1 / seconds };
-    if (move.animation === "punch") return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
-    if (move.animation === "kick") return { name: "Jump_Start", loop: false, speed: 1 / seconds };
-    if (move.animation === "throw") return { name: "PF_Throw", loop: false, speed: 1 / seconds };
-    return { name: "Punch_Cross", loop: false, speed: 1 / seconds };
+    if (move.id === "counter") return { name: `CM_Counter_${move.visualContact === "LEFT_FIST" ? "L" : "R"}`, loop: false, speed: 1 / seconds };
+    if (move.id === "throw") return { name: "CM_Throw", loop: false, speed: 1 / seconds };
+    if (move.id === "backfist" && move.visualContact === "LEFT_FIST") return { name: "BF_Backfist_L", loop: false, speed: 1 / seconds };
+    if (move.id === "bodyBlow" && move.visualContact === "RIGHT_FIST") return { name: "BF_BodyBlow_R", loop: false, speed: 1 / seconds };
+    return { name: proceduralAttackClip(move.id) ?? "BF_Cross_R", loop: false, speed: 1 / seconds };
   }
   switch (fighter.state) {
-    case "WALK": return { name: "Walk_Loop", loop: true, speed: 1 };
-    case "CROUCH": return { name: "Crouch_Idle_Loop", loop: true, speed: 1 };
-    case "GUARD": return { name: "Idle_Loop", loop: true, speed: 0.82 };
-    case "BLOCK_STUN": return { name: "BF_GuardBreak", loop: false, speed: 1.35 };
-    case "SIDESTEP": return { name: "Walk_Loop", loop: true, speed: 1.55 };
-    case "JUMP": return { name: "Jump_Loop", loop: true, speed: 1 };
+    case "WALK": return { name: `CM_Move_${locomotionDirection(runtime.motionX, runtime.motionZ)}`, loop: true, speed: 1 };
+    case "CROUCH": return { name: "CM_Crouch", loop: true, speed: 1 };
+    case "GUARD": return { name: "CM_Guard", loop: true, speed: 1 };
+    case "BLOCK_STUN": return { name: "CM_Block", loop: false, speed: 1 };
+    case "SIDESTEP": {
+      const direction = String(fighter.visual.root.userData.combatStepDirection ?? "R");
+      return { name: `CM_Step_${direction}`, loop: false, speed: 1 };
+    }
+    case "JUMP": return { name: "CM_Jump", loop: false, speed: 1 };
     case "HIT": {
       const side = fighter.reactionSide === "LEFT" ? "L" : "R";
-      if (fighter.reactionAtEdge) return { name: "BF_EdgeStagger", loop: false, speed: 1.35 };
-      if (fighter.reactionKind === "COUNTER") return { name: `BF_CounterHit_${side}`, loop: false, speed: 1.34 };
-      if (fighter.reactionKind === "LIGHT") return { name: `BF_HitLight_${side}`, loop: false, speed: 1.48 };
-      if (fighter.reactionKind === "MID") return { name: `BF_HitMid_${side}`, loop: false, speed: 1.40 };
-      return { name: "BF_HitHeavy", loop: false, speed: 1.35 };
+      if (!fighter.grounded && fighter.velocity.y > 2.5) return { name: "CM_Launch", loop: false, speed: 1 };
+      if (fighter.reactionAtEdge) return { name: "BF_EdgeStagger", loop: false, speed: 1 };
+      if (fighter.reactionKind === "COUNTER") return { name: `BF_CounterHit_${side}`, loop: false, speed: 1 };
+      if (fighter.reactionKind === "LIGHT") return { name: `BF_HitLight_${side}`, loop: false, speed: 1 };
+      if (fighter.reactionKind === "MID") return { name: `BF_HitMid_${side}`, loop: false, speed: 1 };
+      return { name: "BF_HitHeavy", loop: false, speed: 1 };
     }
     case "KNOCKDOWN":
     case "KO":
-    case "RING_OUT": return { name: "PF_DownBack", loop: false, speed: 1 };
-    case "THROW": return { name: "PF_Throw", loop: false, speed: 1 };
-    case "WAKEUP": return { name: "PF_Wakeup", loop: false, speed: 1.2 };
-    default: return { name: "Idle_Loop", loop: true, speed: 1 };
+    case "RING_OUT": return { name: "CM_Down", loop: false, speed: 1 };
+    case "THROW": return { name: "CM_Thrown", loop: false, speed: 1 };
+    case "WAKEUP": return { name: "CM_Wakeup", loop: false, speed: 1 };
+    default:
+      if (runtime.clock < runtime.landingEnd) return { name: "CM_Land", loop: false, speed: 1 };
+      if (Math.abs(runtime.turnRate) > .4) return { name: `CM_Turn_${runtime.turnRate < 0 ? "L" : "R"}`, loop: true, speed: Math.max(.6, Math.min(1.5, Math.abs(runtime.turnRate))) };
+      return { name: "CM_Ready", loop: true, speed: 1 };
   }
 }
 
 function transitionFadeSeconds(previous: string, next: string): number {
-  const isReactionClip = (name: string) =>
-    name === "BF_GuardBreak" ||
-    name === "BF_EdgeStagger" ||
-    name === "PF_HitHeavy" ||
-    name === "PF_GuardBreak" ||
-    name.startsWith("BF_Hit") ||
-    name.startsWith("BF_CounterHit");
-  if (next.startsWith("BF_CounterHit")) return 0.018;
-  if (isReactionClip(next)) return 0.025;
-  if (isReactionClip(previous)) return 0.11;
-  if (previous.startsWith("BF_") && (next === "Idle_Loop" || next === "Walk_Loop")) return 0.09;
-  return 0.06;
+  if (next === "CM_Block" || next.startsWith("BF_Hit") || next.startsWith("BF_Counter")) return .032;
+  if (next === "CM_Wakeup") return .05;
+  if (next.startsWith("CM_Move") && previous.startsWith("CM_Move")) return .085;
+  if (next.startsWith("CM_Step")) return .035;
+  if (next === "CM_Ready" || next === "CM_Guard") return .11;
+  return .055;
 }
 
 function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false): void {
-  if (runtime.currentClip === name && !restart) return;
-  const clip = runtime.clips.get(name) ?? runtime.clips.get("Idle_Loop");
+  const clip = runtime.clips.get(name) ?? runtime.clips.get("CM_Ready") ?? runtime.clips.get("Idle_Loop");
   if (!clip) return;
-  const fade = transitionFadeSeconds(runtime.currentClip, name);
-  runtime.currentAction?.fadeOut(fade);
+  if (runtime.currentClip === clip.name && !restart) {
+    runtime.currentAction?.setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
+    return;
+  }
+  runtime.transitionPose.clear();
+  if (runtime.currentAction) {
+    for (const [boneName, bone] of runtime.bones) {
+      if (!(bone as THREE.Bone).isBone) continue;
+      runtime.transitionPose.set(boneName, { position: bone.position.clone(), rotation: bone.quaternion.clone() });
+    }
+  }
+  runtime.transitionDuration = transitionFadeSeconds(runtime.currentClip, clip.name);
+  runtime.transitionAge = 0;
+  // Snapshot the rendered pose before stopping. Same-clip repeats and combo
+  // interruptions cannot reset a live outgoing action or accumulate old weights.
+  runtime.mixer.stopAllAction();
   const action = runtime.mixer.clipAction(clip, runtime.model);
-  action.reset();
+  action.reset().setEffectiveWeight(1).setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
   action.enabled = true;
   action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
   action.clampWhenFinished = !loop;
-  action.timeScale = loop ? speed : Math.max(0.25, clip.duration * speed);
-  action.fadeIn(fade).play();
-  runtime.currentClip = name;
+  action.play();
+  runtime.currentClip = clip.name;
   runtime.currentAction = action;
   runtime.host.userData.quaterniusCurrentClip = clip.name;
 }
 
-function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false): void {
-  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, 0.05) : 0;
-  // Always advance the wall-clock cursor so releasing hitstop cannot accumulate
-  // a large mixer delta. Only the animation pose itself freezes on impact.
+function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false): number {
+  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;
   runtime.lastTime = timeSeconds;
-  if (!frozen) runtime.mixer.update(delta);
+  if (!frozen) {
+    runtime.clock += delta;
+    runtime.transitionAge += delta;
+    runtime.mixer.update(delta);
+  }
+  return frozen ? 0 : delta;
+}
+
+function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
+  const action = runtime.currentAction;
+  const clip = runtime.clips.get(runtime.currentClip);
+  if (!action || !clip) return;
+  const ticks = fighter.stateMachine.stateTicks;
+  let phase: number | null = null;
+  const move = fighter.currentMove;
+  if (fighter.state === "ATTACK" && move) {
+    const impact = AUTHORED_CONTACT_PHASE[runtime.currentClip] ?? .5;
+    phase = combatAttackPhase(move, fighter.moveTick, impact);
+    runtime.host.userData.combatMotionContactPhase = impact;
+    runtime.host.userData.combatMotionSampledPhase = phase;
+    if (V6_KICK_CONTACT_PHASE[runtime.currentClip] !== undefined) {
+      runtime.host.userData.quaterniusKickTimingPolicy = "V6_ACTIVE_CONTACT_SYNC";
+      runtime.host.userData.quaterniusKickSampledPhase = phase;
+    }
+  } else if (fighter.state === "WALK") phase = runtime.gaitPhase;
+  else if (fighter.state === "SIDESTEP") phase = Math.min(1, ticks / (fighter.visual.root.userData.combatTps ? 8 : 12));
+  else if (fighter.state === "HIT" || fighter.state === "BLOCK_STUN") phase = Math.min(1, ticks / Math.max(1, runtime.stateDuration - 1));
+  else if (["KNOCKDOWN", "KO", "THROW", "RING_OUT"].includes(fighter.state)) phase = Math.min(1, ticks / 29);
+  else if (fighter.state === "WAKEUP") phase = Math.min(1, ticks / 22);
+  else if (fighter.state === "JUMP") phase = Math.min(1, ticks / 38);
+  else if (runtime.currentClip === "CM_Land") phase = Math.min(1, 1 - (runtime.landingEnd - runtime.clock) / .18);
+  if (phase !== null) {
+    action.setEffectiveTimeScale(0);
+    action.time = clip.duration * phase;
+    runtime.mixer.update(0);
+  }
+  if (runtime.transitionPose.size) {
+    const weight = 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
+    if (weight <= 0) runtime.transitionPose.clear();
+    else for (const [name, from] of runtime.transitionPose) {
+      const bone = runtime.bones.get(name)!;
+      bone.quaternion.slerp(from.rotation, weight);
+      bone.position.lerp(from.position, weight);
+    }
+  }
   runtime.model.updateMatrixWorld(true);
 }
+
 
 export function installQuaterniusModelSkin(visual: FighterVisual, definition: FighterDefinition): void {
   if (typeof window === "undefined" || runtimes.has(visual.root)) return;
@@ -714,6 +775,10 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       alias.name = authored;
       retargetedClips.set(alias.name, alias);
     }
+    const combatClips = createCombatMotionLibrary(styled.model, retargetedClips, definition);
+    for (const [name, clip] of combatClips) retargetedClips.set(name, clip);
+    visual.root.userData.combatMotionClipCount = combatClips.size;
+    visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
@@ -723,6 +788,11 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       lastTime: 0,
       lastMoveTick: -1,
       lastReactionSerial: -1,
+      lastPosition: null, motionX: 0, motionZ: 1, gaitPhase: 0,
+      lastYaw: null, turnRate: 0, lastState: "", lastStateTicks: 0,
+      stateDuration: 1, clock: 0, landingEnd: 0,
+      transitionAge: 1, transitionDuration: .05, transitionPose: new Map(),
+      plantedFeet: { l: null, r: null }, finalTime: -1,
       bodyType: resources.bodyType,
       modelUrl: resources.modelUrl,
     };
@@ -781,29 +851,81 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
 export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: number): void {
   const runtime = runtimes.get(fighter.visual.root);
   if (!runtime) return;
-  const desired = desiredClip(fighter);
-  const restartingAttack = fighter.state === "ATTACK" && fighter.moveTick < runtime.lastMoveTick;
+  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;
+  observeMotion(runtime, fighter, delta);
+  const stateChanged = runtime.lastState !== fighter.state;
+  const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;
+  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);
   const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;
+  if (stateChanged || restartedState || restartingReaction) {
+    runtime.stateDuration = fighter.stateMachine.stateTicks + (fighter.state === "HIT" ? fighter.hitStun : fighter.blockStun);
+    runtime.plantedFeet.l = null; runtime.plantedFeet.r = null;
+  }
+  if (runtime.lastState === "JUMP" && fighter.grounded && fighter.state === "IDLE") runtime.landingEnd = runtime.clock + .18;
+  if (fighter.state !== "IDLE") runtime.landingEnd = 0;
+  runtime.lastState = fighter.state;
+  runtime.lastStateTicks = fighter.stateMachine.stateTicks;
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = fighter.reactionSerial;
-  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction);
+  const desired = desiredClip(fighter, runtime);
+  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
   advance(runtime, timeSeconds, fighter.hitStop > 0);
-  syncV6KickContactPhase(runtime, fighter);
+  synchronizeMotion(runtime, fighter);
   const correctionsEnabled = motionCorrectionsEnabled();
-  if (correctionsEnabled) {
+  // New clips already contain an anatomical guard. The legacy assistance toggle
+  // remains meaningful only for an independently missing optional clip pack.
+  if (correctionsEnabled && !runtime.clips.has("CM_Ready")) {
     neutralPoseCorrection(runtime, fighter);
     guardPoseCorrection(runtime, fighter);
     attackContactCorrection(runtime, fighter);
   }
   runtime.host.userData.quaterniusMotionCorrectionsEnabled = correctionsEnabled;
   runtime.host.userData.quaterniusMotionMode = correctionsEnabled ? "CORRECTED" : "RAW_CLIP_PLAYBACK";
+  fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;
+  fighter.visual.root.userData.combatMotionGaitPhase = runtime.gaitPhase;
+  fighter.visual.root.userData.combatMotionSingleMixer = true;
+  runtime.model.updateMatrixWorld(true);
+}
+
+/** Run after the final TPS yaw, never in the side-camera coordinate basis. */
+export function finalizeQuaterniusModelPose(fighter: FighterRuntime, timeSeconds: number): void {
+  const runtime = runtimes.get(fighter.visual.root);
+  if (!runtime || runtime.finalTime === timeSeconds) return;
+  runtime.finalTime = timeSeconds;
+  const walking = fighter.state === "WALK";
+  if (!walking || fighter.hitStop > 0) {
+    if (!walking) { runtime.plantedFeet.l = null; runtime.plantedFeet.r = null; }
+    return;
+  }
+  runtime.model.updateMatrixWorld(true);
+  let maxDrift = 0;
+  for (const suffix of ["l", "r"] as const) {
+    const cycle = combatFootCycle(runtime.gaitPhase + (suffix === "r" ? .5 : 0));
+    const foot = runtime.bones.get(`foot_${suffix}`)!;
+    const root = runtime.bones.get(`thigh_${suffix}`)!;
+    const knee = runtime.bones.get(`calf_${suffix}`)!;
+    const current = foot.getWorldPosition(new THREE.Vector3());
+    if (!cycle.planted || Math.abs(runtime.turnRate) > 2) { runtime.plantedFeet[suffix] = null; continue; }
+    const anchor = runtime.plantedFeet[suffix];
+    if (!anchor || anchor.distanceTo(current) > fighter.visual.root.scale.x * .08) {
+      runtime.plantedFeet[suffix] = current; continue;
+    }
+    const rotation = foot.getWorldQuaternion(new THREE.Quaternion());
+    // Preserve the authored bend plane. This solve is restricted to walking;
+    // Foundry strike/support legs are never re-solved after retargeting.
+    const pole = knee.getWorldPosition(new THREE.Vector3());
+    solveCombatLimb(root, knee, foot, anchor, pole);
+    setWorldQuaternion(foot, rotation);
+    maxDrift = Math.max(maxDrift, foot.getWorldPosition(new THREE.Vector3()).distanceTo(anchor));
+  }
+  fighter.visual.root.userData.combatMotionFootDrift = maxDrift;
   runtime.model.updateMatrixWorld(true);
 }
 
 export function updateQuaterniusModelPreview(visual: FighterVisual, timeSeconds: number): void {
   const runtime = runtimes.get(visual.root);
   if (!runtime) return;
-  playClip(runtime, "Idle_Loop", true, 0.8);
+  playClip(runtime, "CM_Ready", true, 1);
   advance(runtime, timeSeconds);
 }
 

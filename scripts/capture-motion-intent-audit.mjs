@@ -21,10 +21,10 @@ const reset = `function resetFighter(f){f.currentMove=null;f.moveTick=0;f.hitSto
 const cases = [
   { fighter: "p1", name: "kairo", move: "backfist", clip: "BF_Backfist_R", contact: "RIGHT_FIST", authored: true },
   { fighter: "p1", name: "kairo", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "LEFT_FIST", authored: true },
-  { fighter: "p1", name: "kairo", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },
-  { fighter: "p2", name: "sera", move: "backfist", clip: "BF_Backfist_R", contact: "LEFT_FIST", authored: true },
-  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "BF_BodyBlow_L", contact: "RIGHT_FIST", authored: true },
-  { fighter: "p2", name: "sera", move: "counter", clip: "PF_Counter_L", contact: "LEFT_FIST", authored: false },
+  { fighter: "p1", name: "kairo", move: "counter", clip: "CM_Counter_L", contact: "LEFT_FIST", authored: true },
+  { fighter: "p2", name: "sera", move: "backfist", clip: "BF_Backfist_L", contact: "LEFT_FIST", authored: true },
+  { fighter: "p2", name: "sera", move: "bodyBlow", clip: "BF_BodyBlow_R", contact: "RIGHT_FIST", authored: true },
+  { fighter: "p2", name: "sera", move: "counter", clip: "CM_Counter_L", contact: "LEFT_FIST", authored: true },
 ];
 let sessionId = null;
 try {
@@ -45,7 +45,7 @@ try {
   if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");
   let ready = false;
   for (let i = 0; i < 160; i += 1) {
-    ready = await execute(sessionId, `${lookup}const g=findGame();if(!g)return false;return [g.p1,g.p2].every(f=>f.visual.root.userData.motionExpansionHasProcedural===true&&f.visual.root.userData.motionExpansionProceduralClipCount===23);`);
+    ready = await execute(sessionId, `${lookup}const g=findGame();if(!g)return false;return [g.p1,g.p2].every(f=>f.visual.root.userData.combatMotionClipCount>=27);`);
     if (ready) break;
     await delay(100);
   }

@@ -20,19 +20,13 @@ test("settings expose persistent motion correction switch with OFF default", asy
   assert.match(page, /motionCorrections: !settings\.motionCorrections/);
 });
 
-test("motion correction policy separates raw, authored-preserve and procedural-assist paths", async () => {
+test("motion corrections cannot install a second mixer over authored combat", async () => {
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
   const quaternius = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
-
-  assert.match(presentation, /const BLENDER_AUTHORED_ATTACKS = new Set/);
-  assert.match(presentation, /if \(correctionsEnabled && !authoredAttack\)/);
-  assert.match(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
-  assert.match(presentation, /else \{[\s\S]*updateQuaterniusModelSkin\(fighter, timeSeconds\)/);
+  assert.doesNotMatch(presentation, /updateMotionExpansionSkin\(/);
+  assert.equal((presentation.match(/updateQuaterniusModelSkin\(fighter, timeSeconds\)/g) ?? []).length, 1);
   assert.match(presentation, /RAW_CLIP_PLAYBACK/);
   assert.match(presentation, /AUTHORED_ATTACK_PRESERVE/);
-  assert.match(presentation, /PROCEDURAL_ASSIST/);
-
-  assert.match(quaternius, /if \(correctionsEnabled\) \{[\s\S]*neutralPoseCorrection[\s\S]*guardPoseCorrection[\s\S]*attackContactCorrection/);
-  assert.match(quaternius, /BLENDER_AUTHORED_CONTACT_SAFE_MOVES\.has\(move\.id\)/);
-  assert.match(quaternius, /AUTHORED_CONTACT_PRESERVE/);
+  assert.match(presentation, /AUTHORED_COMBAT_PRESERVE/);
+  assert.match(quaternius, /correctionsEnabled && !runtime.clips.has\("CM_Ready"\)/);
 });

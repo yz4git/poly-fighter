@@ -40,3 +40,9 @@ test('support-foot pivot uses shortest quaternion angle instead of 360-degree wr
   assert.match(kicks, /if angle > math\.pi:/);
   assert.match(kicks, /angle = math\.tau - angle/);
 });
+
+test('V6.5 dynamic calibration evaluates dense reference leg positions', () => {
+  assert.match(kicks, /dense_frames = tuple\(range\(spec\.start_frame, spec\.end_frame \+ 1\)\)/);
+  assert.match(kicks, /dense_positions = rig\.v1\.evaluated_positions/);
+  assert.match(kicks, /support_ik, dense_positions, spec\.start_frame, spec\.end_frame/);
+});

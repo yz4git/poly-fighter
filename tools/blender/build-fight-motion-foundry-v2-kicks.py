@@ -793,6 +793,8 @@ def add_kick_controls(
     names = (thigh_name, calf_name, foot_name, s_thigh, s_calf, s_foot)
     armature.animation_data.action = base_action
     positions = rig.v1.evaluated_positions(scene, armature, spec.phases, names)
+    dense_frames = tuple(range(spec.start_frame, spec.end_frame + 1))
+    dense_positions = rig.v1.evaluated_positions(scene, armature, dense_frames, names)
 
     scene.frame_set(spec.start_frame)
     bpy.context.view_layer.update()
@@ -923,7 +925,7 @@ def add_kick_controls(
     # Blender's correct bend solution crosses the bone-roll seam during motion.
     if support_pole_calibration_min <= 0.05:
         support_pole_angle_keys, support_pole_calibration_min = calibrate_dynamic_ik_pole_angle(
-            scene, armature, support_ik, positions, spec.start_frame, spec.end_frame,
+            scene, armature, support_ik, dense_positions, spec.start_frame, spec.end_frame,
             s_thigh, s_calf, s_foot, support_pole_angle,
         )
         support_pole_angle = support_pole_angle_keys[0][1]

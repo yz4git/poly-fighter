@@ -119,5 +119,14 @@ def build_kick_action(scene, armature, spec, axes, mocap_paths):
 base.build_kick_action = build_kick_action
 
 
+# Backward-compatible helper surface for Motion Foundry modules that import the
+# grounded-kick entrypoint as a helper library (notably the airborne Dash Kick).
+# V6.8 moved the implementation into the shared base module; delegate unknown
+# attributes so existing consumers still resolve body_axes, guard helpers and
+# metric helpers without coupling them to the entrypoint's internal layout.
+def __getattr__(name):
+    return getattr(base, name)
+
+
 if __name__ == "__main__":
     base.main()

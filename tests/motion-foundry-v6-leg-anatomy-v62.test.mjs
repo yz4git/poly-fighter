@@ -18,3 +18,11 @@ test('V6.2 foot orientation follows fighter anatomical axes instead of world X',
   assert.match(kicks, /pitch_axis=left, yaw_axis=up/);
   assert.doesNotMatch(kicks, /pitch = Quaternion\(Vector\(\(1\.0, 0\.0, 0\.0\)\), math\.radians\(pitch_deg\)\)/);
 });
+
+test('V6.4 calibrates Blender IK pole angle from evaluated anatomical bend scores', () => {
+  assert.match(kicks, /AUTO_ROBUST_BEND_HEMISPHERE_V6_4/);
+  assert.match(kicks, /calibrate_ik_pole_angle/);
+  assert.match(kicks, /robust_min \* 10\.0 \+ mean/);
+  assert.match(kicks, /strikePoleCalibrationMinDot/);
+  assert.match(kicks, /supportPoleCalibrationMinDot/);
+});

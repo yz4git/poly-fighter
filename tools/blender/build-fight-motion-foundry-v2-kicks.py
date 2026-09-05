@@ -475,6 +475,7 @@ def key_orientation(
 
 KNEE_POLE_POLICY = "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3"
 FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
+POLE_ANGLE_POLICY = "AUTO_ROBUST_BEND_HEMISPHERE_V6_4"
 
 
 def _knee_bend_offset(hip: Vector, knee: Vector, ankle: Vector) -> Tuple[Vector, float]:
@@ -566,6 +567,109 @@ def set_anatomical_knee_pole_keys(
     rig.smooth_control_curves(control)
 
 
+def _evaluated_knee_bend_dot(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    frame: int,
+    source_positions,
+    thigh_name: str,
+    calf_name: str,
+    foot_name: str,
+) -> float | None:
+    """Score the evaluated constrained knee against the measured bend hemisphere."""
+    rig.v1.set_scene_frame(scene, frame)
+    hip = rig.v1.pose_head(armature, thigh_name)
+    knee = rig.v1.pose_head(armature, calf_name)
+    ankle = rig.v1.pose_head(armature, foot_name)
+    source_hip = source_positions[frame][thigh_name]
+    source_knee = source_positions[frame][calf_name]
+    source_ankle = source_positions[frame][foot_name]
+    desired, _ = _project_bend_to_target_chain(
+        source_hip, source_knee, source_ankle, ankle, None
+    )
+    actual, _ = _knee_bend_offset(hip, knee, ankle)
+    # Near full extension has no stable bend side and should not dominate calibration.
+    if desired.length < 1e-4 or actual.length < 0.012:
+        return None
+    return desired.normalized().dot(actual.normalized())
+
+
+def calibrate_ik_pole_angle(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    ik: bpy.types.Constraint,
+    source_positions,
+    frames: Sequence[int],
+    thigh_name: str,
+    calf_name: str,
+    foot_name: str,
+    influences: Sequence[float] | None = None,
+) -> Tuple[float, float]:
+    """Choose a static pole angle that maximizes the worst anatomical bend score.
+
+    Blender's pole target still needs pole_angle compensation for arbitrary bone
+    roll.  Searching the small scalar angle is deterministic, build-time only, and
+    lets the final evaluated chain decide instead of assuming left/right roll.
+    """
+    active = []
+    for index, frame in enumerate(frames):
+        influence = 1.0 if influences is None else influences[index]
+        if influence >= 0.55:
+            active.append(frame)
+    if not active:
+        active = list(frames[1:-1])
+
+    candidates = [math.radians(deg) for deg in range(-180, 180, 10)]
+    best_angle = 0.0
+    best_objective = -999.0
+    best_min = -1.0
+    for angle in candidates:
+        ik.pole_angle = angle
+        scores = []
+        for frame in active:
+            score = _evaluated_knee_bend_dot(
+                scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+            )
+            if score is not None:
+                scores.append(score)
+        if not scores:
+            continue
+        robust_min = min(scores)
+        mean = sum(scores) / len(scores)
+        # Worst-frame correctness dominates; mean only breaks ties.
+        objective = robust_min * 10.0 + mean
+        if objective > best_objective:
+            best_objective = objective
+            best_angle = angle
+            best_min = robust_min
+
+    # Refine ±10 degrees around the coarse optimum at one-degree resolution.
+    coarse = best_angle
+    for degree_offset in range(-10, 11):
+        angle = coarse + math.radians(degree_offset)
+        ik.pole_angle = angle
+        scores = []
+        for frame in active:
+            score = _evaluated_knee_bend_dot(
+                scene, armature, frame, source_positions, thigh_name, calf_name, foot_name
+            )
+            if score is not None:
+                scores.append(score)
+        if not scores:
+            continue
+        robust_min = min(scores)
+        mean = sum(scores) / len(scores)
+        objective = robust_min * 10.0 + mean
+        if objective > best_objective:
+            best_objective = objective
+            best_angle = angle
+            best_min = robust_min
+
+    ik.pole_angle = best_angle
+    bpy.context.view_layer.update()
+    return best_angle, best_min
+
+
 def add_kick_controls(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
@@ -649,6 +753,10 @@ def add_kick_controls(
     for frame, influence in zip(spec.phases, spec.ik_influences):
         strike_ik.influence = influence
         strike_ik.keyframe_insert(data_path="influence", frame=frame)
+    strike_pole_angle, strike_pole_calibration_min = calibrate_ik_pole_angle(
+        scene, armature, strike_ik, positions, spec.phases,
+        thigh_name, calf_name, foot_name, spec.ik_influences,
+    )
 
     strike_foot_world = rig.pose_world_matrix(armature, foot_name)
     strike_orientation = rig.make_matrix_control(f"{spec.action_name}_CTRL_strike_foot_orientation", strike_foot_world, 0.065)
@@ -698,6 +806,10 @@ def add_kick_controls(
     support_ik.pole_target = support_pole
     support_ik.chain_count = 2
     support_ik.influence = 1.0
+    support_pole_angle, support_pole_calibration_min = calibrate_ik_pole_angle(
+        scene, armature, support_ik, positions, spec.phases,
+        s_thigh, s_calf, s_foot, None,
+    )
 
     support_world = rig.pose_world_matrix(armature, s_foot)
     support_orientation = rig.make_matrix_control(f"{spec.action_name}_CTRL_support_foot_orientation", support_world, 0.065)
@@ -715,7 +827,15 @@ def add_kick_controls(
     support_rot.influence = 1.0
     rig.smooth_control_curves(support_orientation)
 
-    return [strike_target, knee_pole, strike_orientation, support_target, support_pole, support_orientation]
+    return (
+        [strike_target, knee_pole, strike_orientation, support_target, support_pole, support_orientation],
+        {
+            "strikePoleAngleDegrees": math.degrees(strike_pole_angle),
+            "strikePoleCalibrationMinDot": strike_pole_calibration_min,
+            "supportPoleAngleDegrees": math.degrees(support_pole_angle),
+            "supportPoleCalibrationMinDot": support_pole_calibration_min,
+        },
+    )
 
 
 def add_guard_controls(
@@ -1001,7 +1121,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
 
     strike_world = armature.matrix_world.to_3x3() @ axes[0]
     masters = rig.add_master_controls(scene, armature, base, strike_world, spec)
-    controls = add_kick_controls(scene, armature, base, spec, *axes)
+    controls, pole_calibration = add_kick_controls(scene, armature, base, spec, *axes)
     guards = add_guard_controls(scene, armature, base, spec, *axes)
 
     constrained = {
@@ -1044,6 +1164,8 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "contactIKPolicy": "IMPACT_WINDOW_ONLY",
         "kneePolePolicy": KNEE_POLE_POLICY,
         "footOrientationPolicy": FOOT_ORIENTATION_POLICY,
+        "poleAnglePolicy": POLE_ANGLE_POLICY,
+        **pole_calibration,
         "strikeKneePlaneMinDot": strike_knee_plane_min_dot,
         "supportKneePlaneMinDot": support_knee_plane_min_dot,
         "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
@@ -1088,6 +1210,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             "impact knee-extension quality gate",
             "move-specific strike-foot orientation around anatomical body axes",
             "measured knee bend-plane hemisphere preservation",
+            "automatic Blender IK pole-angle calibration against evaluated bend hemisphere",
             "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",
             f"controlled {spec.support_side.upper()} support-foot pivot",

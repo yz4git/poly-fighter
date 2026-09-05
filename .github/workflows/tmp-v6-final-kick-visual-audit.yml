@@ -1,5 +1,5 @@
 name: Temporary V6 final kick visual audit
-# Final audit after Rising spine_01=0.20 / spine_02=0.18 chest alignment.
+# Final audit after Rising spine_01=0.17 / spine_02=0.15 chest alignment.
 
 on:
   push:

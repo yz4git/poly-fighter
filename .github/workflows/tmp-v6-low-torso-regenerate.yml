@@ -1,5 +1,5 @@
 name: Temporary V6 low torso regenerate
-# Final generation pass: Low spine_02/spine_03 retention = 0.30.
+# Regenerate after Rising torso stabilization; Low remains at final 0.30 retention.
 
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
           git config user.name yz4git
           git config user.email 65384484+yz4git@users.noreply.github.com
           git add public/models/quaternius/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.generator.sha256
-          git commit -m 'Regenerate V6 kicks with final low torso retention'
+          git commit -m 'Regenerate V6 kicks with stable kick torsos'
           git push origin HEAD:motion-foundry-v6-reference-driven
       - uses: actions/upload-artifact@v4
         if: always()

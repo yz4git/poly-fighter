@@ -445,8 +445,8 @@ def build_mocap_prior(
             # transferred through the UAL rest delta. Preserve pelvis lift and the
             # complete leg motion, while keeping only the useful torso counter-balance.
             RISING_KICK_TORSO_DELTA_RETENTION = {
-                "spine_01": 0.20,
-                "spine_02": 0.18,
+                "spine_01": 0.17,
+                "spine_02": 0.15,
                 "spine_03": 0.25,
                 "neck_01": 0.45,
             }

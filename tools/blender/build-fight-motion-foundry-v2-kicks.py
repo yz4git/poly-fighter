@@ -363,7 +363,7 @@ def derive_reference_knots(
     src_load = max(0.0, reference_impact_u - 0.30)
     src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
     src_over = min(1.0, reference_impact_u + 0.075)
-    src_recovery = min(1.0, reference_impact_u + 0.31)
+    src_recovery = min(0.96, reference_impact_u + 0.44)
     knots = (
         (0.0, 0.0),
         (du(spec.load_frame), src_load),
@@ -384,7 +384,7 @@ def reference_knots_for_impact(spec: KickSpec, reference_impact_u: float):
     src_load = max(0.0, reference_impact_u - 0.30)
     src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
     src_over = min(1.0, reference_impact_u + 0.075)
-    src_recovery = min(1.0, reference_impact_u + 0.31)
+    src_recovery = min(0.96, reference_impact_u + 0.44)
     return (
         (0.0, 0.0),
         (du(spec.load_frame), src_load),

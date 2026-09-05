@@ -190,6 +190,8 @@ test("reference-pose v4 keeps all five kick checkpoints readable and physically 
     assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);
     assert.ok(impact.strikeKneeExtensionDegrees > chamber.strikeKneeExtensionDegrees + 8, `${move.action} chamber->impact knee`);
     assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
+    const recoveryRetreatRatio = Math.abs(recovery.strikeFootForward) / Math.max(0.001, Math.abs(impact.strikeFootForward));
+    assert.ok(recoveryRetreatRatio < 0.58, `${move.action} recovery retreat ratio ${recoveryRetreatRatio}`);
     assert.ok(Math.abs(guard.strikeFootForward) < 0.09, `${move.action} guard forward ${guard.strikeFootForward}`);
     assert.ok(Math.abs(guard.strikeFootRise) < 0.09, `${move.action} guard rise ${guard.strikeFootRise}`);
     assert.ok(guard.supportFootPivotDegrees < 4.0, `${move.action} guard pivot ${guard.supportFootPivotDegrees}`);

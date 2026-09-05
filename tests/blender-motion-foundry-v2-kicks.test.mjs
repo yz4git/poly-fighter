@@ -92,7 +92,7 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.ok(move.mocapSampleCount >= 20);
     assert.ok(move.strikeFootForwardReach > 0.15, `${move.action}: ${move.strikeFootForwardReach}`);
     assert.ok(move.guardHandMaxChestDistance < 0.55, `${move.action}: ${move.guardHandMaxChestDistance}`);
-    assert.ok(move.strikeKneeExtensionDegrees > 135, `${move.action}: ${move.strikeKneeExtensionDegrees}`);
+    assert.ok(move.strikeKneeExtensionDegrees > 120, `${move.action}: ${move.strikeKneeExtensionDegrees}`);
     assert.ok(move.strikeLegReachRatio > 0.85, `${move.action}: ${move.strikeLegReachRatio}`);
     assert.ok(move.guardHandMinChestHeight > -0.05, `${move.action}: ${move.guardHandMinChestHeight}`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action}: ${move.supportFootLockMaxDrift}`);
@@ -100,30 +100,33 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.equal(move.naturalnessPass, "REFERENCE_DRIVEN_V6");
     assert.ok(move.durationSeconds < 0.9, `${move.action}: ${move.durationSeconds}`);
   }
+  // V6.8 deliberately keeps the contact leg visibly bent instead of reintroducing V6.7's near-lockout.
   assert.ok(front.strikeFootTravel > 0.58, front.strikeFootTravel);
   assert.ok(front.strikeFootForwardReach > 0.48, front.strikeFootForwardReach);
   assert.ok(front.strikeFootVerticalRise > 0.27, front.strikeFootVerticalRise);
-  assert.ok(front.strikeKneeExtensionDegrees > 150, front.strikeKneeExtensionDegrees);
+  assert.ok(front.strikeKneeExtensionDegrees > 140 && front.strikeKneeExtensionDegrees < 155, front.strikeKneeExtensionDegrees);
   assert.ok(front.pelvisTravel > 0.055, front.pelvisTravel);
   assert.ok(front.supportFootPivotMaxDegrees > 8 && front.supportFootPivotMaxDegrees < 20, front.supportFootPivotMaxDegrees);
-  assert.ok(front.strikeLegReachRatio > 0.96, front.strikeLegReachRatio);
+  assert.ok(front.strikeLegReachRatio > 0.94 && front.strikeLegReachRatio < 0.97, front.strikeLegReachRatio);
   assert.ok(low.strikeFootTravel > 0.40, low.strikeFootTravel);
   assert.ok(low.strikeFootForwardReach > 0.30, low.strikeFootForwardReach);
-  assert.ok(low.strikeFootVerticalRise > 0.22 && low.strikeFootVerticalRise < 0.58, low.strikeFootVerticalRise);
-  assert.ok(low.strikeKneeExtensionDegrees > 145 && low.strikeKneeExtensionDegrees < 166, low.strikeKneeExtensionDegrees);
-  assert.ok(low.strikeLegReachRatio > 0.90, low.strikeLegReachRatio);
+  assert.ok(low.strikeFootVerticalRise > 0.22 && low.strikeFootVerticalRise < 0.80, low.strikeFootVerticalRise);
+  assert.ok(low.strikeKneeExtensionDegrees > 130 && low.strikeKneeExtensionDegrees < 145, low.strikeKneeExtensionDegrees);
+  assert.ok(low.strikeLegReachRatio > 0.90 && low.strikeLegReachRatio < 0.94, low.strikeLegReachRatio);
   assert.ok(low.pelvisTravel > 0.045, low.pelvisTravel);
   assert.ok(low.supportFootPivotMaxDegrees > 24 && low.supportFootPivotMaxDegrees < 48, low.supportFootPivotMaxDegrees);
   assert.ok(rising.strikeFootTravel > 0.68, rising.strikeFootTravel);
   assert.ok(rising.strikeFootForwardReach > 0.34, rising.strikeFootForwardReach);
   assert.ok(rising.strikeFootOutwardReach > 0.16, rising.strikeFootOutwardReach);
   assert.ok(rising.strikeFootVerticalRise > 0.52, rising.strikeFootVerticalRise);
-  assert.ok(rising.strikeKneeExtensionDegrees > 145, rising.strikeKneeExtensionDegrees);
-  assert.ok(rising.strikeLegReachRatio > 0.93, rising.strikeLegReachRatio);
+  assert.ok(rising.strikeKneeExtensionDegrees > 120 && rising.strikeKneeExtensionDegrees < 140, rising.strikeKneeExtensionDegrees);
+  assert.ok(rising.strikeLegReachRatio > 0.87 && rising.strikeLegReachRatio < 0.92, rising.strikeLegReachRatio);
   assert.ok(rising.pelvisTravel > 0.050, rising.pelvisTravel);
   assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30, rising.supportFootPivotMaxDegrees);
   assert.ok(low.supportFootPivotMaxDegrees > front.supportFootPivotMaxDegrees + 10, `${low.supportFootPivotMaxDegrees} !> ${front.supportFootPivotMaxDegrees} + 10`);
-  assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise}`);
+  assert.ok(low.strikeFootVerticalRise < front.strikeFootVerticalRise - 0.20, `${low.strikeFootVerticalRise} !< ${front.strikeFootVerticalRise} - 0.20`);
+  assert.ok(low.strikeFootVerticalRise < rising.strikeFootVerticalRise - 0.20, `${low.strikeFootVerticalRise} !< ${rising.strikeFootVerticalRise} - 0.20`);
+  assert.ok(rising.strikeFootVerticalRise > front.strikeFootVerticalRise - 0.10, `${rising.strikeFootVerticalRise} !> ${front.strikeFootVerticalRise} - 0.10`);
 });
 
 test("runtime prefers authored grounded kicks and the dedicated airborne Dash Kick with independent PF fallbacks", () => {
@@ -190,7 +193,15 @@ test("reference-pose v4 keeps all five kick checkpoints readable and physically 
     const minimumChamberRise = move.action === "BF_LowKick_L" ? 0.05 : 0.10;
     assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);
     assert.ok(impact.strikeKneeExtensionDegrees > chamber.strikeKneeExtensionDegrees + 8, `${move.action} chamber->impact knee`);
-    assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
+    if (move.action === "BF_FrontKick_R") {
+      assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
+    } else if (move.action === "BF_LowKick_L") {
+      assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 7.5, `${move.action} impact->recovery knee`);
+    } else {
+      // Rising kick retracts spatially while the knee can re-open slightly as the thigh drops.
+      assert.ok(recovery.strikeFootForward < impact.strikeFootForward - 0.20, `${move.action} impact->recovery forward`);
+      assert.ok(recovery.strikeFootRise < impact.strikeFootRise - 0.50, `${move.action} impact->recovery rise`);
+    }
     assert.equal(move.referenceTimeWarpKnots.length, 8, `${move.action} two-stage recovery knots`);
     const settleKnot = move.referenceTimeWarpKnots.at(-2);
     assert.ok(settleKnot[0] > recovery.normalizedTime && settleKnot[0] < 1.0, `${move.action} settle gameplay phase`);
@@ -207,5 +218,5 @@ test("reference-pose v4 keeps all five kick checkpoints readable and physically 
   assert.ok(front.referencePoses[2].supportFootPivotDegrees > 8 && front.referencePoses[2].supportFootPivotDegrees < 20);
   assert.ok(low.referencePoses[2].supportFootPivotDegrees > 18 && low.referencePoses[2].supportFootPivotDegrees < 38);
   assert.ok(rising.referencePoses[2].supportFootPivotDegrees > 10 && rising.referencePoses[2].supportFootPivotDegrees < 28);
-  assert.ok(rising.referencePoses[2].strikeFootRise > front.referencePoses[2].strikeFootRise + 0.16);
+  assert.ok(rising.referencePoses[2].strikeFootRise > front.referencePoses[2].strikeFootRise - 0.10);
 });

@@ -1,5 +1,5 @@
 name: Temporary V6 final kick visual audit
-# Audit final 30% Low torso retention PR head.
+# Audit final Low 30% plus Rising torso stabilization PR head.
 
 on:
   push:

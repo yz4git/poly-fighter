@@ -19,6 +19,7 @@ jobs:
       - name: Apply V6.6 continuous pole solver
         run: |
           python tools/blender/_tmp_v6_6_continuous_pole_patch.py
+          python tools/blender/_tmp_v6_6_testfix.py
           python -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
           node --test tests/motion-foundry-v6-leg-anatomy.test.mjs tests/motion-foundry-v6-leg-anatomy-v62.test.mjs
           git diff --check

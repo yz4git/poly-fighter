@@ -455,14 +455,26 @@ def ensure_kick_bones(armature: bpy.types.Object, spec: KickSpec) -> None:
         bone.rotation_mode = "QUATERNION"
 
 
-def key_orientation(control: bpy.types.Object, base: Matrix, frame: int, pitch_deg: float, yaw_deg: float) -> None:
+def key_orientation(
+    control: bpy.types.Object,
+    base: Matrix,
+    frame: int,
+    pitch_deg: float,
+    yaw_deg: float,
+    pitch_axis: Vector | None = None,
+    yaw_axis: Vector | None = None,
+) -> None:
+    """Key foot orientation around the fighter's anatomical axes, not world X."""
     loc, rot, scale = base.decompose()
-    yaw = Quaternion(Vector((0.0, 0.0, 1.0)), math.radians(yaw_deg))
-    pitch = Quaternion(Vector((1.0, 0.0, 0.0)), math.radians(pitch_deg))
+    p_axis = (pitch_axis or Vector((1.0, 0.0, 0.0))).normalized()
+    y_axis = (yaw_axis or Vector((0.0, 0.0, 1.0))).normalized()
+    yaw = Quaternion(y_axis, math.radians(yaw_deg))
+    pitch = Quaternion(p_axis, math.radians(pitch_deg))
     rig.key_matrix(control, frame, Matrix.LocRotScale(loc, yaw @ pitch @ rot, scale))
 
 
-KNEE_POLE_POLICY = "ANIMATED_MEASURED_KNEE_PLANE_V6_1"
+KNEE_POLE_POLICY = "ANIMATED_MEASURED_KNEE_PLANE_V6_2"
+FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
 
 
 def set_anatomical_knee_pole_keys(
@@ -499,7 +511,24 @@ def set_anatomical_knee_pole_keys(
             direction.negate()
         if direction.length > 1e-6:
             previous_direction = direction.normalized()
-        pole += bias
+
+        # Legacy fixed pole bias could overpower the measured knee plane on
+        # roundhouse/rising kicks. Keep only a small component perpendicular
+        # to the hip-ankle chain and never let it push against the measured
+        # bend hemisphere.
+        safe_bias = bias.copy()
+        chain_axis = ankle - hip
+        if chain_axis.length > 1e-6:
+            axis = chain_axis.normalized()
+            safe_bias -= axis * safe_bias.dot(axis)
+        if direction.length > 1e-6 and safe_bias.dot(direction) < 0.0:
+            d = direction.normalized()
+            safe_bias -= d * safe_bias.dot(d)
+        max_bias = min(0.045, max(0.015, direction.length * 0.12))
+        if safe_bias.length > max_bias:
+            safe_bias.normalize()
+            safe_bias *= max_bias
+        pole += safe_bias
         keys.append((frame, pole))
     rig.v1.set_control_keys(control, armature, keys)
     rig.smooth_control_curves(control)
@@ -596,7 +625,10 @@ def add_kick_controls(
     strike_rot.target_space = "WORLD"
     strike_rot.mix_mode = "REPLACE"
     for frame, pitch, yaw in zip(spec.phases, spec.foot_pitch, spec.foot_yaw):
-        key_orientation(strike_orientation, strike_foot_world, frame, pitch, yaw * side_sign)
+        key_orientation(
+            strike_orientation, strike_foot_world, frame, pitch, yaw * side_sign,
+            pitch_axis=left, yaw_axis=up,
+        )
         strike_rot.influence = rig.phase_value(frame, tuple(zip(spec.phases, spec.ik_influences)))
         strike_rot.keyframe_insert(data_path="influence", frame=frame)
     rig.smooth_control_curves(strike_orientation)
@@ -640,7 +672,10 @@ def add_kick_controls(
     support_rot.target_space = "WORLD"
     support_rot.mix_mode = "REPLACE"
     for frame, yaw in zip(spec.phases, spec.support_yaw):
-        key_orientation(support_orientation, support_world, frame, 0.0, yaw)
+        key_orientation(
+            support_orientation, support_world, frame, 0.0, yaw,
+            pitch_axis=left, yaw_axis=up,
+        )
     support_rot.influence = 1.0
     rig.smooth_control_curves(support_orientation)
 
@@ -835,6 +870,25 @@ def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object,
         })
     return poses
 
+def knee_plane_min_dot(reference_positions, final_positions, frames, thigh_name: str, calf_name: str, foot_name: str) -> float:
+    """Return minimum source-vs-final bend-plane dot; negative means a knee flip."""
+    dots = []
+    for frame in frames:
+        r_hip = reference_positions[frame][thigh_name]
+        r_knee = reference_positions[frame][calf_name]
+        r_ankle = reference_positions[frame][foot_name]
+        f_hip = final_positions[frame][thigh_name]
+        f_knee = final_positions[frame][calf_name]
+        f_ankle = final_positions[frame][foot_name]
+        r_normal = (r_knee - r_hip).cross(r_ankle - r_knee)
+        f_normal = (f_knee - f_hip).cross(f_ankle - f_knee)
+        # Near full extension has an unstable plane; skip those samples.
+        if r_normal.length < 1e-4 or f_normal.length < 1e-4:
+            continue
+        dots.append(r_normal.normalized().dot(f_normal.normalized()))
+    return min(dots) if dots else 1.0
+
+
 def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes, mocap_paths):
     # Reference-driven V6: measured full-body human motion is primary.  The
     # existing procedural rig is demoted to gameplay contact/support constraints.
@@ -898,6 +952,11 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     samples = rig.v1.sample_source_basis(scene, armature, source)
     base = rig.v1.key_pose_basis(scene, armature, f"{spec.action_name}_BASE", samples)
     armature.animation_data.action = base
+    leg_names = (
+        f"thigh_{spec.strike_suffix}", f"calf_{spec.strike_suffix}", f"foot_{spec.strike_suffix}",
+        f"thigh_{spec.support_suffix}", f"calf_{spec.support_suffix}", f"foot_{spec.support_suffix}",
+    )
+    reference_leg_positions = rig.v1.evaluated_positions(scene, armature, spec.phases, leg_names)
 
     strike_world = armature.matrix_world.to_3x3() @ axes[0]
     masters = rig.add_master_controls(scene, armature, base, strike_world, spec)
@@ -922,6 +981,15 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     final_action = rig.v1.bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
     armature.animation_data.action = final_action
+    final_leg_positions = rig.v1.evaluated_positions(scene, armature, spec.phases, leg_names)
+    strike_knee_plane_min_dot = knee_plane_min_dot(
+        reference_leg_positions, final_leg_positions, spec.phases[1:-1],
+        f"thigh_{spec.strike_suffix}", f"calf_{spec.strike_suffix}", f"foot_{spec.strike_suffix}",
+    )
+    support_knee_plane_min_dot = knee_plane_min_dot(
+        reference_leg_positions, final_leg_positions, spec.phases[1:-1],
+        f"thigh_{spec.support_suffix}", f"calf_{spec.support_suffix}", f"foot_{spec.support_suffix}",
+    )
     reference_poses = reference_pose_snapshots(scene, armature, spec, axes[0], axes[2])
     rig.v1.remove_controls([*controls, *guards, *masters])
     metrics = {
@@ -933,6 +1001,10 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "referencePriorActivityScore": reference_prior_score,
         "referenceTimeWarpKnots": [list(knot) for knot in spec.source_knots],
         "contactIKPolicy": "IMPACT_WINDOW_ONLY",
+        "kneePolePolicy": KNEE_POLE_POLICY,
+        "footOrientationPolicy": FOOT_ORIENTATION_POLICY,
+        "strikeKneePlaneMinDot": strike_knee_plane_min_dot,
+        "supportKneePlaneMinDot": support_knee_plane_min_dot,
         "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
         **(mocap_meta.as_dict() if mocap_meta is not None else {}),
         "fps": rig.FPS,
@@ -973,7 +1045,8 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             f"{spec.strike_side.upper()} contact-window strike-leg IK",
             "hip-relative impact reach from authored leg length",
             "impact knee-extension quality gate",
-            "move-specific strike-foot orientation",
+            "move-specific strike-foot orientation around anatomical body axes",
+            "measured knee bend-plane hemisphere preservation",
             "dual high-guard hand IK",
             f"world-space {spec.support_side.upper()} support-foot position lock",
             f"controlled {spec.support_side.upper()} support-foot pivot",

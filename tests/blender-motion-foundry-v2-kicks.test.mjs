@@ -26,6 +26,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(mocapPrior, /spine_02\": 0\.30/);
   assert.match(mocapPrior, /spine_03\": 0\.30/);
   assert.match(generator, /IMPACT_WINDOW_ONLY/);
+  assert.match(generator, /V6_8_CONTACT_ASSIST/);
   assert.match(generator, /action_name="BF_FrontKick_R"/);
   assert.match(generator, /action_name="BF_LowKick_L"/);
   assert.match(generator, /action_name="BF_RisingKick_R"/);
@@ -190,8 +191,10 @@ test("reference-pose v4 keeps all five kick checkpoints readable and physically 
     assert.ok(chamber.strikeFootRise > minimumChamberRise, `${move.action} chamber rise ${chamber.strikeFootRise}`);
     assert.ok(impact.strikeKneeExtensionDegrees > chamber.strikeKneeExtensionDegrees + 8, `${move.action} chamber->impact knee`);
     assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
-    const recoveryRetreatRatio = Math.abs(recovery.strikeFootForward) / Math.max(0.001, Math.abs(impact.strikeFootForward));
-    assert.ok(recoveryRetreatRatio < 0.58, `${move.action} recovery retreat ratio ${recoveryRetreatRatio}`);
+    assert.equal(move.referenceTimeWarpKnots.length, 8, `${move.action} two-stage recovery knots`);
+    const settleKnot = move.referenceTimeWarpKnots.at(-2);
+    assert.ok(settleKnot[0] > recovery.normalizedTime && settleKnot[0] < 1.0, `${move.action} settle gameplay phase`);
+    assert.ok(settleKnot[1] > move.referenceTimeWarpKnots.at(-3)[1], `${move.action} settle source phase`);
     assert.ok(Math.abs(guard.strikeFootForward) < 0.09, `${move.action} guard forward ${guard.strikeFootForward}`);
     assert.ok(Math.abs(guard.strikeFootRise) < 0.09, `${move.action} guard rise ${guard.strikeFootRise}`);
     assert.ok(guard.supportFootPivotDegrees < 4.0, `${move.action} guard pivot ${guard.supportFootPivotDegrees}`);

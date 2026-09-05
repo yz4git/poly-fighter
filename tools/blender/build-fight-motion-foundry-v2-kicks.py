@@ -121,7 +121,7 @@ FRONT_KICK = KickSpec(
     foot_pitch=(0.0, 10.0, -5.0, -20.0, -24.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
     support_yaw=(0.0, -2.0, -7.0, -12.0, -14.0, -4.0, 0.0),
-    ik_influences=(0.0, 0.16, 0.52, 1.0, 0.72, 0.12, 0.0),
+    ik_influences=(0.0, 0.12, 0.40, 0.82, 0.52, 0.08, 0.0),
     pelvis_forward=(0.000, -0.018, 0.028, 0.090, 0.108, 0.012, 0.000),
     pelvis_drop=(0.000, -0.050, -0.048, -0.045, -0.038, -0.024, 0.000),
     pelvis_yaw=(0.0, -2.0, 2.0, 4.0, 5.0, 1.0, 0.0),
@@ -133,7 +133,7 @@ FRONT_KICK = KickSpec(
     reference_candidates=("Melee_Hook_Armature", "OverhandThrow_Armature", "Sword_Regular_A_Armature"),
     guard_influences=(0.0, 0.18, 0.30, 0.58, 0.42, 0.22, 0.0),
     knee_pole_bias=(0.12, 0.06, 0.03),
-    reach_ratios=(0.0, 0.0, 0.90, 0.976, 0.980, 0.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.84, 0.950, 0.955, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
@@ -168,7 +168,7 @@ LOW_KICK = KickSpec(
     foot_pitch=(0.0, 8.0, 2.0, -8.0, -11.0, 5.0, 0.0),
     foot_yaw=(0.0, 10.0, 34.0, 66.0, 78.0, 16.0, 0.0),
     support_yaw=(0.0, 3.0, 12.0, 26.0, 32.0, 8.0, 0.0),
-    ik_influences=(0.0, 0.12, 0.48, 1.0, 0.68, 0.10, 0.0),
+    ik_influences=(0.0, 0.08, 0.30, 0.58, 0.38, 0.06, 0.0),
     pelvis_forward=(0.000, -0.020, 0.012, 0.050, 0.060, 0.006, 0.000),
     pelvis_drop=(0.000, -0.040, -0.038, -0.030, -0.026, -0.020, 0.000),
     pelvis_yaw=(0.0, -10.0, 18.0, 36.0, 44.0, 8.0, 0.0),
@@ -181,7 +181,7 @@ LOW_KICK = KickSpec(
     guard_influences=(0.0, 0.10, 0.24, 0.45, 0.32, 0.16, 0.0),
     guard_width=0.12,
     knee_pole_bias=(0.14, 0.18, -0.02),
-    reach_ratios=(0.0, 0.0, 0.90, 0.955, 0.962, 0.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.72, 0.860, 0.880, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
@@ -216,7 +216,7 @@ RISING_KICK = KickSpec(
     foot_pitch=(0.0, 12.0, -8.0, -24.0, -30.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 2.0, 4.0, 5.0, 1.0, 0.0),
     support_yaw=(0.0, -3.0, -9.0, -18.0, -22.0, -6.0, 0.0),
-    ik_influences=(0.0, 0.18, 0.56, 1.0, 0.78, 0.14, 0.0),
+    ik_influences=(0.0, 0.10, 0.36, 0.68, 0.44, 0.08, 0.0),
     pelvis_forward=(0.000, -0.016, 0.012, 0.055, 0.065, 0.006, 0.000),
     pelvis_drop=(0.000, -0.055, -0.058, -0.052, -0.043, -0.028, 0.000),
     pelvis_yaw=(0.0, -3.0, 3.0, 7.0, 8.0, 2.0, 0.0),
@@ -229,7 +229,7 @@ RISING_KICK = KickSpec(
     guard_influences=(0.0, 0.12, 0.26, 0.50, 0.36, 0.18, 0.0),
     guard_height=0.165,
     knee_pole_bias=(0.30, 0.18, 0.10),
-    reach_ratios=(0.0, 0.0, 0.90, 0.960, 0.966, 0.0, 0.0),
+    reach_ratios=(0.0, 0.0, 0.78, 0.900, 0.910, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
@@ -363,7 +363,14 @@ def derive_reference_knots(
     src_load = max(0.0, reference_impact_u - 0.30)
     src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
     src_over = min(1.0, reference_impact_u + 0.075)
-    src_recovery = min(0.96, reference_impact_u + 0.44)
+    # V6.8: preserve the measured post-impact knee tuck, then advance to a
+    # later measured settle before GUARD. A single late recovery sample skipped
+    # the tuck and produced a straight-leg landing; the old single early sample
+    # left the foot extended until the final eight frames.
+    src_recovery = min(0.90, reference_impact_u + 0.31)
+    src_settle = min(0.96, reference_impact_u + 0.44)
+    recovery_u = du(spec.recovery_frame)
+    settle_u = recovery_u + (1.0 - recovery_u) * 0.55
     knots = (
         (0.0, 0.0),
         (du(spec.load_frame), src_load),
@@ -371,6 +378,7 @@ def derive_reference_knots(
         (du(spec.impact_frame), reference_impact_u),
         (du(spec.overtravel_frame), src_over),
         (du(spec.recovery_frame), src_recovery),
+        (settle_u, src_settle),
         (1.0, 1.0),
     )
     return knots, reference_impact_u, max(0.0, min(1.0, prior_score))
@@ -384,7 +392,14 @@ def reference_knots_for_impact(spec: KickSpec, reference_impact_u: float):
     src_load = max(0.0, reference_impact_u - 0.30)
     src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
     src_over = min(1.0, reference_impact_u + 0.075)
-    src_recovery = min(0.96, reference_impact_u + 0.44)
+    # V6.8: preserve the measured post-impact knee tuck, then advance to a
+    # later measured settle before GUARD. A single late recovery sample skipped
+    # the tuck and produced a straight-leg landing; the old single early sample
+    # left the foot extended until the final eight frames.
+    src_recovery = min(0.90, reference_impact_u + 0.31)
+    src_settle = min(0.96, reference_impact_u + 0.44)
+    recovery_u = du(spec.recovery_frame)
+    settle_u = recovery_u + (1.0 - recovery_u) * 0.55
     return (
         (0.0, 0.0),
         (du(spec.load_frame), src_load),
@@ -392,6 +407,7 @@ def reference_knots_for_impact(spec: KickSpec, reference_impact_u: float):
         (du(spec.impact_frame), reference_impact_u),
         (du(spec.overtravel_frame), src_over),
         (du(spec.recovery_frame), src_recovery),
+        (settle_u, src_settle),
         (1.0, 1.0),
     )
 
@@ -474,6 +490,7 @@ def key_orientation(
 
 
 KNEE_POLE_POLICY = "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3"
+CONTACT_ASSIST_POLICY = "V6_8_CONTACT_ASSIST"
 FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
 POLE_ANGLE_POLICY = "AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6"
 

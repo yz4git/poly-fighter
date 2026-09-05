@@ -19,6 +19,12 @@ jobs:
         run: |
           python tools/blender/_tmp_v6_2_leg_patch.py
           python -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/motion-foundry-v6-leg-anatomy.test.mjs')
+          t = p.read_text().replace('ANIMATED_MEASURED_KNEE_PLANE_V6_1', 'ANIMATED_MEASURED_KNEE_PLANE_V6_2')
+          p.write_text(t)
+          PY
           cat > tests/motion-foundry-v6-leg-anatomy-v62.test.mjs <<'EOF'
           import test from 'node:test';
           import assert from 'node:assert/strict';
@@ -47,6 +53,6 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/motion-foundry-v6-leg-anatomy-v62.test.mjs
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/motion-foundry-v6-leg-anatomy.test.mjs tests/motion-foundry-v6-leg-anatomy-v62.test.mjs
           git commit -m 'Preserve kick knee planes and anatomical foot axes'
           git push origin HEAD:motion-foundry-v6-leg-anatomy-fix

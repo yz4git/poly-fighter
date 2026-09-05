@@ -19,7 +19,7 @@ test('V6.2 foot orientation follows fighter anatomical axes instead of world X',
   assert.doesNotMatch(kicks, /pitch = Quaternion\(Vector\(\(1\.0, 0\.0, 0\.0\)\), math\.radians\(pitch_deg\)\)/);
 });
 
-test('V6.4 calibrates Blender IK pole angle from evaluated anatomical bend scores', () => {
+test('V6.5 keeps robust static pole calibration as the preferred baseline', () => {
   assert.match(kicks, /AUTO_DYNAMIC_BEND_HEMISPHERE_V6_5/);
   assert.match(kicks, /calibrate_ik_pole_angle/);
   assert.match(kicks, /robust_min \* 10\.0 \+ mean/);
@@ -45,4 +45,5 @@ test('V6.5 dynamic calibration evaluates dense reference leg positions', () => {
   assert.match(kicks, /dense_frames = tuple\(range\(spec\.start_frame, spec\.end_frame \+ 1\)\)/);
   assert.match(kicks, /dense_positions = rig\.v1\.evaluated_positions/);
   assert.match(kicks, /support_ik, dense_positions, spec\.start_frame, spec\.end_frame/);
+  assert.match(kicks, /for frame in range\(start_frame, end_frame \+ 1\):/);
 });

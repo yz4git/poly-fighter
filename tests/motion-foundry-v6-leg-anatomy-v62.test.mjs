@@ -19,7 +19,7 @@ test('V6.2 foot orientation follows fighter anatomical axes instead of world X',
   assert.doesNotMatch(kicks, /pitch = Quaternion\(Vector\(\(1\.0, 0\.0, 0\.0\)\), math\.radians\(pitch_deg\)\)/);
 });
 
-test('V6.5 keeps robust static pole calibration as the preferred baseline', () => {
+test('V6.6 keeps robust static pole calibration as the preferred baseline', () => {
   assert.match(kicks, /AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6/);
   assert.match(kicks, /calibrate_ik_pole_angle/);
   assert.match(kicks, /robust_min \* 10\.0 \+ mean/);
@@ -34,6 +34,7 @@ test('V6.6 dynamically calibrates a continuous pole-angle path only when static 
   assert.match(kicks, /point\.interpolation = "LINEAR"/);
   assert.match(kicks, /supportPoleAngleKeysDegrees/);
   assert.match(kicks, /DYNAMIC_TARGET_MIN_DOT = 0\.10/);
+  assert.match(kicks, /DYNAMIC_MAX_STEP_DEGREES = 45\.0/);
   assert.match(kicks, /_wrapped_angle_delta/);
   assert.match(kicks, /dynamic programming/);
   assert.match(kicks, /supportPoleAngleMaxStepDegrees/);
@@ -45,7 +46,7 @@ test('support-foot pivot uses shortest quaternion angle instead of 360-degree wr
   assert.match(kicks, /angle = math\.tau - angle/);
 });
 
-test('V6.5 dynamic calibration evaluates dense reference leg positions', () => {
+test('V6.6 dynamic calibration evaluates dense reference leg positions', () => {
   assert.match(kicks, /dense_frames = tuple\(range\(spec\.start_frame, spec\.end_frame \+ 1\)\)/);
   assert.match(kicks, /dense_positions = rig\.v1\.evaluated_positions/);
   assert.match(kicks, /support_ik, dense_positions, spec\.start_frame, spec\.end_frame/);

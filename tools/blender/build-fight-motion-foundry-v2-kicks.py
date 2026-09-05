@@ -43,18 +43,21 @@ module_spec.loader.exec_module(base)
 
 
 # V6.8 frame review: weak 0.58 contact IK let the CMU prior lift Low Kick to
-# roughly 0.72 m above its guard-relative start.  Restore a strong contact
+# roughly 0.72 m above its guard-relative start. Restore a strong contact
 # assist, but keep the shorter 0.90 reach target so the knee remains bent.
+# Keep a light recovery assist after contact as well: without it the CMU prior
+# continued carrying the foot forward after impact, which made the kick read as
+# an extended pose followed by a late snap instead of a deliberate retraction.
 LOW_KICK = replace(
     base.LOW_KICK,
-    ik_influences=(0.0, 0.08, 0.30, 0.90, 0.58, 0.06, 0.0),
+    ik_influences=(0.0, 0.08, 0.30, 0.90, 0.58, 0.24, 0.0),
     reach_ratios=(0.0, 0.0, 0.72, 0.900, 0.910, 0.0, 0.0),
 )
 base.LOW_KICK = LOW_KICK
 base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, base.RISING_KICK)
 
 
-# Low's measured source has a faster late return than Front/Rising.  Give the
+# Low's measured source has a faster late return than Front/Rising. Give the
 # final measured settle more gameplay frames so the last part of recovery does
 # not bunch up immediately before GUARD.
 _base_reference_knots_for_impact = base.reference_knots_for_impact

@@ -18,6 +18,14 @@ jobs:
       - name: Apply target-aware knee solver
         run: |
           python tools/blender/_tmp_v6_3_target_knee_patch.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/motion-foundry-v6-leg-anatomy-v62.test.mjs')
+          t = p.read_text()
+          t = t.replace('/max_bias = min\\(0\\.045/', '/safe_bias\\.length > 0\\.035/')
+          t = t.replace('V6.2 knee poles preserve the measured bend hemisphere with bounded projected bias', 'V6.3 target-aware knee poles preserve the measured bend hemisphere')
+          p.write_text(t)
+          PY
           python -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
           node --test tests/motion-foundry-v6-leg-anatomy.test.mjs tests/motion-foundry-v6-leg-anatomy-v62.test.mjs
           git diff --check

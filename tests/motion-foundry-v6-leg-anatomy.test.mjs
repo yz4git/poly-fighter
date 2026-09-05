@@ -19,3 +19,7 @@ test('kick IK poles follow measured knee planes instead of one frozen world pole
   assert.match(kicks, /s_thigh,\s+s_calf,\s+s_foot,/);
   assert.doesNotMatch(kicks, /knee_pole_position = rig\.v1\.chain_pole\(hip, knee, ankle/);
 });
+
+test('Rising Kick keeps a readable anatomical chamber after leg-axis correction', () => {
+  assert.match(kicks, /\(-0\.07, 0\.00, 0\.34\)/);
+});

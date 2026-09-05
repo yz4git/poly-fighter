@@ -46,4 +46,14 @@ Low therefore keeps stronger low-line contact assistance through OVERTRAVEL and 
 
 The reference time warp uses eight knots: START, LOAD, PRECONTACT, IMPACT, OVERTRAVEL, RECOVERY, SETTLE, GUARD. SETTLE must occur after RECOVERY so the measured post-impact phase cannot collapse into a late one-frame snap.
 
+## Airborne compatibility
+
+V6.8 split the grounded-kick implementation into a thin entrypoint plus `build-fight-motion-foundry-v2-kicks-base.py`. The airborne Dash Kick historically imports the grounded entrypoint as a helper library, so the entrypoint now delegates unknown helper attributes to the shared base. This preserves the existing helper API (`body_axes`, guard helpers and metric helpers) without duplicating implementation.
+
+The compatibility repair was verified by regenerating `BF_DashKick_R`: Blender generation, airborne metrics/GLB validation, airborne contract tests, production build, rules/lint and generated-artifact publication all pass.
+
+## Final visual result
+
+The regenerated 138-frame KAIRO audit was reviewed frame by frame. The old Low F29–F33 waist-height horizontal extension is gone; the new sequence stays bent and descends toward guard. Front and Rising remain continuous through their complete authored frame ranges.
+
 Do not merge V6.8 until the generated GLB is committed and the all-frame audit has captured all 138 KAIRO kick frames successfully and the resulting image sequence has been visually reviewed.

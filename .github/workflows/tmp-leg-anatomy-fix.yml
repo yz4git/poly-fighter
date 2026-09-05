@@ -1,4 +1,4 @@
-name: TMP apply V6 leg anatomy fix
+name: TMP tune V6 rising chamber
 
 on:
   push:
@@ -10,82 +10,39 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'Apply V6 leg anatomy patch'
+    if: github.event.head_commit.message != 'Apply Rising chamber anatomy tune'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: motion-foundry-v6-leg-anatomy-fix
           fetch-depth: 0
-      - name: Apply anatomical leg retarget and animated knee poles
+      - name: Preserve a readable chamber after leg-axis correction
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-
-          mocap_path = Path('tools/blender/motion_foundry_v6_mocap.py')
-          text = mocap_path.read_text()
-          marker = 'SEGMENT_DIRECTION_SWING_V6_1'
-          if marker not in text:
-              needle = '''def _mapped_source_name(source_name: str, mirrored: bool) -> str:\n    return SIDE_SWAP.get(source_name, source_name) if mirrored else source_name\n\n\n'''
-              insert = '''def _mapped_source_name(source_name: str, mirrored: bool) -> str:\n    return SIDE_SWAP.get(source_name, source_name) if mirrored else source_name\n\n\nLEG_ANATOMY_SOLVER = "SEGMENT_DIRECTION_SWING_V6_1"\nLEG_DIRECTION_TARGETS = frozenset({\n    "thigh_l", "calf_l", "foot_l",\n    "thigh_r", "calf_r", "foot_r",\n})\n\n\ndef _map_segment_direction(\n    direction: Vector,\n    source_basis: Matrix,\n    target_basis: Matrix,\n    mirrored: bool,\n) -> Vector:\n    """Map a measured bone-axis direction through the anatomy bases.\n\n    Unlike a full bone quaternion, a segment direction does not carry the BVH\n    bone's arbitrary axial twist.  That is important for knees and ankles: the\n    UAL/UBC rig keeps its own rest-roll while the measured hip->knee->ankle\n    direction supplies the actual human bend plane.\n    """\n    canonical = source_basis.inverted() @ direction\n    if mirrored:\n        canonical.y *= -1.0\n    mapped = target_basis @ canonical\n    if mapped.length < 1e-7:\n        raise RuntimeError("Measured leg segment direction is degenerate")\n    mapped.normalize()\n    return mapped\n\n\ndef _segment_direction_retarget_delta(\n    start_matrix: Matrix,\n    current_matrix: Matrix,\n    source_basis: Matrix,\n    target_basis: Matrix,\n    mirrored: bool,\n    base_target_q: Quaternion,\n) -> Quaternion:\n    """Retarget leg motion as a swing of the physical segment, never raw twist.\n\n    Blender bones point along local +Y.  We transfer the change in that axis from\n    the measured clip and apply it to the target's own +Y axis.  The target rest\n    roll is therefore preserved, preventing a CMU/UAL axis mismatch from making\n    a knee appear to hinge sideways or backwards.\n    """\n    bone_axis = Vector((0.0, 1.0, 0.0))\n    start_dir = start_matrix.to_3x3() @ bone_axis\n    current_dir = current_matrix.to_3x3() @ bone_axis\n    start_dir = _map_segment_direction(start_dir, source_basis, target_basis, mirrored)\n    current_dir = _map_segment_direction(current_dir, source_basis, target_basis, mirrored)\n    measured_swing = start_dir.rotation_difference(current_dir)\n\n    base_dir = base_target_q @ bone_axis\n    if base_dir.length < 1e-7:\n        return Quaternion((1.0, 0.0, 0.0, 0.0))\n    base_dir.normalize()\n    desired_dir = measured_swing @ base_dir\n    desired_dir.normalize()\n    return base_dir.rotation_difference(desired_dir).normalized()\n\n\n'''
-              if needle not in text:
-                  raise SystemExit('mocap insertion anchor not found')
-              text = text.replace(needle, insert, 1)
-
-              needle = '''    # Parents first, then limbs, so assigning object-space rotations resolves into\n    # stable local matrix_basis values on the target hierarchy.\n    ordered_pairs = list(CMU_TO_UAL)\n'''
-              replace = '''    # Parents first, then limbs, so assigning object-space rotations resolves into\n    # stable local matrix_basis values on the target hierarchy.\n    ordered_pairs = list(CMU_TO_UAL)\n    leg_direction_targets = LEG_DIRECTION_TARGETS\n'''
-              if needle not in text:
-                  raise SystemExit('ordered_pairs anchor not found')
-              text = text.replace(needle, replace, 1)
-
-              needle = '''            start_q = samples[0][actual_source].to_quaternion().normalized()\n            current_q = sample[actual_source].to_quaternion().normalized()\n            delta_q = _rotation_delta_in_target_space(start_q, current_q, source_basis, target_basis, mirrored)\n'''
-              replace = '''            if target_name in leg_direction_targets:\n                delta_q = _segment_direction_retarget_delta(\n                    samples[0][actual_source],\n                    sample[actual_source],\n                    source_basis,\n                    target_basis,\n                    mirrored,\n                    base_object_q[target_name],\n                )\n            else:\n                start_q = samples[0][actual_source].to_quaternion().normalized()\n                current_q = sample[actual_source].to_quaternion().normalized()\n                delta_q = _rotation_delta_in_target_space(\n                    start_q, current_q, source_basis, target_basis, mirrored\n                )\n'''
-              if needle not in text:
-                  raise SystemExit('rotation delta anchor not found')
-              text = text.replace(needle, replace, 1)
-
-              needle = '''    action["motion_prior_provider"] = "CMU_MOCAP_WORLD_DELTA_V6"\n'''
-              replace = '''    action["motion_prior_provider"] = "CMU_MOCAP_WORLD_DELTA_V6"\n    action["cmu_leg_orientation_solver"] = LEG_ANATOMY_SOLVER\n'''
-              if needle not in text:
-                  raise SystemExit('metadata anchor not found')
-              text = text.replace(needle, replace, 1)
-              mocap_path.write_text(text)
-
-          kicks_path = Path('tools/blender/build-fight-motion-foundry-v2-kicks.py')
-          text = kicks_path.read_text()
-          marker = 'ANIMATED_MEASURED_KNEE_PLANE_V6_1'
-          if marker not in text:
-              needle = '''def add_kick_controls(\n'''
-              helper = '''KNEE_POLE_POLICY = "ANIMATED_MEASURED_KNEE_PLANE_V6_1"\n\n\ndef set_anatomical_knee_pole_keys(\n    control: bpy.types.Object,\n    armature: bpy.types.Object,\n    positions,\n    frames: Sequence[int],\n    thigh_name: str,\n    calf_name: str,\n    foot_name: str,\n    scale: float,\n    bias: Vector,\n) -> None:\n    """Animate an IK pole from the measured knee plane for every authored phase.\n\n    A single world-space pole is incorrect for a roundhouse/rising kick because\n    the pelvis and support leg rotate through the strike.  Following the measured\n    hip-knee-ankle plane keeps the knee on the human side of the chain.  A\n    hemisphere continuity guard prevents an almost-straight leg from flipping the\n    pole 180 degrees between adjacent phases.\n    """\n    keys = []\n    previous_direction = None\n    for frame in frames:\n        hip = positions[frame][thigh_name]\n        knee = positions[frame][calf_name]\n        ankle = positions[frame][foot_name]\n        pole = rig.v1.chain_pole(hip, knee, ankle, scale=scale)\n        direction = pole - knee\n        if direction.length < 1e-6:\n            direction = previous_direction.copy() if previous_direction is not None else Vector((0.0, 1.0, 0.0))\n        if previous_direction is not None and direction.dot(previous_direction) < 0.0:\n            pole = knee - direction\n            direction.negate()\n        if direction.length > 1e-6:\n            previous_direction = direction.normalized()\n        pole += bias\n        keys.append((frame, pole))\n    rig.v1.set_control_keys(control, armature, keys)\n    rig.smooth_control_curves(control)\n\n\n'''
-              if needle not in text:
-                  raise SystemExit('add_kick_controls anchor not found')
-              text = text.replace(needle, helper + needle, 1)
-
-              old = '''    hip = positions[spec.impact_frame][thigh_name]\n    knee = positions[spec.impact_frame][calf_name]\n    ankle = positions[spec.impact_frame][foot_name]\n    knee_pole_position = rig.v1.chain_pole(hip, knee, ankle, scale=spec.knee_pole_scale)\n    pole_forward, pole_lateral, pole_up = spec.knee_pole_bias\n    knee_pole_position += forward * pole_forward + left * (pole_lateral * side_sign) + up * pole_up\n    knee_pole = rig.v1.make_control(\n        f"{spec.action_name}_CTRL_strike_knee",\n        armature,\n        knee_pole_position,\n    )\n'''
-              new = '''    pole_forward, pole_lateral, pole_up = spec.knee_pole_bias\n    strike_pole_bias = (\n        forward * pole_forward\n        + left * (pole_lateral * side_sign)\n        + up * pole_up\n    )\n    hip = positions[spec.start_frame][thigh_name]\n    knee = positions[spec.start_frame][calf_name]\n    ankle = positions[spec.start_frame][foot_name]\n    knee_pole = rig.v1.make_control(\n        f"{spec.action_name}_CTRL_strike_knee",\n        armature,\n        rig.v1.chain_pole(hip, knee, ankle, scale=spec.knee_pole_scale) + strike_pole_bias,\n    )\n    set_anatomical_knee_pole_keys(\n        knee_pole,\n        armature,\n        positions,\n        spec.phases,\n        thigh_name,\n        calf_name,\n        foot_name,\n        spec.knee_pole_scale,\n        strike_pole_bias,\n    )\n'''
+          path = Path('tools/blender/build-fight-motion-foundry-v2-kicks.py')
+          text = path.read_text()
+          old = '        (-0.07, 0.00, 0.29),\n'
+          new = '        (-0.07, 0.00, 0.34),\n'
+          if new not in text:
               if old not in text:
-                  raise SystemExit('strike knee pole block not found')
+                  raise SystemExit('Rising chamber offset anchor not found')
               text = text.replace(old, new, 1)
-
-              old = '''    support_pole = rig.v1.make_control(\n        f"{spec.action_name}_CTRL_support_knee",\n        armature,\n        rig.v1.chain_pole(support_hip, support_knee, support_ankle, scale=1.9),\n    )\n'''
-              new = '''    support_pole = rig.v1.make_control(\n        f"{spec.action_name}_CTRL_support_knee",\n        armature,\n        rig.v1.chain_pole(support_hip, support_knee, support_ankle, scale=1.9),\n    )\n    set_anatomical_knee_pole_keys(\n        support_pole,\n        armature,\n        positions,\n        spec.phases,\n        s_thigh,\n        s_calf,\n        s_foot,\n        1.9,\n        Vector((0.0, 0.0, 0.0)),\n    )\n'''
-              if old not in text:
-                  raise SystemExit('support knee pole block not found')
-              text = text.replace(old, new, 1)
-              kicks_path.write_text(text)
+              path.write_text(text)
           PY
-          python -m py_compile tools/blender/motion_foundry_v6_mocap.py tools/blender/build-fight-motion-foundry-v2-kicks.py
+          python -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
           node --test tests/motion-foundry-v6-leg-anatomy.test.mjs
-      - name: Commit patch
+      - name: Commit tune
         shell: bash
         run: |
           if git diff --quiet; then
-            echo 'No patch required'
+            echo 'No tune required'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add tools/blender/motion_foundry_v6_mocap.py tools/blender/build-fight-motion-foundry-v2-kicks.py
-          git commit -m 'Apply V6 leg anatomy patch'
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py
+          git commit -m 'Apply Rising chamber anatomy tune'
           git push origin HEAD:motion-foundry-v6-leg-anatomy-fix

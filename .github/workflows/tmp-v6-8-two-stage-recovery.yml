@@ -1,0 +1,35 @@
+name: TEMP V6.8 Two Stage Recovery Patch
+
+on:
+  push:
+    branches:
+      - kick-frame-audit-v1
+    paths:
+      - .github/tmp/v6-8-two-stage-recovery.py
+      - .github/workflows/tmp-v6-8-two-stage-recovery.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: kick-frame-audit-v1
+          fetch-depth: 0
+      - name: Apply V6.8 two-stage patch
+        run: |
+          python3 .github/tmp/v6-8-two-stage-recovery.py
+          python3 -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
+          grep -c 'src_settle = min(0.96, reference_impact_u + 0.44)' tools/blender/build-fight-motion-foundry-v2-kicks.py | grep -qx '2'
+          grep -q 'V6_8_CONTACT_ASSIST' tools/blender/build-fight-motion-foundry-v2-kicks.py
+          grep -q 'two-stage recovery knots' tests/blender-motion-foundry-v2-kicks.test.mjs
+      - name: Commit patch
+        run: |
+          git config user.name yz4git
+          git config user.email 65384484+yz4git@users.noreply.github.com
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/blender-motion-foundry-v2-kicks.test.mjs
+          git commit -m 'V6.8: preserve measured tuck and soften contact IK'
+          git push origin HEAD:kick-frame-audit-v1

@@ -59,3 +59,4 @@ if marker in gen and 'V6_8_CONTACT_ASSIST' not in gen:
 
 test_path.write_text(test)
 print('V6.8 two-stage recovery + mocap-dominant contact assist patch applied')
+# trigger: 2026-09-05 V6.8 phase 2

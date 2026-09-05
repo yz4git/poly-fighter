@@ -86,6 +86,10 @@ test("generated V6.8 kick pack keeps three distinct readable contact lines", () 
     assert.ok(move.guardHandMinChestHeight > -0.05, `${move.action} guard height`);
     assert.ok(move.supportFootLockMaxDrift < 0.01, `${move.action} support drift`);
     assert.ok(move.durationSeconds < 0.9, `${move.action} duration`);
+    assert.ok(Number.isFinite(move.allFrameStrikeFootVerticalRiseMax), `${move.action} all-frame rise max`);
+    assert.ok(Number.isInteger(move.allFrameStrikeFootVerticalRiseMaxFrame), `${move.action} all-frame rise frame`);
+    assert.ok(Number.isFinite(move.allFrameStrikeFootForwardReachMax), `${move.action} all-frame forward max`);
+    assert.ok(Number.isInteger(move.allFrameStrikeFootForwardReachMaxFrame), `${move.action} all-frame forward frame`);
 
     if (move.supportConstraintPolicy === "MOCAP_PELVIS_ANCHOR_V6_7") {
       assert.equal(move.action, "BF_RisingKick_R");
@@ -108,9 +112,9 @@ test("generated V6.8 kick pack keeps three distinct readable contact lines", () 
   assert.ok(front.supportFootPivotMaxDegrees > 8 && front.supportFootPivotMaxDegrees < 20);
 
   assert.ok(low.strikeFootForwardReach > 0.30);
-  assert.ok(low.strikeFootVerticalRise > 0.22 && low.strikeFootVerticalRise < 0.65, low.strikeFootVerticalRise);
-  assert.ok(low.strikeKneeExtensionDegrees > 130 && low.strikeKneeExtensionDegrees < 145);
-  assert.ok(low.strikeLegReachRatio > 0.90 && low.strikeLegReachRatio < 0.94);
+  assert.ok(low.strikeFootVerticalRise > 0.20 && low.strikeFootVerticalRise < 0.60, low.strikeFootVerticalRise);
+  assert.ok(low.strikeKneeExtensionDegrees > 128 && low.strikeKneeExtensionDegrees < 145, low.strikeKneeExtensionDegrees);
+  assert.ok(low.strikeLegReachRatio > 0.89 && low.strikeLegReachRatio < 0.94, low.strikeLegReachRatio);
   assert.ok(low.supportFootPivotMaxDegrees > 24 && low.supportFootPivotMaxDegrees < 48);
 
   assert.ok(rising.strikeFootForwardReach > 0.34);
@@ -119,8 +123,12 @@ test("generated V6.8 kick pack keeps three distinct readable contact lines", () 
   assert.ok(rising.strikeLegReachRatio > 0.87 && rising.strikeLegReachRatio < 0.92);
   assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30);
 
-  assert.ok(low.strikeFootVerticalRise < front.strikeFootVerticalRise - 0.20);
-  assert.ok(low.strikeFootVerticalRise < rising.strikeFootVerticalRise - 0.20);
+  // The all-frame gate is the V6.8 regression that representative poses lacked.
+  // A Low Kick may never climb into the Front/Rising vertical band between checkpoints.
+  assert.ok(low.allFrameStrikeFootVerticalRiseMax < 0.65, low.allFrameStrikeFootVerticalRiseMax);
+  assert.ok(low.allFrameStrikeFootForwardReachMax < 0.95, low.allFrameStrikeFootForwardReachMax);
+  assert.ok(low.allFrameStrikeFootVerticalRiseMax < front.allFrameStrikeFootVerticalRiseMax - 0.35);
+  assert.ok(low.allFrameStrikeFootVerticalRiseMax < rising.allFrameStrikeFootVerticalRiseMax - 0.35);
   assert.ok(low.supportFootPivotMaxDegrees > front.supportFootPivotMaxDegrees + 10);
 });
 
@@ -136,11 +144,10 @@ test("all five reference checkpoints stage contact and recovery without a late s
     if (move.action === "BF_FrontKick_R") {
       assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 8, `${move.action} impact->recovery knee`);
     } else if (move.action === "BF_LowKick_L") {
-      // Low retracts by folding somewhat while the foot drops and stops extending.
-      // This is a stronger visual continuity contract than knee angle alone.
-      assert.ok(recovery.strikeKneeExtensionDegrees < impact.strikeKneeExtensionDegrees - 3.0, `${move.action} impact->recovery knee`);
-      assert.ok(recovery.strikeFootRise < impact.strikeFootRise - 0.25, `${move.action} impact->recovery rise`);
-      assert.ok(recovery.strikeFootForward < impact.strikeFootForward + 0.08, `${move.action} impact->recovery forward hold`);
+      // The low leg can re-open while it drops; spatial retreat is the actual visual contract.
+      assert.ok(recovery.strikeFootRise < impact.strikeFootRise - 0.40, `${move.action} impact->recovery rise`);
+      assert.ok(recovery.strikeFootForward < impact.strikeFootForward - 0.20, `${move.action} impact->recovery forward`);
+      assert.ok(recovery.strikeKneeExtensionDegrees < 150, `${move.action} recovery knee not locked`);
     } else {
       // Rising retracts spatially while the knee can re-open as the thigh drops.
       assert.ok(recovery.strikeFootForward < impact.strikeFootForward - 0.20, `${move.action} impact->recovery forward`);

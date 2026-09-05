@@ -1,5 +1,5 @@
 name: Temporary V6 kick contact phase sync
-# Final Rising chest alignment after TPS review.
+# Final Rising chest alignment after last TPS residual.
 
 on:
   push:
@@ -27,8 +27,8 @@ jobs:
           git diff --check
           grep -q 'LOW_KICK_TORSO_DELTA_RETENTION' tools/blender/motion_foundry_v6_mocap.py
           grep -q 'RISING_KICK_TORSO_DELTA_RETENTION' tools/blender/motion_foundry_v6_mocap.py
-          grep -q '"spine_01": 0.20' tools/blender/motion_foundry_v6_mocap.py
-          grep -q '"spine_02": 0.18' tools/blender/motion_foundry_v6_mocap.py
+          grep -q '"spine_01": 0.17' tools/blender/motion_foundry_v6_mocap.py
+          grep -q '"spine_02": 0.15' tools/blender/motion_foundry_v6_mocap.py
           grep -q '"neck_01": 0.45' tools/blender/motion_foundry_v6_mocap.py
           grep -q 'V6_ACTIVE_CONTACT_SYNC' src/game/visual-quaternius-runtime.ts
       - uses: actions/setup-node@v4
@@ -45,5 +45,5 @@ jobs:
           git config user.name yz4git
           git config user.email 65384484+yz4git@users.noreply.github.com
           git add tools/blender/motion_foundry_v6_mocap.py tests/blender-motion-foundry-v2-kicks.test.mjs
-          git commit -m 'Finalize rising kick chest alignment'
+          git commit -m 'Finalize rising kick chest retention'
           git push origin HEAD:motion-foundry-v6-reference-driven

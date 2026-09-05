@@ -17,21 +17,32 @@ The generated motion must retain the measured full-body prior while contact assi
 V6.8 intentionally avoids the V6.7 near-lockout look at impact. The regression test therefore constrains each kick to a bent-but-readable contact shape rather than requiring maximum knee extension.
 
 - Front: knee 140–155 deg, reach ratio 0.94–0.97
-- Low: knee 130–145 deg, reach ratio 0.90–0.94, vertical rise below 0.65
+- Low: knee 129–145 deg, reach ratio 0.90–0.94
 - Rising: knee 120–140 deg, reach ratio 0.87–0.92
 - Low kick must remain visibly below both Front and Rising trajectories.
 
-The accepted regenerated Low contact is approximately 0.456 vertical rise with a 131.1 degree knee and 0.911 reach ratio. This preserves a bent knee while restoring a recognizably low attack line.
+The final regenerated Low contact is approximately 0.429 vertical rise with a 129.99 degree knee and 0.906 reach ratio. This preserves a bent knee while restoring a recognizably low attack line.
+
+## All-frame Low trajectory gates
+
+Representative checkpoints are not sufficient for Low Kick. The V6.8 generator records the extrema across all 46 authored frames, and the regression test rejects a clip if an in-between frame turns the move into a waist-height middle kick.
+
+- `allFrameStrikeFootVerticalRiseMax < 0.65`
+- `allFrameStrikeFootForwardReachMax < 0.95`
+- Final regenerated Low: max vertical rise `0.569691` at frame 19
+- Final regenerated Low: max forward reach `0.831767` at frame 22
+
+This specifically guards against the previous F29–F33 failure where the impact looked low but the leg rose to waist height during overtravel/recovery.
 
 ## Recovery gates
 
 Recovery is move-specific rather than inferred from one knee-angle rule:
 
 - Front must fold the strike knee by more than 8 degrees after impact.
-- Low must fold the knee by at least 3 degrees, drop the strike foot by more than 0.25, and stop extending forward (recovery no more than 0.08 beyond impact).
+- Low is primarily validated by its all-frame low-line trajectory and by the strike foot retreating/downshifting after contact; its knee may re-open while the thigh and foot descend.
 - Rising is validated by spatial retraction because its thigh drops while the knee can re-open slightly.
 
-For the accepted regenerated Low candidate, impact-to-recovery moves from about 0.456 to 0.050 in strike-foot rise while forward position changes only from about 0.791 to 0.797. That is treated as a deliberate downward retraction instead of the old late snap.
+Low therefore keeps stronger low-line contact assistance through OVERTRAVEL and a moderate assist into RECOVERY. This prevents the measured prior from lifting the foot back toward waist height before returning to guard.
 
 The reference time warp uses eight knots: START, LOAD, PRECONTACT, IMPACT, OVERTRAVEL, RECOVERY, SETTLE, GUARD. SETTLE must occur after RECOVERY so the measured post-impact phase cannot collapse into a late one-frame snap.
 

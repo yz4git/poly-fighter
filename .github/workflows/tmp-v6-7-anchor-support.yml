@@ -1,5 +1,6 @@
 name: TEMP V6.7 Anchor Support Patch
 
+# Trigger V6.7 measured support-leg preservation pass.
 on:
   push:
     paths:

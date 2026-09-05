@@ -441,8 +441,22 @@ def build_mocap_prior(
                 "spine_03": 0.30,
                 "neck_01": 0.70,
             }
-            if spec.action_name == "BF_LowKick_L" and target_name in LOW_KICK_TORSO_DELTA_RETENTION:
-                retention = LOW_KICK_TORSO_DELTA_RETENTION[target_name]
+            # The measured rising/side kick contains an extreme upper-body fold when
+            # transferred through the UAL rest delta. Preserve pelvis lift and the
+            # complete leg motion, while keeping only the useful torso counter-balance.
+            RISING_KICK_TORSO_DELTA_RETENTION = {
+                "spine_01": 0.30,
+                "spine_02": 0.25,
+                "spine_03": 0.25,
+                "neck_01": 0.45,
+            }
+            retention_map = None
+            if spec.action_name == "BF_LowKick_L":
+                retention_map = LOW_KICK_TORSO_DELTA_RETENTION
+            elif spec.action_name == "BF_RisingKick_R":
+                retention_map = RISING_KICK_TORSO_DELTA_RETENTION
+            if retention_map is not None and target_name in retention_map:
+                retention = retention_map[target_name]
                 delta_q = Quaternion((1.0, 0.0, 0.0, 0.0)).slerp(delta_q, retention).normalized()
             desired_q = (delta_q @ base_object_q[target_name]).normalized()
             pb = target.pose.bones[target_name]

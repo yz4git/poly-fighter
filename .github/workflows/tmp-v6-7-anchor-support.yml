@@ -1,0 +1,37 @@
+name: TEMP V6.7 Anchor Support Patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-v6-7-anchor-support.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-foundry-v6-leg-anatomy-fix
+          fetch-depth: 0
+      - name: Apply V6.7 patch
+        run: |
+          set -euo pipefail
+          python3 .github/tmp/v6_7_anchor_support_patch.py
+          python3 -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py tools/blender/motion_foundry_v6_mocap.py
+          grep -Fq 'MOCAP_PELVIS_ANCHOR_V6_7' tools/blender/build-fight-motion-foundry-v2-kicks.py
+          grep -Fq 'mocapSupportAnchorAfter' tools/blender/build-fight-motion-foundry-v2-kicks.py
+      - name: Commit branch patch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/blender-motion-foundry-v2-kicks.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No patch changes.'
+            exit 0
+          fi
+          git commit -m 'V6.7 preserve measured rising support leg'
+          git push origin HEAD:motion-foundry-v6-leg-anatomy-fix

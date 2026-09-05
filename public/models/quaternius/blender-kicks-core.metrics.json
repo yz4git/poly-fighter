@@ -199,7 +199,11 @@
         "controlled L support-foot pivot",
         "Blender native NLA visual-keying bake",
         "glTF Action export"
-      ]
+      ],
+      "allFrameStrikeFootVerticalRiseMax": 1.174396276473999,
+      "allFrameStrikeFootVerticalRiseMaxFrame": 28,
+      "allFrameStrikeFootForwardReachMax": 1.4746131747961044,
+      "allFrameStrikeFootForwardReachMaxFrame": 35
     },
     {
       "version": "BLENDER_MOTION_FOUNDRY_V6_LOW_KICK",
@@ -246,8 +250,8 @@
       "kneePolePolicy": "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3",
       "footOrientationPolicy": "ANATOMICAL_BODY_AXES_V6_2",
       "poleAnglePolicy": "AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6",
-      "strikePoleAngleDegrees": -147.00000000000003,
-      "strikePoleCalibrationMinDot": 0.7912758551537991,
+      "strikePoleAngleDegrees": -152.0,
+      "strikePoleCalibrationMinDot": 0.7625842429697514,
       "supportConstraintPolicy": "IK_POSITION_LOCK_V6_6",
       "supportPoleAngleDegrees": 148.0,
       "supportPoleAngleKeysDegrees": [
@@ -258,7 +262,7 @@
       ],
       "supportPoleCalibrationMinDot": 0.14118918031454086,
       "supportPoleAngleMaxStepDegrees": 0.0,
-      "strikeKneePlaneMinDot": 0.7965695634484291,
+      "strikeKneePlaneMinDot": 0.7714761905372143,
       "supportKneePlaneMinDot": 0.17262820154428482,
       "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6",
       "mocapSupportAnchorBefore": 0.5116282905341668,
@@ -282,12 +286,12 @@
       "impactFrame": 25,
       "strikeSide": "L",
       "supportSide": "R",
-      "strikeFootTravel": 0.9130416961396403,
-      "strikeFootForwardReach": 0.7907537966966629,
-      "strikeFootOutwardReach": -0.005291670560836792,
-      "strikeFootVerticalRise": 0.4564269185066223,
-      "strikeKneeExtensionDegrees": 131.127064516172,
-      "strikeLegReachRatio": 0.9105377798117431,
+      "strikeFootTravel": 0.8777077577881669,
+      "strikeFootForwardReach": 0.7654333636164665,
+      "strikeFootOutwardReach": -0.017925143241882324,
+      "strikeFootVerticalRise": 0.42914021015167236,
+      "strikeKneeExtensionDegrees": 129.9888954532594,
+      "strikeLegReachRatio": 0.9063899332032372,
       "guardHandMaxChestDistance": 0.314067872615902,
       "guardHandMinChestHeight": 0.22734200954437256,
       "supportFootLockMaxDrift": 1.161783249798231e-05,
@@ -295,12 +299,12 @@
       "supportFootPivotMaxDegrees": 31.999979261548756,
       "pelvisTravel": 0.2972322419554307,
       "torsoTwistDegrees": 17.235196898772625,
-      "constrainedStrikeFootTravel": 0.9130414390940718,
-      "constrainedStrikeFootForwardReach": 0.790753573179245,
-      "constrainedStrikeFootOutwardReach": -0.005291730165481567,
-      "constrainedStrikeFootVerticalRise": 0.456426739692688,
-      "constrainedStrikeKneeExtensionDegrees": 131.127064516172,
-      "constrainedStrikeLegReachRatio": 0.9105376189630844,
+      "constrainedStrikeFootTravel": 0.8777074033856908,
+      "constrainedStrikeFootForwardReach": 0.765433207154274,
+      "constrainedStrikeFootOutwardReach": -0.017924994230270386,
+      "constrainedStrikeFootVerticalRise": 0.42913979291915894,
+      "constrainedStrikeKneeExtensionDegrees": 129.9889227740161,
+      "constrainedStrikeLegReachRatio": 0.9063897894889258,
       "constrainedGuardHandMaxChestDistance": 0.3140676813504795,
       "constrainedGuardHandMinChestHeight": 0.22734177112579346,
       "constrainedSupportFootLockMaxDrift": 1.1319155876452177e-05,
@@ -329,9 +333,9 @@
           "label": "CHAMBER",
           "frame": 8,
           "normalizedTime": 0.15555555555555556,
-          "strikeFootForward": 0.03322313167154789,
-          "strikeFootRise": 0.10893749445676804,
-          "strikeKneeExtensionDegrees": 112.90507603706178,
+          "strikeFootForward": 0.03309844806790352,
+          "strikeFootRise": 0.11010030657052994,
+          "strikeKneeExtensionDegrees": 112.90509652762928,
           "pelvisForward": 0.13898448087275028,
           "pelvisRise": -0.045154690742492676,
           "supportFootPivotDegrees": 2.999704464357591
@@ -340,9 +344,9 @@
           "label": "IMPACT",
           "frame": 25,
           "normalizedTime": 0.5333333333333333,
-          "strikeFootForward": 0.7907537966966629,
-          "strikeFootRise": 0.4564269185066223,
-          "strikeKneeExtensionDegrees": 131.127064516172,
+          "strikeFootForward": 0.7654333636164665,
+          "strikeFootRise": 0.42914021015167236,
+          "strikeKneeExtensionDegrees": 129.9888954532594,
           "pelvisForward": 0.262984286993742,
           "pelvisRise": -0.11883747577667236,
           "supportFootPivotDegrees": 26.00003202854961
@@ -351,9 +355,9 @@
           "label": "RECOVERY",
           "frame": 38,
           "normalizedTime": 0.8222222222222222,
-          "strikeFootForward": 0.7965683341026306,
-          "strikeFootRise": 0.049517326056957245,
-          "strikeKneeExtensionDegrees": 127.52001429473158,
+          "strikeFootForward": 0.4670424461364746,
+          "strikeFootRise": -0.19681555032730103,
+          "strikeKneeExtensionDegrees": 135.64263918025082,
           "pelvisForward": 0.33600494265556335,
           "pelvisRise": -0.270907998085022,
           "supportFootPivotDegrees": 7.999955541799461
@@ -389,7 +393,11 @@
         "controlled R support-foot pivot",
         "Blender native NLA visual-keying bake",
         "glTF Action export"
-      ]
+      ],
+      "allFrameStrikeFootVerticalRiseMax": 0.5696912407875061,
+      "allFrameStrikeFootVerticalRiseMaxFrame": 19,
+      "allFrameStrikeFootForwardReachMax": 0.8317670524120331,
+      "allFrameStrikeFootForwardReachMaxFrame": 22
     },
     {
       "version": "BLENDER_MOTION_FOUNDRY_V6_RISING_KICK",
@@ -574,7 +582,11 @@
         "controlled L support-foot pivot",
         "Blender native NLA visual-keying bake",
         "glTF Action export"
-      ]
+      ],
+      "allFrameStrikeFootVerticalRiseMax": 1.347854733467102,
+      "allFrameStrikeFootVerticalRiseMaxFrame": 16,
+      "allFrameStrikeFootForwardReachMax": 0.6304407604038715,
+      "allFrameStrikeFootForwardReachMaxFrame": 21
     }
   ],
   "boneCount": 65

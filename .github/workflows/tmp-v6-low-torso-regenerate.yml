@@ -1,5 +1,5 @@
 name: Temporary V6 low torso regenerate
-# Regenerate after final Rising chest alignment; Low remains at final 0.30 retention.
+# Regenerate after final Rising spine_01=0.17 / spine_02=0.15 retention.
 
 on:
   push:

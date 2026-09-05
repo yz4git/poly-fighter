@@ -1,4 +1,4 @@
-name: POLY FIGHTER Blender Motion Foundry v2 Kicks
+name: POLY FIGHTER Motion Foundry V6 Measured Kicks
 
 on:
   pull_request:
@@ -7,11 +7,13 @@ on:
     paths:
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks.py
       - scripts/apply-blender-motion-foundry-v2-kicks.mjs
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
+      - docs/MOTION_FOUNDRY_V6_REFERENCE_DRIVEN.md
       - public/models/quaternius/blender-kicks-core.glb
       - public/models/quaternius/blender-kicks-core.metrics.json
       - public/models/quaternius/blender-kicks-core.generator.sha256
@@ -23,7 +25,7 @@ jobs:
   build-kicks:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
@@ -32,12 +34,18 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
-      - name: Check whether Blender kick artifact is current
+      - name: Check whether V6 measured kick artifact is current
         id: foundry
         shell: bash
         run: |
           set -euo pipefail
-          kick_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-kicks.py | sha256sum | awk '{print $1}')"
+          CMU_PIN=09a07f54f3bbb58797325f009282d0b2048a2871
+          kick_hash="$( (cat \
+            tools/blender/build-fight-motion-foundry-v1.py \
+            tools/blender/motion_foundry_v2_rig.py \
+            tools/blender/motion_foundry_v6_mocap.py \
+            tools/blender/build-fight-motion-foundry-v2-kicks.py; \
+            printf '%s\n' "$CMU_PIN" '135_04.bvh' '135_07.bvh' '135_11.bvh') | sha256sum | awk '{print $1}')"
           echo "kick_hash=$kick_hash" >> "$GITHUB_OUTPUT"
           if [ -s public/models/quaternius/blender-kicks-core.glb ] \
             && [ -s public/models/quaternius/blender-kicks-core.metrics.json ] \
@@ -48,7 +56,7 @@ jobs:
             echo "needs_generate=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fetch pinned full UAL authoring source
+      - name: Fetch pinned full UAL target skeleton
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
           set -euxo pipefail
@@ -57,6 +65,24 @@ jobs:
           BASE_URL=https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/$BASE_PIN/public/assets/vendor/quaternius
           curl -L --fail --retry 3 "$BASE_URL/universal-animation-library.glb" -o .tmp-quaternius/ual1-full.glb
           echo '4c748767741a3e495d89667b9a218b690ba9810b9517a12e960780e3ca72c4e9  .tmp-quaternius/ual1-full.glb' | sha256sum -c -
+
+      - name: Fetch pinned CMU martial arts BVH priors
+        if: steps.foundry.outputs.needs_generate == 'true'
+        run: |
+          set -euxo pipefail
+          mkdir -p .tmp-cmu-mocap
+          CMU_PIN=09a07f54f3bbb58797325f009282d0b2048a2871
+          CMU_URL=https://raw.githubusercontent.com/una-dinosauria/cmu-mocap/$CMU_PIN/data/135
+          curl -L --fail --retry 3 "$CMU_URL/135_04.bvh" -o .tmp-cmu-mocap/135_04.bvh
+          curl -L --fail --retry 3 "$CMU_URL/135_07.bvh" -o .tmp-cmu-mocap/135_07.bvh
+          curl -L --fail --retry 3 "$CMU_URL/135_11.bvh" -o .tmp-cmu-mocap/135_11.bvh
+          for file in .tmp-cmu-mocap/*.bvh; do
+            test -s "$file"
+            grep -q '^HIERARCHY' "$file"
+            grep -q '^MOTION' "$file"
+            grep -q '^Frame Time:' "$file"
+          done
+          wc -c .tmp-cmu-mocap/*.bvh
 
       - name: Install Blender
         if: steps.foundry.outputs.needs_generate == 'true'
@@ -67,12 +93,12 @@ jobs:
           export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
           blender --background --python-use-system-env --python-expr "import numpy; print('BLENDER_NUMPY', numpy.__version__)"
 
-      - name: Generate grounded kick pack in Blender
+      - name: Generate measured full-body kick pack in Blender
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
           set -euo pipefail
           export PYTHONPATH="tools/blender:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
-          out="artifacts/blender-motion-foundry-v2-kicks"
+          out="artifacts/motion-foundry-v6-kicks"
           mkdir -p "$out"
           xvfb-run -a blender --background \
             --python-use-system-env \
@@ -80,23 +106,29 @@ jobs:
             --python tools/blender/build-fight-motion-foundry-v2-kicks.py \
             -- \
             --source .tmp-quaternius/ual1-full.glb \
+            --mocap-front .tmp-cmu-mocap/135_04.bvh \
+            --mocap-low .tmp-cmu-mocap/135_07.bvh \
+            --mocap-rising .tmp-cmu-mocap/135_11.bvh \
             --output-dir "$out"
           test -s "$out/blender-kicks-core.glb"
           test -s "$out/blender-kicks-core.metrics.json"
           test -s "$out/blender-kicks-core-v2.blend"
           cat "$out/blender-kicks-core.metrics.json"
 
-      - name: Validate kick metrics and GLB actions
+      - name: Validate V6 mocap metrics and GLB actions
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
           python3 - <<'PY'
           import json, struct
           from pathlib import Path
-          root = Path('artifacts/blender-motion-foundry-v2-kicks')
+          root = Path('artifacts/motion-foundry-v6-kicks')
           m = json.loads((root / 'blender-kicks-core.metrics.json').read_text())
           expected = {'BF_FrontKick_R', 'BF_LowKick_L', 'BF_RisingKick_R'}
-          assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V2_KICKS', m
+          expected_sources = {'135_04.bvh', '135_07.bvh', '135_11.bvh'}
+          assert m['version'] == 'BLENDER_MOTION_FOUNDRY_V6_KICKS', m
           assert m['sharedRig'] == 'MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG', m
+          assert m['naturalnessPass'] == 'REFERENCE_DRIVEN_V6', m
+          assert m['motionPriorProvider'] == 'CMU_MOCAP_WORLD_DELTA_V6', m
           assert set(m['actions']) == expected, m
           assert len(m['moves']) == 3, m
           minimum_travel = {'BF_FrontKick_R': 0.22, 'BF_LowKick_L': 0.18, 'BF_RisingKick_R': 0.35}
@@ -105,14 +137,23 @@ jobs:
               'BF_LowKick_L': (24.0, 48.0),
               'BF_RisingKick_R': (12.0, 30.0),
           }
+          seen_sources = set()
           for move in m['moves']:
               assert move['action'] in expected, move
+              assert move['motionPriorProvider'] == 'CMU_MOCAP_WORLD_DELTA_V6', move
+              assert move['contactIKPolicy'] == 'IMPACT_WINDOW_ONLY', move
+              assert move['mocapSourceFile'] in expected_sources, move
+              seen_sources.add(move['mocapSourceFile'])
+              assert move['mocapSourceFps'] > 100.0, move
+              assert move['mocapSampleCount'] >= 20, move
+              assert move['mocapActivityScore'] > 0.05, move
               assert move['strikeFootTravel'] > minimum_travel[move['action']], move
               assert move['supportFootLockMaxDrift'] < 0.01, move
               low_pivot, high_pivot = pivot_bounds[move['action']]
               assert low_pivot < move['supportFootPivotMaxDegrees'] < high_pivot, move
               assert move['pelvisTravel'] > 0.002, move
               assert move['boneCount'] >= 40, move
+          assert seen_sources == expected_sources, seen_sources
           raw = (root / 'blender-kicks-core.glb').read_bytes()
           assert raw[:4] == b'glTF' and len(raw) > 20
           json_len, json_type = struct.unpack_from('<II', raw, 12)
@@ -120,15 +161,15 @@ jobs:
           doc = json.loads(raw[20:20 + json_len].decode('utf-8').rstrip('\x00 '))
           names = {a.get('name') for a in doc.get('animations', [])}
           assert expected.issubset(names), {'expected': sorted(expected), 'animations': sorted(n for n in names if n)}
-          print('BLENDER_MOTION_FOUNDRY_V2_KICKS_OK', sorted(names))
+          print('MOTION_FOUNDRY_V6_MOCAP_OK', sorted(names))
           PY
 
-      - name: Stage generated kick library
+      - name: Stage generated V6 kick library
         if: steps.foundry.outputs.needs_generate == 'true'
         run: |
           set -euo pipefail
-          cp artifacts/blender-motion-foundry-v2-kicks/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.glb
-          cp artifacts/blender-motion-foundry-v2-kicks/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.metrics.json
+          cp artifacts/motion-foundry-v6-kicks/blender-kicks-core.glb public/models/quaternius/blender-kicks-core.glb
+          cp artifacts/motion-foundry-v6-kicks/blender-kicks-core.metrics.json public/models/quaternius/blender-kicks-core.metrics.json
           printf '%s\n' '${{ steps.foundry.outputs.kick_hash }}' > public/models/quaternius/blender-kicks-core.generator.sha256
 
       - name: Apply kick runtime integration
@@ -144,7 +185,7 @@ jobs:
             && grep -Fq 'QUATERNIUS_BLENDER_KICKS_URL' src/game/model-viewer-motion.ts \
             && grep -Fq 'hasBlenderFrontKick' scripts/capture-model-view-audit.mjs \
             && grep -Fq 'model-view-motion-blender-rising-kick.png' scripts/capture-model-view-audit.mjs; then
-            echo 'Blender v2 grounded kick integration is already materialized; preserving later Foundry layers.'
+            echo 'V6 measured grounded kick integration is already materialized.'
           else
             node scripts/apply-blender-motion-foundry-v2-kicks.mjs
           fi
@@ -157,7 +198,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate kick contract when present
+      - name: Validate V6 kick contract when present
         run: |
           if [ -f tests/blender-motion-foundry-v2-kicks.test.mjs ]; then
             node --test tests/blender-motion-foundry-v2-kicks.test.mjs
@@ -170,12 +211,12 @@ jobs:
           npm run test:pwa
           npm run lint
 
-      - name: Publish generated kicks and integration to PR branch
+      - name: Publish generated V6 kicks to PR branch
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           if git diff --quiet --exit-code && [ -z "$(git status --porcelain)" ]; then
-            echo "Blender kick branch is already current."
+            echo "V6 kick branch is already current."
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -187,16 +228,16 @@ jobs:
             src/game/visual-quaternius-runtime.ts \
             src/game/model-viewer-motion.ts \
             scripts/capture-model-view-audit.mjs
-          git commit -m "Generate Blender v2 grounded kick actions"
+          git commit -m "Generate measured Motion Foundry V6 kick actions"
           git pull --rebase origin "${GITHUB_HEAD_REF}"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: poly-fighter-blender-motion-foundry-v2-kicks
+          name: poly-fighter-motion-foundry-v6-kicks
           path: |
-            artifacts/blender-motion-foundry-v2-kicks
+            artifacts/motion-foundry-v6-kicks
             public/models/quaternius/blender-kicks-core.metrics.json
           if-no-files-found: ignore
           retention-days: 14

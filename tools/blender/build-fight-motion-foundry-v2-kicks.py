@@ -4,17 +4,18 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 import os
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Sequence
 
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 import motion_foundry_v2_rig as rig
+import motion_foundry_v6_mocap as mocap_v6
 
 
 PhaseOffsets = Tuple[
@@ -54,6 +55,7 @@ class KickSpec:
     lower_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     upper_pitch: rig.PhaseValues = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     source_action_hint: str = "Idle_Loop_Armature"
+    reference_candidates: Tuple[str, ...] = ()
     source_knots: Tuple[Tuple[float, float], ...] = ((0.0, 0.0), (1.0, 1.0))
     hand_scales: rig.HandScales = (None, None, None, None, None, None, None)
     hand_offsets: rig.HandOffsets = ((0.0, 0.0, 0.0),) * 7
@@ -98,7 +100,7 @@ class KickSpec:
 
 FRONT_KICK = KickSpec(
     action_name="BF_FrontKick_R",
-    version="BLENDER_MOTION_FOUNDRY_V2_FRONT_KICK",
+    version="BLENDER_MOTION_FOUNDRY_V6_FRONT_KICK",
     end_frame=43,
     load_frame=7,
     precontact_frame=18,
@@ -119,7 +121,7 @@ FRONT_KICK = KickSpec(
     foot_pitch=(0.0, 10.0, -5.0, -20.0, -24.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
     support_yaw=(0.0, -2.0, -7.0, -12.0, -14.0, -4.0, 0.0),
-    ik_influences=(0.0, 0.74, 0.96, 1.0, 1.0, 0.76, 0.0),
+    ik_influences=(0.0, 0.16, 0.52, 1.0, 0.72, 0.12, 0.0),
     pelvis_forward=(0.000, -0.018, 0.028, 0.090, 0.108, 0.012, 0.000),
     pelvis_drop=(0.000, -0.050, -0.048, -0.045, -0.038, -0.024, 0.000),
     pelvis_yaw=(0.0, -2.0, 2.0, 4.0, 5.0, 1.0, 0.0),
@@ -128,6 +130,8 @@ FRONT_KICK = KickSpec(
     pelvis_pitch=(0.0, -3.0, -6.0, -8.0, -8.0, -2.0, 0.0),
     lower_pitch=(0.0, -4.0, -8.0, -10.0, -10.0, -3.0, 0.0),
     upper_pitch=(0.0, -2.0, -5.0, -7.0, -7.0, -2.0, 0.0),
+    reference_candidates=("Melee_Hook_Armature", "OverhandThrow_Armature", "Sword_Regular_A_Armature"),
+    guard_influences=(0.0, 0.18, 0.30, 0.58, 0.42, 0.22, 0.0),
     knee_pole_bias=(0.12, 0.06, 0.03),
     reach_ratios=(0.0, 0.0, 0.90, 0.976, 0.980, 0.0, 0.0),
     reach_directions=(
@@ -143,7 +147,7 @@ FRONT_KICK = KickSpec(
 
 LOW_KICK = KickSpec(
     action_name="BF_LowKick_L",
-    version="BLENDER_MOTION_FOUNDRY_V2_LOW_KICK",
+    version="BLENDER_MOTION_FOUNDRY_V6_LOW_KICK",
     end_frame=46,
     load_frame=8,
     precontact_frame=19,
@@ -164,7 +168,7 @@ LOW_KICK = KickSpec(
     foot_pitch=(0.0, 8.0, 2.0, -8.0, -11.0, 5.0, 0.0),
     foot_yaw=(0.0, 10.0, 34.0, 66.0, 78.0, 16.0, 0.0),
     support_yaw=(0.0, 3.0, 12.0, 26.0, 32.0, 8.0, 0.0),
-    ik_influences=(0.0, 0.70, 0.94, 1.0, 1.0, 0.72, 0.0),
+    ik_influences=(0.0, 0.12, 0.48, 1.0, 0.68, 0.10, 0.0),
     pelvis_forward=(0.000, -0.020, 0.012, 0.050, 0.060, 0.006, 0.000),
     pelvis_drop=(0.000, -0.040, -0.038, -0.030, -0.026, -0.020, 0.000),
     pelvis_yaw=(0.0, -10.0, 18.0, 36.0, 44.0, 8.0, 0.0),
@@ -173,6 +177,8 @@ LOW_KICK = KickSpec(
     pelvis_pitch=(0.0, -2.0, -4.0, -5.0, -5.0, -1.0, 0.0),
     lower_pitch=(0.0, -2.0, -4.0, -5.0, -4.0, -1.0, 0.0),
     upper_pitch=(0.0, -2.0, -4.0, -6.0, -6.0, -2.0, 0.0),
+    reference_candidates=("Melee_Hook_Armature", "Sword_Regular_A_Armature", "OverhandThrow_Armature"),
+    guard_influences=(0.0, 0.10, 0.24, 0.45, 0.32, 0.16, 0.0),
     guard_width=0.12,
     knee_pole_bias=(0.14, 0.18, -0.02),
     reach_ratios=(0.0, 0.0, 0.90, 0.955, 0.962, 0.0, 0.0),
@@ -189,7 +195,7 @@ LOW_KICK = KickSpec(
 
 RISING_KICK = KickSpec(
     action_name="BF_RisingKick_R",
-    version="BLENDER_MOTION_FOUNDRY_V2_RISING_KICK",
+    version="BLENDER_MOTION_FOUNDRY_V6_RISING_KICK",
     end_frame=49,
     load_frame=9,
     precontact_frame=21,
@@ -210,7 +216,7 @@ RISING_KICK = KickSpec(
     foot_pitch=(0.0, 12.0, -8.0, -24.0, -30.0, 5.0, 0.0),
     foot_yaw=(0.0, 0.0, 2.0, 4.0, 5.0, 1.0, 0.0),
     support_yaw=(0.0, -3.0, -9.0, -18.0, -22.0, -6.0, 0.0),
-    ik_influences=(0.0, 0.72, 0.96, 1.0, 1.0, 0.74, 0.0),
+    ik_influences=(0.0, 0.18, 0.56, 1.0, 0.78, 0.14, 0.0),
     pelvis_forward=(0.000, -0.016, 0.012, 0.055, 0.065, 0.006, 0.000),
     pelvis_drop=(0.000, -0.055, -0.058, -0.052, -0.043, -0.028, 0.000),
     pelvis_yaw=(0.0, -3.0, 3.0, 7.0, 8.0, 2.0, 0.0),
@@ -219,15 +225,17 @@ RISING_KICK = KickSpec(
     pelvis_pitch=(0.0, -4.0, -7.0, -10.0, -11.0, -3.0, 0.0),
     lower_pitch=(0.0, -5.0, -9.0, -12.0, -13.0, -4.0, 0.0),
     upper_pitch=(0.0, -3.0, -6.0, -9.0, -10.0, -3.0, 0.0),
+    reference_candidates=("NinjaJump_Start_Armature", "Melee_Hook_Armature", "OverhandThrow_Armature"),
+    guard_influences=(0.0, 0.12, 0.26, 0.50, 0.36, 0.18, 0.0),
     guard_height=0.165,
     knee_pole_bias=(0.30, 0.18, 0.10),
     reach_ratios=(0.0, 0.0, 0.90, 0.960, 0.966, 0.0, 0.0),
     reach_directions=(
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
-        (0.80, 0.08, 0.60),
-        (0.85, 0.10, 0.52),
-        (0.87, 0.10, 0.49),
+        (0.82, 0.22, 0.62),
+        (0.86, 0.32, 0.58),
+        (0.88, 0.36, 0.55),
         (0.0, 0.0, 0.0),
         (0.0, 0.0, 0.0),
     ),
@@ -241,6 +249,151 @@ def _find_action_exact(name: str) -> bpy.types.Action:
     if exact is not None:
         return exact
     raise RuntimeError(f"Required action {name!r} missing; available: {[a.name for a in bpy.data.actions]}")
+
+
+def _normalized_action_name(name: str) -> str:
+    stem = name.split(".", 1)[0].lower().replace("armature", "")
+    return "".join(ch for ch in stem if ch.isalnum())
+
+
+def _find_action_fuzzy(name: str):
+    exact = next((action for action in bpy.data.actions if action.name == name), None)
+    if exact is not None:
+        return exact
+    wanted = _normalized_action_name(name)
+    return next((action for action in bpy.data.actions if _normalized_action_name(action.name) == wanted), None)
+
+
+def import_reference_actions(path: str) -> List[str]:
+    before_objects = {obj.name for obj in bpy.context.scene.objects}
+    before_actions = {action.name for action in bpy.data.actions}
+    bpy.ops.import_scene.gltf(filepath=os.path.abspath(path))
+    imported = [action.name for action in bpy.data.actions if action.name not in before_actions]
+    for obj in list(bpy.context.scene.objects):
+        if obj.name not in before_objects:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    if not imported:
+        raise RuntimeError(f"Reference source {path!r} did not provide any new Actions")
+    return imported
+
+
+def choose_reference_action(spec: KickSpec) -> bpy.types.Action:
+    for candidate in spec.reference_candidates:
+        action = _find_action_fuzzy(candidate)
+        if action is not None:
+            return action
+    fallback = _find_action_fuzzy(spec.source_action_hint)
+    if fallback is not None:
+        return fallback
+    raise RuntimeError(
+        f"{spec.action_name}: no reference action found from {spec.reference_candidates}; "
+        f"available: {[a.name for a in bpy.data.actions]}"
+    )
+
+
+def _normalize_series(values: Sequence[float]) -> List[float]:
+    if not values:
+        return []
+    low, high = min(values), max(values)
+    span = high - low
+    if span < 1e-8:
+        return [0.0 for _ in values]
+    return [(value - low) / span for value in values]
+
+
+def derive_reference_knots(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    action: bpy.types.Action,
+    spec: KickSpec,
+    up: Vector,
+):
+    """Align the authored reference's kinetic peak to gameplay impact.
+
+    V5 stretched an Idle pose and asked IK to invent almost the entire kick.
+    V6 preserves an authored full-body combat sequence and only constrains the
+    strike limb near contact. The reference peak is found from hand reach, torso
+    rotation, pelvis travel and (for rising kicks) vertical pelvis velocity.
+    """
+    armature.animation_data.action = action
+    start, end = action.frame_range
+    if end - start < 2.0:
+        raise RuntimeError(f"{spec.action_name}: reference {action.name} is too short")
+    sample_count = 49
+    reaches, twists, pelvis_travel, vertical_speed = [], [], [], []
+    pelvis0 = None
+    torso0 = None
+    previous_pelvis = None
+    for index in range(sample_count):
+        frame = start + (end - start) * index / (sample_count - 1)
+        rig.v1.set_scene_frame(scene, frame)
+        pelvis = rig.v1.pose_head(armature, "pelvis")
+        left_hand = rig.v1.pose_head(armature, "hand_l")
+        right_hand = rig.v1.pose_head(armature, "hand_r")
+        torso_q = rig.pose_world_matrix(armature, "spine_03").to_quaternion()
+        if pelvis0 is None:
+            pelvis0 = pelvis.copy()
+            torso0 = torso_q.copy()
+        reach_l = left_hand - pelvis
+        reach_r = right_hand - pelvis
+        reaches.append(max(reach_l.length, reach_r.length))
+        twists.append(math.degrees(torso0.rotation_difference(torso_q).angle))
+        pelvis_travel.append((pelvis - pelvis0).length)
+        vertical_speed.append(0.0 if previous_pelvis is None else abs((pelvis - previous_pelvis).dot(up)))
+        previous_pelvis = pelvis.copy()
+
+    nr = _normalize_series(reaches)
+    nt = _normalize_series(twists)
+    np = _normalize_series(pelvis_travel)
+    nv = _normalize_series(vertical_speed)
+    rising = spec.action_name == "BF_RisingKick_R"
+    scores = [
+        0.92 * nr[i] + 1.00 * nt[i] + 0.45 * np[i] + (0.85 if rising else 0.20) * nv[i]
+        for i in range(sample_count)
+    ]
+    lo, hi = int(sample_count * 0.10), int(sample_count * 0.90)
+    peak_index = max(range(lo, hi), key=lambda i: scores[i])
+    reference_impact_u = peak_index / (sample_count - 1)
+    reference_impact_u = max(0.18, min(0.82, reference_impact_u))
+    prior_score = scores[peak_index] / (3.22 if rising else 2.57)
+
+    def du(frame: int) -> float:
+        return (frame - spec.start_frame) / max(1, spec.end_frame - spec.start_frame)
+
+    src_load = max(0.0, reference_impact_u - 0.30)
+    src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
+    src_over = min(1.0, reference_impact_u + 0.075)
+    src_recovery = min(1.0, reference_impact_u + 0.31)
+    knots = (
+        (0.0, 0.0),
+        (du(spec.load_frame), src_load),
+        (du(spec.precontact_frame), src_pre),
+        (du(spec.impact_frame), reference_impact_u),
+        (du(spec.overtravel_frame), src_over),
+        (du(spec.recovery_frame), src_recovery),
+        (1.0, 1.0),
+    )
+    return knots, reference_impact_u, max(0.0, min(1.0, prior_score))
+
+
+def reference_knots_for_impact(spec: KickSpec, reference_impact_u: float):
+    """Build a nonlinear source-time map around a measured impact event."""
+    reference_impact_u = max(0.18, min(0.82, reference_impact_u))
+    def du(frame: int) -> float:
+        return (frame - spec.start_frame) / max(1, spec.end_frame - spec.start_frame)
+    src_load = max(0.0, reference_impact_u - 0.30)
+    src_pre = max(src_load + 0.02, reference_impact_u - 0.085)
+    src_over = min(1.0, reference_impact_u + 0.075)
+    src_recovery = min(1.0, reference_impact_u + 0.31)
+    return (
+        (0.0, 0.0),
+        (du(spec.load_frame), src_load),
+        (du(spec.precontact_frame), src_pre),
+        (du(spec.impact_frame), reference_impact_u),
+        (du(spec.overtravel_frame), src_over),
+        (du(spec.recovery_frame), src_recovery),
+        (1.0, 1.0),
+    )
 
 
 def body_axes(scene: bpy.types.Scene, armature: bpy.types.Object) -> Tuple[Vector, Vector, Vector]:
@@ -614,10 +767,65 @@ def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object,
         })
     return poses
 
-def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes):
+def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: KickSpec, axes, mocap_paths):
+    # Reference-driven V6: measured full-body human motion is primary.  The
+    # existing procedural rig is demoted to gameplay contact/support constraints.
+    mocap_path = mocap_paths.get(spec.action_name)
+    mocap_meta = None
+    if mocap_path:
+        reference, mocap_meta = mocap_v6.build_mocap_prior(scene, armature, spec, mocap_path, axes)
+        # The mocap already contains weight transfer and counter-rotation.  Keep
+        # only a small fraction of legacy master offsets to avoid double-driving.
+        spec = replace(
+            spec,
+            source_action_hint=reference.name,
+            pelvis_forward=tuple(value * 0.22 for value in spec.pelvis_forward),
+            pelvis_drop=tuple(value * 0.22 for value in spec.pelvis_drop),
+            pelvis_yaw=tuple(value * 0.12 for value in spec.pelvis_yaw),
+            lower_yaw=tuple(value * 0.10 for value in spec.lower_yaw),
+            upper_yaw=tuple(value * 0.10 for value in spec.upper_yaw),
+            pelvis_pitch=tuple(value * 0.12 for value in spec.pelvis_pitch),
+            lower_pitch=tuple(value * 0.10 for value in spec.lower_pitch),
+            upper_pitch=tuple(value * 0.10 for value in spec.upper_pitch),
+            # Mocap remains the primary motion. These narrow controls only make
+            # the combat-readable chamber and high guard survive retargeting.
+            ik_influences=(
+                spec.ik_influences[0],
+                max(spec.ik_influences[1], 0.66 if spec.action_name == "BF_RisingKick_R" else 0.52),
+                max(spec.ik_influences[2], 0.62),
+                spec.ik_influences[3],
+                spec.ik_influences[4],
+                spec.ik_influences[5],
+                spec.ik_influences[6],
+            ),
+            guard_influences=(
+                spec.guard_influences[0],
+                max(spec.guard_influences[1], 0.52),
+                max(spec.guard_influences[2], 0.78),
+                max(spec.guard_influences[3], 0.90),
+                max(spec.guard_influences[4], 0.82),
+                max(spec.guard_influences[5], 0.46),
+                spec.guard_influences[6],
+            ),
+            guard_height=max(spec.guard_height, 0.245),
+            guard_forward=min(spec.guard_forward, 0.095),
+        )
+    else:
+        reference = choose_reference_action(spec)
+        spec = replace(spec, source_action_hint=reference.name)
     rig.configure_v1_for_spec(spec)
     ensure_kick_bones(armature, spec)
-    source = rig.v1.find_source_action()
+    if mocap_meta is not None:
+        reference_impact_u = mocap_meta.impact_normalized_time
+        reference_prior_score = mocap_meta.activity_score
+        reference_knots = reference_knots_for_impact(spec, reference_impact_u)
+    else:
+        reference_knots, reference_impact_u, reference_prior_score = derive_reference_knots(
+            scene, armature, reference, spec, axes[2]
+        )
+    spec = replace(spec, source_knots=reference_knots)
+    rig.configure_v1_for_spec(spec)
+    source = reference
     source_name = source.name
     samples = rig.v1.sample_source_basis(scene, armature, source)
     base = rig.v1.key_pose_basis(scene, armature, f"{spec.action_name}_BASE", samples)
@@ -631,6 +839,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     constrained = {
         "constrainedStrikeFootTravel": foot_travel(scene, armature, spec),
         "constrainedStrikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
+        "constrainedStrikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (-1.0 if spec.strike_suffix == "l" else 1.0),
         "constrainedStrikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "constrainedStrikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "constrainedStrikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),
@@ -651,6 +860,13 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "version": spec.version,
         "action": spec.action_name,
         "sourceAction": source_name,
+        "referenceSourceAction": source_name,
+        "referenceImpactNormalizedTime": reference_impact_u,
+        "referencePriorActivityScore": reference_prior_score,
+        "referenceTimeWarpKnots": [list(knot) for knot in spec.source_knots],
+        "contactIKPolicy": "IMPACT_WINDOW_ONLY",
+        "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
+        **(mocap_meta.as_dict() if mocap_meta is not None else {}),
         "fps": rig.FPS,
         "startFrame": spec.start_frame,
         "endFrame": spec.end_frame,
@@ -660,6 +876,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "supportSide": spec.support_side.upper(),
         "strikeFootTravel": foot_travel(scene, armature, spec),
         "strikeFootForwardReach": foot_axis_reach(scene, armature, spec, axes[0]),
+        "strikeFootOutwardReach": foot_axis_reach(scene, armature, spec, axes[1]) * (-1.0 if spec.strike_suffix == "l" else 1.0),
         "strikeFootVerticalRise": foot_axis_reach(scene, armature, spec, axes[2]),
         "strikeKneeExtensionDegrees": strike_knee_extension_degrees(scene, armature, spec),
         "strikeLegReachRatio": strike_leg_reach_ratio(scene, armature, spec),
@@ -674,16 +891,18 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "boneCount": len(armature.pose.bones),
         "meshCount": len([o for o in bpy.context.scene.objects if o.type == "MESH"]),
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
-        "naturalnessPass": "SCREEN_REVIEW_V5",
-        "referencePoseMethod": "FIVE_KEY_REFERENCE_V4",
+        "naturalnessPass": "REFERENCE_DRIVEN_V6",
+        "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
         "referencePoses": reference_poses,
         "pipeline": [
-            "Idle_Loop whole-body base",
+            (f"measured CMU mocap full-body prior: {mocap_meta.source_file}" if mocap_meta is not None else f"full-body authored reference base: {source_name}"),
+            "automatic kinetic-peak alignment to gameplay impact",
+            "reference motion retained outside the contact window",
             "shoulder-orthogonal anatomical forward axis",
             "Cross max hand-to-pelvis reach chooses forward sign",
             "five-pose visual reference: START / CHAMBER / IMPACT / RECOVERY / GUARD",
             "shared COG/pelvis and staged torso masters",
-            f"{spec.strike_side.upper()} strike-leg two-bone IK",
+            f"{spec.strike_side.upper()} contact-window strike-leg IK",
             "hip-relative impact reach from authored leg length",
             "impact knee-extension quality gate",
             "move-specific strike-foot orientation",
@@ -707,21 +926,35 @@ def _argv_after_double_dash() -> List[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--reference-source")
+    parser.add_argument("--mocap-front")
+    parser.add_argument("--mocap-low")
+    parser.add_argument("--mocap-rising")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args(_argv_after_double_dash())
     rig.v1.reset_scene()
     armature = rig.v1.import_source(os.path.abspath(args.source))
     scene = bpy.context.scene
+    imported_reference_actions = []
+    if args.reference_source:
+        imported_reference_actions = import_reference_actions(args.reference_source)
+        print("MOTION_FOUNDRY_V6_REFERENCE_ACTIONS", imported_reference_actions)
     axes = body_axes(scene, armature)
+    mocap_paths = {
+        "BF_FrontKick_R": args.mocap_front,
+        "BF_LowKick_L": args.mocap_low,
+        "BF_RisingKick_R": args.mocap_rising,
+    }
     actions, moves = [], []
     for spec in KICK_SPECS:
-        action, metrics = build_kick_action(scene, armature, spec, axes)
+        action, metrics = build_kick_action(scene, armature, spec, axes, mocap_paths)
         actions.append(action); moves.append(metrics)
     summary = {
-        "version": "BLENDER_MOTION_FOUNDRY_V2_KICKS",
+        "version": "BLENDER_MOTION_FOUNDRY_V6_KICKS",
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
-        "naturalnessPass": "SCREEN_REVIEW_V5",
-        "referencePoseMethod": "FIVE_KEY_REFERENCE_V4",
+        "naturalnessPass": "REFERENCE_DRIVEN_V6",
+        "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+        "motionPriorProvider": ("CMU_MOCAP_WORLD_DELTA_V6" if all(mocap_paths.values()) else "HYBRID_REFERENCE_V6"),
         "fps": rig.FPS,
         "actions": [s.action_name for s in KICK_SPECS],
         "moves": moves,

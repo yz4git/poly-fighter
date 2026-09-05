@@ -462,6 +462,49 @@ def key_orientation(control: bpy.types.Object, base: Matrix, frame: int, pitch_d
     rig.key_matrix(control, frame, Matrix.LocRotScale(loc, yaw @ pitch @ rot, scale))
 
 
+KNEE_POLE_POLICY = "ANIMATED_MEASURED_KNEE_PLANE_V6_1"
+
+
+def set_anatomical_knee_pole_keys(
+    control: bpy.types.Object,
+    armature: bpy.types.Object,
+    positions,
+    frames: Sequence[int],
+    thigh_name: str,
+    calf_name: str,
+    foot_name: str,
+    scale: float,
+    bias: Vector,
+) -> None:
+    """Animate an IK pole from the measured knee plane for every authored phase.
+
+    A single world-space pole is incorrect for a roundhouse/rising kick because
+    the pelvis and support leg rotate through the strike.  Following the measured
+    hip-knee-ankle plane keeps the knee on the human side of the chain.  A
+    hemisphere continuity guard prevents an almost-straight leg from flipping the
+    pole 180 degrees between adjacent phases.
+    """
+    keys = []
+    previous_direction = None
+    for frame in frames:
+        hip = positions[frame][thigh_name]
+        knee = positions[frame][calf_name]
+        ankle = positions[frame][foot_name]
+        pole = rig.v1.chain_pole(hip, knee, ankle, scale=scale)
+        direction = pole - knee
+        if direction.length < 1e-6:
+            direction = previous_direction.copy() if previous_direction is not None else Vector((0.0, 1.0, 0.0))
+        if previous_direction is not None and direction.dot(previous_direction) < 0.0:
+            pole = knee - direction
+            direction.negate()
+        if direction.length > 1e-6:
+            previous_direction = direction.normalized()
+        pole += bias
+        keys.append((frame, pole))
+    rig.v1.set_control_keys(control, armature, keys)
+    rig.smooth_control_curves(control)
+
+
 def add_kick_controls(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
@@ -509,16 +552,30 @@ def add_kick_controls(
         keys.append((frame, target))
     rig.v1.set_control_keys(strike_target, armature, keys)
 
-    hip = positions[spec.impact_frame][thigh_name]
-    knee = positions[spec.impact_frame][calf_name]
-    ankle = positions[spec.impact_frame][foot_name]
-    knee_pole_position = rig.v1.chain_pole(hip, knee, ankle, scale=spec.knee_pole_scale)
     pole_forward, pole_lateral, pole_up = spec.knee_pole_bias
-    knee_pole_position += forward * pole_forward + left * (pole_lateral * side_sign) + up * pole_up
+    strike_pole_bias = (
+        forward * pole_forward
+        + left * (pole_lateral * side_sign)
+        + up * pole_up
+    )
+    hip = positions[spec.start_frame][thigh_name]
+    knee = positions[spec.start_frame][calf_name]
+    ankle = positions[spec.start_frame][foot_name]
     knee_pole = rig.v1.make_control(
         f"{spec.action_name}_CTRL_strike_knee",
         armature,
-        knee_pole_position,
+        rig.v1.chain_pole(hip, knee, ankle, scale=spec.knee_pole_scale) + strike_pole_bias,
+    )
+    set_anatomical_knee_pole_keys(
+        knee_pole,
+        armature,
+        positions,
+        spec.phases,
+        thigh_name,
+        calf_name,
+        foot_name,
+        spec.knee_pole_scale,
+        strike_pole_bias,
     )
     calf = armature.pose.bones[calf_name]
     strike_ik = calf.constraints.new(type="IK")
@@ -554,6 +611,17 @@ def add_kick_controls(
         f"{spec.action_name}_CTRL_support_knee",
         armature,
         rig.v1.chain_pole(support_hip, support_knee, support_ankle, scale=1.9),
+    )
+    set_anatomical_knee_pole_keys(
+        support_pole,
+        armature,
+        positions,
+        spec.phases,
+        s_thigh,
+        s_calf,
+        s_foot,
+        1.9,
+        Vector((0.0, 0.0, 0.0)),
     )
     support_calf = armature.pose.bones[s_calf]
     support_ik = support_calf.constraints.new(type="IK")

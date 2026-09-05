@@ -242,6 +242,67 @@ def _mapped_source_name(source_name: str, mirrored: bool) -> str:
     return SIDE_SWAP.get(source_name, source_name) if mirrored else source_name
 
 
+LEG_ANATOMY_SOLVER = "SEGMENT_DIRECTION_SWING_V6_1"
+LEG_DIRECTION_TARGETS = frozenset({
+    "thigh_l", "calf_l", "foot_l",
+    "thigh_r", "calf_r", "foot_r",
+})
+
+
+def _map_segment_direction(
+    direction: Vector,
+    source_basis: Matrix,
+    target_basis: Matrix,
+    mirrored: bool,
+) -> Vector:
+    """Map a measured bone-axis direction through the anatomy bases.
+
+    Unlike a full bone quaternion, a segment direction does not carry the BVH
+    bone's arbitrary axial twist.  That is important for knees and ankles: the
+    UAL/UBC rig keeps its own rest-roll while the measured hip->knee->ankle
+    direction supplies the actual human bend plane.
+    """
+    canonical = source_basis.inverted() @ direction
+    if mirrored:
+        canonical.y *= -1.0
+    mapped = target_basis @ canonical
+    if mapped.length < 1e-7:
+        raise RuntimeError("Measured leg segment direction is degenerate")
+    mapped.normalize()
+    return mapped
+
+
+def _segment_direction_retarget_delta(
+    start_matrix: Matrix,
+    current_matrix: Matrix,
+    source_basis: Matrix,
+    target_basis: Matrix,
+    mirrored: bool,
+    base_target_q: Quaternion,
+) -> Quaternion:
+    """Retarget leg motion as a swing of the physical segment, never raw twist.
+
+    Blender bones point along local +Y.  We transfer the change in that axis from
+    the measured clip and apply it to the target's own +Y axis.  The target rest
+    roll is therefore preserved, preventing a CMU/UAL axis mismatch from making
+    a knee appear to hinge sideways or backwards.
+    """
+    bone_axis = Vector((0.0, 1.0, 0.0))
+    start_dir = start_matrix.to_3x3() @ bone_axis
+    current_dir = current_matrix.to_3x3() @ bone_axis
+    start_dir = _map_segment_direction(start_dir, source_basis, target_basis, mirrored)
+    current_dir = _map_segment_direction(current_dir, source_basis, target_basis, mirrored)
+    measured_swing = start_dir.rotation_difference(current_dir)
+
+    base_dir = base_target_q @ bone_axis
+    if base_dir.length < 1e-7:
+        return Quaternion((1.0, 0.0, 0.0, 0.0))
+    base_dir.normalize()
+    desired_dir = measured_swing @ base_dir
+    desired_dir.normalize()
+    return base_dir.rotation_difference(desired_dir).normalized()
+
+
 def _target_leg_length(armature: bpy.types.Object, side: str) -> float:
     suffix = side.lower()
     thigh = armature.data.bones[f"thigh_{suffix}"].length
@@ -416,6 +477,7 @@ def build_mocap_prior(
     # Parents first, then limbs, so assigning object-space rotations resolves into
     # stable local matrix_basis values on the target hierarchy.
     ordered_pairs = list(CMU_TO_UAL)
+    leg_direction_targets = LEG_DIRECTION_TARGETS
     for index, sample in enumerate(samples):
         dest_frame = index + 1
         scene.frame_set(dest_frame)
@@ -429,9 +491,21 @@ def build_mocap_prior(
             actual_source = _mapped_source_name(source_name, mirrored)
             if actual_source not in sample or actual_source not in samples[0]:
                 continue
-            start_q = samples[0][actual_source].to_quaternion().normalized()
-            current_q = sample[actual_source].to_quaternion().normalized()
-            delta_q = _rotation_delta_in_target_space(start_q, current_q, source_basis, target_basis, mirrored)
+            if target_name in leg_direction_targets:
+                delta_q = _segment_direction_retarget_delta(
+                    samples[0][actual_source],
+                    sample[actual_source],
+                    source_basis,
+                    target_basis,
+                    mirrored,
+                    base_object_q[target_name],
+                )
+            else:
+                start_q = samples[0][actual_source].to_quaternion().normalized()
+                current_q = sample[actual_source].to_quaternion().normalized()
+                delta_q = _rotation_delta_in_target_space(
+                    start_q, current_q, source_basis, target_basis, mirrored
+                )
             # Mawashigeri carries useful hip/shoulder counter-rotation, but the raw
             # CMU upper-torso lean is too large after UAL -> UBC rest-delta retargeting.
             # Keep pelvis/legs untouched and retain a measured, progressively softer
@@ -501,6 +575,7 @@ def build_mocap_prior(
 
     action.use_fake_user = True
     action["motion_prior_provider"] = "CMU_MOCAP_WORLD_DELTA_V6"
+    action["cmu_leg_orientation_solver"] = LEG_ANATOMY_SOLVER
     action["cmu_source_file"] = Path(bvh_path).name
     action["cmu_detected_strike_side"] = detected_side
     action["cmu_target_strike_side"] = target_side

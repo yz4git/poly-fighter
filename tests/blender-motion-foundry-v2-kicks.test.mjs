@@ -65,6 +65,10 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.notEqual(move.sourceAction, "Idle_Loop_Armature");
     assert.ok(move.referencePriorActivityScore > 0.05, `${move.action}: ${move.referencePriorActivityScore}`);
     assert.equal(move.contactIKPolicy, "IMPACT_WINDOW_ONLY");
+    assert.equal(move.kneePolePolicy, "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3");
+    assert.equal(move.footOrientationPolicy, "ANATOMICAL_BODY_AXES_V6_2");
+    assert.ok(move.strikeKneePlaneMinDot > 0.05, `${move.action} strike knee plane ${move.strikeKneePlaneMinDot}`);
+    assert.ok(move.supportKneePlaneMinDot > 0.05, `${move.action} support knee plane ${move.supportKneePlaneMinDot}`);
     assert.equal(move.motionPriorProvider, "CMU_MOCAP_WORLD_DELTA_V6");
     assert.match(move.mocapSourceFile, /^135_(04|07|11)\.bvh$/);
     assert.ok(move.mocapSampleCount >= 20);

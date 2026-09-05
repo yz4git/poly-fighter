@@ -473,8 +473,47 @@ def key_orientation(
     rig.key_matrix(control, frame, Matrix.LocRotScale(loc, yaw @ pitch @ rot, scale))
 
 
-KNEE_POLE_POLICY = "ANIMATED_MEASURED_KNEE_PLANE_V6_2"
+KNEE_POLE_POLICY = "ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3"
 FOOT_ORIENTATION_POLICY = "ANATOMICAL_BODY_AXES_V6_2"
+
+
+def _knee_bend_offset(hip: Vector, knee: Vector, ankle: Vector) -> Tuple[Vector, float]:
+    """Return the knee's perpendicular offset from the hip-ankle axis and its axial ratio."""
+    axis = ankle - hip
+    if axis.length_squared < 1e-8:
+        return Vector((0.0, 0.0, 0.0)), 0.5
+    ratio = max(0.0, min(1.0, (knee - hip).dot(axis) / axis.length_squared))
+    on_axis = hip + axis * ratio
+    return knee - on_axis, ratio
+
+
+def _project_bend_to_target_chain(
+    hip: Vector,
+    knee: Vector,
+    source_ankle: Vector,
+    target_ankle: Vector,
+    previous_direction: Vector | None,
+) -> Tuple[Vector, float]:
+    """Transplant the measured knee side onto the actual IK hip->target-ankle chain."""
+    source_bend, ratio = _knee_bend_offset(hip, knee, source_ankle)
+    target_axis = target_ankle - hip
+    if target_axis.length_squared < 1e-8:
+        fallback = previous_direction.copy() if previous_direction is not None else source_bend.copy()
+        return fallback, ratio
+    axis = target_axis.normalized()
+    bend = source_bend - axis * source_bend.dot(axis)
+    if bend.length < 1e-5:
+        source_axis = source_ankle - hip
+        source_normal = source_axis.cross(knee - hip)
+        if source_normal.length > 1e-5:
+            bend = source_normal.normalized().cross(axis)
+            if source_bend.length > 1e-5 and bend.dot(source_bend) < 0.0:
+                bend.negate()
+    if bend.length < 1e-5 and previous_direction is not None:
+        bend = previous_direction - axis * previous_direction.dot(axis)
+    if bend.length < 1e-5:
+        bend = Vector((0.0, 1.0, 0.0)) - axis * axis.y
+    return bend, ratio
 
 
 def set_anatomical_knee_pole_keys(
@@ -487,47 +526,40 @@ def set_anatomical_knee_pole_keys(
     foot_name: str,
     scale: float,
     bias: Vector,
+    target_ankles=None,
 ) -> None:
-    """Animate an IK pole from the measured knee plane for every authored phase.
-
-    A single world-space pole is incorrect for a roundhouse/rising kick because
-    the pelvis and support leg rotate through the strike.  Following the measured
-    hip-knee-ankle plane keeps the knee on the human side of the chain.  A
-    hemisphere continuity guard prevents an almost-straight leg from flipping the
-    pole 180 degrees between adjacent phases.
-    """
+    """Animate a target-aware pole that preserves the measured knee bend hemisphere."""
     keys = []
     previous_direction = None
     for frame in frames:
         hip = positions[frame][thigh_name]
         knee = positions[frame][calf_name]
-        ankle = positions[frame][foot_name]
-        pole = rig.v1.chain_pole(hip, knee, ankle, scale=scale)
-        direction = pole - knee
-        if direction.length < 1e-6:
-            direction = previous_direction.copy() if previous_direction is not None else Vector((0.0, 1.0, 0.0))
-        if previous_direction is not None and direction.dot(previous_direction) < 0.0:
-            pole = knee - direction
-            direction.negate()
-        if direction.length > 1e-6:
-            previous_direction = direction.normalized()
+        source_ankle = positions[frame][foot_name]
+        target_ankle = (target_ankles or {}).get(frame, source_ankle)
+        bend, ratio = _project_bend_to_target_chain(
+            hip, knee, source_ankle, target_ankle, previous_direction
+        )
+        if bend.length < 1e-6:
+            bend = previous_direction.copy() if previous_direction is not None else Vector((0.0, 1.0, 0.0))
+        direction = bend.normalized()
+        previous_direction = direction.copy()
+        target_axis = target_ankle - hip
+        on_axis = hip + target_axis * ratio
+        source_upper = (knee - hip).length
+        source_lower = (source_ankle - knee).length
+        pole_distance = max(0.18, (source_upper + source_lower) * scale)
+        pole = on_axis + direction * pole_distance
 
-        # Legacy fixed pole bias could overpower the measured knee plane on
-        # roundhouse/rising kicks. Keep only a small component perpendicular
-        # to the hip-ankle chain and never let it push against the measured
-        # bend hemisphere.
+        # Keep legacy styling bias only when it supports the same anatomical side.
         safe_bias = bias.copy()
-        chain_axis = ankle - hip
-        if chain_axis.length > 1e-6:
-            axis = chain_axis.normalized()
+        if target_axis.length > 1e-6:
+            axis = target_axis.normalized()
             safe_bias -= axis * safe_bias.dot(axis)
-        if direction.length > 1e-6 and safe_bias.dot(direction) < 0.0:
-            d = direction.normalized()
-            safe_bias -= d * safe_bias.dot(d)
-        max_bias = min(0.045, max(0.015, direction.length * 0.12))
-        if safe_bias.length > max_bias:
+        if safe_bias.dot(direction) < 0.0:
+            safe_bias -= direction * safe_bias.dot(direction)
+        if safe_bias.length > 0.035:
             safe_bias.normalize()
-            safe_bias *= max_bias
+            safe_bias *= 0.035
         pole += safe_bias
         keys.append((frame, pole))
     rig.v1.set_control_keys(control, armature, keys)
@@ -580,6 +612,7 @@ def add_kick_controls(
             target = strike_ankle + offset
         keys.append((frame, target))
     rig.v1.set_control_keys(strike_target, armature, keys)
+    strike_target_positions = {frame: target.copy() for frame, target in keys}
 
     pole_forward, pole_lateral, pole_up = spec.knee_pole_bias
     strike_pole_bias = (
@@ -605,6 +638,7 @@ def add_kick_controls(
         foot_name,
         spec.knee_pole_scale,
         strike_pole_bias,
+        strike_target_positions,
     )
     calf = armature.pose.bones[calf_name]
     strike_ik = calf.constraints.new(type="IK")
@@ -637,6 +671,7 @@ def add_kick_controls(
     bpy.context.view_layer.update()
     support_ankle = rig.v1.pose_tail(armature, s_calf)
     support_target = rig.v1.make_control(f"{spec.action_name}_CTRL_support_foot", armature, support_ankle)
+    support_target_positions = {frame: support_ankle.copy() for frame in spec.phases}
     support_knee = positions[spec.start_frame][s_calf]
     support_hip = positions[spec.start_frame][s_thigh]
     support_pole = rig.v1.make_control(
@@ -654,6 +689,7 @@ def add_kick_controls(
         s_foot,
         1.9,
         Vector((0.0, 0.0, 0.0)),
+        support_target_positions,
     )
     support_calf = armature.pose.bones[s_calf]
     support_ik = support_calf.constraints.new(type="IK")
@@ -871,8 +907,9 @@ def reference_pose_snapshots(scene: bpy.types.Scene, armature: bpy.types.Object,
     return poses
 
 def knee_plane_min_dot(reference_positions, final_positions, frames, thigh_name: str, calf_name: str, foot_name: str) -> float:
-    """Return minimum source-vs-final bend-plane dot; negative means a knee flip."""
+    """Return minimum target-chain bend-side dot; negative means an anatomical knee flip."""
     dots = []
+    previous_desired = None
     for frame in frames:
         r_hip = reference_positions[frame][thigh_name]
         r_knee = reference_positions[frame][calf_name]
@@ -880,12 +917,16 @@ def knee_plane_min_dot(reference_positions, final_positions, frames, thigh_name:
         f_hip = final_positions[frame][thigh_name]
         f_knee = final_positions[frame][calf_name]
         f_ankle = final_positions[frame][foot_name]
-        r_normal = (r_knee - r_hip).cross(r_ankle - r_knee)
-        f_normal = (f_knee - f_hip).cross(f_ankle - f_knee)
-        # Near full extension has an unstable plane; skip those samples.
-        if r_normal.length < 1e-4 or f_normal.length < 1e-4:
+        desired, _ = _project_bend_to_target_chain(
+            r_hip, r_knee, r_ankle, f_ankle, previous_desired
+        )
+        final_bend, _ = _knee_bend_offset(f_hip, f_knee, f_ankle)
+        if desired.length < 1e-4 or final_bend.length < 1e-4:
             continue
-        dots.append(r_normal.normalized().dot(f_normal.normalized()))
+        desired.normalize()
+        final_bend.normalize()
+        previous_desired = desired.copy()
+        dots.append(desired.dot(final_bend))
     return min(dots) if dots else 1.0
 
 

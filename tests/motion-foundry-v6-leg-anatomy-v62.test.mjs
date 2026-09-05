@@ -4,10 +4,10 @@ import fs from 'node:fs';
 
 const kicks = fs.readFileSync('tools/blender/build-fight-motion-foundry-v2-kicks.py', 'utf8');
 
-test('V6.2 knee poles preserve the measured bend hemisphere with bounded projected bias', () => {
-  assert.match(kicks, /ANIMATED_MEASURED_KNEE_PLANE_V6_2/);
+test('V6.3 target-aware knee poles preserve the measured bend hemisphere', () => {
+  assert.match(kicks, /ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3/);
   assert.match(kicks, /safe_bias -= axis \* safe_bias\.dot\(axis\)/);
-  assert.match(kicks, /max_bias = min\(0\.045/);
+  assert.match(kicks, /safe_bias\.length > 0\.035/);
   assert.match(kicks, /knee_plane_min_dot/);
   assert.match(kicks, /strikeKneePlaneMinDot/);
   assert.match(kicks, /supportKneePlaneMinDot/);

@@ -13,7 +13,7 @@ test('V6 mocap legs use segment-direction swing retarget instead of raw bone twi
 });
 
 test('kick IK poles follow measured knee planes instead of one frozen world pole', () => {
-  assert.match(kicks, /ANIMATED_MEASURED_KNEE_PLANE_V6_2/);
+  assert.match(kicks, /ANIMATED_TARGET_AWARE_KNEE_PLANE_V6_3/);
   assert.match(kicks, /set_anatomical_knee_pole_keys/);
   assert.match(kicks, /positions\[frame\]\[thigh_name\]/);
   assert.match(kicks, /s_thigh,\s+s_calf,\s+s_foot,/);

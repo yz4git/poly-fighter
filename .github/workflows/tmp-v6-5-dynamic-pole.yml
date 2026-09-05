@@ -1,4 +1,4 @@
-name: TMP V6.5 dynamic knee pole calibration
+name: TMP V6.6 continuous knee pole calibration
 
 on:
   push:
@@ -16,9 +16,9 @@ jobs:
         with:
           ref: motion-foundry-v6-leg-anatomy-fix
           fetch-depth: 0
-      - name: Apply V6.5 dense reference fix
+      - name: Apply V6.6 continuous pole solver
         run: |
-          python tools/blender/_tmp_v6_5_dense_positions_patch.py
+          python tools/blender/_tmp_v6_6_continuous_pole_patch.py
           python -m py_compile tools/blender/build-fight-motion-foundry-v2-kicks.py
           node --test tests/motion-foundry-v6-leg-anatomy.test.mjs tests/motion-foundry-v6-leg-anatomy-v62.test.mjs
           git diff --check
@@ -27,5 +27,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add tools/blender/build-fight-motion-foundry-v2-kicks.py tests/motion-foundry-v6-leg-anatomy-v62.test.mjs tests/blender-motion-foundry-v2-kicks.test.mjs
-          git commit -m 'Sample dense reference positions for dynamic knee calibration'
+          git commit -m 'Make V6.6 knee pole calibration continuous'
           git push origin HEAD:motion-foundry-v6-leg-anatomy-fix

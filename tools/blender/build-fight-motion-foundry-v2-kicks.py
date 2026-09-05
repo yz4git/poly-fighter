@@ -816,6 +816,7 @@ def add_kick_controls(
     forward: Vector,
     left: Vector,
     up: Vector,
+    use_mocap_support_anchor: bool = False,
 ):
     strike = spec.strike_suffix
     support = spec.support_suffix
@@ -915,52 +916,62 @@ def add_kick_controls(
         strike_rot.keyframe_insert(data_path="influence", frame=frame)
     rig.smooth_control_curves(strike_orientation)
 
-    scene.frame_set(spec.start_frame)
-    bpy.context.view_layer.update()
-    support_ankle = rig.v1.pose_tail(armature, s_calf)
-    support_target = rig.v1.make_control(f"{spec.action_name}_CTRL_support_foot", armature, support_ankle)
-    support_target_positions = {frame: support_ankle.copy() for frame in spec.phases}
-    support_knee = positions[spec.start_frame][s_calf]
-    support_hip = positions[spec.start_frame][s_thigh]
-    support_pole = rig.v1.make_control(
-        f"{spec.action_name}_CTRL_support_knee",
-        armature,
-        rig.v1.chain_pole(support_hip, support_knee, support_ankle, scale=1.9),
-    )
-    set_anatomical_knee_pole_keys(
-        support_pole,
-        armature,
-        positions,
-        spec.phases,
-        s_thigh,
-        s_calf,
-        s_foot,
-        1.9,
-        Vector((0.0, 0.0, 0.0)),
-        support_target_positions,
-    )
-    support_calf = armature.pose.bones[s_calf]
-    support_ik = support_calf.constraints.new(type="IK")
-    support_ik.name = f"{spec.action_name}_SupportFootPositionLockIK"
-    support_ik.target = support_target
-    support_ik.pole_target = support_pole
-    support_ik.chain_count = 2
-    support_ik.influence = 1.0
-    support_pole_angle, support_pole_calibration_min = calibrate_ik_pole_angle(
-        scene, armature, support_ik, positions, spec.phases,
-        s_thigh, s_calf, s_foot, None,
-    )
-    support_pole_angle_keys = [(spec.start_frame, support_pole_angle)]
+    # V6.7: the measured prior already anchors the support ankle at dense 60 Hz
+    # by moving only the pelvis root. Applying a second two-bone position IK on
+    # Rising forced Blender onto the opposite knee solution. Preserve the measured
+    # support-leg rotations for that move and keep the old IK lock for Front/Low.
+    support_controls = []
+    support_constraint_policy = "MOCAP_PELVIS_ANCHOR_V6_7" if use_mocap_support_anchor else "IK_POSITION_LOCK_V6_6"
+    support_pole_angle = None
+    support_pole_angle_keys = []
+    support_pole_calibration_min = None
     support_pole_angle_max_step = 0.0
-    # Static pole-angle compensation is preferable when it works.  Only fall
-    # back to dense dynamic calibration for chains such as Rising support where
-    # Blender's correct bend solution crosses the bone-roll seam during motion.
-    if support_pole_calibration_min <= 0.05:
-        support_pole_angle_keys, support_pole_calibration_min, support_pole_angle_max_step = calibrate_dynamic_ik_pole_angle(
-            scene, armature, support_ik, dense_positions, spec.start_frame, spec.end_frame,
-            s_thigh, s_calf, s_foot, support_pole_angle,
+    if not use_mocap_support_anchor:
+        scene.frame_set(spec.start_frame)
+        bpy.context.view_layer.update()
+        support_ankle = rig.v1.pose_tail(armature, s_calf)
+        support_target = rig.v1.make_control(f"{spec.action_name}_CTRL_support_foot", armature, support_ankle)
+        support_target_positions = {frame: support_ankle.copy() for frame in spec.phases}
+        support_knee = positions[spec.start_frame][s_calf]
+        support_hip = positions[spec.start_frame][s_thigh]
+        support_pole = rig.v1.make_control(
+            f"{spec.action_name}_CTRL_support_knee",
+            armature,
+            rig.v1.chain_pole(support_hip, support_knee, support_ankle, scale=1.9),
         )
-        support_pole_angle = support_pole_angle_keys[0][1]
+        set_anatomical_knee_pole_keys(
+            support_pole,
+            armature,
+            positions,
+            spec.phases,
+            s_thigh,
+            s_calf,
+            s_foot,
+            1.9,
+            Vector((0.0, 0.0, 0.0)),
+            support_target_positions,
+        )
+        support_calf = armature.pose.bones[s_calf]
+        support_ik = support_calf.constraints.new(type="IK")
+        support_ik.name = f"{spec.action_name}_SupportFootPositionLockIK"
+        support_ik.target = support_target
+        support_ik.pole_target = support_pole
+        support_ik.chain_count = 2
+        support_ik.influence = 1.0
+        support_pole_angle, support_pole_calibration_min = calibrate_ik_pole_angle(
+            scene, armature, support_ik, positions, spec.phases,
+            s_thigh, s_calf, s_foot, None,
+        )
+        support_pole_angle_keys = [(spec.start_frame, support_pole_angle)]
+        # Static pole-angle compensation is preferable when it works. Only fall
+        # back to dense calibration on legacy support-IK moves.
+        if support_pole_calibration_min <= 0.05:
+            support_pole_angle_keys, support_pole_calibration_min, support_pole_angle_max_step = calibrate_dynamic_ik_pole_angle(
+                scene, armature, support_ik, dense_positions, spec.start_frame, spec.end_frame,
+                s_thigh, s_calf, s_foot, support_pole_angle,
+            )
+            support_pole_angle = support_pole_angle_keys[0][1]
+        support_controls.extend([support_target, support_pole])
 
     support_world = rig.pose_world_matrix(armature, s_foot)
     support_orientation = rig.make_matrix_control(f"{spec.action_name}_CTRL_support_foot_orientation", support_world, 0.065)
@@ -979,11 +990,12 @@ def add_kick_controls(
     rig.smooth_control_curves(support_orientation)
 
     return (
-        [strike_target, knee_pole, strike_orientation, support_target, support_pole, support_orientation],
+        [strike_target, knee_pole, strike_orientation, *support_controls, support_orientation],
         {
             "strikePoleAngleDegrees": math.degrees(strike_pole_angle),
             "strikePoleCalibrationMinDot": strike_pole_calibration_min,
-            "supportPoleAngleDegrees": math.degrees(support_pole_angle),
+            "supportConstraintPolicy": support_constraint_policy,
+            "supportPoleAngleDegrees": None if support_pole_angle is None else math.degrees(support_pole_angle),
             "supportPoleAngleKeysDegrees": [
                 [frame, math.degrees(angle)] for frame, angle in support_pole_angle_keys
             ],
@@ -1218,19 +1230,23 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     # existing procedural rig is demoted to gameplay contact/support constraints.
     mocap_path = mocap_paths.get(spec.action_name)
     mocap_meta = None
+    mocap_support_anchor_before = None
+    mocap_support_anchor_after = None
     if mocap_path:
         reference, mocap_meta = mocap_v6.build_mocap_prior(scene, armature, spec, mocap_path, axes)
+        mocap_support_anchor_before = float(reference.get("cmu_support_anchor_before", 0.0))
+        mocap_support_anchor_after = float(reference.get("cmu_support_anchor_after", 0.0))
         # The mocap already contains weight transfer and counter-rotation.  Keep
         # only a small fraction of legacy master offsets to avoid double-driving.
         spec = replace(
             spec,
             source_action_hint=reference.name,
-            pelvis_forward=tuple(value * 0.22 for value in spec.pelvis_forward),
-            pelvis_drop=tuple(value * 0.22 for value in spec.pelvis_drop),
-            pelvis_yaw=tuple(value * 0.12 for value in spec.pelvis_yaw),
+            pelvis_forward=tuple(value * (0.0 if spec.action_name == "BF_RisingKick_R" else 0.22) for value in spec.pelvis_forward),
+            pelvis_drop=tuple(value * (0.0 if spec.action_name == "BF_RisingKick_R" else 0.22) for value in spec.pelvis_drop),
+            pelvis_yaw=tuple(value * (0.0 if spec.action_name == "BF_RisingKick_R" else 0.12) for value in spec.pelvis_yaw),
             lower_yaw=tuple(value * 0.10 for value in spec.lower_yaw),
             upper_yaw=tuple(value * 0.10 for value in spec.upper_yaw),
-            pelvis_pitch=tuple(value * 0.12 for value in spec.pelvis_pitch),
+            pelvis_pitch=tuple(value * (0.0 if spec.action_name == "BF_RisingKick_R" else 0.12) for value in spec.pelvis_pitch),
             lower_pitch=tuple(value * 0.10 for value in spec.lower_pitch),
             upper_pitch=tuple(value * 0.10 for value in spec.upper_pitch),
             # Mocap remains the primary motion. These narrow controls only make
@@ -1284,7 +1300,11 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
 
     strike_world = armature.matrix_world.to_3x3() @ axes[0]
     masters = rig.add_master_controls(scene, armature, base, strike_world, spec)
-    controls, pole_calibration = add_kick_controls(scene, armature, base, spec, *axes)
+    use_mocap_support_anchor = mocap_meta is not None and spec.action_name == "BF_RisingKick_R"
+    controls, pole_calibration = add_kick_controls(
+        scene, armature, base, spec, *axes,
+        use_mocap_support_anchor=use_mocap_support_anchor,
+    )
     guards = add_guard_controls(scene, armature, base, spec, *axes)
 
     constrained = {
@@ -1332,6 +1352,8 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "strikeKneePlaneMinDot": strike_knee_plane_min_dot,
         "supportKneePlaneMinDot": support_knee_plane_min_dot,
         "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
+        "mocapSupportAnchorBefore": mocap_support_anchor_before,
+        "mocapSupportAnchorAfter": mocap_support_anchor_after,
         **(mocap_meta.as_dict() if mocap_meta is not None else {}),
         "fps": rig.FPS,
         "startFrame": spec.start_frame,

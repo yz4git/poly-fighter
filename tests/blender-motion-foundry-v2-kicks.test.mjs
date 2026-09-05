@@ -35,6 +35,7 @@ test("grounded kick Foundry authors three move-specific leg IK actions on the sh
   assert.match(generator, /StrikeFootOrientation/);
   assert.match(generator, /GuardHandIK/);
   assert.match(generator, /SupportFootPositionLockIK/);
+  assert.match(generator, /MOCAP_PELVIS_ANCHOR_V6_7/);
   assert.match(generator, /SupportFootOrientationLock/);
   assert.match(generator, /support_yaw/);
   assert.match(generator, /knee_pole_bias/);
@@ -69,11 +70,20 @@ test("generated kick pack reaches its intended line with a high guard on planted
     assert.equal(move.footOrientationPolicy, "ANATOMICAL_BODY_AXES_V6_2");
     assert.equal(move.poleAnglePolicy, "AUTO_CONTINUOUS_BEND_HEMISPHERE_V6_6");
     assert.ok(Number.isFinite(move.strikePoleAngleDegrees));
-    assert.ok(Number.isFinite(move.supportPoleAngleDegrees));
-    assert.ok(Array.isArray(move.supportPoleAngleKeysDegrees) && move.supportPoleAngleKeysDegrees.length >= 1);
-    assert.ok(move.supportPoleAngleMaxStepDegrees <= 45, `${move.action} support pole step ${move.supportPoleAngleMaxStepDegrees}`);
     assert.ok(move.strikePoleCalibrationMinDot > 0.05, `${move.action} strike pole calibration ${move.strikePoleCalibrationMinDot}`);
-    assert.ok(move.supportPoleCalibrationMinDot > 0.05, `${move.action} support pole calibration ${move.supportPoleCalibrationMinDot}`);
+    if (move.supportConstraintPolicy === "MOCAP_PELVIS_ANCHOR_V6_7") {
+      assert.equal(move.action, "BF_RisingKick_R");
+      assert.equal(move.supportPoleAngleDegrees, null);
+      assert.deepEqual(move.supportPoleAngleKeysDegrees, []);
+      assert.equal(move.supportPoleCalibrationMinDot, null);
+      assert.ok(move.mocapSupportAnchorAfter < 0.001, `${move.action} prior anchor ${move.mocapSupportAnchorAfter}`);
+    } else {
+      assert.equal(move.supportConstraintPolicy, "IK_POSITION_LOCK_V6_6");
+      assert.ok(Number.isFinite(move.supportPoleAngleDegrees));
+      assert.ok(Array.isArray(move.supportPoleAngleKeysDegrees) && move.supportPoleAngleKeysDegrees.length >= 1);
+      assert.ok(move.supportPoleAngleMaxStepDegrees <= 45, `${move.action} support pole step ${move.supportPoleAngleMaxStepDegrees}`);
+      assert.ok(move.supportPoleCalibrationMinDot > 0.05, `${move.action} support pole calibration ${move.supportPoleCalibrationMinDot}`);
+    }
     assert.ok(move.strikeKneePlaneMinDot > 0.05, `${move.action} strike knee plane ${move.strikeKneePlaneMinDot}`);
     assert.ok(move.supportKneePlaneMinDot > 0.05, `${move.action} support knee plane ${move.supportKneePlaneMinDot}`);
     assert.equal(move.motionPriorProvider, "CMU_MOCAP_WORLD_DELTA_V6");

@@ -1,0 +1,81 @@
+name: POLY FIGHTER Kick Frame Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - kick-frame-audit-v1
+    paths:
+      - scripts/capture-kick-frame-audit.mjs
+      - .github/workflows/kick-frame-audit.yml
+      - public/models/quaternius/blender-kicks-core.glb
+      - public/models/quaternius/blender-kicks-core.metrics.json
+      - tools/blender/**
+      - src/components/model-viewer-panel.tsx
+      - src/game/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/capture-kick-frame-audit.mjs
+      - .github/workflows/kick-frame-audit.yml
+      - public/models/quaternius/blender-kicks-core.glb
+      - public/models/quaternius/blender-kicks-core.metrics.json
+      - tools/blender/**
+      - src/components/model-viewer-panel.tsx
+      - src/game/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kick-frame-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Kick and TPS regression tests
+        run: |
+          node --test tests/blender-motion-foundry-v2-kicks.test.mjs
+          npm run test:ci:tps
+      - name: Build production preview
+        run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-server.log
+          exit 1
+      - name: Capture every KAIRO kick frame
+        run: |
+          mkdir -p artifacts/kick-frame-audit
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" KICK_FRAME_AUDIT_DIR="artifacts/kick-frame-audit" node scripts/capture-kick-frame-audit.mjs
+          test "$(find artifacts/kick-frame-audit/front -name '*.png' | wc -l)" -eq 43
+          test "$(find artifacts/kick-frame-audit/low -name '*.png' | wc -l)" -eq 46
+          test "$(find artifacts/kick-frame-audit/rising -name '*.png' | wc -l)" -eq 49
+          cp /tmp/poly-fighter-server.log artifacts/kick-frame-audit/server.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-kick-frame-audit
+          path: artifacts/kick-frame-audit
+          if-no-files-found: error
+          retention-days: 14

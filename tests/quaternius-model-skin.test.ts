@@ -56,11 +56,13 @@ test("KAIRO uses male UBC and SERA uses female UBC", () => {
 
 test("Quaternius runtime retargets rest-pose deltas and preserves canonical combat poses", async () => {
   const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
+  const retarget = await readFile(new URL("../src/game/motion-retarget.ts", import.meta.url), "utf8");
   assert.doesNotMatch(runtime, /ual2-fight-core\.glb/);
   assert.doesNotMatch(runtime, /ubc-superhero-male\.glb[`\"]/);
-  assert.match(runtime, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
-  assert.match(runtime, /retargetMotionClips/);
-  assert.match(runtime, /quaterniusRetargetMode = "rest-delta-separated-sources"/);
+  assert.match(retarget, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
+  assert.match(retarget, /export function retargetMotionClips/);
+  assert.match(runtime, /from "\.\/motion-retarget"/);
+  assert.match(runtime, /quaterniusRetargetMode = "shared-rest-delta-retarget-v1"/);
   assert.match(runtime, /function neutralPoseCorrection/);
   assert.match(runtime, /neutralPoseCorrection\(runtime, fighter\)/);
   assert.match(runtime, /function guardPoseCorrection/);

@@ -209,7 +209,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     leftFoot: [-.11, .005, .30], rightFoot: [.14, .005, .23], leftHand: [-.24, .025, -.25], rightHand: [.25, .025, -.23] };
   function interpolate(a: BodyPose, b: BodyPose, u: number): BodyPose {
     const out: BodyPose = {};
-    for (const name of ["drop", "forward", "yaw", "pitch", "roll", "chest", "highGuard"] as const) out[name] = THREE.MathUtils.lerp(a[name] ?? 0, b[name] ?? 0, u);
+    for (const name of ["drop", "forward", "yaw", "pitch", "roll", "chest", "highGuard"] as const) {
+      const neutralValue = name === "pitch" ? .025 : name === "chest" ? .035 : 0;
+      out[name] = THREE.MathUtils.lerp(a[name] ?? neutralValue, b[name] ?? neutralValue, u);
+    }
     for (const name of ["leftFoot", "rightFoot", "leftHand", "rightHand"] as const) {
       const fallback = name === "leftFoot" ? stanceFeet.l : name === "rightFoot" ? stanceFeet.r : name === "leftHand" ? guardHands.l : guardHands.r;
       const p = a[name] ?? fallback, q = b[name] ?? fallback;

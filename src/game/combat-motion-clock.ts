@@ -36,7 +36,7 @@ export function combatAttackPhase(move: Pick<MoveDefinition, "startup" | "active
   const activeEnd = Math.min(end, start + Math.max(1, move.active) - 1);
   const t = Math.max(0, Math.min(end, tick));
   const release = Math.min(.68, impact + .035);
-  if (t <= start) return start === 0 ? impact : impact * t / start;
+  if (t <= start) return start === 0 ? impact : impact * (t / start);
   if (t <= activeEnd) return impact + (release - impact) * (t - start) / Math.max(1, activeEnd - start);
   return release + (1 - release) * (t - activeEnd) / Math.max(1, end - activeEnd);
 }

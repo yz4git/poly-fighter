@@ -1,4 +1,4 @@
-name: POLY FIGHTER Motion Hitstop Hold Once
+name: POLY FIGHTER Motion Absolute Sampling Once
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: motion-hitstop-hold-once
+  group: motion-absolute-sampling-once
   cancel-in-progress: true
 
 jobs:
@@ -27,17 +27,24 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Hold identical gameplay pose exactly during hitstop
+      - name: Make combat timeline the only attack pose clock
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('src/game/visual-quaternius-runtime.ts')
           s = p.read_text()
+
           old_import = 'import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldApplyLocomotionFootLock } from "./motion-pose-policy";'
-          new_import = 'import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldApplyLocomotionFootLock, shouldResamplePose } from "./motion-pose-policy";'
+          new_import = 'import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldAdvanceMixerFromRenderTime, shouldApplyLocomotionFootLock, shouldResamplePose } from "./motion-pose-policy";'
           if old_import not in s:
               raise SystemExit('pose policy import anchor not found')
           s = s.replace(old_import, new_import, 1)
+
+          old_advance = '''function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false): number {\n  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;\n  runtime.lastTime = timeSeconds;\n  if (!frozen) {\n    runtime.clock += delta;\n    runtime.transitionAge += delta;\n    runtime.mixer.update(delta);\n  }\n  return frozen ? 0 : delta;\n}\n'''
+          new_advance = '''function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false, advanceMixer = true): number {\n  const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;\n  runtime.lastTime = timeSeconds;\n  if (!frozen) {\n    runtime.clock += delta;\n    runtime.transitionAge += delta;\n    if (advanceMixer) runtime.mixer.update(delta);\n  }\n  return frozen ? 0 : delta;\n}\n'''
+          if old_advance not in s:
+              raise SystemExit('advance function anchor not found')
+          s = s.replace(old_advance, new_advance, 1)
 
           old_state = '''  const stateChanged = runtime.lastState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;\n'''
           new_state = '''  const previousState = runtime.lastState;\n  const previousStateTicks = runtime.lastStateTicks;\n  const previousMoveTick = runtime.lastMoveTick;\n  const previousReactionSerial = runtime.lastReactionSerial;\n  const stateChanged = previousState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < previousStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < previousMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== previousReactionSerial;\n  const poseSampleChanged =\n    stateChanged\n    || fighter.stateMachine.stateTicks !== previousStateTicks\n    || fighter.moveTick !== previousMoveTick\n    || fighter.reactionSerial !== previousReactionSerial;\n'''
@@ -46,13 +53,13 @@ jobs:
           s = s.replace(old_state, new_state, 1)
 
           old_play = '''  const desired = desiredClip(fighter, runtime);\n  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));\n  advance(runtime, timeSeconds, fighter.hitStop > 0);\n  synchronizeMotion(runtime, fighter);\n'''
-          new_play = '''  const desired = desiredClip(fighter, runtime);\n  const resamplePose = shouldResamplePose(fighter.hitStop, poseSampleChanged);\n  runtime.host.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  fighter.visual.root.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  if (!resamplePose) {\n    // Updating lastTime prevents a post-hitstop delta burst, but the mixer and\n    // transition pose are intentionally untouched: hitstop is an exact pose hold.\n    advance(runtime, timeSeconds, true);\n    fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;\n    fighter.visual.root.userData.combatMotionSingleMixer = true;\n    fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";\n    runtime.model.updateMatrixWorld(true);\n    return;\n  }\n  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));\n  advance(runtime, timeSeconds, fighter.hitStop > 0);\n  synchronizeMotion(runtime, fighter);\n'''
+          new_play = '''  const desired = desiredClip(fighter, runtime);\n  const resamplePose = shouldResamplePose(fighter.hitStop, poseSampleChanged);\n  const advanceMixerFromRenderTime = shouldAdvanceMixerFromRenderTime(fighter.state);\n  runtime.host.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  runtime.host.userData.combatMotionRenderTimeMixerAdvance = advanceMixerFromRenderTime;\n  fighter.visual.root.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  fighter.visual.root.userData.combatMotionRenderTimeMixerAdvance = advanceMixerFromRenderTime;\n  if (!resamplePose) {\n    // Keep the render clock current without touching the authored skeleton.\n    advance(runtime, timeSeconds, true, false);\n    fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;\n    fighter.visual.root.userData.combatMotionSingleMixer = true;\n    fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";\n    runtime.model.updateMatrixWorld(true);\n    return;\n  }\n  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));\n  advance(runtime, timeSeconds, fighter.hitStop > 0, advanceMixerFromRenderTime);\n  synchronizeMotion(runtime, fighter);\n'''
           if old_play not in s:
               raise SystemExit('play/synchronize anchor not found')
           s = s.replace(old_play, new_play, 1)
           p.write_text(s)
           PY
-      - name: Prepare focused WebGL audit
+      - name: Prepare focused WebGL determinism audit
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -64,10 +71,15 @@ jobs:
               raise SystemExit('quaternion audit anchor not found')
           s = s.replace(old_q, new_q, 1)
           old_moves = '  const moves = ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick", "counter", "throw"];'
-          new_moves = '  const moves = ["risingKick"];'
+          new_moves = '  const moves = ["risingKick", "counter", "throw"];'
           if old_moves not in s:
               raise SystemExit('move list anchor not found')
           s = s.replace(old_moves, new_moves, 1)
+          old_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    assert.ok(freezeDelta.maxPosition < 1e-8, `${actorName}: startup hitstop position drift ${JSON.stringify(freezeDelta)}`);\n    assert.ok(freezeDelta.maxAngle < 1e-8, `${actorName}: startup hitstop rotation drift ${JSON.stringify(freezeDelta)}`);\n    assert.equal(freeze.before.meta.previousPoseWeight, freeze.after.meta.previousPoseWeight, `${actorName}: hitstop changed entry blend weight`);\n    report.hitstop[actorName] = freezeDelta;\n'''
+          new_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    assert.deepEqual(freeze.after.pose, freeze.before.pose, `${actorName}: startup hitstop changed raw local bone pose`);\n    assert.equal(freeze.before.meta.previousPoseWeight, freeze.after.meta.previousPoseWeight, `${actorName}: hitstop changed entry blend weight`);\n    report.hitstop[actorName] = freezeDelta;\n'''
+          if old_freeze not in s:
+              raise SystemExit('hitstop assertion anchor not found')
+          s = s.replace(old_freeze, new_freeze, 1)
           p.write_text(s)
           PY
       - name: Validate deterministic motion contracts
@@ -78,36 +90,36 @@ jobs:
           npm run build
       - name: Start production preview
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-hitstop-server.log 2>&1 &
+          PORT=3000 npm start > /tmp/poly-fighter-absolute-sampling.log 2>&1 &
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/poly-fighter-hitstop-server.log
+          cat /tmp/poly-fighter-absolute-sampling.log
           exit 1
-      - name: Verify Rising Kick contact and hitstop on both rigs
+      - name: Verify Rising Counter Throw across 30 60 120 fps
         run: |
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
           test -n "$DRIVER"
-          mkdir -p artifacts/motion-hitstop-audit
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_FRAMERATE_AUDIT_DIR="artifacts/motion-hitstop-audit" node scripts/capture-motion-framerate-audit.mjs
+          mkdir -p artifacts/motion-absolute-sampling
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_FRAMERATE_AUDIT_DIR="artifacts/motion-absolute-sampling" node scripts/capture-motion-framerate-audit.mjs
       - name: Preserve server log
         if: always()
-        run: cp /tmp/poly-fighter-hitstop-server.log artifacts/motion-hitstop-audit/server.log 2>/dev/null || true
+        run: cp /tmp/poly-fighter-absolute-sampling.log artifacts/motion-absolute-sampling/server.log 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: poly-fighter-motion-hitstop-audit
-          path: artifacts/motion-hitstop-audit
+          name: poly-fighter-motion-absolute-sampling
+          path: artifacts/motion-absolute-sampling
           if-no-files-found: warn
           retention-days: 7
-      - name: Commit verified hitstop hold and remove one-shot workflow
+      - name: Commit verified runtime and remove one-shot workflow
         run: |
           git checkout -- scripts/capture-motion-framerate-audit.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/game/visual-quaternius-runtime.ts
           git rm .github/workflows/motion-framerate-audit-once.yml
-          git commit -m "Freeze repeated animation samples during hitstop"
+          git commit -m "Make combat pose sampling fully gameplay-tick deterministic"
           git push origin HEAD:motion-pose-ownership-v2

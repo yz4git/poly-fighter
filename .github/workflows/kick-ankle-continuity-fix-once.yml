@@ -74,11 +74,11 @@ jobs:
                   const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
                   const isStrike = suffix === strike;
                   const centerDegrees = !isStrike ? 80 : name === "BF_LowKick_L" ? 60 : name === "BF_RisingKick_R" ? 80 : 100;
-                  // Author a small safety margin inside the public contract. The final
-                  // ready-pose stitch and real male/female rest rolls can move the measured
-                  // shin/toe angle by a fraction of a degree after this correction.
-                  const minDegrees = !isStrike ? 47 : name === "BF_LowKick_L" ? 47 : name === "BF_RisingKick_R" ? 67 : 87;
-                  const maxDegrees = !isStrike ? 118 : name === "BF_LowKick_L" ? 73 : name === "BF_RisingKick_R" ? 93 : 113;
+                  // Keep authored targets well inside the public anatomy contract. The
+                  // final toe hierarchy and male/female rest rolls shift the measured
+                  // shin-to-toe angle by several degrees after foot-world correction.
+                  const minDegrees = !isStrike ? 50 : name === "BF_LowKick_L" ? 50 : name === "BF_RisingKick_R" ? 70 : 90;
+                  const maxDegrees = !isStrike ? 110 : name === "BF_LowKick_L" ? 70 : name === "BF_RisingKick_R" ? 90 : 110;
                   const continuityKey = `${name}:${suffix}`;
                   if (u <= 1e-7) ankleWorldContinuity.delete(continuityKey);
                   const currentWorld = foot.getWorldQuaternion(new THREE.Quaternion());
@@ -95,9 +95,9 @@ jobs:
                   const center = THREE.MathUtils.degToRad(centerDegrees);
                   const targetToe = shin.clone().multiplyScalar(Math.cos(center)).addScaledVector(plane, Math.sin(center)).normalize();
                   const exactWorld = new THREE.Quaternion().setFromUnitVectors(previousToe, targetToe).multiply(previousWorld).normalize();
-                  // If the previous visible boot orientation is still anatomically valid
-                  // against the new shin direction, keep it exactly. Otherwise walk only
-                  // far enough toward the cone center to re-enter the accepted range.
+                  // Preserve the previous visible boot orientation whenever it remains
+                  // inside the robust authoring band. Otherwise apply only the smallest
+                  // correction needed to re-enter that band.
                   let targetWorld = previousWorld.clone();
                   const previousAngle = ankleFor(previousWorld);
                   if (previousAngle < minDegrees || previousAngle > maxDegrees) {

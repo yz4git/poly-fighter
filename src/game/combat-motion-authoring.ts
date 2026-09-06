@@ -78,6 +78,19 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   const bind = capture(nodes);
   rig.updateMatrixWorld(true);
   const bindWorld = new Map([...nodes].map(([name, bone]) => [name, bone.getWorldQuaternion(new THREE.Quaternion())]));
+  // Calibrate on this character's rest skeleton. UBC bone rolls differ between
+  // sides; an Euler angle or a world-space foot lock is not an ankle angle.
+  const ankleFrames = new Map(["l", "r"].map(suffix => {
+    const foot = nodes.get(`foot_${suffix}`)!;
+    const calf = nodes.get(`calf_${suffix}`)!;
+    const ball = nodes.get(`ball_${suffix}`)!;
+    const toe = nodes.get(`ball_leaf_${suffix}`)!;
+    const forward = toe.getWorldPosition(new THREE.Vector3()).sub(ball.getWorldPosition(new THREE.Vector3())).normalize();
+    const localForward = forward.clone().applyQuaternion(calf.getWorldQuaternion(new THREE.Quaternion()).invert());
+    const flexAxis = foot.position.clone().normalize().cross(localForward).normalize();
+    const flatForward = forward.clone().setY(0).normalize();
+    return [suffix, { flexAxis, flatForward }] as const;
+  }));
   const mixer = new THREE.AnimationMixer(rig);
   const idle = sourceClips.get("Idle_Loop");
   if (!idle) return new Map();
@@ -243,6 +256,40 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rightHand: [.12 + release * .06, .756 - grip * .07, .125 + grip * .20] });
   }, 37);
 
+  function kickAnkles(name: string, u: number): void {
+    const strike = name === "BF_LowKick_L" ? "l" : "r";
+    const airborne = name === "BF_DashKick_R";
+    if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
+    const weight = smoothMotion((u - .04) / .20) * (1 - smoothMotion((u - .80) / .20));
+    rig.updateMatrixWorld(true);
+    for (const suffix of ["l", "r"]) {
+      const foot = nodes.get(`foot_${suffix}`)!;
+      const frame = ankleFrames.get(suffix)!;
+      const ball = nodes.get(`ball_${suffix}`)!;
+      if (suffix === strike || airborne) {
+        // Positive flex draws toes toward the shin. Front/dash kicks present
+        // the heel; low kicks extend the instep; the rising kick stays supple.
+        // The ankle follows the animated calf, preserving its bend plane.
+        const degrees = suffix !== strike ? -24 : name === "BF_LowKick_L" ? -32 : name === "BF_RisingKick_R" ? -12 : 8;
+        const desired = new THREE.Quaternion().setFromAxisAngle(frame.flexAxis, THREE.MathUtils.degToRad(degrees)).multiply(bind.get(`foot_${suffix}`)!.rotation);
+        foot.quaternion.slerp(desired, weight);
+      } else {
+        // Retain the authored pivot around the floor normal, remove banking
+        // onto the boot edge. This does not move the ankle or re-solve the knee.
+        const toe = nodes.get(`ball_leaf_${suffix}`)!;
+        const forward = toe.getWorldPosition(new THREE.Vector3()).sub(ball.getWorldPosition(new THREE.Vector3())).setY(0);
+        if (forward.lengthSq() > 1e-8) {
+          const yaw = new THREE.Quaternion().setFromUnitVectors(frame.flatForward, forward.normalize());
+          const desired = yaw.multiply(bindWorld.get(`foot_${suffix}`)!);
+          worldRotation(foot, foot.getWorldQuaternion(new THREE.Quaternion()).slerp(desired, weight));
+        }
+      }
+      // The armored boot's toe must not inherit a second, conflicting toe curl.
+      ball.quaternion.slerp(bind.get(`ball_${suffix}`)!.rotation, weight);
+      rig.updateMatrixWorld(true);
+    }
+  }
+
   // Existing mocap/Blender body mechanics remain authoritative through contact.
   // Common entry/exit poses remove arm drops and foot pops between libraries.
   for (const [name, source] of sourceClips) {
@@ -255,6 +302,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       const sampled = capture(nodes);
       mixer.stopAllAction();
       restore(nodes, sampled);
+      kickAnkles(name, u);
       const entry = 1 - smoothMotion(u / .24);
       const exit = smoothMotion((u - .75) / .25);
       const weight = Math.max(entry, exit);

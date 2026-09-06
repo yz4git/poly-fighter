@@ -61,7 +61,22 @@ LOW_KICK = replace(
     reach_directions=tuple(_low_dirs),
 )
 base.LOW_KICK = LOW_KICK
-base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, base.RISING_KICK)
+
+
+# The Rising mocap prior has an excellent chamber, but its raw extension peaks
+# before the authored impact frame. With only 0.68 contact IK the baked action
+# therefore reached furthest at PRECONTACT (frame 21) and was already retracting
+# at visual IMPACT (frame 28). Preserve the measured full-body prior while making
+# the contact window authoritative: soften the early assist, then strongly blend
+# into the existing impact/overtravel targets. The targets themselves are not
+# moved, so height, bend plane, body mechanics and gameplay timing stay intact.
+RISING_KICK = replace(
+    base.RISING_KICK,
+    ik_influences=(0.0, 0.10, 0.26, 0.94, 0.82, 0.10, 0.0),
+    reach_ratios=(0.0, 0.0, 0.78, 0.915, 0.925, 0.0, 0.0),
+)
+base.RISING_KICK = RISING_KICK
+base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, RISING_KICK)
 
 
 # Low's measured source has a faster late return than Front/Rising. Give the

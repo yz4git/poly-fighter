@@ -54,7 +54,10 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
           if (name !== "BF_DashKick_R") assert.ok(after.feet[support].soleTilt < 1.5, `${name}/${u}: banked support sole ${after.feet[support].soleTilt}`);
           for (const n of ["pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r"]) assert.ok(before.points[n].distanceTo(after.points[n]) < .002, `${name}/${u}: changed ${n} trajectory`);
         }
-        if (previous) for (const s of ["l", "r"]) assert.ok(THREE.MathUtils.radToDeg(previous.feet[s].q.angleTo(after.feet[s].q)) < 45, `${name}/${u}: ankle rotation discontinuity`);
+        if (previous) for (const s of ["l", "r"]) {
+          const delta = THREE.MathUtils.radToDeg(previous.feet[s].q.angleTo(after.feet[s].q));
+          assert.ok(delta < 45, `${name}/${u}/foot_${s}: ankle rotation discontinuity ${delta.toFixed(3)} deg`);
+        }
         previous = after;
         frames.push({ u, before: { strike: before.feet[strike].ankleDegrees, sole: before.feet[support].soleTilt }, after: { strike: after.feet[strike].ankleDegrees, sole: after.feet[support].soleTilt } });
       }

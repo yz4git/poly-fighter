@@ -76,7 +76,7 @@ jobs:
                   const previousWorld = ankleWorldContinuity.get(continuityKey);
                   if (previousWorld) {
                     const delta = previousWorld.angleTo(correctedWorld);
-                    const maxStep = THREE.MathUtils.degToRad(28);
+                    const maxStep = THREE.MathUtils.degToRad(38);
                     if (delta > maxStep) correctedWorld = previousWorld.clone().slerp(correctedWorld, maxStep / delta);
                   }
                   ankleWorldContinuity.set(continuityKey, correctedWorld.clone());

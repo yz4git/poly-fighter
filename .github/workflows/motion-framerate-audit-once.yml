@@ -46,6 +46,12 @@ jobs:
               raise SystemExit('advance function anchor not found')
           s = s.replace(old_advance, new_advance, 1)
 
+          old_sync = '''  if (phase !== null) {\n    action.setEffectiveTimeScale(0);\n    action.time = clip.duration * phase;\n    runtime.mixer.update(0);\n  }\n'''
+          new_sync = '''  if (phase !== null) {\n    if (fighter.state === "ATTACK") {\n      // AnimationMixer.setTime is the absolute-time API: it clears accumulated\n      // action time before evaluating the requested authored contact sample.\n      action.setEffectiveTimeScale(1);\n      runtime.mixer.setTime(clip.duration * phase);\n    } else {\n      action.setEffectiveTimeScale(0);\n      action.time = clip.duration * phase;\n      runtime.mixer.update(0);\n    }\n  }\n'''
+          if old_sync not in s:
+              raise SystemExit('absolute sampling anchor not found')
+          s = s.replace(old_sync, new_sync, 1)
+
           old_state = '''  const stateChanged = runtime.lastState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;\n'''
           new_state = '''  const previousState = runtime.lastState;\n  const previousStateTicks = runtime.lastStateTicks;\n  const previousMoveTick = runtime.lastMoveTick;\n  const previousReactionSerial = runtime.lastReactionSerial;\n  const stateChanged = previousState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < previousStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < previousMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== previousReactionSerial;\n  const poseSampleChanged =\n    stateChanged\n    || fighter.stateMachine.stateTicks !== previousStateTicks\n    || fighter.moveTick !== previousMoveTick\n    || fighter.reactionSerial !== previousReactionSerial;\n'''
           if old_state not in s:

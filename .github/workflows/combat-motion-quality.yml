@@ -35,6 +35,8 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Apply staged ankle continuity patch
+        run: python tools/patch-kick-ankle.py
       - name: Validate both real character skeletons and all move clocks
         run: node --import tsx --test tests/combat-motion.test.ts tests/kick-ankle.test.ts
       - run: npm run test:ci:tps

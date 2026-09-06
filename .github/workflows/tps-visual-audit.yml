@@ -9,7 +9,6 @@ on:
       - app/**
       - src/game/**
       - public/models/**
-      - package.json
       - package-lock.json
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-motion-readability-audit.mjs
@@ -23,7 +22,6 @@ on:
       - app/**
       - src/game/**
       - public/models/**
-      - package.json
       - package-lock.json
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-motion-readability-audit.mjs

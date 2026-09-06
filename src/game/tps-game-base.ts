@@ -38,17 +38,17 @@ const TPS_KO_MIN_SHOW_TICKS = 72;
 const TPS_KO_SETTLED_HOLD_TICKS = 30;
 const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.50;
-const TPS_CAMERA_CLOSE_BACK_DELTA = -1.05;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.80;
+const TPS_CAMERA_CLOSE_BACK_DELTA = 0.35;
 const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
 const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
-const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.42;
+const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
-const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
-const TPS_IMPACT_CONTACT_MINIMUM = 1.40;
-const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.46;
-const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.50;
+const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
+const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
+const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
+const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
 const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   jab: 2.62,
   straight: 2.60,
@@ -241,6 +241,7 @@ export class TpsFightGame {
   private lastHudTick = -1;
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
+  private readonly cameraLookTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
   private readonly cameraPairMidpoint = new THREE.Vector3();
   private readonly cameraAnchor = new THREE.Vector3();
@@ -1024,7 +1025,12 @@ export class TpsFightGame {
       this.camera.position.addScaledVector(right, Math.sin(this.renderTime * 76) * impact);
       this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
     }
-    this.camera.lookAt(this.cameraTarget);
+    // Smooth the look target as well as camera position. Close-range lock-on can
+    // rotate the target basis quickly during sidesteps, blocks, and hit-stop;
+    // smoothing both halves of the rig prevents a visible aim snap while keeping
+    // the opponent centered.
+    ease(this.cameraLookTarget, this.cameraTarget, 12.0, delta);
+    this.camera.lookAt(this.cameraLookTarget);
   }
 
   private updateLockOn(): void {

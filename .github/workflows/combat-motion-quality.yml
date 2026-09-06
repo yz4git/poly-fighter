@@ -14,6 +14,7 @@ on:
       - src/game/combat-motion-*.ts
       - src/game/visual-quaternius-runtime.ts
       - src/game/presentation-animation.ts
+      - tools/patch-kick-ankle.py
       - .github/workflows/combat-motion-quality.yml
   workflow_dispatch:
 

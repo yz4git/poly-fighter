@@ -155,57 +155,27 @@ test("side-sensitive punches select the clip that matches each fighter's authore
   assert.equal(motionDnaForFighter(sera).id, "SERA_SPEED");
 });
 
-test("motion runtime uses bounded procedural center-of-mass motion and generated guard/evasion states", async () => {
-  const source = await readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8");
+test("production motion runtime has one timeline, one mixer and no legacy second engine", async () => {
+  const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
+  const timeline = await readFile(new URL("../src/game/combat-motion-timeline.ts", import.meta.url), "utf8");
+  const retarget = await readFile(new URL("../src/game/motion-retarget.ts", import.meta.url), "utf8");
   const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
 
-  assert.match(source, /const runtime = ensureRuntime\(fighter\);/);
-  assert.match(source, /TAIL_NEUTRAL_STATES/);
-  assert.match(source, /motionExpansionTailKind/);
-  assert.match(source, /COMBO_LINK_BLEND_SECONDS = 0\.075/);
-  assert.match(source, /comboLinkState === "LINKED"/);
-  assert.match(source, /comboLinkSerial !== runtime\.lastComboLinkSerial/);
-  assert.match(source, /currentPhase = "SETTLE"/);
-  assert.match(source, /FULL_BODY_BALANCE_VERSION = "FULL_BODY_SOLVER_V3"/);
-  assert.match(source, /motionExpansionBalanceVersion = FULL_BODY_BALANCE_VERSION/);
-  assert.match(source, /strikeTrajectory\(runtime, fighter, opponent\)/);
-  assert.match(source, /motionExpansionContactMode = "V3_FULL_BODY_TARGET_IK"/);
-  assert.match(source, /captureFootLocks/);
-  assert.match(source, /solveFootLock/);
-  assert.match(source, /solveCenterOfMass/);
-  assert.match(source, /fullBodyStrikeSolve/);
-  assert.match(source, /impactPairAccent/);
-  assert.match(source, /IMPACT_PAIR_REACTION_STATES/);
-  assert.match(source, /"KNOCKDOWN", "THROW", "KO", "RING_OUT"/);
-  assert.match(source, /applyMotionDna/);
-  assert.match(source, /V3_VISUAL_READABILITY_VERSION = "PROCEDURAL_FIGHT_V3_READABILITY_3"/);
-  assert.match(source, /V3_KICK_CONTACT_SOLVER = "KICK_CONTACT_SOLVER_V2_PLANT_COMPENSATED"/);
-  assert.match(source, /motionExpansionStrikeContactError/);
-  assert.match(source, /motionExpansionStrikeContactBlend/);
-  assert.match(source, /phaseAlignedAttackPoseU/);
-  assert.match(source, /syncKickActionToAuthoredPose/);
-  assert.match(source, /PHASE_ALIGNED_KICK_V2/);
-  assert.match(source, /motionExpansionAuthoredPoseU/);
-  assert.match(source, /motionExpansionDnaSilhouetteStrength/);
-  assert.match(source, /motionExpansionImpactPairStrength/);
-  assert.match(source, /motionExpansionVisualReadabilityVersion/);
-  assert.match(source, /V3_CONTACT_LANE_POLICY = "OUTER_EDGE_TARGET_V2"/);
-  assert.match(source, /motionExpansionContactLanePolicy/);
-  assert.match(source, /motionExpansionFootLockError/);
-  assert.match(source, /PROCEDURAL_URL/);
-  assert.match(source, /PROCEDURAL_FIGHT_V3/);
-  assert.match(source, /preserveProceduralPlanarRoot/);
-  assert.match(source, /THREE\.MathUtils\.clamp\(track\.values\[offset\] - sourceNode\.position\.x, -0\.09, 0\.09\)/);
-  assert.match(source, /PF_GuardBreak/);
-  assert.match(source, /PF_Sidestep_L/);
-  assert.match(source, /PF_Sidestep_R/);
-  assert.match(source, /motionExpansionRootMotionPolicy = "V3_COM_FOOT_LOCK_FULL_BODY_IK"/);
-  assert.match(source, /child\.name\.startsWith\("quaternius-ubc-"\) && child\.name\.endsWith\("-runtime"\)/);
-  assert.match(source, /motionExpansionTargetsVisibleQuaternius = true/);
-  assert.match(source, /motionExpansionTargetHost = host\.name/);
-  assert.match(source, /styleTarget\(opponent, spec\.style, side\)/);
-  assert.doesNotMatch(source, /getVisualContactPoint/);
+  await assert.rejects(
+    readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8"),
+    (error: NodeJS.ErrnoException) => error.code === "ENOENT",
+  );
+  assert.match(runtime, /sampleCombatMotionTimeline\(move, fighter\.moveTick, runtime\.currentClip\)/);
+  assert.match(runtime, /combatMotionSingleMixer = true/);
+  assert.match(runtime, /GAMEPLAY_TICK_AUTHORED_EVENT_V1/);
+  assert.match(runtime, /from "\.\/motion-retarget"/);
+  assert.doesNotMatch(runtime, /V6_KICK_CONTACT_PHASE/);
+  assert.doesNotMatch(runtime, /V6_ACTIVE_CONTACT_SYNC/);
   assert.doesNotMatch(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
+  assert.match(timeline, /AUTHORED_MOTION_EVENTS/);
+  assert.match(timeline, /first ACTIVE tick is exactly contact/i);
+  assert.match(retarget, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
+  assert.match(retarget, /export function retargetMotionClips/);
 });
 
 test("reaction selection distinguishes head, body, low, heavy and launch impacts", () => {

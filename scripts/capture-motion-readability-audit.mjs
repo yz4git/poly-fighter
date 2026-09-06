@@ -275,8 +275,9 @@ try {
     if (preload?.ready) break;
     await delay(100);
   }
-  if (!preload?.ready || preload.version !== "COMBAT_MOTION_V7") {
-    throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
+  const timelineRuntime = typeof preload?.version === "string" && preload.version.endsWith("_TIMELINE");
+  if (!preload?.ready || preload.clips < 27 || !timelineRuntime) {
+    throw new Error(`Motion packs were not preloaded with unified timeline runtime: ${JSON.stringify(preload)}`);
   }
 
   await mkdir(outputDir, { recursive: true });

@@ -62,7 +62,7 @@ async function shot(name) {
   assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
   await writeFile(`${output}/${name}.png`, bytes);
 }
-const report = { version: "COMBAT_MOTION_V7", models: {}, errors: [], screenshots: 0 };
+const report = { version: null, timelinePolicy: null, models: {}, errors: [], screenshots: 0 };
 try {
   await mkdir(output, { recursive: true });
   for (let i = 0; i < 100; i++) {
@@ -78,11 +78,14 @@ try {
   }
   let ready;
   for (let i = 0; i < 200; i++) {
-    ready = await execute(`${lookup} const g=findGame();return g && [g.p1,g.p2].map(f=>({ready:f.visual.root.userData.quaterniusModelState,clips:f.visual.root.userData.combatMotionClipCount,version:f.visual.root.userData.combatMotionVersion}));`);
-    if (ready?.every(f => f.ready === "ready" && f.clips >= 27)) break;
+    ready = await execute(`${lookup} const g=findGame();return g && [g.p1,g.p2].map(f=>({ready:f.visual.root.userData.quaterniusModelState,clips:f.visual.root.userData.combatMotionClipCount,version:f.visual.root.userData.combatMotionVersion,timelinePolicy:f.visual.root.userData.combatMotionTimelineVersion??null}));`);
+    if (ready?.every(f => f.ready === "ready" && f.clips >= 27 && typeof f.version === "string" && f.version.endsWith("_TIMELINE") && f.timelinePolicy === "GAMEPLAY_TICK_AUTHORED_EVENT_V1")) break;
     await wait(100);
   }
-  assert.ok(ready?.every(f => f.clips >= 27), `motion load failed: ${JSON.stringify(ready)}`);
+  assert.ok(ready?.every(f => f.ready === "ready" && f.clips >= 27 && typeof f.version === "string" && f.version.endsWith("_TIMELINE") && f.timelinePolicy === "GAMEPLAY_TICK_AUTHORED_EVENT_V1"), `unified motion runtime load failed: ${JSON.stringify(ready)}`);
+  assert.equal(ready[0].version, ready[1].version, `fighter motion runtime versions differ: ${JSON.stringify(ready)}`);
+  report.version = ready[0].version;
+  report.timelinePolicy = ready[0].timelinePolicy;
   await execute(`${lookup}const g=findGame();cancelAnimationFrame(g.raf);g.running=false;g.finished=false;g.input.clear();g.__motionActors=[g.p1,g.p2];g.__motionAuditTime=100;return true;`);
   const attacks = ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick", "counter", "throw"];
   for (const [actorIndex, actorName] of [[0, "kairo"], [1, "sera"]]) {
@@ -129,7 +132,7 @@ try {
   report.errors = browser.filter(entry => entry.level === "SEVERE" && !entry.message.includes("favicon"));
   assert.equal(report.errors.length, 0, JSON.stringify(report.errors));
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
-  console.log(JSON.stringify({ models: Object.keys(report.models), screenshots: report.screenshots, errors: report.errors.length }));
+  console.log(JSON.stringify({ version: report.version, timelinePolicy: report.timelinePolicy, models: Object.keys(report.models), screenshots: report.screenshots, errors: report.errors.length }));
 } finally {
   await writeFile(`${output}/webdriver.log`, logs);
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));

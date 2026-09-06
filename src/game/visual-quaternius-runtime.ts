@@ -6,7 +6,10 @@ import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
-import { AUTHORED_CONTACT_PHASE, COMBAT_MOTION_VERSION, combatAttackPhase, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
+import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
+import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
+import { retargetMotionClips } from "./motion-retarget";
+export { retargetMotionClips } from "./motion-retarget";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male-flat.glb`;
@@ -166,65 +169,6 @@ function nodeMap(root: THREE.Object3D): Map<string, THREE.Object3D> {
  * Bone positions/scales stay authored by the target model so limb lengths do
  * not collapse. Local pelvis XYZ deltas retain authored weight transfer; gameplay still owns world X/Z.
  */
-export function retargetMotionClips(
-  sourceRoot: THREE.Object3D,
-  targetRoot: THREE.Object3D,
-  clips: readonly THREE.AnimationClip[],
-): Map<string, THREE.AnimationClip> {
-  const sourceNodes = nodeMap(sourceRoot);
-  const targetNodes = nodeMap(targetRoot);
-  const result = new Map<string, THREE.AnimationClip>();
-  const sourceAnimated = new THREE.Quaternion();
-  const sourceRestInverse = new THREE.Quaternion();
-  const targetAnimated = new THREE.Quaternion();
-
-  for (const clip of clips) {
-    const tracks: THREE.KeyframeTrack[] = [];
-    for (const track of clip.tracks) {
-      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
-      const nodeName = parsed.nodeName;
-      const propertyName = parsed.propertyName;
-      if (!nodeName || !propertyName) continue;
-      const sourceNode = sourceNodes.get(nodeName);
-      const targetNode = targetNodes.get(nodeName);
-      if (!sourceNode || !targetNode) continue;
-
-      if (propertyName === "quaternion" && track.values.length % 4 === 0) {
-        const values = new Float32Array(track.values.length);
-        sourceRestInverse.copy(sourceNode.quaternion).invert();
-        for (let offset = 0; offset < track.values.length; offset += 4) {
-          sourceAnimated.fromArray(track.values, offset).normalize();
-          targetAnimated.copy(targetNode.quaternion)
-            .multiply(sourceRestInverse)
-            .multiply(sourceAnimated)
-            .normalize();
-          targetAnimated.toArray(values, offset);
-        }
-        const next = new THREE.QuaternionKeyframeTrack(track.name, track.times, values);
-        next.setInterpolation(track.getInterpolation());
-        tracks.push(next);
-        continue;
-      }
-
-      if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
-        const values = new Float32Array(track.values.length);
-        for (let offset = 0; offset < track.values.length; offset += 3) {
-          values[offset] = targetNode.position.x + (track.values[offset] - sourceNode.position.x);
-          values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
-          values[offset + 2] = targetNode.position.z + (track.values[offset + 2] - sourceNode.position.z);
-        }
-        const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
-        next.setInterpolation(track.getInterpolation());
-        tracks.push(next);
-      }
-    }
-    const retargeted = new THREE.AnimationClip(clip.name, clip.duration, tracks, clip.blendMode);
-    retargeted.optimize();
-    result.set(retargeted.name, retargeted);
-  }
-  return result;
-}
-
 function styleMaterial(material: THREE.Material, definition: FighterDefinition): THREE.Material {
   const next = material.clone();
   if (!(next instanceof THREE.MeshStandardMaterial)) return next;
@@ -518,17 +462,6 @@ function proceduralAttackClip(moveId: string): string | null {
   return PROCEDURAL_ATTACK_CLIPS[moveId] ?? null;
 }
 
-// The exported V6 mocap clips intentionally retain a readable anticipation arc,
-// so their authored IMPACT pose lands around the middle of each clip. Gameplay,
-// however, can connect on the first ACTIVE tick. Lock the three grounded V6 kicks
-// to their measured impact phase at ACTIVE start, hold only a narrow contact arc
-// through ACTIVE, then spend the remaining time on recovery. This keeps hit timing
-// unchanged while making the rendered foot and gameplay hitbox agree.
-const V6_KICK_CONTACT_PHASE: Readonly<Record<string, number>> = {
-  BF_FrontKick_R: 0.5476190476190477,
-  BF_LowKick_L: 0.5333333333333333,
-  BF_RisingKick_R: 0.5625,
-};
 function observeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delta: number): void {
   const forwardArray = fighter.visual.root.userData.combatMotionForward as number[] | undefined;
   const forward = forwardArray ? new THREE.Vector3().fromArray(forwardArray) : new THREE.Vector3(0, 0, 1).applyQuaternion(fighter.visual.root.quaternion);
@@ -654,12 +587,17 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
   let phase: number | null = null;
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
-    const impact = AUTHORED_CONTACT_PHASE[runtime.currentClip] ?? .5;
-    phase = combatAttackPhase(move, fighter.moveTick, impact);
-    runtime.host.userData.combatMotionContactPhase = impact;
+    const sample = sampleCombatMotionTimeline(move, fighter.moveTick, runtime.currentClip);
+    phase = sample.phase;
+    runtime.host.userData.combatMotionTimelinePolicy = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
+    runtime.host.userData.combatMotionTimelineStage = sample.stage;
+    runtime.host.userData.combatMotionTimelineStageProgress = sample.stageProgress;
+    runtime.host.userData.combatMotionContactPhase = sample.contactPhase;
+    runtime.host.userData.combatMotionContactExitPhase = sample.contactExitPhase;
+    runtime.host.userData.combatMotionContactWeight = sample.contactWeight;
     runtime.host.userData.combatMotionSampledPhase = phase;
-    if (V6_KICK_CONTACT_PHASE[runtime.currentClip] !== undefined) {
-      runtime.host.userData.quaterniusKickTimingPolicy = "V6_ACTIVE_CONTACT_SYNC";
+    if (move.animation === "kick") {
+      runtime.host.userData.quaterniusKickTimingPolicy = "UNIFIED_COMBAT_TIMELINE";
       runtime.host.userData.quaterniusKickSampledPhase = phase;
     }
   } else if (fighter.state === "WALK") phase = runtime.gaitPhase;
@@ -805,7 +743,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusModelState = "ready";
     visual.root.userData.quaterniusModelAsset = modelUrl;
     visual.root.userData.quaterniusAnimationRigCoverage = 1;
-    visual.root.userData.quaterniusRetargetMode = "rest-delta-separated-sources";
+    visual.root.userData.quaterniusRetargetMode = "shared-rest-delta-retarget-v1";
     visual.root.userData.quaterniusProceduralClipCount = proceduralClips.size;
     visual.root.userData.quaterniusBlenderClipCount = blenderClips.size + blenderCrossClips.size + blenderStrikeClips.size + blenderKickClips.size + blenderAirborneClips.size + blenderReactionClips.size;
     visual.root.userData.quaterniusBlenderCrossClipCount = blenderCrossClips.size;
@@ -886,6 +824,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;
   fighter.visual.root.userData.combatMotionGaitPhase = runtime.gaitPhase;
   fighter.visual.root.userData.combatMotionSingleMixer = true;
+  fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
   runtime.model.updateMatrixWorld(true);
 }
 

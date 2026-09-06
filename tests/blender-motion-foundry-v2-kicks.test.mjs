@@ -196,8 +196,10 @@ test("runtime and Model View prefer authored BF kicks with procedural fallbacks"
     '["BF_DashKick_R", "PF_DashKick_R"]',
     "quaterniusBlenderKickClipCount",
     "quaterniusBlenderAirborneClipCount",
-    "V6_ACTIVE_CONTACT_SYNC",
+    "UNIFIED_COMBAT_TIMELINE",
+    "sampleCombatMotionTimeline",
   ]) assert.ok(runtime.includes(token), token);
+  assert.ok(!runtime.includes("V6_KICK_CONTACT_PHASE"), "runtime must not keep a second kick timing table");
 
   assert.ok(viewer.includes("QUATERNIUS_BLENDER_KICKS_URL"));
   for (const [procedural, blender, slug] of [

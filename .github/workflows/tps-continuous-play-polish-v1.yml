@@ -1,0 +1,48 @@
+name: Apply TPS continuous play polish v1
+
+on:
+  push:
+    branches: [tps-continuous-play-polish-v1]
+    paths:
+      - .github/workflows/tps-continuous-play-polish-v1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tps-continuous-play-polish-v1
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Apply continuous TPS playtest fixes
+        run: node scripts/apply-tps-continuous-play-polish-v1.mjs
+      - run: npm ci --no-audit --no-fund
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Verify patch
+        run: |
+          git diff --check
+          git status --short
+          test -n "$(git status --porcelain)"
+      - name: Commit validated TPS continuous-play pass
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git rm scripts/apply-tps-continuous-play-polish-v1.mjs .github/workflows/tps-continuous-play-polish-v1.yml
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml
+          git commit -m "Polish TPS contact spacing and camera continuity"
+          git push

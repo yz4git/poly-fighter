@@ -22,7 +22,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Author anatomical ankles and distribute sharp turns into anticipation
+      - name: Author anatomical ankles and distribute sharp world turns into anticipation
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -59,9 +59,8 @@ jobs:
           new = '''        const degrees = suffix !== strike ? -24 : name === "BF_LowKick_L" ? -32 : name === "BF_RisingKick_R" ? -12 : 8;
                   const calf = nodes.get(`calf_${suffix}`)!;
                   const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
-                  // Use calf-to-ankle swing rather than imported calf axial twist as the
-                  // anatomical frame. This preserves the authored leg path while removing
-                  // the unstable boot roll that produced the Low Kick snap.
+                  // Follow the anatomical calf-to-ankle swing, not imported calf axial
+                  // twist. The foot still inherits the real leg path, but not unstable roll.
                   const shinSwing = new THREE.Quaternion().setFromUnitVectors(frame.restShin, shin);
                   const flexAxis = frame.flexAxis.clone().applyQuaternion(shinSwing).normalize();
                   const desired = new THREE.Quaternion()
@@ -73,23 +72,41 @@ jobs:
           s = s.replace(old, new, 1)
           old = '''    const tracks: THREE.KeyframeTrack[] = [];
               for (const [name, value] of values) {'''
-          new = '''    // Offline authoring can preserve the exact pose at a sudden shin turn and
-              // distribute the required rotation into preceding samples. This avoids causal
-              // lag at contact while keeping adjacent strike-foot rotations below the snap gate.
+          new = '''    // A boot's visible rotation includes every parent up through the calf/thigh.
+              // Smooth that final world-space orientation, then convert the corrected pose
+              // back into the foot's local quaternion track. This preserves all leg points.
               if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) {
                 const suffixes = name === "BF_DashKick_R" ? ["l", "r"] : [name === "BF_LowKick_L" ? "l" : "r"];
-                const maxStep = THREE.MathUtils.degToRad(32);
+                const maxWorldStep = THREE.MathUtils.degToRad(30);
+                const readLocal = (boneName: string, index: number) => new THREE.Quaternion().fromArray(values.get(boneName)!.q, index * 4).normalize();
+                const chainFor = (boneName: string) => {
+                  const chain: string[] = [];
+                  let current: THREE.Object3D | null = nodes.get(boneName) ?? null;
+                  while (current && current !== rig) {
+                    if (values.has(current.name)) chain.unshift(current.name);
+                    current = current.parent;
+                  }
+                  return chain;
+                };
+                const worldAt = (chain: string[], index: number) => {
+                  const q = new THREE.Quaternion();
+                  for (const boneName of chain) q.multiply(readLocal(boneName, index));
+                  return q.normalize();
+                };
                 for (const suffix of suffixes) {
-                  const q = values.get(`foot_${suffix}`)!.q;
-                  const readQ = (index: number) => new THREE.Quaternion().fromArray(q, index * 4).normalize();
-                  const writeQ = (index: number, value: THREE.Quaternion) => value.normalize().toArray(q, index * 4);
+                  const footName = `foot_${suffix}`;
+                  const footTrack = values.get(footName)!.q;
+                  const chain = chainFor(footName);
+                  const parentChain = chain.slice(0, -1);
                   for (let i = 1; i < samples; i++) {
                     for (let j = i - 1; j >= 1; j--) {
-                      const current = readQ(j);
-                      const next = readQ(j + 1);
-                      const delta = current.angleTo(next);
-                      if (delta <= maxStep) break;
-                      writeQ(j, next.clone().slerp(current, maxStep / delta));
+                      const currentWorld = worldAt(chain, j);
+                      const nextWorld = worldAt(chain, j + 1);
+                      const delta = currentWorld.angleTo(nextWorld);
+                      if (delta <= maxWorldStep) break;
+                      const correctedWorld = nextWorld.clone().slerp(currentWorld, maxWorldStep / delta);
+                      const parentWorld = worldAt(parentChain, j);
+                      parentWorld.invert().multiply(correctedWorld).normalize().toArray(footTrack, j * 4);
                     }
                   }
                 }

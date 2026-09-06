@@ -25,7 +25,9 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - name: Apply continuous TPS playtest fixes
-        run: node scripts/apply-tps-continuous-play-polish-v1.mjs
+        run: |
+          sed -i '/const insertMarker =/i const gameLookup = "${gameLookup}";\nconst outputDir = "${outputDir}";' scripts/apply-tps-continuous-play-polish-v1.mjs
+          node scripts/apply-tps-continuous-play-polish-v1.mjs
       - run: npm ci --no-audit --no-fund
       - name: TPS regression suite
         run: npm run test:ci:tps

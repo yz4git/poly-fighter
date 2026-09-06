@@ -56,13 +56,13 @@ test("runtime prioritizes Blender reactions, freezes mixer on hitstop, and keeps
   assert.match(runtime, /blenderReactions: MotionClipSource \| null/);
   assert.match(runtime, /blenderReactionClips/);
   assert.match(runtime, /BF_HitHeavy/);
-  assert.match(runtime, /case "BLOCK_STUN": return \{ name: "BF_GuardBreak"/);
+  assert.match(runtime, /case "BLOCK_STUN": return \{ name: "CM_Block"/);
   assert.match(runtime, /\["BF_HitHeavy", "PF_HitHeavy"\]/);
   assert.match(runtime, /\["BF_GuardBreak", "PF_GuardBreak"\]/);
   assert.match(runtime, /function transitionFadeSeconds/);
-  assert.match(runtime, /0\.025/);
+  assert.match(runtime, /return \.032/);
   assert.match(runtime, /function advance\(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false\)/);
-  assert.match(runtime, /if \(!frozen\) runtime\.mixer\.update\(delta\)/);
+  assert.match(runtime, /if \(!frozen\) \{[^}]*runtime\.mixer\.update\(delta\)/);
   assert.match(runtime, /advance\(runtime, timeSeconds, fighter\.hitStop > 0\)/);
   assert.match(runtime, /quaterniusHitReactionMotionSource/);
   assert.match(runtime, /quaterniusGuardBreakMotionSource/);

@@ -27,17 +27,43 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Normalize quaternion comparison in audit
+      - name: Upgrade framerate audit diagnostics
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('scripts/capture-motion-framerate-audit.mjs')
           s = p.read_text()
-          old = '''    const dot = Math.min(1, Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]));\n    const angle = 2 * Math.acos(dot);\n'''
-          new = '''    const normA = Math.hypot(qa[0], qa[1], qa[2], qa[3]);\n    const normB = Math.hypot(qb[0], qb[1], qb[2], qb[3]);\n    const rawDot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3];\n    const dot = Math.min(1, Math.abs(rawDot / Math.max(1e-12, normA * normB)));\n    const angle = 2 * Math.acos(dot);\n'''
-          if old not in s:
-              raise SystemExit('quaternion comparison anchor not found')
-          p.write_text(s.replace(old, new, 1))
+
+          old_delta = '''function poseDelta(a, b) {\n  let maxPosition = 0;\n  let maxAngle = 0;\n  let worstPositionBone = "";\n  let worstAngleBone = "";\n  for (const name of Object.keys(a)) {\n    const pa = a[name].position;\n    const pb = b[name].position;\n    const position = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);\n    if (position > maxPosition) { maxPosition = position; worstPositionBone = name; }\n    const qa = a[name].quaternion;\n    const qb = b[name].quaternion;\n    const dot = Math.min(1, Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]));\n    const angle = 2 * Math.acos(dot);\n    if (angle > maxAngle) { maxAngle = angle; worstAngleBone = name; }\n  }\n  return { maxPosition, maxAngle, worstPositionBone, worstAngleBone };\n}\n'''
+          new_delta = '''function poseDelta(a, b) {\n  let maxPosition = 0;\n  let maxAngle = 0;\n  let maxQuaternionComponent = 0;\n  let worstPositionBone = "";\n  let worstAngleBone = "";\n  let worstQuaternionBone = "";\n  for (const name of Object.keys(a)) {\n    const pa = a[name].position;\n    const pb = b[name].position;\n    const position = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);\n    if (position > maxPosition) { maxPosition = position; worstPositionBone = name; }\n    const qa = a[name].quaternion;\n    const qb = b[name].quaternion;\n    const normA = Math.hypot(qa[0], qa[1], qa[2], qa[3]);\n    const normB = Math.hypot(qb[0], qb[1], qb[2], qb[3]);\n    const an = qa.map(value => value / Math.max(1e-12, normA));\n    const bn = qb.map(value => value / Math.max(1e-12, normB));\n    const rawDot = an[0] * bn[0] + an[1] * bn[1] + an[2] * bn[2] + an[3] * bn[3];\n    const sign = rawDot < 0 ? -1 : 1;\n    const component = Math.max(...an.map((value, index) => Math.abs(value - bn[index] * sign)));\n    if (component > maxQuaternionComponent) { maxQuaternionComponent = component; worstQuaternionBone = name; }\n    const dot = Math.min(1, Math.abs(rawDot));\n    const angle = 2 * Math.acos(dot);\n    if (angle > maxAngle) { maxAngle = angle; worstAngleBone = name; }\n  }\n  return { maxPosition, maxAngle, maxQuaternionComponent, worstPositionBone, worstAngleBone, worstQuaternionBone };\n}\n'''
+          if old_delta not in s:
+              raise SystemExit('poseDelta anchor not found')
+          s = s.replace(old_delta, new_delta, 1)
+
+          old_report = '''  maxima: { position: 0, angleRadians: 0 },\n  hitstop: {},\n  screenshots: 0,\n  errors: [],\n'''
+          new_report = '''  maxima: { position: 0, angleRadians: 0, quaternionComponent: 0 },\n  offenders: [],\n  hitstop: {},\n  screenshots: 0,\n  errors: [],\n'''
+          if old_report not in s:
+              raise SystemExit('report anchor not found')
+          s = s.replace(old_report, new_report, 1)
+
+          old_compare = '''        report.maxima.position = Math.max(report.maxima.position, delta.maxPosition);\n        report.maxima.angleRadians = Math.max(report.maxima.angleRadians, delta.maxAngle);\n        assert.ok(delta.maxPosition < 1e-5, `${actorName}/${move}/${fps}: position delta ${JSON.stringify(delta)}`);\n        assert.ok(delta.maxAngle < 1e-5, `${actorName}/${move}/${fps}: rotation delta ${JSON.stringify(delta)}`);\n'''
+          new_compare = '''        report.maxima.position = Math.max(report.maxima.position, delta.maxPosition);\n        report.maxima.angleRadians = Math.max(report.maxima.angleRadians, delta.maxAngle);\n        report.maxima.quaternionComponent = Math.max(report.maxima.quaternionComponent, delta.maxQuaternionComponent);\n        if (delta.maxPosition >= 1e-5 || delta.maxAngle >= 1e-5) {\n          report.offenders.push({ actor: actorName, move, fps, kind: "contact", ...delta });\n        }\n'''
+          if old_compare not in s:
+              raise SystemExit('comparison assert anchor not found')
+          s = s.replace(old_compare, new_compare, 1)
+
+          old_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    assert.ok(freezeDelta.maxPosition < 1e-8, `${actorName}: startup hitstop position drift ${JSON.stringify(freezeDelta)}`);\n    assert.ok(freezeDelta.maxAngle < 1e-8, `${actorName}: startup hitstop rotation drift ${JSON.stringify(freezeDelta)}`);\n    assert.equal(freeze.before.meta.previousPoseWeight, freeze.after.meta.previousPoseWeight, `${actorName}: hitstop changed entry blend weight`);\n    report.hitstop[actorName] = freezeDelta;\n'''
+          new_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    const sameBlendWeight = freeze.before.meta.previousPoseWeight === freeze.after.meta.previousPoseWeight;\n    if (freezeDelta.maxPosition >= 1e-8 || freezeDelta.maxAngle >= 1e-8 || !sameBlendWeight) {\n      report.offenders.push({ actor: actorName, move: "risingKick", fps: 30, kind: "startup-hitstop", sameBlendWeight, ...freezeDelta });\n    }\n    report.hitstop[actorName] = { ...freezeDelta, sameBlendWeight };\n'''
+          if old_freeze not in s:
+              raise SystemExit('hitstop assert anchor not found')
+          s = s.replace(old_freeze, new_freeze, 1)
+
+          old_end = '''  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));\n  console.log(JSON.stringify({ maxima: report.maxima, hitstop: report.hitstop, screenshots: report.screenshots }));\n} finally {\n'''
+          new_end = '''  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));\n  console.log(JSON.stringify({ maxima: report.maxima, offenders: report.offenders, hitstop: report.hitstop, screenshots: report.screenshots }));\n  assert.equal(report.offenders.length, 0, `framerate pose deviations: ${JSON.stringify(report.offenders)}`);\n} finally {\n'''
+          if old_end not in s:
+              raise SystemExit('final assertion anchor not found')
+          s = s.replace(old_end, new_end, 1)
+          p.write_text(s)
           PY
       - name: Validate policy and production build
         run: |

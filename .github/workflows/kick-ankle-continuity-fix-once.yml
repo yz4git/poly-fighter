@@ -72,31 +72,30 @@ jobs:
               raise SystemExit('strike ankle anchor missing')
           s = s.replace(old, new, 1)
           old = '''    const tracks: THREE.KeyframeTrack[] = [];
-                for (const [name, value] of values) {'''
-          new = '''    // Because this is offline clip authoring we can preserve the exact pose at
-                // a sudden shin turn and distribute the required rotation into preceding
-                // samples. That avoids causal lag at contact while keeping every adjacent
-                // strike-foot quaternion comfortably below the visual snap threshold.
-                if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) {
-                  const suffixes = name === "BF_DashKick_R" ? ["l", "r"] : [name === "BF_LowKick_L" ? "l" : "r"];
-                  const maxStep = THREE.MathUtils.degToRad(32);
-                  for (const suffix of suffixes) {
-                    const q = values.get(`foot_${suffix}`)!.q;
-                    const readQ = (index: number) => new THREE.Quaternion().fromArray(q, index * 4).normalize();
-                    const writeQ = (index: number, value: THREE.Quaternion) => value.normalize().toArray(q, index * 4);
-                    for (let i = 1; i < samples; i++) {
-                      for (let j = i - 1; j >= 1; j--) {
-                        const current = readQ(j);
-                        const next = readQ(j + 1);
-                        const delta = current.angleTo(next);
-                        if (delta <= maxStep) break;
-                        writeQ(j, next.clone().slerp(current, maxStep / delta));
-                      }
+              for (const [name, value] of values) {'''
+          new = '''    // Offline authoring can preserve the exact pose at a sudden shin turn and
+              // distribute the required rotation into preceding samples. This avoids causal
+              // lag at contact while keeping adjacent strike-foot rotations below the snap gate.
+              if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) {
+                const suffixes = name === "BF_DashKick_R" ? ["l", "r"] : [name === "BF_LowKick_L" ? "l" : "r"];
+                const maxStep = THREE.MathUtils.degToRad(32);
+                for (const suffix of suffixes) {
+                  const q = values.get(`foot_${suffix}`)!.q;
+                  const readQ = (index: number) => new THREE.Quaternion().fromArray(q, index * 4).normalize();
+                  const writeQ = (index: number, value: THREE.Quaternion) => value.normalize().toArray(q, index * 4);
+                  for (let i = 1; i < samples; i++) {
+                    for (let j = i - 1; j >= 1; j--) {
+                      const current = readQ(j);
+                      const next = readQ(j + 1);
+                      const delta = current.angleTo(next);
+                      if (delta <= maxStep) break;
+                      writeQ(j, next.clone().slerp(current, maxStep / delta));
                     }
                   }
                 }
-                const tracks: THREE.KeyframeTrack[] = [];
-                for (const [name, value] of values) {'''
+              }
+              const tracks: THREE.KeyframeTrack[] = [];
+              for (const [name, value] of values) {'''
           if old not in s:
               raise SystemExit('author track anchor missing')
           p.write_text(s.replace(old, new, 1))

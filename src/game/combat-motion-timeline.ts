@@ -51,7 +51,7 @@ function smootherstep(value: number): number {
   return u * u * u * (10 + u * (-15 + u * 6));
 }
 
-function events(contact: number): AuthoredMotionEvents {
+export function motionEventsAtContact(contact: number): AuthoredMotionEvents {
   const normalized = clamp01(contact);
   // Keep contact travel narrow. It exists to carry force through ACTIVE, not to
   // invent a second strike on top of the authored Blender trajectory.
@@ -61,21 +61,23 @@ function events(contact: number): AuthoredMotionEvents {
   };
 }
 
+function events(contact: number): AuthoredMotionEvents {
+  return motionEventsAtContact(contact);
+}
+
 export function authoredMotionEvents(clipName: string): AuthoredMotionEvents {
   return AUTHORED_MOTION_EVENTS[clipName] ?? events(0.5);
 }
 
 /**
- * Converts the deterministic gameplay move tick into one normalized clip phase.
- * The first ACTIVE tick is exactly authored contact for every strike. Hitstop
- * naturally freezes animation because moveTick itself is frozen by gameplay.
+ * Pure timeline sampler shared by the runtime and compatibility API. Keeping
+ * this math in one function prevents punch/kick/fallback paths from drifting.
  */
-export function sampleCombatMotionTimeline(
+export function sampleCombatMotionAtEvent(
   move: Pick<MoveDefinition, "startup" | "active" | "recovery">,
   tick: number,
-  clipName: string,
+  event: AuthoredMotionEvents,
 ): CombatMotionSample {
-  const event = authoredMotionEvents(clipName);
   const totalTicks = Math.max(1, move.startup + move.active + move.recovery);
   const finalTick = Math.max(0, totalTicks - 1);
   const startupTicks = Math.max(0, move.startup);
@@ -83,15 +85,15 @@ export function sampleCombatMotionTimeline(
   const activeEndTick = Math.min(finalTick, startupTicks + activeTicks - 1);
   const t = Math.max(0, Math.min(finalTick, tick));
 
-  if (t <= startupTicks) {
+  if (t < startupTicks) {
     const progress = startupTicks === 0 ? 1 : clamp01(t / startupTicks);
     return {
-      stage: startupTicks === 0 && t === 0 ? "ACTIVE" : "STARTUP",
+      stage: "STARTUP",
       stageProgress: progress,
       phase: event.contact * progress,
       contactPhase: event.contact,
       contactExitPhase: event.contactExit,
-      contactWeight: progress >= 1 ? 1 : smootherstep((progress - 0.72) / 0.28),
+      contactWeight: smootherstep((progress - 0.72) / 0.28),
     };
   }
 
@@ -118,4 +120,17 @@ export function sampleCombatMotionTimeline(
     contactExitPhase: event.contactExit,
     contactWeight: 1 - smootherstep(progress),
   };
+}
+
+/**
+ * Converts deterministic gameplay moveTick into one normalized authored clip
+ * phase. The first ACTIVE tick is exactly contact. Hitstop naturally freezes
+ * the pose because FighterRuntime freezes moveTick during hitstop.
+ */
+export function sampleCombatMotionTimeline(
+  move: Pick<MoveDefinition, "startup" | "active" | "recovery">,
+  tick: number,
+  clipName: string,
+): CombatMotionSample {
+  return sampleCombatMotionAtEvent(move, tick, authoredMotionEvents(clipName));
 }

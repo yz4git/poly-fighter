@@ -14,7 +14,6 @@ on:
       - public/reference/female-turnaround.jpeg
       - tests/sera-hero-pipeline.test.mjs
       - .github/workflows/sera-hero-ai.yml
-      - package.json
 
 permissions:
   contents: read

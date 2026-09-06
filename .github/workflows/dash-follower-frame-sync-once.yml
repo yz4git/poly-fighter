@@ -1,0 +1,70 @@
+name: Verify dash follower same-frame sync once
+
+on:
+  push:
+    branches: [dash-follower-frame-sync-v1]
+    paths:
+      - .github/workflows/dash-follower-frame-sync-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dash-follower-frame-sync-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply same-frame follower sync
+        run: python tools/patch-dash-follower-frame-sync.py
+      - name: Validate follower contract and kick anatomy
+        run: node --import tsx --test tests/quaternius-character-graphics-v2.test.ts tests/kick-ankle.test.ts
+      - name: Run TPS regressions
+        run: npm run test:ci:tps
+      - name: Run lint
+        run: npm run lint
+      - name: Build production preview
+        run: npm run build
+      - name: Start production game
+        run: |
+          PORT=3000 npm start > /tmp/dash-follower-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dash-follower-server.log
+          exit 1
+      - name: Capture all combat motions after follower fix
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -x "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" node scripts/capture-combat-motion-audit.mjs
+      - name: Preserve server log
+        if: always()
+        run: |
+          mkdir -p artifacts/dash-follower-sync
+          cp /tmp/dash-follower-server.log artifacts/dash-follower-sync/server.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-dash-follower-frame-sync-audit
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14
+      - name: Commit verified same-frame follower sync and remove staging helpers
+        if: success()
+        run: |
+          git rm .github/workflows/dash-follower-frame-sync-once.yml tools/patch-dash-follower-frame-sync.py
+          git add src/game/quaternius-character-graphics-v2.ts src/game/quaternius-graphics-polish.ts tests/quaternius-character-graphics-v2.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix fast-motion character follower frame lag"
+          git push origin HEAD:dash-follower-frame-sync-v1

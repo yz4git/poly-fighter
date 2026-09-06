@@ -28,6 +28,12 @@ jobs:
         run: |
           sed -i '/const insertMarker =/i const gameLookup = "${gameLookup}";\nconst outputDir = "${outputDir}";' scripts/apply-tps-continuous-play-polish-v1.mjs
           node scripts/apply-tps-continuous-play-polish-v1.mjs
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'scripts/capture-tps-visual-audit.mjs';
+          const source = readFileSync(path, 'utf8');
+          writeFileSync(path, source.replaceAll('\\`', '`').replaceAll('\\${', '${'));
+          NODE
       - run: npm ci --no-audit --no-fund
       - name: TPS regression suite
         run: npm run test:ci:tps

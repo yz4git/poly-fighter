@@ -1,0 +1,66 @@
+name: POLY FIGHTER Motion Framerate Audit Once
+
+on:
+  push:
+    branches: [motion-pose-ownership-v2]
+    paths:
+      - .github/workflows/motion-framerate-audit-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: motion-framerate-audit-once
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-pose-ownership-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate policy and production build
+        run: |
+          node --import tsx --test tests/motion-pose-policy.test.ts tests/combat-motion-timeline.test.ts
+          npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-framerate-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-framerate-server.log
+          exit 1
+      - name: Compare 30 60 120 fps contact poses
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          mkdir -p artifacts/motion-framerate-audit
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_FRAMERATE_AUDIT_DIR="artifacts/motion-framerate-audit" node scripts/capture-motion-framerate-audit.mjs
+      - name: Preserve server log
+        if: always()
+        run: cp /tmp/poly-fighter-framerate-server.log artifacts/motion-framerate-audit/server.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-motion-framerate-audit
+          path: artifacts/motion-framerate-audit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove one-shot workflow after verified audit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/motion-framerate-audit-once.yml
+          git commit -m "Complete motion framerate audit"
+          git push origin HEAD:motion-pose-ownership-v2

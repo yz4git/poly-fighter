@@ -63,17 +63,20 @@ LOW_KICK = replace(
 base.LOW_KICK = LOW_KICK
 
 
-# The Rising mocap prior has an excellent chamber, but its raw extension peaks
-# before the authored impact frame. The first contact-sync pass moved the final
-# forward maximum from frame 21 to 23, proving the contact target is correct but
-# still underweighted. Keep the measured body prior and make only the strike-leg
-# contact window authoritative: precontact remains mostly mocap, IMPACT is fully
-# on the authored target, and OVERTRAVEL stays strongly constrained. This shifts
-# visible extension toward gameplay contact without moving any phase or hit frame.
+# Rising's measured source provides the chamber and whole-body lift, but its raw
+# foot trajectory peaks before gameplay contact. Simply increasing IK strength
+# moved energy upward/outward and exceeded the leg-reach quality gate. The target
+# vectors are normalized by the base generator, so make IMPACT/OVERTRAVEL point
+# more through the opponent while retaining enough vertical component to read as
+# an upward launcher. Keep contact leg length inside the established <0.92 gate.
+_rising_dirs = list(base.RISING_KICK.reach_directions)
+_rising_dirs[3] = (0.96, 0.12, 0.44)  # impact: forward-high contact, low side drift
+_rising_dirs[4] = (0.98, 0.16, 0.40)  # overtravel: continue through target, then retract
 RISING_KICK = replace(
     base.RISING_KICK,
-    ik_influences=(0.0, 0.10, 0.16, 1.00, 0.96, 0.10, 0.0),
-    reach_ratios=(0.0, 0.0, 0.72, 0.925, 0.930, 0.0, 0.0),
+    ik_influences=(0.0, 0.10, 0.18, 1.00, 0.88, 0.10, 0.0),
+    reach_ratios=(0.0, 0.0, 0.72, 0.915, 0.918, 0.0, 0.0),
+    reach_directions=tuple(_rising_dirs),
 )
 base.RISING_KICK = RISING_KICK
 base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, RISING_KICK)

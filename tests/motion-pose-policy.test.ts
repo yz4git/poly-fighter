@@ -6,6 +6,7 @@ import {
   attackEntryBlendTicks,
   attackEntryPreviousPoseWeight,
   motionPoseOwner,
+  shouldAdvanceMixerFromRenderTime,
   shouldApplyLocomotionFootLock,
   shouldResamplePose,
 } from "../src/game/motion-pose-policy";
@@ -50,6 +51,12 @@ test("attack entry blend depends only on gameplay tick", () => {
   assert.equal(attackEntryPreviousPoseWeight(move, 2), 0);
 });
 
+test("authored combat timeline never advances its mixer from render delta", () => {
+  for (const state of STATES) {
+    assert.equal(shouldAdvanceMixerFromRenderTime(state), state !== "ATTACK", state);
+  }
+});
+
 test("hitstop resamples a newly reached gameplay pose once, then holds it exactly", () => {
   assert.equal(shouldResamplePose(0, false), true);
   assert.equal(shouldResamplePose(0, true), true);
@@ -66,9 +73,10 @@ test("foot lock belongs only to unfrozen locomotion", () => {
   }
 });
 
-test("production runtime delegates attack blending, hitstop hold and foot lock to pose policy", async () => {
+test("production runtime delegates attack blending, mixer clock, hitstop hold and foot lock to pose policy", async () => {
   const source = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
   assert.match(source, /attackEntryPreviousPoseWeight\(move, fighter\.moveTick\)/);
+  assert.match(source, /shouldAdvanceMixerFromRenderTime\(fighter\.state\)/);
   assert.match(source, /shouldResamplePose\(fighter\.hitStop, poseSampleChanged\)/);
   assert.match(source, /shouldApplyLocomotionFootLock\(fighter\.state, fighter\.hitStop\)/);
   assert.match(source, /combatMotionHitStopPoseFrozen/);

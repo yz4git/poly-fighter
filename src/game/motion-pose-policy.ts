@@ -39,6 +39,15 @@ export function attackEntryPreviousPoseWeight(
   return 1 - eased;
 }
 
+/**
+ * Hitstop is a rendered-pose hold, not merely a zero-delta mixer update.
+ * A newly reached gameplay sample is evaluated once, then repeated render frames
+ * at the same state/move/reaction sample leave the skeleton byte-for-byte alone.
+ */
+export function shouldResamplePose(hitStop: number, poseSampleChanged: boolean): boolean {
+  return hitStop <= 0 || poseSampleChanged;
+}
+
 export function shouldApplyLocomotionFootLock(state: FighterState, hitStop: number): boolean {
   return state === "WALK" && hitStop <= 0;
 }

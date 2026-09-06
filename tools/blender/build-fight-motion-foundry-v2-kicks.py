@@ -61,7 +61,25 @@ LOW_KICK = replace(
     reach_directions=tuple(_low_dirs),
 )
 base.LOW_KICK = LOW_KICK
-base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, base.RISING_KICK)
+
+
+# Rising's measured source provides the chamber and whole-body lift, but its raw
+# foot trajectory peaks before gameplay contact. Simply increasing IK strength
+# moved energy upward/outward and exceeded the leg-reach quality gate. The target
+# vectors are normalized by the base generator, so make IMPACT/OVERTRAVEL point
+# more through the opponent while retaining enough vertical component to read as
+# an upward launcher. Keep contact leg length inside the established <0.92 gate.
+_rising_dirs = list(base.RISING_KICK.reach_directions)
+_rising_dirs[3] = (0.96, 0.12, 0.44)  # impact: forward-high contact, low side drift
+_rising_dirs[4] = (0.98, 0.16, 0.40)  # overtravel: continue through target, then retract
+RISING_KICK = replace(
+    base.RISING_KICK,
+    ik_influences=(0.0, 0.10, 0.18, 1.00, 0.88, 0.10, 0.0),
+    reach_ratios=(0.0, 0.0, 0.72, 0.915, 0.918, 0.0, 0.0),
+    reach_directions=tuple(_rising_dirs),
+)
+base.RISING_KICK = RISING_KICK
+base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, RISING_KICK)
 
 
 # Low's measured source has a faster late return than Front/Rising. Give the

@@ -22,7 +22,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Replace calf-twist ankle frame with swing-only anatomical shin frame
+      - name: Replace calf-twist ankle frame with continuous anatomical shin transport
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -49,7 +49,11 @@ jobs:
               const flexAxis = restShin.clone().cross(forward).normalize();
               const flatForward = forward.clone().setY(0).normalize();
               return [suffix, { restShin, flexAxis, flatForward }] as const;
-            }));'''
+            }));
+            // Offline authoring samples each clip in ascending time. Carry the corrected
+            // world ankle orientation forward so a fast shin swing cannot turn into a
+            // one-frame boot snap. This changes rotation only; leg point paths remain intact.
+            const ankleWorldContinuity = new Map<string, THREE.Quaternion>();'''
           if old not in s:
               raise SystemExit('ankle calibration anchor missing')
           s = s.replace(old, new, 1)
@@ -59,15 +63,24 @@ jobs:
           new = '''        const degrees = suffix !== strike ? -24 : name === "BF_LowKick_L" ? -32 : name === "BF_RisingKick_R" ? -12 : 8;
                   const calf = nodes.get(`calf_${suffix}`)!;
                   const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
-                  // Follow only the anatomical shin swing. Imported/retargeted calf
-                  // axial twist is not a stable ankle frame and previously caused an
-                  // ~80 degree one-frame boot snap in Low Kick on both body rigs.
+                  // Follow only the anatomical calf-to-ankle swing. Imported calf axial
+                  // twist is not a stable foot frame and caused the Low Kick ~80 degree snap.
                   const shinSwing = new THREE.Quaternion().setFromUnitVectors(frame.restShin, shin);
                   const flexAxis = frame.flexAxis.clone().applyQuaternion(shinSwing).normalize();
                   const desired = new THREE.Quaternion()
                     .setFromAxisAngle(flexAxis, THREE.MathUtils.degToRad(degrees))
                     .multiply(shinSwing.clone().multiply(bindWorld.get(`foot_${suffix}`)!));
-                  worldRotation(foot, foot.getWorldQuaternion(new THREE.Quaternion()).slerp(desired, weight));'''
+                  const currentWorld = foot.getWorldQuaternion(new THREE.Quaternion());
+                  let correctedWorld = currentWorld.clone().slerp(desired, weight);
+                  const continuityKey = `${name}:${suffix}`;
+                  const previousWorld = ankleWorldContinuity.get(continuityKey);
+                  if (previousWorld) {
+                    const delta = previousWorld.angleTo(correctedWorld);
+                    const maxStep = THREE.MathUtils.degToRad(28);
+                    if (delta > maxStep) correctedWorld = previousWorld.clone().slerp(correctedWorld, maxStep / delta);
+                  }
+                  ankleWorldContinuity.set(continuityKey, correctedWorld.clone());
+                  worldRotation(foot, correctedWorld);'''
           if old not in s:
               raise SystemExit('strike ankle anchor missing')
           p.write_text(s.replace(old, new, 1))
@@ -83,5 +96,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/kick-ankle-continuity-fix-once.yml
           git add src/game/combat-motion-authoring.ts tests/kick-ankle.test.ts
-          git commit -m "Fix Low Kick ankle twist continuity"
+          git commit -m "Fix kick ankle twist continuity"
           git push origin HEAD:kick-ankle-anatomy-v8

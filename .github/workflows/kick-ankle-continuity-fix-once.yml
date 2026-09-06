@@ -22,7 +22,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Replace calf-twist ankle frame with continuous anatomical shin transport
+      - name: Author anatomical ankles and distribute sharp turns into anticipation
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -49,11 +49,7 @@ jobs:
               const flexAxis = restShin.clone().cross(forward).normalize();
               const flatForward = forward.clone().setY(0).normalize();
               return [suffix, { restShin, flexAxis, flatForward }] as const;
-            }));
-            // Offline authoring samples each clip in ascending time. Carry the corrected
-            // world ankle orientation forward so a fast shin swing cannot turn into a
-            // one-frame boot snap. This changes rotation only; leg point paths remain intact.
-            const ankleWorldContinuity = new Map<string, THREE.Quaternion>();'''
+            }));'''
           if old not in s:
               raise SystemExit('ankle calibration anchor missing')
           s = s.replace(old, new, 1)
@@ -63,26 +59,46 @@ jobs:
           new = '''        const degrees = suffix !== strike ? -24 : name === "BF_LowKick_L" ? -32 : name === "BF_RisingKick_R" ? -12 : 8;
                   const calf = nodes.get(`calf_${suffix}`)!;
                   const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
-                  // Follow only the anatomical calf-to-ankle swing. Imported calf axial
-                  // twist is not a stable foot frame and caused the Low Kick ~80 degree snap.
+                  // Use calf-to-ankle swing rather than imported calf axial twist as the
+                  // anatomical frame. This preserves the authored leg path while removing
+                  // the unstable boot roll that produced the Low Kick snap.
                   const shinSwing = new THREE.Quaternion().setFromUnitVectors(frame.restShin, shin);
                   const flexAxis = frame.flexAxis.clone().applyQuaternion(shinSwing).normalize();
                   const desired = new THREE.Quaternion()
                     .setFromAxisAngle(flexAxis, THREE.MathUtils.degToRad(degrees))
                     .multiply(shinSwing.clone().multiply(bindWorld.get(`foot_${suffix}`)!));
-                  const currentWorld = foot.getWorldQuaternion(new THREE.Quaternion());
-                  let correctedWorld = currentWorld.clone().slerp(desired, weight);
-                  const continuityKey = `${name}:${suffix}`;
-                  const previousWorld = ankleWorldContinuity.get(continuityKey);
-                  if (previousWorld) {
-                    const delta = previousWorld.angleTo(correctedWorld);
-                    const maxStep = THREE.MathUtils.degToRad(38);
-                    if (delta > maxStep) correctedWorld = previousWorld.clone().slerp(correctedWorld, maxStep / delta);
-                  }
-                  ankleWorldContinuity.set(continuityKey, correctedWorld.clone());
-                  worldRotation(foot, correctedWorld);'''
+                  worldRotation(foot, foot.getWorldQuaternion(new THREE.Quaternion()).slerp(desired, weight));'''
           if old not in s:
               raise SystemExit('strike ankle anchor missing')
+          s = s.replace(old, new, 1)
+          old = '''    const tracks: THREE.KeyframeTrack[] = [];
+                for (const [name, value] of values) {'''
+          new = '''    // Because this is offline clip authoring we can preserve the exact pose at
+                // a sudden shin turn and distribute the required rotation into preceding
+                // samples. That avoids causal lag at contact while keeping every adjacent
+                // strike-foot quaternion comfortably below the visual snap threshold.
+                if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) {
+                  const suffixes = name === "BF_DashKick_R" ? ["l", "r"] : [name === "BF_LowKick_L" ? "l" : "r"];
+                  const maxStep = THREE.MathUtils.degToRad(32);
+                  for (const suffix of suffixes) {
+                    const q = values.get(`foot_${suffix}`)!.q;
+                    const readQ = (index: number) => new THREE.Quaternion().fromArray(q, index * 4).normalize();
+                    const writeQ = (index: number, value: THREE.Quaternion) => value.normalize().toArray(q, index * 4);
+                    for (let i = 1; i < samples; i++) {
+                      for (let j = i - 1; j >= 1; j--) {
+                        const current = readQ(j);
+                        const next = readQ(j + 1);
+                        const delta = current.angleTo(next);
+                        if (delta <= maxStep) break;
+                        writeQ(j, next.clone().slerp(current, maxStep / delta));
+                      }
+                    }
+                  }
+                }
+                const tracks: THREE.KeyframeTrack[] = [];
+                for (const [name, value] of values) {'''
+          if old not in s:
+              raise SystemExit('author track anchor missing')
           p.write_text(s.replace(old, new, 1))
           PY
       - name: Validate ankle anatomy on both real skeletons

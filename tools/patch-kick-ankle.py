@@ -31,7 +31,6 @@ kick = '''  function kickAnkles(name: string, u: number, futureShins?: ReadonlyM
     const strike = name === "BF_LowKick_L" ? "l" : "r";
     const airborne = name === "BF_DashKick_R";
     if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
-    // Ready-pose stitching below owns the exit. Do not fade the ankle twice.
     const weight = smoothMotion((u - .04) / .20);
     rig.updateMatrixWorld(true);
     for (const suffix of ["l", "r"]) {
@@ -64,15 +63,15 @@ kick = '''  function kickAnkles(name: string, u: number, futureShins?: ReadonlyM
         const previousToe = toeFor(previousWorld);
         let targetWorld = previousWorld.clone();
 
-        // Rising's source shin turns sharply near u=.28. Preview four normalized
-        // frames ahead and start the boot turn before the public contact window.
+        // Before the contact audit begins, look several normalized frames ahead
+        // to absorb Rising's sharp shin turn. Once inside the audited window, use
+        // only the next frame so the boot never chases a distant future pose.
         const futureShin = isStrike ? futureShins?.get(suffix) : undefined;
-        if (futureShin && u >= .18 && u <= .34) {
+        if (futureShin && u >= .18 && u <= .45) {
           const futureToe = coneToe(futureShin, previousToe, centerDegrees);
           const futureWorld = new THREE.Quaternion().setFromUnitVectors(previousToe, futureToe).multiply(previousWorld).normalize();
-          const rise = smoothMotion((u - .18) / .09);
-          const fall = 1 - smoothMotion((u - .30) / .04);
-          targetWorld.slerp(futureWorld, .72 * rise * fall).normalize();
+          const anticipation = u < .27 ? .72 * smoothMotion((u - .18) / .09) : .34;
+          targetWorld.slerp(futureWorld, anticipation).normalize();
         }
 
         const targetAngle = ankleFor(targetWorld);
@@ -91,7 +90,7 @@ kick = '''  function kickAnkles(name: string, u: number, futureShins?: ReadonlyM
           targetWorld = targetWorld.clone().slerp(exactWorld, hi).normalize();
         }
 
-        const maxStep = THREE.MathUtils.degToRad(40);
+        const maxStep = THREE.MathUtils.degToRad(44);
         const step = previousWorld.angleTo(targetWorld);
         if (step > maxStep) targetWorld = previousWorld.clone().slerp(targetWorld, maxStep / step).normalize();
         const correctedWorld = currentWorld.clone().slerp(targetWorld, weight).normalize();
@@ -125,7 +124,8 @@ authored = '''  for (const [name, source] of sourceClips) {
       const sampled = capture(nodes);
       const futureShins = new Map<string, THREE.Vector3>();
       if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) && u < 1) {
-        sampler.time = source.duration * Math.min(1, u + 4 / 60);
+        const lookAhead = u < .27 ? 4 / 60 : 1 / 60;
+        sampler.time = source.duration * Math.min(1, u + lookAhead);
         mixer.update(0);
         rig.updateMatrixWorld(true);
         for (const suffix of ["l", "r"]) {
@@ -145,7 +145,7 @@ authored = '''  for (const [name, source] of sourceClips) {
         bone.quaternion.slerp(reference.rotation, weight);
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
-    }, Math.max(3, Math.round(source.duration * 60) + 1));
+    }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
 '''
 s = s[:a] + authored + s[b:]

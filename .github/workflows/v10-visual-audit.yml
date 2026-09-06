@@ -13,7 +13,6 @@ on:
       - src/game/quaternius-character-graphics-v2.ts
       - src/game/quaternius-graphics-polish.ts
       - public/models/**
-      - package.json
       - package-lock.json
       - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs
@@ -29,7 +28,6 @@ on:
       - src/game/quaternius-character-graphics-v2.ts
       - src/game/quaternius-graphics-polish.ts
       - public/models/**
-      - package.json
       - package-lock.json
       - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs

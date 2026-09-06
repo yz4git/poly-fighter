@@ -1,0 +1,110 @@
+name: POLY FIGHTER Motion Foundation Deep Audit Once
+
+on:
+  push:
+    branches: [motion-runtime-foundation-v1]
+    paths:
+      - .github/workflows/motion-foundation-deep-audit-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: motion-foundation-deep-audit-once
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: motion-runtime-foundation-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Replace stale motion-version audit with timeline capability contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/capture-motion-readability-audit.mjs')
+          s = p.read_text()
+          old = '''  if (!preload?.ready || preload.version !== "COMBAT_MOTION_V7") {
+            throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
+          }
+'''
+          new = '''  const timelineRuntime = typeof preload?.version === "string" && preload.version.endsWith("_TIMELINE");
+          if (!preload?.ready || preload.clips < 27 || !timelineRuntime) {
+            throw new Error(`Motion packs were not preloaded with unified timeline runtime: ${JSON.stringify(preload)}`);
+          }
+'''
+          if old not in s:
+              raise SystemExit('stale preload contract anchor not found')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Motion architecture contracts
+        run: |
+          node --import tsx --test tests/combat-motion-timeline.test.ts tests/combat-motion.test.ts tests/kick-ankle.test.ts
+          npm run test:static
+          npm run lint
+      - name: Build production preview once
+        run: npm run build
+      - name: Start production preview once
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-deep-motion-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-deep-motion-server.log
+          exit 1
+      - name: Run complete TPS audit suite
+        run: |
+          mkdir -p artifacts/tps-visual-audit
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-visual-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
+      - name: Capture complete combat motion library
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" node scripts/capture-combat-motion-audit.mjs
+      - name: Capture every authored kick frame
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          mkdir -p artifacts/kick-frame-audit
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" KICK_FRAME_AUDIT_DIR="artifacts/kick-frame-audit" node scripts/capture-kick-frame-audit.mjs
+          test "$(find artifacts/kick-frame-audit/front -name '*.png' | wc -l)" -eq 43
+          test "$(find artifacts/kick-frame-audit/low -name '*.png' | wc -l)" -eq 46
+          test "$(find artifacts/kick-frame-audit/rising -name '*.png' | wc -l)" -eq 49
+      - name: Preserve audit artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts/deep-motion-audit
+          cp /tmp/poly-fighter-deep-motion-server.log artifacts/deep-motion-audit/server.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-motion-foundation-deep-audit
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 7
+      - name: Commit verified audit contract and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-motion-readability-audit.mjs
+          git rm .github/workflows/motion-foundation-deep-audit-once.yml
+          git commit -m "Align TPS audit with unified motion timeline"
+          git push origin HEAD:motion-runtime-foundation-v1

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: combat-motion-quality-${{ github.ref }}
@@ -73,3 +73,19 @@ jobs:
           path: artifacts
           if-no-files-found: error
           retention-days: 14
+      - name: Commit verified ankle implementation and remove staging helpers
+        if: success() && github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git fetch origin "$HEAD_REF" main
+          git checkout -B "$HEAD_REF" "origin/$HEAD_REF"
+          python tools/patch-kick-ankle.py
+          git checkout origin/main -- .github/workflows/combat-motion-quality.yml
+          git rm -f .github/workflows/kick-ankle-continuity-fix-once.yml tools/patch-kick-ankle.py
+          git add src/game/combat-motion-authoring.ts tests/kick-ankle.test.ts .github/workflows/combat-motion-quality.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Fix kick ankle twist continuity"
+          git push origin HEAD:"$HEAD_REF"

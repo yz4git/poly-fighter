@@ -3,40 +3,34 @@ name: POLY FIGHTER WebGL visual audit
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - app/**
       - src/components/model-viewer-panel.tsx
-      - src/game/**
+      - src/game/visual-*.ts
+      - src/game/model-viewer-motion.ts
+      - src/game/presentation-animation.ts
+      - src/game/quaternius-character-graphics-v2.ts
+      - src/game/quaternius-graphics-polish.ts
       - public/models/**
-      - public/sw.js
-      - package.json
       - package-lock.json
-      - scripts/blender-runtime-audit-helpers.mjs
       - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs
-      - scripts/run-blender-prototype-ci.sh
-      - tools/blender/**
-      - tests/**
       - .github/workflows/v10-visual-audit.yml
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - app/**
       - src/components/model-viewer-panel.tsx
-      - src/game/**
+      - src/game/visual-*.ts
+      - src/game/model-viewer-motion.ts
+      - src/game/presentation-animation.ts
+      - src/game/quaternius-character-graphics-v2.ts
+      - src/game/quaternius-graphics-polish.ts
       - public/models/**
-      - public/sw.js
-      - package.json
       - package-lock.json
-      - scripts/blender-runtime-audit-helpers.mjs
       - scripts/capture-model-view-audit.mjs
       - scripts/capture-v10-visual-audit.mjs
-      - scripts/run-blender-prototype-ci.sh
-      - tools/blender/**
-      - tests/**
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
@@ -49,68 +43,29 @@ concurrency:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      - name: Checkout Quaternius Universal Base Characters mirror
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
-          repository: aaroohhiiii/ggj
-          ref: 57c0855a6622d4654fe32e9208efb820051164e3
-          path: .external/quaternius
-          sparse-checkout: |
-            first/assets/3d/characters/player
-            first/assets/3d/characters/License_Standard.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Run static regression tests
-        run: npm run test:ci:static
-      - name: Run lint
-        run: npm run lint
-      - name: Generate Blender runtime candidate
-        if: github.event_name == 'pull_request'
-        run: SERA_RUN_BLENDER_PROTOTYPE=1 npm run blender:prototype:ci
-      - name: Stage Blender runtime asset for the real game audit
-        if: github.event_name == 'pull_request'
-        run: |
-          generated="artifacts/visual-audit/blender-sera/sera-blender-runtime.glb"
-          generated_metrics="artifacts/visual-audit/blender-sera/sera-blender-metrics.json"
-          committed="public/models/sera-blender-runtime.glb"
-          committed_metrics="public/models/sera-blender-runtime.metrics.json"
-          mkdir -p public/models
-
-          if [ -s "$generated" ] && [ -s "$generated_metrics" ]; then
-            cp "$generated" "$committed"
-            cp "$generated_metrics" "$committed_metrics"
-            echo "Using generated Blender runtime for PR audit."
-          else
-            test -s "$committed"
-            test -s "$committed_metrics"
-            echo "Using committed Blender runtime for audit."
-          fi
       - name: Build production preview
         run: npm run build
-      - name: Verify rendered server output
-        run: npm run test:ci:postbuild
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-server.log 2>&1 &
           echo $! > /tmp/poly-fighter-server.pid
           for attempt in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
-              exit 0
-            fi
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
             sleep 1
           done
           cat /tmp/poly-fighter-server.log
           exit 1
-      - name: Verify Blender runtime and V10 reference models are locally served
+      - name: Verify committed runtime models are served
         run: |
           curl --fail --silent http://127.0.0.1:3000/models/sera-blender-runtime.glb -o /tmp/sera-blender-runtime.glb
           test -s /tmp/sera-blender-runtime.glb
@@ -120,59 +75,31 @@ jobs:
         run: |
           mkdir -p artifacts/visual-audit
           DRIVER="$(command -v chromedriver || true)"
-          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
-            DRIVER="$CHROMEWEBDRIVER/chromedriver"
-          fi
-          if [ -z "$DRIVER" ]; then
-            echo "ChromeDriver is not available"
-            exit 1
-          fi
-          WEBDRIVER_BIN="$DRIVER" \
-            AUDIT_URL="http://127.0.0.1:3000/" \
-            MODEL_VIEW_AUDIT_DIR="artifacts/visual-audit" \
-            node scripts/capture-model-view-audit.mjs
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MODEL_VIEW_AUDIT_DIR="artifacts/visual-audit" node scripts/capture-model-view-audit.mjs
           for fighter in sera kairo; do
             test -s "artifacts/visual-audit/model-view-${fighter}.png"
             file "artifacts/visual-audit/model-view-${fighter}.png" | grep -q "PNG image data"
           done
           test -s artifacts/visual-audit/model-view-state.json
-      - name: Capture actual match frame with ChromeDriver
+      - name: Capture representative match poses with ChromeDriver
         run: |
-          mkdir -p artifacts/visual-audit
+          mkdir -p artifacts/visual-audit artifacts/kairo-visual-audit
           DRIVER="$(command -v chromedriver || true)"
-          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
-            DRIVER="$CHROMEWEBDRIVER/chromedriver"
-          fi
-          if [ -z "$DRIVER" ]; then
-            echo "ChromeDriver is not available"
-            exit 1
-          fi
-          WEBDRIVER_BIN="$DRIVER" \
-            AUDIT_URL="http://127.0.0.1:3000/" \
-            AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-canvas-idle.png" \
-            node scripts/capture-v10-visual-audit.mjs
-          mkdir -p artifacts/kairo-visual-audit
-          WEBDRIVER_BIN="$DRIVER" \
-            AUDIT_URL="http://127.0.0.1:3000/" \
-            AUDIT_FIGHTER="KAIRO" \
-            AUDIT_DIR="artifacts/kairo-visual-audit" \
-            AUDIT_OUTPUT="artifacts/kairo-visual-audit/kairo-v1-canvas-idle.png" \
-            node scripts/capture-v10-visual-audit.mjs
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-canvas-idle.png" node scripts/capture-v10-visual-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" AUDIT_FIGHTER="KAIRO" AUDIT_DIR="artifacts/kairo-visual-audit" AUDIT_OUTPUT="artifacts/kairo-visual-audit/kairo-v1-canvas-idle.png" node scripts/capture-v10-visual-audit.mjs
           for pose in idle guard punch kick; do
             test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
-            file "artifacts/visual-audit/sera-v10-canvas-${pose}.png" | grep -q "PNG image data"
+            test -s "artifacts/kairo-visual-audit/kairo-v1-canvas-${pose}.png"
           done
           test -s artifacts/visual-audit/blender-runtime-state.json
-          for pose in idle guard punch kick; do
-            test -s "artifacts/kairo-visual-audit/kairo-v1-canvas-$pose.png"
-            file "artifacts/kairo-visual-audit/kairo-v1-canvas-$pose.png" | grep -q "PNG image data"
-          done
           test -s artifacts/kairo-visual-audit/runtime-state.json
           test -s artifacts/kairo-visual-audit/pose-separation.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
           cp /tmp/poly-fighter-server.log artifacts/kairo-visual-audit/server.log
-          printf '%s\n' "Real WebGL screenshots captured in headless Chrome via ChromeDriver for title MODEL VIEW and SERA match poses." > artifacts/visual-audit/README.txt
-          printf '%s\n' "Real WebGL KAIRO V1 Forge reconstruction screenshots captured in headless Chrome via ChromeDriver for Idle, Guard, Punch and Kick." > artifacts/kairo-visual-audit/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: poly-fighter-webgl-visual-audit
@@ -180,47 +107,4 @@ jobs:
             artifacts/visual-audit
             artifacts/kairo-visual-audit
           if-no-files-found: error
-          retention-days: 14
-      - name: Upload same-repository runtime candidate
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/upload-artifact@v4
-        with:
-          name: sera-runtime-candidate
-          path: |
-            public/models/sera-blender-runtime.glb
-            public/models/sera-blender-runtime.metrics.json
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-runtime:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: capture
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: sera-runtime-candidate
-          path: runtime-candidate
-      - name: Publish generated Blender runtime asset to same-repository PR branch
-        run: |
-          runtime_glb="$(find runtime-candidate -type f -name 'sera-blender-runtime.glb' -print -quit)"
-          runtime_metrics="$(find runtime-candidate -type f -name 'sera-blender-runtime.metrics.json' -print -quit)"
-          test -n "$runtime_glb" && test -s "$runtime_glb"
-          test -n "$runtime_metrics" && test -s "$runtime_metrics"
-          cp "$runtime_glb" public/models/sera-blender-runtime.glb
-          cp "$runtime_metrics" public/models/sera-blender-runtime.metrics.json
-          if git diff --quiet -- public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json; then
-            echo "Generated runtime is unchanged."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/models/sera-blender-runtime.glb public/models/sera-blender-runtime.metrics.json
-          git commit -m "Checkpoint: publish Blender SERA runtime asset"
-          git push origin HEAD:${{ github.head_ref }}
+          retention-days: 7

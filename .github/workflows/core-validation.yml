@@ -1,0 +1,59 @@
+name: POLY FIGHTER Core validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - app/**
+      - src/**
+      - tests/**
+      - scripts/**
+      - package.json
+      - package-lock.json
+      - next.config.*
+      - tsconfig.json
+      - postcss.config.*
+      - public/sw.js
+      - .github/workflows/core-validation.yml
+  push:
+    branches: [main]
+    paths:
+      - app/**
+      - src/**
+      - tests/**
+      - scripts/**
+      - package.json
+      - package-lock.json
+      - next.config.*
+      - tsconfig.json
+      - postcss.config.*
+      - public/sw.js
+      - .github/workflows/core-validation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Static regression suite
+        run: npm run test:ci:static
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Rendered HTML smoke test
+        run: npm run test:ci:postbuild

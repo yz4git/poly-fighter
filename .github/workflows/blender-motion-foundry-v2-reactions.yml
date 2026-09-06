@@ -16,7 +16,6 @@ on:
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
-      - package.json
       - public/models/quaternius/blender-reactions-core.glb
       - public/models/quaternius/blender-reactions-core.metrics.json
       - public/models/quaternius/blender-reactions-core.generator.sha256

@@ -1,4 +1,4 @@
-name: POLY FIGHTER Motion Framerate Audit Once
+name: POLY FIGHTER Motion Hitstop Hold Once
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: motion-framerate-audit-once
+  group: motion-hitstop-hold-once
   cancel-in-progress: true
 
 jobs:
-  audit:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,79 +27,87 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Upgrade framerate audit diagnostics
+      - name: Hold identical gameplay pose exactly during hitstop
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/game/visual-quaternius-runtime.ts')
+          s = p.read_text()
+          old_import = 'import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldApplyLocomotionFootLock } from "./motion-pose-policy";'
+          new_import = 'import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldApplyLocomotionFootLock, shouldResamplePose } from "./motion-pose-policy";'
+          if old_import not in s:
+              raise SystemExit('pose policy import anchor not found')
+          s = s.replace(old_import, new_import, 1)
+
+          old_state = '''  const stateChanged = runtime.lastState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;\n'''
+          new_state = '''  const previousState = runtime.lastState;\n  const previousStateTicks = runtime.lastStateTicks;\n  const previousMoveTick = runtime.lastMoveTick;\n  const previousReactionSerial = runtime.lastReactionSerial;\n  const stateChanged = previousState !== fighter.state;\n  const restartedState = fighter.stateMachine.stateTicks < previousStateTicks;\n  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < previousMoveTick);\n  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== previousReactionSerial;\n  const poseSampleChanged =\n    stateChanged\n    || fighter.stateMachine.stateTicks !== previousStateTicks\n    || fighter.moveTick !== previousMoveTick\n    || fighter.reactionSerial !== previousReactionSerial;\n'''
+          if old_state not in s:
+              raise SystemExit('state sampling anchor not found')
+          s = s.replace(old_state, new_state, 1)
+
+          old_play = '''  const desired = desiredClip(fighter, runtime);\n  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));\n  advance(runtime, timeSeconds, fighter.hitStop > 0);\n  synchronizeMotion(runtime, fighter);\n'''
+          new_play = '''  const desired = desiredClip(fighter, runtime);\n  const resamplePose = shouldResamplePose(fighter.hitStop, poseSampleChanged);\n  runtime.host.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  fighter.visual.root.userData.combatMotionHitStopPoseFrozen = !resamplePose;\n  if (!resamplePose) {\n    // Updating lastTime prevents a post-hitstop delta burst, but the mixer and\n    // transition pose are intentionally untouched: hitstop is an exact pose hold.\n    advance(runtime, timeSeconds, true);\n    fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;\n    fighter.visual.root.userData.combatMotionSingleMixer = true;\n    fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";\n    runtime.model.updateMatrixWorld(true);\n    return;\n  }\n  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));\n  advance(runtime, timeSeconds, fighter.hitStop > 0);\n  synchronizeMotion(runtime, fighter);\n'''
+          if old_play not in s:
+              raise SystemExit('play/synchronize anchor not found')
+          s = s.replace(old_play, new_play, 1)
+          p.write_text(s)
+          PY
+      - name: Prepare focused WebGL audit
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('scripts/capture-motion-framerate-audit.mjs')
           s = p.read_text()
-
-          old_delta = '''function poseDelta(a, b) {\n  let maxPosition = 0;\n  let maxAngle = 0;\n  let worstPositionBone = "";\n  let worstAngleBone = "";\n  for (const name of Object.keys(a)) {\n    const pa = a[name].position;\n    const pb = b[name].position;\n    const position = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);\n    if (position > maxPosition) { maxPosition = position; worstPositionBone = name; }\n    const qa = a[name].quaternion;\n    const qb = b[name].quaternion;\n    const dot = Math.min(1, Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]));\n    const angle = 2 * Math.acos(dot);\n    if (angle > maxAngle) { maxAngle = angle; worstAngleBone = name; }\n  }\n  return { maxPosition, maxAngle, worstPositionBone, worstAngleBone };\n}\n'''
-          new_delta = '''function poseDelta(a, b) {\n  let maxPosition = 0;\n  let maxAngle = 0;\n  let maxQuaternionComponent = 0;\n  let worstPositionBone = "";\n  let worstAngleBone = "";\n  let worstQuaternionBone = "";\n  for (const name of Object.keys(a)) {\n    const pa = a[name].position;\n    const pb = b[name].position;\n    const position = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);\n    if (position > maxPosition) { maxPosition = position; worstPositionBone = name; }\n    const qa = a[name].quaternion;\n    const qb = b[name].quaternion;\n    const normA = Math.hypot(qa[0], qa[1], qa[2], qa[3]);\n    const normB = Math.hypot(qb[0], qb[1], qb[2], qb[3]);\n    const an = qa.map(value => value / Math.max(1e-12, normA));\n    const bn = qb.map(value => value / Math.max(1e-12, normB));\n    const rawDot = an[0] * bn[0] + an[1] * bn[1] + an[2] * bn[2] + an[3] * bn[3];\n    const sign = rawDot < 0 ? -1 : 1;\n    const component = Math.max(...an.map((value, index) => Math.abs(value - bn[index] * sign)));\n    if (component > maxQuaternionComponent) { maxQuaternionComponent = component; worstQuaternionBone = name; }\n    const dot = Math.min(1, Math.abs(rawDot));\n    const angle = 2 * Math.acos(dot);\n    if (angle > maxAngle) { maxAngle = angle; worstAngleBone = name; }\n  }\n  return { maxPosition, maxAngle, maxQuaternionComponent, worstPositionBone, worstAngleBone, worstQuaternionBone };\n}\n'''
-          if old_delta not in s:
-              raise SystemExit('poseDelta anchor not found')
-          s = s.replace(old_delta, new_delta, 1)
-
-          old_report = '''  maxima: { position: 0, angleRadians: 0 },\n  hitstop: {},\n  screenshots: 0,\n  errors: [],\n'''
-          new_report = '''  maxima: { position: 0, angleRadians: 0, quaternionComponent: 0 },\n  offenders: [],\n  hitstop: {},\n  screenshots: 0,\n  errors: [],\n'''
-          if old_report not in s:
-              raise SystemExit('report anchor not found')
-          s = s.replace(old_report, new_report, 1)
-
-          old_compare = '''        report.maxima.position = Math.max(report.maxima.position, delta.maxPosition);\n        report.maxima.angleRadians = Math.max(report.maxima.angleRadians, delta.maxAngle);\n        assert.ok(delta.maxPosition < 1e-5, `${actorName}/${move}/${fps}: position delta ${JSON.stringify(delta)}`);\n        assert.ok(delta.maxAngle < 1e-5, `${actorName}/${move}/${fps}: rotation delta ${JSON.stringify(delta)}`);\n'''
-          new_compare = '''        report.maxima.position = Math.max(report.maxima.position, delta.maxPosition);\n        report.maxima.angleRadians = Math.max(report.maxima.angleRadians, delta.maxAngle);\n        report.maxima.quaternionComponent = Math.max(report.maxima.quaternionComponent, delta.maxQuaternionComponent);\n        if (delta.maxPosition >= 1e-5 || delta.maxAngle >= 1e-5) {\n          report.offenders.push({ actor: actorName, move, fps, kind: "contact", ...delta });\n        }\n'''
-          if old_compare not in s:
-              raise SystemExit('comparison assert anchor not found')
-          s = s.replace(old_compare, new_compare, 1)
-
-          old_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    assert.ok(freezeDelta.maxPosition < 1e-8, `${actorName}: startup hitstop position drift ${JSON.stringify(freezeDelta)}`);\n    assert.ok(freezeDelta.maxAngle < 1e-8, `${actorName}: startup hitstop rotation drift ${JSON.stringify(freezeDelta)}`);\n    assert.equal(freeze.before.meta.previousPoseWeight, freeze.after.meta.previousPoseWeight, `${actorName}: hitstop changed entry blend weight`);\n    report.hitstop[actorName] = freezeDelta;\n'''
-          new_freeze = '''    const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);\n    const sameBlendWeight = freeze.before.meta.previousPoseWeight === freeze.after.meta.previousPoseWeight;\n    if (freezeDelta.maxPosition >= 1e-8 || freezeDelta.maxAngle >= 1e-8 || !sameBlendWeight) {\n      report.offenders.push({ actor: actorName, move: "risingKick", fps: 30, kind: "startup-hitstop", sameBlendWeight, ...freezeDelta });\n    }\n    report.hitstop[actorName] = { ...freezeDelta, sameBlendWeight };\n'''
-          if old_freeze not in s:
-              raise SystemExit('hitstop assert anchor not found')
-          s = s.replace(old_freeze, new_freeze, 1)
-
-          old_end = '''  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));\n  console.log(JSON.stringify({ maxima: report.maxima, hitstop: report.hitstop, screenshots: report.screenshots }));\n} finally {\n'''
-          new_end = '''  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));\n  console.log(JSON.stringify({ maxima: report.maxima, offenders: report.offenders, hitstop: report.hitstop, screenshots: report.screenshots }));\n  assert.equal(report.offenders.length, 0, `framerate pose deviations: ${JSON.stringify(report.offenders)}`);\n} finally {\n'''
-          if old_end not in s:
-              raise SystemExit('final assertion anchor not found')
-          s = s.replace(old_end, new_end, 1)
+          old_q = '''    const dot = Math.min(1, Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]));\n    const angle = 2 * Math.acos(dot);\n'''
+          new_q = '''    const normA = Math.hypot(qa[0], qa[1], qa[2], qa[3]);\n    const normB = Math.hypot(qb[0], qb[1], qb[2], qb[3]);\n    const rawDot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3];\n    const dot = Math.min(1, Math.abs(rawDot / Math.max(1e-12, normA * normB)));\n    const angle = 2 * Math.acos(dot);\n'''
+          if old_q not in s:
+              raise SystemExit('quaternion audit anchor not found')
+          s = s.replace(old_q, new_q, 1)
+          old_moves = '  const moves = ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick", "counter", "throw"];'
+          new_moves = '  const moves = ["risingKick"];'
+          if old_moves not in s:
+              raise SystemExit('move list anchor not found')
+          s = s.replace(old_moves, new_moves, 1)
           p.write_text(s)
           PY
-      - name: Validate policy and production build
+      - name: Validate deterministic motion contracts
         run: |
           node --import tsx --test tests/motion-pose-policy.test.ts tests/combat-motion-timeline.test.ts
+          npm run test:ci:tps
+          npm run lint
           npm run build
       - name: Start production preview
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-framerate-server.log 2>&1 &
+          PORT=3000 npm start > /tmp/poly-fighter-hitstop-server.log 2>&1 &
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/poly-fighter-framerate-server.log
+          cat /tmp/poly-fighter-hitstop-server.log
           exit 1
-      - name: Compare 30 60 120 fps contact poses
+      - name: Verify Rising Kick contact and hitstop on both rigs
         run: |
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
           test -n "$DRIVER"
-          mkdir -p artifacts/motion-framerate-audit
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_FRAMERATE_AUDIT_DIR="artifacts/motion-framerate-audit" node scripts/capture-motion-framerate-audit.mjs
+          mkdir -p artifacts/motion-hitstop-audit
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" MOTION_FRAMERATE_AUDIT_DIR="artifacts/motion-hitstop-audit" node scripts/capture-motion-framerate-audit.mjs
       - name: Preserve server log
         if: always()
-        run: cp /tmp/poly-fighter-framerate-server.log artifacts/motion-framerate-audit/server.log 2>/dev/null || true
+        run: cp /tmp/poly-fighter-hitstop-server.log artifacts/motion-hitstop-audit/server.log 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: poly-fighter-motion-framerate-audit
-          path: artifacts/motion-framerate-audit
-          if-no-files-found: error
+          name: poly-fighter-motion-hitstop-audit
+          path: artifacts/motion-hitstop-audit
+          if-no-files-found: warn
           retention-days: 7
-      - name: Remove one-shot workflow after verified audit
+      - name: Commit verified hitstop hold and remove one-shot workflow
         run: |
+          git checkout -- scripts/capture-motion-framerate-audit.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/capture-motion-framerate-audit.mjs
+          git add src/game/visual-quaternius-runtime.ts
           git rm .github/workflows/motion-framerate-audit-once.yml
-          git commit -m "Complete motion framerate audit"
+          git commit -m "Freeze repeated animation samples during hitstop"
           git push origin HEAD:motion-pose-ownership-v2

@@ -140,7 +140,7 @@ const resetAndPose = `
       spine02: point(get('spine_02')),
       chest: point(get('spine_03')),
       neck: point(get('neck_01')),
-      head: point(get('head')),
+      head: point(get('Head') ?? get('head')),
       upperArmL: point(get('upperarm_l')),
       upperArmR: point(get('upperarm_r')),
       elbowL: point(get('lowerarm_l')),
@@ -338,8 +338,8 @@ try {
       throw new Error(`Neutral ${side} forearm hangs too low: ${JSON.stringify({ elbow, hand, chest, neutral })}`);
     }
   }
-  if (!neutral.correctionsEnabled || neutral.correctionPolicy !== "PROCEDURAL_ASSIST") {
-    throw new Error(`Motion readability audit is not running with safe assist enabled: ${JSON.stringify(neutral)}`);
+  if (!neutral.correctionsEnabled || neutral.correctionPolicy !== "AUTHORED_COMBAT_PRESERVE" || neutral.visibleClip !== "CM_Ready") {
+    throw new Error(`Motion readability audit is not preserving the authored combat stance: ${JSON.stringify(neutral)}`);
   }
   if (neutral.fistMeshCount < 2) throw new Error(`Readable fist geometry missing: ${JSON.stringify(neutral)}`);
 

@@ -40,6 +40,16 @@ export function attackEntryPreviousPoseWeight(
 }
 
 /**
+ * Authored combat poses are absolute gameplay-tick samples. Advancing their
+ * AnimationAction from render delta before scrubbing to moveTick creates a
+ * second animation clock, so only non-combat pose owners use render-time mixer
+ * advancement.
+ */
+export function shouldAdvanceMixerFromRenderTime(state: FighterState): boolean {
+  return motionPoseOwner(state) !== "AUTHORED_COMBAT_TIMELINE";
+}
+
+/**
  * Hitstop is a rendered-pose hold, not merely a zero-delta mixer update.
  * A newly reached gameplay sample is evaluated once, then repeated render frames
  * at the same state/move/reaction sample leave the skeleton byte-for-byte alone.

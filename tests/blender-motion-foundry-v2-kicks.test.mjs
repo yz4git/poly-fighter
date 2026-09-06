@@ -123,6 +123,19 @@ test("generated V6.8 kick pack keeps three distinct readable contact lines", () 
   assert.ok(rising.strikeLegReachRatio > 0.87 && rising.strikeLegReachRatio < 0.92);
   assert.ok(rising.supportFootPivotMaxDegrees > 12 && rising.supportFootPivotMaxDegrees < 30);
 
+  // Rising must build into gameplay contact. Its visible forward peak may carry
+  // through the authored four-frame overtravel, but it may never peak in the
+  // precontact phase and already be retracting at IMPACT again.
+  assert.ok(
+    rising.allFrameStrikeFootForwardReachMaxFrame >= rising.impactFrame &&
+      rising.allFrameStrikeFootForwardReachMaxFrame <= rising.impactFrame + 4,
+    `Rising forward peak ${rising.allFrameStrikeFootForwardReachMaxFrame} vs impact ${rising.impactFrame}`,
+  );
+  assert.ok(
+    rising.strikeFootForwardReach >= rising.allFrameStrikeFootForwardReachMax * 0.94,
+    `Rising impact reach ${rising.strikeFootForwardReach} vs max ${rising.allFrameStrikeFootForwardReachMax}`,
+  );
+
   // The all-frame gate is the V6.8 regression that representative poses lacked.
   // A Low Kick may never climb into the Front/Rising vertical band between checkpoints.
   assert.ok(low.allFrameStrikeFootVerticalRiseMax < 0.65, low.allFrameStrikeFootVerticalRiseMax);

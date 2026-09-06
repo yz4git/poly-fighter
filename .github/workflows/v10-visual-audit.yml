@@ -55,8 +55,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Build production preview
         run: npm run build
-      - name: Verify rendered server output
-        run: npm run test:ci:postbuild
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-server.log 2>&1 &

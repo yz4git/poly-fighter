@@ -80,3 +80,42 @@ replaceOnce(
 );
 
 await writeFile(path, source);
+
+// Migrate source-string regressions so they guard the new architecture rather
+// than requiring the deleted second runtime and duplicate kick clock.
+const kickTestPath = "tests/blender-motion-foundry-v2-kicks.test.mjs";
+let kickTest = await readFile(kickTestPath, "utf8");
+kickTest = kickTest.replace(
+  '    "V6_ACTIVE_CONTACT_SYNC",\n  ]) assert.ok(runtime.includes(token), token);',
+  '    "UNIFIED_COMBAT_TIMELINE",\n    "sampleCombatMotionTimeline",\n  ]) assert.ok(runtime.includes(token), token);\n  assert.ok(!runtime.includes("V6_KICK_CONTACT_PHASE"), "runtime must not keep a second kick timing table");',
+);
+await writeFile(kickTestPath, kickTest);
+
+const expansionTestPath = "tests/motion-expansion.test.ts";
+let expansionTest = await readFile(expansionTestPath, "utf8");
+const expansionStart = expansionTest.indexOf('test("motion runtime uses bounded procedural center-of-mass motion and generated guard/evasion states"');
+const expansionEnd = expansionTest.indexOf('test("reaction selection distinguishes head, body, low, heavy and launch impacts"', expansionStart);
+if (expansionStart < 0 || expansionEnd < 0) throw new Error("motion foundation patch: old expansion runtime regression block missing");
+const architectureTest = `test("production motion runtime has one timeline, one mixer and no legacy second engine", async () => {\n  const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");\n  const timeline = await readFile(new URL("../src/game/combat-motion-timeline.ts", import.meta.url), "utf8");\n  const retarget = await readFile(new URL("../src/game/motion-retarget.ts", import.meta.url), "utf8");\n  const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");\n\n  await assert.rejects(\n    readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8"),\n    (error: NodeJS.ErrnoException) => error.code === "ENOENT",\n  );\n  assert.match(runtime, /sampleCombatMotionTimeline\\(move, fighter\\.moveTick, runtime\\.currentClip\\)/);\n  assert.match(runtime, /combatMotionSingleMixer = true/);\n  assert.match(runtime, /GAMEPLAY_TICK_AUTHORED_EVENT_V1/);\n  assert.match(runtime, /from "\\.\\/motion-retarget"/);\n  assert.doesNotMatch(runtime, /V6_KICK_CONTACT_PHASE/);\n  assert.doesNotMatch(runtime, /V6_ACTIVE_CONTACT_SYNC/);\n  assert.doesNotMatch(presentation, /updateMotionExpansionSkin\\(fighter, opponent, timeSeconds\\)/);\n  assert.match(timeline, /AUTHORED_MOTION_EVENTS/);\n  assert.match(timeline, /first ACTIVE tick is exactly contact/i);\n  assert.match(retarget, /targetRest \\* inverse\\(sourceRest\\) \\* sourceAnimated/);\n  assert.match(retarget, /export function retargetMotionClips/);\n});\n\n`;
+expansionTest = expansionTest.slice(0, expansionStart) + architectureTest + expansionTest.slice(expansionEnd);
+await writeFile(expansionTestPath, expansionTest);
+
+const skinTestPath = "tests/quaternius-model-skin.test.ts";
+let skinTest = await readFile(skinTestPath, "utf8");
+skinTest = skinTest.replace(
+`  const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(runtime, /ual2-fight-core\\.glb/);
+  assert.doesNotMatch(runtime, /ubc-superhero-male\\.glb[\x60\\"]/);
+  assert.match(runtime, /targetRest \\* inverse\\(sourceRest\\) \\* sourceAnimated/);
+  assert.match(runtime, /retargetMotionClips/);
+  assert.match(runtime, /quaterniusRetargetMode = "rest-delta-separated-sources"/);`,
+`  const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
+  const retarget = await readFile(new URL("../src/game/motion-retarget.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(runtime, /ual2-fight-core\\.glb/);
+  assert.doesNotMatch(runtime, /ubc-superhero-male\\.glb[\x60\\"]/);
+  assert.match(retarget, /targetRest \\* inverse\\(sourceRest\\) \\* sourceAnimated/);
+  assert.match(retarget, /export function retargetMotionClips/);
+  assert.match(runtime, /from "\\.\\/motion-retarget"/);
+  assert.match(runtime, /quaterniusRetargetMode = "shared-rest-delta-retarget-v1"/);`,
+);
+await writeFile(skinTestPath, skinTest);

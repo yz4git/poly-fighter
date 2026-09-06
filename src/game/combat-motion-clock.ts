@@ -44,6 +44,11 @@ export function combatAttackPhase(move: Pick<MoveDefinition, "startup" | "active
 export const LOCOMOTION_DIRECTIONS = ["F", "FR", "R", "BR", "B", "BL", "L", "FL"] as const;
 export type LocomotionDirection = typeof LOCOMOTION_DIRECTIONS[number];
 
+/** Short lateral steps keep the feet separated inside the narrower speed stance. */
+export function combatStride(speed: boolean, lateral: number): number {
+  return Math.min(.30, (speed ? .16 : .20) / Math.max(.001, Math.abs(lateral)));
+}
+
 export function locomotionDirection(x: number, z: number): LocomotionDirection {
   const sector = Math.round(Math.atan2(x, z) / (Math.PI / 4));
   return LOCOMOTION_DIRECTIONS[(sector + 8) % 8];

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { combatFootCycle, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
+import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
 import type { FighterDefinition } from "./types";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
@@ -167,9 +167,9 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const angle = i * Math.PI / 4, dx = Math.sin(angle) * handedness, dz = Math.cos(angle);
     author(`CM_Move_${direction}`, 1, u => {
       const l = combatFootCycle(u), r = combatFootCycle(u + .5);
-      const stride = .38;
+      const stride = combatStride(speed, dx);
       body({
-        drop: -.008 * Math.cos(u * Math.PI * 4),
+        drop: -.04 - .008 * Math.cos(u * Math.PI * 4),
         forward: dz * .005,
         yaw: Math.sin(u * Math.PI * 2) * .045,
         roll: -dx * .035,

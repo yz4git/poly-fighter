@@ -61,7 +61,7 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
     const mixer = new THREE.AnimationMixer(target.scene);
     const pose = (name: string, phase: number) => {
       mixer.stopAllAction();
-      const action = mixer.clipAction(library.get(name)!);
+      const action = mixer.clipAction(library.get(name)!).reset();
       action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; action.play(); action.time = action.getClip().duration * phase;
       mixer.update(0); target.scene.updateMatrixWorld(true);
       return Object.fromEntries(["pelvis", "Head", "hand_l", "hand_r", "foot_l", "foot_r"].map(bone => [bone, target.scene.getObjectByName(bone)!.getWorldPosition(new THREE.Vector3())]));
@@ -74,6 +74,12 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
     const down = pose("CM_Down", 1);
     assert.ok(down.Head.y < ready.Head.y * .4, "down stays on the floor");
     assert.ok(down.Head.y > -.02, "down never puts the head below the floor");
+    for (const direction of ["F", "FR", "R", "BR", "B", "BL", "L", "FL"]) {
+      for (let i = 0; i < 40; i++) {
+        const moving = pose(`CM_Move_${direction}`, i / 40);
+        assert.ok(moving.foot_l.x > moving.foot_r.x, `${direction}/${i}: locomotion keeps feet separated`);
+      }
+    }
     mixer.stopAllAction(); mixer.uncacheRoot(target.scene);
   });
 }

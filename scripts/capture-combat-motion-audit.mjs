@@ -120,9 +120,9 @@ try {
         frames.push(...captured);
         await shot(`${actorName}-${c.label}-${String(tick).padStart(3,"0")}`); report.screenshots++;
       }
-      if (c.state === "WALK") assert.ok(frames.every(f=>f.footDrift < .06), `${actorName}/${c.label}: foot plant residual`);
-      if (c.state === "BLOCK_STUN") assert.ok(frames.every(f=>f.clip === "CM_Block"), "normal blocks never play a guard break");
       actor.states[c.label] = frames;
+      if (c.state === "WALK") assert.ok(frames.every(f=>f.footDrift < .06), `${actorName}/${c.label}: foot plant residual ${Math.max(...frames.map(f=>f.footDrift))}`);
+      if (c.state === "BLOCK_STUN") assert.ok(frames.every(f=>f.clip === "CM_Block"), "normal blocks never play a guard break");
     }
   }
   const browser = await command(`/session/${session}/log`, "POST", { type: "browser" });

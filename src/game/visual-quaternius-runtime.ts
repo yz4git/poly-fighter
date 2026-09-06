@@ -6,7 +6,7 @@ import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
-import { AUTHORED_CONTACT_PHASE, COMBAT_MOTION_VERSION, combatAttackPhase, combatFootCycle, locomotionDirection, smoothMotion } from "./combat-motion-clock";
+import { AUTHORED_CONTACT_PHASE, COMBAT_MOTION_VERSION, combatAttackPhase, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const QUATERNIUS_UBC_MALE_MODEL_URL = `${BASE_PATH}/models/quaternius/ubc-superhero-male-flat.glb`;
@@ -547,7 +547,9 @@ function observeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delt
       runtime.motionX = step.dot(right);
       runtime.motionZ = step.dot(forward);
       const stature = fighter.visual.root.scale.x;
-      runtime.gaitPhase = (runtime.gaitPhase + step.length() * .62 / Math.max(.1, stature * .38)) % 1;
+      const sector = LOCOMOTION_DIRECTIONS.indexOf(locomotionDirection(runtime.motionX, runtime.motionZ));
+      const stride = combatStride(fighter.definition.archetype === "SPEED", Math.sin(sector * Math.PI / 4));
+      runtime.gaitPhase = (runtime.gaitPhase + step.length() * .62 / Math.max(.1, stature * stride)) % 1;
     }
   }
   runtime.lastPosition = fighter.position.clone();

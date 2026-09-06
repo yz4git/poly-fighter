@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
+import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
   chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
@@ -465,7 +466,10 @@ prototype.updateVisual = function updateVisual(
 ): void {
   coreUpdateVisual.call(this, fighter, opponent, time);
   const game = extended(this as unknown as TpsFightGame);
-  if (fighter !== game.p2) return;
+  if (fighter !== game.p2) {
+    finalizeQuaterniusModelPose(fighter, time);
+    return;
+  }
 
   // The core animation still supplies the pose. Replace only its final root yaw
   // so the enemy visibly turns toward a lateral STEP over several ticks. A new
@@ -476,6 +480,7 @@ prototype.updateVisual = function updateVisual(
   }
   fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);
   fighter.visual.root.updateMatrixWorld(true);
+  finalizeQuaterniusModelPose(fighter, time);
 };
 
 prototype.updateCamera = function updateCamera(delta: number): void {

@@ -97,7 +97,7 @@ test("Quaternius runtime retargets rest-pose deltas and preserves canonical comb
   assert.match(runtime, /backfist: "BF_Backfist_R"/);
   assert.match(runtime, /BLENDER_MOTION_FOUNDRY_V2_SHARED_STRIKES/);
   assert.match(runtime, /IMPORTED_NEUTRAL_HAND_LIFT/);
-  assert.match(runtime, /case "SIDESTEP": return \{ name: "Walk_Loop", loop: true, speed: 1\.55 \};/);
+  assert.match(runtime, /name: `CM_Step_/);
   assert.doesNotMatch(runtime, /case "SIDESTEP": return \{ name: "Roll"/);
   assert.doesNotMatch(runtime, /poleLocal\.y \+= guard \? 0\.015 : -0\.075/);
 });

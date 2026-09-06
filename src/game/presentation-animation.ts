@@ -1,9 +1,8 @@
 import * as THREE from "three";
 import { FighterAnimationController, type FighterRuntime } from "./fighter";
-import { updateMotionExpansionSkin } from "./motion-expansion-runtime";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
-import { fighterBasis, orientBoneForward, solveTwoBoneIK } from "./rig";
-import { updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
+import { fighterBasis, fighterRootQuaternion, orientBoneForward, solveTwoBoneIK } from "./rig";
+import { finalizeQuaterniusModelPose, updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
 const KAIRO_READY_STATES = new Set(["IDLE", "WALK", "CROUCH", "SIDESTEP"]);
 
@@ -24,6 +23,8 @@ const BLENDER_AUTHORED_ATTACKS = new Set([
   "lowKick",
   "risingKick",
   "dashKick",
+  "counter",
+  "throw",
 ]);
 
 /**
@@ -85,21 +86,19 @@ export class PresentationAnimationController extends FighterAnimationController 
       && Boolean(fighter.currentMove)
       && BLENDER_AUTHORED_ATTACKS.has(fighter.currentMove?.id ?? "");
 
-    if (correctionsEnabled && !authoredAttack) {
-      if (!updateMotionExpansionSkin(fighter, opponent, timeSeconds)) {
-        updateQuaterniusModelSkin(fighter, timeSeconds);
-      }
-    } else {
-      // OFF is raw playback. ON uses the same authored Blender attack pose for
-      // Motion Foundry moves so correction cannot overwrite the animator's
-      // silhouette; safe neutral/guard assistance remains inside Quaternius.
-      updateQuaterniusModelSkin(fighter, timeSeconds);
+    if (fighter.visual.root.userData.quaterniusModelState === "ready") {
+      // The imported down clip owns the fall. Do not rotate it a second time
+      // using the legacy proxy skeleton's root tilt.
+      fighter.visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      fighter.visual.root.updateMatrixWorld(true);
     }
+    updateQuaterniusModelSkin(fighter, timeSeconds);
+    if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled
       ? authoredAttack
         ? "AUTHORED_ATTACK_PRESERVE"
-        : "PROCEDURAL_ASSIST"
+        : "AUTHORED_COMBAT_PRESERVE"
       : "RAW_CLIP_PLAYBACK";
   }
 }

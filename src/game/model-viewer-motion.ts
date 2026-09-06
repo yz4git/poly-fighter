@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { FighterVisual } from "./visual-entry";
+import { createCombatMotionLibrary } from "./combat-motion-authoring";
+import { FIGHTER_DEFINITIONS } from "./definitions";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
@@ -148,9 +150,9 @@ function retargetClip(
     if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
       const values = new Float32Array(track.values.length);
       for (let offset = 0; offset < track.values.length; offset += 3) {
-        values[offset] = targetNode.position.x;
+        values[offset] = targetNode.position.x + (track.values[offset] - sourceNode.position.x);
         values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
-        values[offset + 2] = targetNode.position.z;
+        values[offset + 2] = targetNode.position.z + (track.values[offset + 2] - sourceNode.position.z);
       }
       const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
       next.setInterpolation(track.getInterpolation());
@@ -217,6 +219,9 @@ export class ModelViewerMotionController {
         controller.clips.set(retargeted.name, { clip: retargeted, source: pack.source });
       }
     }
+    const bodyDefinition = visual.root.userData.quaterniusBodyType === "FEMALE" ? FIGHTER_DEFINITIONS.blue : FIGHTER_DEFINITIONS.red;
+    const combatClips = createCombatMotionLibrary(target as THREE.Group, new Map([...controller.clips].map(([name, entry]) => [name, entry.clip])), bodyDefinition);
+    for (const [name, clip] of combatClips) controller.clips.set(name, { clip, source: name.startsWith("BF_") ? "BLENDER" : "PROCEDURAL" });
     const initial = controller.clips.has("Idle_Loop") ? "Idle_Loop" : controller.clipInfos()[0]?.name;
     if (!initial) throw new Error("No compatible motion clips found for Model View");
     controller.setClip(initial, true);

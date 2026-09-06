@@ -1,4 +1,16 @@
+import type { MoveDefinition } from "./types";
+import {
+  AUTHORED_MOTION_EVENTS,
+  motionEventsAtContact,
+  sampleCombatMotionAtEvent,
+} from "./combat-motion-timeline";
+
 export const COMBAT_MOTION_VERSION = "COMBAT_MOTION_V8_TIMELINE";
+
+/** @deprecated Use AUTHORED_MOTION_EVENTS from combat-motion-timeline. */
+export const AUTHORED_CONTACT_PHASE: Readonly<Record<string, number>> = Object.freeze(
+  Object.fromEntries(Object.entries(AUTHORED_MOTION_EVENTS).map(([name, event]) => [name, event.contact])),
+);
 
 export function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -7,6 +19,18 @@ export function clamp01(value: number): number {
 export function smoothMotion(value: number): number {
   const u = clamp01(value);
   return u * u * u * (10 + u * (-15 + u * 6));
+}
+
+/**
+ * @deprecated Compatibility adapter for older tests/tools. Runtime playback must
+ * use sampleCombatMotionTimeline so the clip name and authored event stay bound.
+ */
+export function combatAttackPhase(
+  move: Pick<MoveDefinition, "startup" | "active" | "recovery">,
+  tick: number,
+  impact: number,
+): number {
+  return sampleCombatMotionAtEvent(move, tick, motionEventsAtContact(impact)).phase;
 }
 
 export const LOCOMOTION_DIRECTIONS = ["F", "FR", "R", "BR", "B", "BL", "L", "FL"] as const;

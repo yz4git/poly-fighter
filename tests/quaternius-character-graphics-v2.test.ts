@@ -51,3 +51,18 @@ test("fighter visual entry schedules Character Graphics v2 only for Quaternius U
     /if \(modelId === "QUATERNIUS_UBC"\) \{[\s\S]*scheduleQuaterniusGraphicsPolish\(polished, definition\);[\s\S]*scheduleQuaterniusCharacterGraphicsV2\(polished, definition\);[\s\S]*scheduleQuaterniusOutfitSkin\(polished, definition\);/,
   );
 });
+
+
+test("bone followers refresh matrixWorld in the render callback", async () => {
+  for (const relative of [
+    "../src/game/quaternius-character-graphics-v2.ts",
+    "../src/game/quaternius-graphics-polish.ts",
+  ]) {
+    const source = await readFile(new URL(relative, import.meta.url), "utf8");
+    assert.match(
+      source,
+      /mesh\.quaternion\.copy\(poseDelta\)\.multiply\(authoredRestRotation\);[\s\S]{0,260}mesh\.updateMatrixWorld\(true\);/,
+      `${relative}: follower transform must reach matrixWorld in the same rendered frame`,
+    );
+  }
+});

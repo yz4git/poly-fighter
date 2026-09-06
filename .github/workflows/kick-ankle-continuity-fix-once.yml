@@ -53,16 +53,16 @@ jobs:
               const flatForward = forward.clone().setY(0).normalize();
               return [suffix, { toeLocal, restPlane, flatForward }] as const;
             }));
-            // Clip authoring samples forward in time. Keep the previous corrected boot
-            // world orientation so the next ankle pose can be parallel-transported on
-            // the anatomical cone around the live shin instead of inheriting calf twist.
+            // Carry corrected visible boot orientation between authored samples. The
+            // next sample only rotates as much as anatomy requires, rather than copying
+            // unstable calf axial twist from the retargeted source.
             const ankleWorldContinuity = new Map<string, THREE.Quaternion>();'''
           if old not in s:
               raise SystemExit('ankle calibration anchor missing')
           s = s.replace(old, new, 1)
           old = '''    const weight = smoothMotion((u - .04) / .20) * (1 - smoothMotion((u - .80) / .20));'''
-          new = '''    // Stay authoritative through recovery; the existing ready-pose stitch below
-              // owns the exit blend. Double-fading the ankle here caused late boot drift.
+          new = '''    // The common ready-pose stitch below owns the exit blend. Keep the ankle
+              // correction authoritative through recovery so it does not double-fade.
               const weight = smoothMotion((u - .04) / .20);'''
           if old not in s:
               raise SystemExit('ankle weight anchor missing')
@@ -70,28 +70,46 @@ jobs:
           old = '''        const degrees = suffix !== strike ? -24 : name === "BF_LowKick_L" ? -32 : name === "BF_RisingKick_R" ? -12 : 8;
                   const desired = new THREE.Quaternion().setFromAxisAngle(frame.flexAxis, THREE.MathUtils.degToRad(degrees)).multiply(bind.get(`foot_${suffix}`)!.rotation);
                   foot.quaternion.slerp(desired, weight);'''
-          new = '''        // Constrain the visible toe to a move-specific anatomical cone around
-                  // the actual calf-to-ankle direction. Of all valid points on that cone,
-                  // choose the one nearest the previous corrected toe direction. This is
-                  // discrete parallel transport: exact ankle flex without one-frame roll.
-                  const calf = nodes.get(`calf_${suffix}`)!;
+          new = '''        const calf = nodes.get(`calf_${suffix}`)!;
                   const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
-                  const ankleDegrees = suffix !== strike ? 80 : name === "BF_LowKick_L" ? 60 : name === "BF_RisingKick_R" ? 80 : 100;
-                  const angle = THREE.MathUtils.degToRad(ankleDegrees);
+                  const isStrike = suffix === strike;
+                  const centerDegrees = !isStrike ? 80 : name === "BF_LowKick_L" ? 60 : name === "BF_RisingKick_R" ? 80 : 100;
+                  const minDegrees = !isStrike ? 45 : name === "BF_LowKick_L" ? 45 : name === "BF_RisingKick_R" ? 65 : 85;
+                  const maxDegrees = !isStrike ? 120 : name === "BF_LowKick_L" ? 75 : name === "BF_RisingKick_R" ? 95 : 115;
                   const continuityKey = `${name}:${suffix}`;
                   if (u <= 1e-7) ankleWorldContinuity.delete(continuityKey);
                   const currentWorld = foot.getWorldQuaternion(new THREE.Quaternion());
                   const previousWorld = ankleWorldContinuity.get(continuityKey)?.clone() ?? currentWorld.clone();
-                  const previousToe = frame.toeLocal.clone().applyQuaternion(previousWorld).normalize();
+                  const toeFor = (q: THREE.Quaternion) => frame.toeLocal.clone().applyQuaternion(q).normalize();
+                  const ankleFor = (q: THREE.Quaternion) => THREE.MathUtils.radToDeg(shin.angleTo(toeFor(q)));
+                  const previousToe = toeFor(previousWorld);
                   const plane = previousToe.clone().addScaledVector(shin, -previousToe.dot(shin));
                   if (plane.lengthSq() < 1e-8) {
                     plane.copy(frame.restPlane).addScaledVector(shin, -frame.restPlane.dot(shin));
                     if (plane.lengthSq() < 1e-8) plane.crossVectors(shin, Math.abs(shin.y) < .9 ? Y : Z);
                   }
                   plane.normalize();
-                  const targetToe = shin.clone().multiplyScalar(Math.cos(angle)).addScaledVector(plane, Math.sin(angle)).normalize();
-                  const transportedWorld = new THREE.Quaternion().setFromUnitVectors(previousToe, targetToe).multiply(previousWorld).normalize();
-                  const correctedWorld = currentWorld.clone().slerp(transportedWorld, weight).normalize();
+                  const center = THREE.MathUtils.degToRad(centerDegrees);
+                  const targetToe = shin.clone().multiplyScalar(Math.cos(center)).addScaledVector(plane, Math.sin(center)).normalize();
+                  const exactWorld = new THREE.Quaternion().setFromUnitVectors(previousToe, targetToe).multiply(previousWorld).normalize();
+                  // If the previous visible boot orientation is still anatomically valid
+                  // against the new shin direction, keep it exactly. Otherwise walk only
+                  // far enough toward the cone center to re-enter the accepted range.
+                  let targetWorld = previousWorld.clone();
+                  const previousAngle = ankleFor(previousWorld);
+                  if (previousAngle < minDegrees || previousAngle > maxDegrees) {
+                    let lo = 0;
+                    let hi = 1;
+                    for (let iteration = 0; iteration < 18; iteration++) {
+                      const mid = (lo + hi) * .5;
+                      const candidate = previousWorld.clone().slerp(exactWorld, mid).normalize();
+                      const candidateAngle = ankleFor(candidate);
+                      if (candidateAngle >= minDegrees && candidateAngle <= maxDegrees) hi = mid;
+                      else lo = mid;
+                    }
+                    targetWorld = previousWorld.clone().slerp(exactWorld, hi).normalize();
+                  }
+                  const correctedWorld = currentWorld.clone().slerp(targetWorld, weight).normalize();
                   worldRotation(foot, correctedWorld);
                   ankleWorldContinuity.set(continuityKey, foot.getWorldQuaternion(new THREE.Quaternion()));'''
           if old not in s:

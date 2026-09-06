@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import {
   MOTION_POSE_POLICY_VERSION,
   attackEntryBlendTicks,
@@ -53,4 +54,13 @@ test("foot lock belongs only to unfrozen locomotion", () => {
     assert.equal(shouldApplyLocomotionFootLock(state, 0), state === "WALK");
     assert.equal(shouldApplyLocomotionFootLock(state, 1), false);
   }
+});
+
+
+test("production runtime delegates attack blending and foot lock to pose policy", async () => {
+  const source = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
+  assert.match(source, /attackEntryPreviousPoseWeight\(move, fighter\.moveTick\)/);
+  assert.match(source, /shouldApplyLocomotionFootLock\(fighter\.state, fighter\.hitStop\)/);
+  assert.match(source, /combatMotionPoseOwner/);
+  assert.doesNotMatch(source, /const walking = fighter\.state === "WALK"/);
 });

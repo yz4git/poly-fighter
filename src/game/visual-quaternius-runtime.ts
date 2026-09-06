@@ -9,6 +9,7 @@ import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-auth
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { retargetMotionClips } from "./motion-retarget";
+import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldApplyLocomotionFootLock } from "./motion-pose-policy";
 export { retargetMotionClips } from "./motion-retarget";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -612,14 +613,28 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
     action.time = clip.duration * phase;
     runtime.mixer.update(0);
   }
+  const poseOwner = motionPoseOwner(fighter.state);
+  runtime.host.userData.combatMotionPoseOwner = poseOwner;
   if (runtime.transitionPose.size) {
-    const weight = 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
+    const attackOwned = poseOwner === "AUTHORED_COMBAT_TIMELINE" && Boolean(move);
+    const weight = attackOwned && move
+      ? attackEntryPreviousPoseWeight(move, fighter.moveTick)
+      : 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
+    runtime.host.userData.combatMotionTransitionPolicy = attackOwned
+      ? "GAMEPLAY_TICK_ATTACK_ENTRY"
+      : "RENDER_TIME_STATE_TRANSITION";
+    runtime.host.userData.combatMotionTransitionPreviousPoseWeight = weight;
     if (weight <= 0) runtime.transitionPose.clear();
     else for (const [name, from] of runtime.transitionPose) {
       const bone = runtime.bones.get(name)!;
       bone.quaternion.slerp(from.rotation, weight);
       bone.position.lerp(from.position, weight);
     }
+  } else {
+    runtime.host.userData.combatMotionTransitionPolicy = poseOwner === "AUTHORED_COMBAT_TIMELINE"
+      ? "GAMEPLAY_TICK_ATTACK_ENTRY"
+      : "RENDER_TIME_STATE_TRANSITION";
+    runtime.host.userData.combatMotionTransitionPreviousPoseWeight = 0;
   }
   runtime.model.updateMatrixWorld(true);
 }
@@ -833,9 +848,13 @@ export function finalizeQuaterniusModelPose(fighter: FighterRuntime, timeSeconds
   const runtime = runtimes.get(fighter.visual.root);
   if (!runtime || runtime.finalTime === timeSeconds) return;
   runtime.finalTime = timeSeconds;
-  const walking = fighter.state === "WALK";
-  if (!walking || fighter.hitStop > 0) {
-    if (!walking) { runtime.plantedFeet.l = null; runtime.plantedFeet.r = null; }
+  const footLockActive = shouldApplyLocomotionFootLock(fighter.state, fighter.hitStop);
+  fighter.visual.root.userData.combatMotionPoseOwner = motionPoseOwner(fighter.state);
+  fighter.visual.root.userData.combatMotionFootLockPolicy = footLockActive
+    ? "LOCOMOTION_OWNER_ONLY"
+    : "DISABLED_FOR_CURRENT_POSE_OWNER";
+  if (!footLockActive) {
+    if (fighter.state !== "WALK") { runtime.plantedFeet.l = null; runtime.plantedFeet.r = null; }
     return;
   }
   runtime.model.updateMatrixWorld(true);

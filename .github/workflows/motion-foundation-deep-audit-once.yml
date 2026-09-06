@@ -42,7 +42,7 @@ jobs:
       - name: Motion architecture contracts
         run: |
           node --import tsx --test tests/combat-motion-timeline.test.ts tests/combat-motion.test.ts tests/kick-ankle.test.ts
-          npm run test:static
+          npm run test:ci:static
           npm run lint
       - name: Build production preview once
         run: npm run build

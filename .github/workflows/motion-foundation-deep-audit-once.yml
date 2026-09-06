@@ -33,15 +33,8 @@ jobs:
           from pathlib import Path
           p = Path('scripts/capture-motion-readability-audit.mjs')
           s = p.read_text()
-          old = '''  if (!preload?.ready || preload.version !== "COMBAT_MOTION_V7") {
-            throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);
-          }
-'''
-          new = '''  const timelineRuntime = typeof preload?.version === "string" && preload.version.endsWith("_TIMELINE");
-          if (!preload?.ready || preload.clips < 27 || !timelineRuntime) {
-            throw new Error(`Motion packs were not preloaded with unified timeline runtime: ${JSON.stringify(preload)}`);
-          }
-'''
+          old = '  if (!preload?.ready || preload.version !== "COMBAT_MOTION_V7") {\n    throw new Error(`Motion packs were not preloaded in neutral: ${JSON.stringify(preload)}`);\n  }\n'
+          new = '  const timelineRuntime = typeof preload?.version === "string" && preload.version.endsWith("_TIMELINE");\n  if (!preload?.ready || preload.clips < 27 || !timelineRuntime) {\n    throw new Error(`Motion packs were not preloaded with unified timeline runtime: ${JSON.stringify(preload)}`);\n  }\n'
           if old not in s:
               raise SystemExit('stale preload contract anchor not found')
           p.write_text(s.replace(old, new))

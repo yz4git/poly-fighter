@@ -33,12 +33,12 @@ jobs:
           const source = readFileSync(path, 'utf8');
           writeFileSync(path, source.replaceAll('\\`', '`').replaceAll('\\${', '${'));
           NODE
+          git checkout -- .github/workflows/tps-visual-audit.yml
           git diff --check
-      - name: Commit validated TPS continuous-play pass
+      - name: Push validated gameplay and audit changes
         run: |
           git config user.name "yz4git"
           git config user.email "65384484+yz4git@users.noreply.github.com"
-          git rm -f scripts/apply-tps-continuous-play-polish-v1.mjs .github/workflows/tps-continuous-play-polish-v1.yml
-          git add src/game/tps-game-base.ts tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
           git commit -m "Polish TPS contact spacing and camera continuity"
           git push

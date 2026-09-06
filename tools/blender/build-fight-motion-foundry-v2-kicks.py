@@ -64,16 +64,16 @@ base.LOW_KICK = LOW_KICK
 
 
 # The Rising mocap prior has an excellent chamber, but its raw extension peaks
-# before the authored impact frame. With only 0.68 contact IK the baked action
-# therefore reached furthest at PRECONTACT (frame 21) and was already retracting
-# at visual IMPACT (frame 28). Preserve the measured full-body prior while making
-# the contact window authoritative: soften the early assist, then strongly blend
-# into the existing impact/overtravel targets. The targets themselves are not
-# moved, so height, bend plane, body mechanics and gameplay timing stay intact.
+# before the authored impact frame. The first contact-sync pass moved the final
+# forward maximum from frame 21 to 23, proving the contact target is correct but
+# still underweighted. Keep the measured body prior and make only the strike-leg
+# contact window authoritative: precontact remains mostly mocap, IMPACT is fully
+# on the authored target, and OVERTRAVEL stays strongly constrained. This shifts
+# visible extension toward gameplay contact without moving any phase or hit frame.
 RISING_KICK = replace(
     base.RISING_KICK,
-    ik_influences=(0.0, 0.10, 0.26, 0.94, 0.82, 0.10, 0.0),
-    reach_ratios=(0.0, 0.0, 0.78, 0.915, 0.925, 0.0, 0.0),
+    ik_influences=(0.0, 0.10, 0.16, 1.00, 0.96, 0.10, 0.0),
+    reach_ratios=(0.0, 0.0, 0.72, 0.925, 0.930, 0.0, 0.0),
 )
 base.RISING_KICK = RISING_KICK
 base.KICK_SPECS = (base.FRONT_KICK, LOW_KICK, RISING_KICK)

@@ -168,6 +168,9 @@ function addFollower(visual: FighterVisual, host: THREE.Object3D, spec: V2Follow
     rotatedOffset.copy(offset).applyQuaternion(poseDelta);
     mesh.position.copy(localPosition).add(rotatedOffset);
     mesh.quaternion.copy(poseDelta).multiply(authoredRestRotation);
+    // onBeforeRender runs after Three.js has already propagated matrixWorld.
+    // Refresh this follower immediately so fast kicks never render one pose behind.
+    mesh.updateMatrixWorld(true);
   };
 
   sync();

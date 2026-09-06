@@ -7,6 +7,7 @@ import {
   attackEntryPreviousPoseWeight,
   motionPoseOwner,
   shouldApplyLocomotionFootLock,
+  shouldResamplePose,
 } from "../src/game/motion-pose-policy";
 import type { FighterState } from "../src/game/types";
 
@@ -49,6 +50,15 @@ test("attack entry blend depends only on gameplay tick", () => {
   assert.equal(attackEntryPreviousPoseWeight(move, 2), 0);
 });
 
+test("hitstop resamples a newly reached gameplay pose once, then holds it exactly", () => {
+  assert.equal(shouldResamplePose(0, false), true);
+  assert.equal(shouldResamplePose(0, true), true);
+  assert.equal(shouldResamplePose(1, true), true);
+  assert.equal(shouldResamplePose(8, true), true);
+  assert.equal(shouldResamplePose(1, false), false);
+  assert.equal(shouldResamplePose(8, false), false);
+});
+
 test("foot lock belongs only to unfrozen locomotion", () => {
   for (const state of STATES) {
     assert.equal(shouldApplyLocomotionFootLock(state, 0), state === "WALK");
@@ -56,11 +66,12 @@ test("foot lock belongs only to unfrozen locomotion", () => {
   }
 });
 
-
-test("production runtime delegates attack blending and foot lock to pose policy", async () => {
+test("production runtime delegates attack blending, hitstop hold and foot lock to pose policy", async () => {
   const source = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
   assert.match(source, /attackEntryPreviousPoseWeight\(move, fighter\.moveTick\)/);
+  assert.match(source, /shouldResamplePose\(fighter\.hitStop, poseSampleChanged\)/);
   assert.match(source, /shouldApplyLocomotionFootLock\(fighter\.state, fighter\.hitStop\)/);
+  assert.match(source, /combatMotionHitStopPoseFrozen/);
   assert.match(source, /combatMotionPoseOwner/);
   assert.doesNotMatch(source, /const walking = fighter\.state === "WALK"/);
 });

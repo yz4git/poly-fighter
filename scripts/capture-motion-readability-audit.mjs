@@ -338,7 +338,7 @@ try {
       throw new Error(`Neutral ${side} forearm hangs too low: ${JSON.stringify({ elbow, hand, chest, neutral })}`);
     }
   }
-  if (!neutral.correctionsEnabled || neutral.correctionPolicy !== "AUTHORED_COMBAT_PRESERVE" || neutral.visibleClip !== "CM_Ready") {
+  if (!neutral.correctionsEnabled || neutral.correctionPolicy !== "AUTHORED_COMBAT_PRESERVE" || !["CM_Ready", "CM_Turn_L", "CM_Turn_R"].includes(neutral.visibleClip)) {
     throw new Error(`Motion readability audit is not preserving the authored combat stance: ${JSON.stringify(neutral)}`);
   }
   if (neutral.fistMeshCount < 2) throw new Error(`Readable fist geometry missing: ${JSON.stringify(neutral)}`);

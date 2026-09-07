@@ -295,6 +295,7 @@ export class TpsFightGame {
   private playerFlankAttackTicks = 0;
   private playerPerfectEvadeTicks = 0;
   private playerStepThreatTicks = 0;
+  private playerStepThreatMoveId: string | null = null;
   private playerInterceptTicks = 0;
   private playerReversalTicks = 0;
   private combatBeatLabel: string | null = null;
@@ -722,7 +723,8 @@ export class TpsFightGame {
         && incomingFrames > 0
         && incomingDistance <= incomingThreatReach
       );
-      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
+      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;
+      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;
     }
 
     if (this.playerEvadeTicks > 0) {
@@ -1102,11 +1104,13 @@ export class TpsFightGame {
     const trackedSideEvade = defender === this.p1
       && attacker === this.p2
       && this.playerStepThreatTicks > 0
+      && this.playerStepThreatMoveId === move.id
       && this.playerStepSideWeight > 0.45
       && move.hitLevel !== "THROW";
     if (trackedSideEvade) {
       attacker.hitTargets.add(defender.id);
       this.playerStepThreatTicks = 0;
+      this.playerStepThreatMoveId = null;
       this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
       this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
       this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
@@ -1483,6 +1487,7 @@ export class TpsFightGame {
     this.playerFlankAttackTicks = 0;
     this.playerPerfectEvadeTicks = 0;
     this.playerStepThreatTicks = 0;
+    this.playerStepThreatMoveId = null;
     this.playerInterceptTicks = 0;
     this.playerReversalTicks = 0;
     this.combatBeatLabel = null;

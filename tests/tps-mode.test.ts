@@ -88,6 +88,8 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /PERFECT STEP/);
   assert.match(source, /SIDE STEP/);
   assert.match(source, /playerStepThreatTicks/);
+  assert.match(source, /playerStepThreatMoveId/);
+  assert.match(source, /this\.playerStepThreatMoveId === move\.id/);
   assert.match(source, /const reactiveSideStep = Boolean/);
   assert.match(source, /const incomingThreatReach = incomingMove/);
   assert.match(source, /incomingDistance <= incomingThreatReach/);

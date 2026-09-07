@@ -1,5 +1,7 @@
 import type { HitEvent } from "./types";
 
+export type CombatSignatureKind = "INTERCEPT" | "REVERSAL" | "FINAL_IMPACT";
+
 function impactTier(event: HitEvent): 1 | 2 | 3 {
   const id = event.move.id;
   if (["power", "risingKick", "dashKick", "counter", "backfist"].includes(id) || event.move.power >= 1.6) return 3;
@@ -133,6 +135,28 @@ export class AudioManager {
     this.tone(42, 0.20, "triangle", 0.050, -6);
     this.tone(event.counter ? 1580 : 1320, 0.028, "square", 0.020, -760);
     window.setTimeout(() => this.tone(58, 0.16, "sawtooth", 0.028, -18), 24);
+  }
+
+  combatSignature(kind: CombatSignatureKind, fighter: string): void {
+    if (!this.enabled || !this.context) return;
+    const sera = fighter.toUpperCase() === "SERA";
+    if (kind === "INTERCEPT") {
+      this.noise(0.055, 0.032, sera ? 1450 : 880, true);
+      this.tone(sera ? 720 : 118, 0.10, sera ? "triangle" : "sawtooth", 0.034, sera ? 420 : -48);
+      this.tone(sera ? 1380 : 620, 0.035, "square", 0.018, sera ? -540 : -260);
+      return;
+    }
+    if (kind === "REVERSAL") {
+      this.noise(0.075, 0.044, sera ? 1750 : 640, false);
+      this.tone(sera ? 960 : 92, 0.15, sera ? "triangle" : "sawtooth", 0.046, sera ? 520 : -42);
+      window.setTimeout(() => this.tone(sera ? 1540 : 54, 0.12, "triangle", 0.032, sera ? -620 : -10), 18);
+      return;
+    }
+    this.noise(0.13, 0.068, 430, false);
+    this.noise(0.055, 0.034, 2100, true);
+    this.tone(44, 0.34, "sawtooth", 0.072, -8);
+    this.tone(sera ? 1680 : 1120, 0.055, "square", 0.032, -760);
+    window.setTimeout(() => this.tone(38, 0.42, "triangle", 0.052, -5), 34);
   }
 
   rush(perfect = false, dash = false): void {

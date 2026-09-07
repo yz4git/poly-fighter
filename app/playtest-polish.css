@@ -357,3 +357,30 @@
 @media (orientation: landscape) and (max-height: 430px) {
   .action-buttons .tps-attack-action.tps-intercept-action { font-size: 9px; letter-spacing: 0; }
 }
+
+
+.training-coach {
+  position: fixed;
+  z-index: 55;
+  left: max(16px, env(safe-area-inset-left));
+  top: max(78px, calc(env(safe-area-inset-top) + 62px));
+  width: min(280px, 34vw);
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 232, 255, .42);
+  background: rgba(3, 11, 22, .82);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.training-coach > span { display:block; font-size:8px; letter-spacing:.14em; color:#7ce8ff; }
+.training-coach > strong { display:block; margin-top:4px; font-size:17px; letter-spacing:.06em; }
+.training-coach > p { margin:3px 0 7px; font-size:10px; line-height:1.25; color:#b9cbd9; }
+.training-coach > div { display:flex; gap:4px; }
+.training-coach > div i { width:20px; height:3px; background:rgba(124,232,255,.18); }
+.training-coach > div i.done { background:rgba(124,232,255,.92); }
+.training-coach.complete { border-color:rgba(109,255,184,.78); }
+.training-coach button { pointer-events:auto; margin-top:8px; border:1px solid rgba(109,255,184,.72); background:rgba(4,24,24,.86); color:#baffdf; font:inherit; padding:6px 10px; }
+@media (orientation: landscape) and (max-height: 430px) {
+  .training-coach { top:max(62px, calc(env(safe-area-inset-top) + 50px)); width:min(250px,32vw); padding:7px 9px; }
+  .training-coach > strong { font-size:14px; }
+  .training-coach > p { font-size:9px; }
+}

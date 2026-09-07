@@ -640,11 +640,24 @@ export class FighterAnimationController {
       const hitPhase = THREE.MathUtils.clamp(fighter.stateMachine.stateTicks / 22, 0, 1);
       const hitSample = sampleQuaterniusMotion("Hit_Chest", hitPhase);
       const hitHead = quaterniusMotionDelta("Hit_Chest", hitPhase, "head");
-      visual.rig.bones.spineUpper.rotation.z = -0.18 + hitHead[0] * 1.35;
-      visual.rig.bones.spineUpper.rotation.x += -hitHead[2] * 1.20;
-      visual.head.rotation.z = 0.18 + hitHead[0] * 1.45;
-      visual.leftArm.root.rotation.z = -0.42;
-      visual.rightArm.root.rotation.z = 0.42;
+      const reactionStrength = THREE.MathUtils.clamp(Number(visual.root.userData.tpsReactionStrength ?? 1), 0.72, 1.9);
+      const reactionVariant = Number(visual.root.userData.tpsReactionVariant ?? 0) % 3;
+      const reactionRegion = String(visual.root.userData.tpsReactionRegion ?? "BODY");
+      const reactionType = String(visual.root.userData.tpsReactionType ?? "NORMAL");
+      const variantLean = reactionVariant === 0 ? -0.055 : reactionVariant === 1 ? 0.035 : 0.075;
+      const headScale = reactionRegion === "HEAD" ? 1.26 : reactionRegion === "LEGS" ? 0.72 : 1;
+      const bodyScale = reactionRegion === "BODY" ? 1.18 : reactionRegion === "LEGS" ? 0.82 : 1;
+      const counterTwist = ["COUNTER", "INTERCEPT", "REVERSAL", "FINISHER"].includes(reactionType) ? 0.10 : 0;
+      visual.rig.bones.spineUpper.rotation.z = (-0.18 + hitHead[0] * 1.35 + variantLean - counterTwist) * reactionStrength * bodyScale;
+      visual.rig.bones.spineUpper.rotation.x += -hitHead[2] * 1.20 * reactionStrength * bodyScale;
+      visual.head.rotation.z = (0.18 + hitHead[0] * 1.45 - variantLean) * reactionStrength * headScale;
+      visual.leftArm.root.rotation.z = -0.42 * reactionStrength;
+      visual.rightArm.root.rotation.z = 0.42 * reactionStrength;
+      if (reactionRegion === "LEGS") {
+        visual.hips.position.y -= 0.035 * reactionStrength;
+        visual.leftLeg.root.rotation.z -= 0.12 * reactionStrength;
+        visual.rightLeg.root.rotation.z += 0.12 * reactionStrength;
+      }
       visual.root.updateMatrixWorld(true);
       const hitHipsWorld = visual.rig.bones.hips.getWorldPosition(new THREE.Vector3());
       const leftCurrent = getVisualContactPoint(visual, "LEFT_FIST");

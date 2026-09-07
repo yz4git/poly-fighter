@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { AudioManager } from "./audio";
 import { EffectsManager } from "./effects";
+import { fighterDnaForName, resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { FighterRuntime, type CpuDifficulty } from "./fighter";
 import { CpuFunDirector, isAttackIntent, type CpuActorSnapshot, type CpuDecision, type CpuIntent, type CpuSituation } from "./cpu-director";
 import { FixedStepClock } from "./fixed";
@@ -39,6 +40,7 @@ const TPS_REVERSAL_TICKS = 24;
 const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
+const TPS_DRAMA_REVIEW_TICKS = 30;
 const TPS_KO_MIN_SHOW_TICKS = 72;
 const TPS_KO_SETTLED_HOLD_TICKS = 30;
 const TPS_KO_MAX_SHOW_TICKS = 150;
@@ -72,7 +74,8 @@ const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 type EnemyPersona = "BRAWLER" | "SKIRMISHER";
-type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH";
+type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH" | "CUT_RETREAT" | "MIRROR_LEFT" | "MIRROR_RIGHT" | "HUNT_INTERCEPT";
+type MatchDramaPhase = "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
@@ -232,6 +235,8 @@ export class TpsFightGame {
   private readonly targetGroundRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
   private readonly visibilityHandler: () => void;
   private readonly difficulty: CpuDifficulty;
+  private readonly p1Dna: FighterDna;
+  private readonly p2Dna: FighterDna;
   private raf = 0;
   private running = false;
   private paused = false;
@@ -278,9 +283,17 @@ export class TpsFightGame {
   private combatBeatTicks = 0;
   private playerAttackSamples = 0;
   private playerStepSamples = 0;
+  private playerRetreatSamples = 0;
+  private playerLeftStepSamples = 0;
+  private playerRightStepSamples = 0;
+  private playerInterceptSamples = 0;
+  private playerReversalSamples = 0;
   private enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
   private enemyPersona: EnemyPersona = "BRAWLER";
   private enemyAdaptation: EnemyAdaptation = "NEUTRAL";
+  private dramaPhase: MatchDramaPhase = "OPENING";
+  private dramaIntensity = 0.14;
+  private dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
   private simulationTicks = 0;
   private cameraImpact = 0;
   private enemyTactic: EnemyTactic = "ORBIT";
@@ -348,6 +361,8 @@ export class TpsFightGame {
 
     this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality, options.p1Model ?? "ORIGINAL"));
     this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
+    this.p1Dna = fighterDnaForName(this.p1.definition.name);
+    this.p2Dna = fighterDnaForName(this.p2.definition.name);
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
     this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";
     this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
@@ -508,6 +523,7 @@ export class TpsFightGame {
     this.applyAttackStepIn(this.p2, this.p1);
     this.resolveAttack(this.p1, this.p2, this.p2.state === "GUARD");
     this.resolveAttack(this.p2, this.p1, this.p1.state === "GUARD");
+    this.updateMatchDrama();
     this.separateFighters();
     clampToArena(this.p1.position);
     clampToArena(this.p2.position);
@@ -515,6 +531,48 @@ export class TpsFightGame {
     this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
     this.checkFinish();
     this.publishHud(false);
+  }
+
+  private updateMatchDrama(): void {
+    this.dramaReviewTicks -= 1;
+    if (this.dramaReviewTicks > 0) return;
+    this.dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
+    const previous = this.dramaPhase;
+    const healthGap = Math.abs(this.p1.health - this.p2.health);
+    const bothLow = this.p1.health <= 32 && this.p2.health <= 32;
+    const someoneCritical = Math.min(this.p1.health, this.p2.health) <= 16;
+    const comebackState = healthGap >= 24 && Math.min(this.p1.health, this.p2.health) <= 42;
+    const pressureState = this.playerComboStage >= 2 || this.playerPerfectEvadeTicks > 0 || this.combatBeatTicks > 0 || healthGap >= 34;
+
+    this.dramaPhase = this.timerTicks > 93 * 60
+      ? "OPENING"
+      : someoneCritical
+        ? "FINISH"
+        : bothLow
+          ? "CLUTCH"
+          : comebackState
+            ? "COMEBACK"
+            : pressureState
+              ? "PRESSURE"
+              : "NEUTRAL";
+    this.dramaIntensity = this.dramaPhase === "FINISH"
+      ? 0.96
+      : this.dramaPhase === "CLUTCH"
+        ? 0.84
+        : this.dramaPhase === "COMEBACK"
+          ? 0.66
+          : this.dramaPhase === "PRESSURE"
+            ? 0.48
+            : this.dramaPhase === "NEUTRAL" ? 0.28 : 0.14;
+    this.camera.userData.tpsDramaPhase = this.dramaPhase;
+    this.camera.userData.tpsDramaIntensity = this.dramaIntensity;
+    this.p1.visual.root.userData.tpsDramaPhase = this.dramaPhase;
+    this.p2.visual.root.userData.tpsDramaPhase = this.dramaPhase;
+    if (previous !== this.dramaPhase) {
+      if (this.dramaPhase === "CLUTCH") this.setCombatBeat("CLUTCH", 30);
+      else if (this.dramaPhase === "FINISH") this.setCombatBeat("FINAL STAND", 30);
+      else if (this.dramaPhase === "COMEBACK") this.setCombatBeat("MOMENTUM SHIFT", 26);
+    }
   }
 
   private updatePlayer(input: InputFrame): void {
@@ -539,8 +597,9 @@ export class TpsFightGame {
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
     const forwardAxis = (input.up ? 1 : 0) - (input.down ? 1 : 0);
     const sideAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (forwardAxis < 0 && this.simulationTicks % 12 === 0) this.playerRetreatSamples += 1;
     const move = toEnemy.clone().multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
-    const moveSpeed = this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
+    const moveSpeed = (this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35) * this.p1Dna.moveSpeedScale;
 
     // Keep the old keyboard-only G+K throw reachable for regression/debugging,
     // but it is deliberately absent from the TPS touch UI. The player-facing
@@ -598,8 +657,11 @@ export class TpsFightGame {
       this.playerStepForwardWeight = stepVector.dot(toEnemy);
       this.playerStepSideWeight = Math.abs(stepVector.dot(right));
       this.playerEvadeSign = sideAxis === 0 ? 0 : sideAxis > 0 ? 1 : -1;
+      if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
+      else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
+      if (this.playerStepForwardWeight < -0.45) this.playerRetreatSamples += 1;
       this.playerEvadeTicks = TPS_STEP_TICKS;
-      this.playerEvadeCooldown = TPS_STEP_COOLDOWN_TICKS;
+      this.playerEvadeCooldown = Math.max(12, Math.round(TPS_STEP_COOLDOWN_TICKS * this.p1Dna.stepCooldownScale));
       // A side STEP by itself is only movement. Flank advantage is awarded later,
       // inside resolveAttack, when an in-range enemy strike is actually evaded.
       this.playerFlankWindowTicks = 0;
@@ -620,7 +682,7 @@ export class TpsFightGame {
         // STEP is therefore an earned read even if its burst movement exits the
         // eventual contact radius before the move reaches its active frames.
         this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
-        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS;
+        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks;
       }
     }
 
@@ -638,7 +700,7 @@ export class TpsFightGame {
         : this.playerStepForwardWeight > 0.45
           ? -0.16
           : 0.08;
-      const stepMultiplier = baseStepMultiplier + directionalStepBonus;
+      const stepMultiplier = (baseStepMultiplier + directionalStepBonus) * this.p1Dna.stepSpeedScale;
       this.playerEvadeTicks -= 1;
       this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);
       this.p1.state = "SIDESTEP";
@@ -669,6 +731,7 @@ export class TpsFightGame {
       const threat = this.enemyThreatStatus();
       if (threat.windup && !threat.incoming) {
         this.playerInterceptTicks = TPS_INTERCEPT_TICKS;
+        this.playerInterceptSamples += 1;
         this.setCombatBeat("INTERCEPT");
       }
       this.beginContextAttack();
@@ -680,17 +743,33 @@ export class TpsFightGame {
     if (!this.p1.canAct()) return false;
     const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const stage = Math.min(2, this.playerComboStage);
-    const closeMoves = ["jab", "straight", "power"] as const;
-    const farMoves = ["kick", "lowKick", "risingKick"] as const;
     const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
-    const moveId = reversalStrike ? "counter" : distance <= TPS_CLOSE_ATTACK_RANGE ? closeMoves[stage] : farMoves[stage];
     const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
-    if (!this.p1.beginMove(moveId)) return false;
+    const interceptStrike = this.playerInterceptTicks > 0;
+    const defenderNearWall = Math.hypot(this.p2.position.x, this.p2.position.z) >= ARENA_RADIUS - 1.35;
+    const choice = resolveContextAttack({
+      fighterName: this.p1.definition.name,
+      distance,
+      comboStage: stage,
+      flankOpen: flankStrike,
+      reversalOpen: reversalStrike,
+      interceptOpen: interceptStrike,
+      defenderAttacking: this.p2.state === "ATTACK",
+      defenderNearWall,
+      selfHealth: this.p1.health,
+      defenderHealth: this.p2.health,
+    });
+    if (!this.p1.beginMove(choice.moveId)) return false;
     this.playerComboStage = reversalStrike ? 1 : stage + 1;
     this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
+    this.p1.visual.root.userData.tpsFighterDna = this.p1Dna.id;
+    this.p1.visual.root.userData.tpsContextMove = choice.moveId;
+    this.p1.visual.root.userData.tpsSignatureAction = choice.signature;
+    this.p1.visual.root.userData.tpsContextBeat = choice.beat;
+    if (choice.beat) this.setCombatBeat(choice.beat);
     if (reversalStrike) {
+      this.playerReversalSamples += 1;
       this.playerReversalTicks = 0;
-      this.setCombatBeat("REVERSAL");
     }
     if (flankStrike) {
       this.playerFlankAttackTicks = 28;
@@ -732,14 +811,41 @@ export class TpsFightGame {
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.enemyAdaptReviewTicks -= 1;
     if (this.enemyAdaptReviewTicks <= 0) {
-      const samples = this.playerAttackSamples + this.playerStepSamples;
-      if (samples >= 4) {
-        const stepRatio = this.playerStepSamples / samples;
-        const attackRatio = this.playerAttackSamples / samples;
-        this.enemyAdaptation = stepRatio >= 0.58 ? "ANTI_STEP" : attackRatio >= 0.62 ? "ANTI_RUSH" : "NEUTRAL";
+      const previousAdaptation = this.enemyAdaptation;
+      const actionSamples = this.playerAttackSamples + this.playerStepSamples;
+      const movementSamples = actionSamples + this.playerRetreatSamples;
+      const stepBiasSamples = this.playerLeftStepSamples + this.playerRightStepSamples;
+      if (movementSamples >= 5) {
+        const stepRatio = this.playerStepSamples / Math.max(1, actionSamples);
+        const attackRatio = this.playerAttackSamples / Math.max(1, actionSamples);
+        const retreatRatio = this.playerRetreatSamples / Math.max(1, movementSamples);
+        const sideBias = stepBiasSamples > 0 ? (this.playerRightStepSamples - this.playerLeftStepSamples) / stepBiasSamples : 0;
+        this.enemyAdaptation = this.playerInterceptSamples >= 2
+          ? "HUNT_INTERCEPT"
+          : retreatRatio >= 0.38
+            ? "CUT_RETREAT"
+            : stepRatio >= 0.52 && Math.abs(sideBias) >= 0.55
+              ? sideBias > 0 ? "MIRROR_RIGHT" : "MIRROR_LEFT"
+              : stepRatio >= 0.58
+                ? "ANTI_STEP"
+                : attackRatio >= 0.62 ? "ANTI_RUSH" : "NEUTRAL";
+      }
+      if (previousAdaptation !== this.enemyAdaptation && this.enemyAdaptation !== "NEUTRAL") {
+        const readLabel = this.enemyAdaptation === "ANTI_STEP" ? "ANTI STEP"
+          : this.enemyAdaptation === "ANTI_RUSH" ? "ANTI RUSH"
+            : this.enemyAdaptation === "CUT_RETREAT" ? "CUT OFF"
+              : this.enemyAdaptation === "HUNT_INTERCEPT" ? "HUNT INTERCEPT"
+                : this.enemyAdaptation === "MIRROR_LEFT" ? "CUT LEFT"
+                  : "CUT RIGHT";
+        this.setCombatBeat(`RIVAL: ${readLabel}`, 28);
       }
       this.playerAttackSamples = Math.floor(this.playerAttackSamples * 0.45);
       this.playerStepSamples = Math.floor(this.playerStepSamples * 0.45);
+      this.playerRetreatSamples = Math.floor(this.playerRetreatSamples * 0.40);
+      this.playerLeftStepSamples = Math.floor(this.playerLeftStepSamples * 0.40);
+      this.playerRightStepSamples = Math.floor(this.playerRightStepSamples * 0.40);
+      this.playerInterceptSamples = Math.floor(this.playerInterceptSamples * 0.35);
+      this.playerReversalSamples = Math.floor(this.playerReversalSamples * 0.35);
       this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
     }
     this.enemyTacticTicks -= 1;
@@ -748,13 +854,21 @@ export class TpsFightGame {
       const healthPressure = this.p2.health < this.p1.health ? 1 : 0;
       const personaBias = this.enemyPersona === "SKIRMISHER" ? 1 : 0;
       const tacticIndex = (slot + healthPressure + personaBias + (this.difficulty === "HARD" ? 1 : 0)) % 3;
-      this.enemyTactic = this.enemyAdaptation === "ANTI_STEP"
+      this.enemyTactic = this.enemyAdaptation === "ANTI_STEP" || this.enemyAdaptation === "HUNT_INTERCEPT"
         ? "BAIT"
-        : this.enemyAdaptation === "ANTI_RUSH"
+        : this.enemyAdaptation === "ANTI_RUSH" || this.enemyAdaptation === "MIRROR_LEFT" || this.enemyAdaptation === "MIRROR_RIGHT"
           ? "ORBIT"
-          : tacticIndex === 0 ? "PRESSURE" : tacticIndex === 1 ? "ORBIT" : "BAIT";
-      this.enemyOrbitSign = (slot + (this.difficulty === "EASY" ? 1 : 0)) % 2 === 0 ? 1 : -1;
-      this.enemyTacticTicks = this.difficulty === "HARD" ? 56 : this.difficulty === "EASY" ? 90 : ENEMY_TACTIC_INTERVAL;
+          : this.enemyAdaptation === "CUT_RETREAT"
+            ? "PRESSURE"
+            : tacticIndex === 0 ? "PRESSURE" : tacticIndex === 1 ? "ORBIT" : "BAIT";
+      this.enemyOrbitSign = this.enemyAdaptation === "MIRROR_LEFT"
+        ? -1
+        : this.enemyAdaptation === "MIRROR_RIGHT"
+          ? 1
+          : (slot + (this.difficulty === "EASY" ? 1 : 0)) % 2 === 0 ? 1 : -1;
+      const baseTacticTicks = this.difficulty === "HARD" ? 56 : this.difficulty === "EASY" ? 90 : ENEMY_TACTIC_INTERVAL;
+      const dramaTempo = this.dramaPhase === "FINISH" || this.dramaPhase === "CLUTCH" ? 0.82 : this.dramaPhase === "COMEBACK" ? 0.9 : 1;
+      this.enemyTacticTicks = Math.max(42, Math.round(baseTacticTicks * dramaTempo));
     }
 
     const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
@@ -790,7 +904,7 @@ export class TpsFightGame {
         this.p2.state = "IDLE";
         return;
       }
-      const baseSpeed = this.p2.definition.archetype === "SPEED" ? 3.45 : 2.95;
+      const baseSpeed = (this.p2.definition.archetype === "SPEED" ? 3.45 : 2.95) * this.p2Dna.moveSpeedScale;
       const difficultySpeed = this.difficulty === "HARD" ? 1.08 : this.difficulty === "EASY" ? 0.9 : 1;
       this.p2.position.addScaledVector(movement.normalize(), FIXED_STEP * baseSpeed * difficultySpeed);
       this.p2.state = "WALK";
@@ -869,10 +983,16 @@ export class TpsFightGame {
     } else if (this.enemyPersona === "SKIRMISHER" && decision.intent === "APPROACH" && liveDistance < 1.85) {
       decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-skirmisher-angle` };
     }
-    if (this.enemyAdaptation === "ANTI_STEP" && isAttackIntent(decision.intent) && this.simulationTicks % 3 === 0) {
+    if (this.enemyAdaptation === "HUNT_INTERCEPT" && isAttackIntent(decision.intent) && decision.telegraphTicks > 0 && this.simulationTicks % 4 === 0) {
+      decision = { ...decision, intent: "WAIT", holdTicks: Math.max(2, decision.holdTicks), telegraphTicks: 0, reason: "adapt-hunt-intercept-feint" };
+    } else if (this.enemyAdaptation === "ANTI_STEP" && isAttackIntent(decision.intent) && this.simulationTicks % 3 === 0) {
       decision = { ...decision, intent: "COUNTER", telegraphTicks: Math.max(4, decision.telegraphTicks), reason: "adapt-anti-step-counter" };
     } else if (this.enemyAdaptation === "ANTI_RUSH" && decision.intent === "WAIT" && liveDistance < 2.0) {
       decision = { ...decision, intent: "RETREAT", reason: "adapt-anti-rush-reset" };
+    } else if (this.enemyAdaptation === "CUT_RETREAT" && ["WAIT", "RETREAT"].includes(decision.intent) && liveDistance > 1.25) {
+      decision = { ...decision, intent: "APPROACH", reason: "adapt-cut-retreat-lane" };
+    } else if (["MIRROR_LEFT", "MIRROR_RIGHT"].includes(this.enemyAdaptation) && decision.intent === "WAIT") {
+      decision = { ...decision, intent: "SIDESTEP", reason: "adapt-directional-cut" };
     }
     this.enemyDirectorDecision = decision;
     publishDecision(decision);
@@ -928,7 +1048,7 @@ export class TpsFightGame {
       attacker.hitTargets.add(defender.id);
       this.playerStepThreatTicks = 0;
       this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
-      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS);
+      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
       this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
       this.setCombatBeat("REVERSAL");
       return;
@@ -944,7 +1064,11 @@ export class TpsFightGame {
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
     impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
-    const damageScale = interceptStrike ? 1.22 : reversalStrike ? 1.18 : defenderWasAttacking ? 1.12 : 1;
+    const damageScale = interceptStrike
+      ? 1.22 * this.p1Dna.interceptDamageScale
+      : reversalStrike
+        ? 1.18 * this.p1Dna.reversalDamageScale
+        : defenderWasAttacking ? 1.12 : 1;
     const resolvedDamage = blocked ? 0 : Math.max(1, Math.round(move.damage * damageScale));
     const lethalImpact = !blocked && defender.health <= resolvedDamage;
     const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);
@@ -966,15 +1090,30 @@ export class TpsFightGame {
       this.enemyDirectorTelegraphTicks = 0;
       this.enemyDirectorDecision = null;
       this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);
-      this.setCombatBeat("INTERCEPT");
+      this.setCombatBeat(this.p1Dna.signature.intercept);
     } else if (reversalStrike) {
-      this.setCombatBeat("REVERSAL");
+      this.setCombatBeat(this.p1Dna.signature.reversal);
     } else if (defenderWasAttacking && !blocked) {
       this.setCombatBeat("COUNTER HIT");
     }
 
     const reactionType = lethalImpact ? "FINISHER" : interceptStrike ? "INTERCEPT" : reversalStrike ? "REVERSAL" : defenderWasAttacking ? "COUNTER" : blocked ? "BLOCK" : move.power >= 1.45 ? "HEAVY" : "NORMAL";
+    const reactionRegion = move.reactionTarget ?? (move.hitLevel === "LOW" ? "LEGS" : "BODY");
+    const reactionVariant = (this.simulationTicks + move.id.length * 3 + (attacker === this.p1 ? 0 : 1)) % 3;
+    const impactPairStrength = THREE.MathUtils.clamp(reactionStrength * (lethalImpact ? 1.18 : 1), 0.7, 1.9);
+    attacker.visual.root.userData.tpsImpactPairRole = "ATTACKER";
+    attacker.visual.root.userData.tpsImpactPairTick = this.simulationTicks;
+    attacker.visual.root.userData.tpsImpactPairMove = move.id;
+    attacker.visual.root.userData.tpsImpactPairStrength = impactPairStrength;
+    attacker.visual.root.userData.tpsImpactPairContact = [impactPosition.x, impactPosition.y, impactPosition.z];
+    defender.visual.root.userData.tpsImpactPairRole = "DEFENDER";
+    defender.visual.root.userData.tpsImpactPairTick = this.simulationTicks;
+    defender.visual.root.userData.tpsImpactPairMove = move.id;
+    defender.visual.root.userData.tpsImpactPairStrength = impactPairStrength;
+    defender.visual.root.userData.tpsImpactPairContact = [impactPosition.x, impactPosition.y, impactPosition.z];
     defender.visual.root.userData.tpsReactionType = reactionType;
+    defender.visual.root.userData.tpsReactionRegion = reactionRegion;
+    defender.visual.root.userData.tpsReactionVariant = reactionVariant;
     defender.visual.root.userData.tpsReactionStrength = reactionStrength;
     defender.visual.root.userData.tpsReactionDirectionX = direction.x;
     defender.visual.root.userData.tpsReactionDirectionZ = direction.z;
@@ -999,7 +1138,22 @@ export class TpsFightGame {
     this.effects.hit(event);
     this.graphics.hit(event, this.camera);
     this.audio.impact(event);
-    if (!blocked && this.settings.get().vibration && attacker.id === "p1") navigator.vibrate?.(lethalImpact ? 34 : move.power > 1.45 ? 22 : 9);
+    if (!blocked) {
+      const attackerDna = attacker === this.p1 ? this.p1Dna : this.p2Dna;
+      if (lethalImpact) this.audio.combatSignature("FINAL_IMPACT", attackerDna.id);
+      else if (interceptStrike) this.audio.combatSignature("INTERCEPT", attackerDna.id);
+      else if (reversalStrike) this.audio.combatSignature("REVERSAL", attackerDna.id);
+    }
+    if (!blocked && this.settings.get().vibration && attacker.id === "p1") {
+      const hapticPattern: number | number[] = lethalImpact
+        ? [28, 18, 42]
+        : interceptStrike
+          ? [8, 14, 16]
+          : reversalStrike
+            ? [12, 12, 22]
+            : move.power > 1.45 ? 22 : 9;
+      navigator.vibrate?.(hapticPattern);
+    }
   }
 
   private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {
@@ -1055,6 +1209,7 @@ export class TpsFightGame {
     fighter.facing = opponent.position.x >= fighter.position.x ? 1 : -1;
     const forward = horizontalDirection(fighter.position, opponent.position);
     fighter.visual.root.userData.combatTps = true;
+    fighter.visual.root.userData.tpsFighterDna = fighter === this.p1 ? this.p1Dna.id : this.p2Dna.id;
     fighter.visual.root.userData.combatMotionForward = forward.toArray();
     if (fighter.state === "SIDESTEP") {
       const direction = fighter === this.p1 ? this.playerStepDirection : fighter.velocity;
@@ -1090,15 +1245,18 @@ export class TpsFightGame {
     // foreground fighter instead of zooming toward the pair or hiding them inline.
     // Compact iPhone landscape still receives a small additional shoulder offset.
     const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
+    const dramaCinematicFactor = ["COMEBACK", "CLUTCH", "FINISH"].includes(this.dramaPhase) ? this.dramaIntensity : 0;
     const backDistance = 4.70
       + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
       + compactLandscapeFactor * 0.18
-      + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA;
+      + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA
+      - dramaCinematicFactor * 0.16;
     const shoulderOffset = 2.50
       + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
       + compactLandscapeFactor * (0.52 + closeFactor * 0.48)
-      + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER;
-    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035;
+      + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER
+      + dramaCinematicFactor * 0.08;
+    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035 + dramaCinematicFactor * 0.025;
     const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
     // At melee range, orbit around the pair instead of keeping the camera rooted
     // directly behind the foreground player. This reduces foreground occlusion
@@ -1115,6 +1273,7 @@ export class TpsFightGame {
     this.camera.userData.tpsCloseAnchorBlend = closeAnchorBlend;
     this.camera.userData.tpsCloseTargetBlend = closeTargetBlend;
     this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;
+    this.camera.userData.tpsDramaCinematicFactor = dramaCinematicFactor;
     this.camera.userData.tpsShoulderOffset = shoulderOffset;
     this.camera.userData.tpsBackDistance = backDistance;
     this.camera.userData.tpsTargetHeight = targetHeight;
@@ -1240,9 +1399,17 @@ export class TpsFightGame {
     this.combatBeatTicks = 0;
     this.playerAttackSamples = 0;
     this.playerStepSamples = 0;
+    this.playerRetreatSamples = 0;
+    this.playerLeftStepSamples = 0;
+    this.playerRightStepSamples = 0;
+    this.playerInterceptSamples = 0;
+    this.playerReversalSamples = 0;
     this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
     this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";
     this.enemyAdaptation = "NEUTRAL";
+    this.dramaPhase = "OPENING";
+    this.dramaIntensity = 0.14;
+    this.dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
     this.simulationTicks = 0;
     this.cameraImpact = 0;
     this.timerTicks = ROUND_TICKS;

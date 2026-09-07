@@ -267,7 +267,7 @@ try {
     };
   `);
   await delay(60);
-  if (intercept?.reaction !== 'INTERCEPT' || intercept?.p2Health >= 100 || intercept?.beat !== 'INTERCEPT') {
+  if (intercept?.reaction !== 'INTERCEPT' || intercept?.p2Health >= 100 || !['INTERCEPT', 'BREAK LINE', 'BLUE SHIFT'].includes(intercept?.beat)) {
     throw new Error(`INTERCEPT browser probe failed: ${JSON.stringify(intercept)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-v2-intercept.png`);

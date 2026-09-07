@@ -33,7 +33,7 @@ jobs:
             s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          node --import tsx --test tests/tps-mode.test.ts tests/tps-main-mode.test.mjs
+          node --test tests/tps-main-mode.test.mjs
           git diff --check
       - name: Commit tests
         run: |

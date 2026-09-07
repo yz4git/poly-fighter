@@ -481,10 +481,20 @@ prototype.resolveAttack = function resolveAttack(
   const blocked = defender.blockStun > beforeBlockStun || defender.state === "BLOCK_STUN";
   const madeContact = defender.health < beforeHealth || blocked || defender.hitStop > beforeHitStop;
   if (!madeContact) return;
+  // The base runtime already resolved the strike's body-region contact. Reuse
+  // that point for every impact layer instead of drawing a second burst at the
+  // old, shorter character height (head strikes previously flashed at the waist).
+  const pairContact: unknown = defender.visual.root.userData.tpsImpactPairContact;
+  const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
+  if (Array.isArray(pairContact) && pairContact.length === 3 && pairContact.every(Number.isFinite)) {
+    impactPosition.set(pairContact[0], pairContact[1], pairContact[2]);
+  } else {
+    impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
+  }
   const lethalImpact = !blocked && beforeHealth > 0 && defender.health <= 0;
   if (lethalImpact) {
     game.__finalImpactSeconds = 0.68;
-    game.__finalImpactContact = attacker.position.clone().lerp(defender.position, 0.55);
+    game.__finalImpactContact = impactPosition.clone();
     game.camera.userData.tpsFinalImpactStage = "HOLD";
     game.camera.userData.tpsFinalImpactMove = move.id;
     defender.visual.root.userData.tpsFinalImpact = true;
@@ -509,8 +519,6 @@ prototype.resolveAttack = function resolveAttack(
     }
   }
 
-  const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,
@@ -601,3 +609,4 @@ prototype.destroy = function destroy(): void {
   game.__hypeDirector = undefined;
   coreDestroy.call(this);
 };
+

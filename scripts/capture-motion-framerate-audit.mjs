@@ -160,7 +160,7 @@ try {
   session = created.sessionId;
   await command(`/session/${session}/url`, "POST", { url });
   await wait(650);
-  for (const label of ["TPS LOCK-ON BATTLE", "ENGAGE TPS"]) {
+  for (const label of ["START FIGHT", "ENGAGE"]) {
     const clicked = await execute(`const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes(arguments[0]));b?.click();return !!b;`, [label]);
     assert.ok(clicked, label);
     await wait(200);

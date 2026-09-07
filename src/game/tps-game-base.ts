@@ -47,6 +47,7 @@ const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
 const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;
+const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
@@ -624,7 +625,18 @@ export class TpsFightGame {
 
     if (move.lengthSq() > 0.001) {
       move.normalize();
-      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed);
+      // Near-contact pure strafing can otherwise orbit the opponent fast enough
+      // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;
+      // forward/back movement and the authored STEP burst keep their full speed.
+      const fightDistance = Math.hypot(
+        this.p2.position.x - this.p1.position.x,
+        this.p2.position.z - this.p1.position.z,
+      );
+      const closeOrbitFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
+      const lateralInputWeight = Math.abs(sideAxis) / Math.max(1, Math.abs(forwardAxis) + Math.abs(sideAxis));
+      const closeOrbitScale = THREE.MathUtils.lerp(1, TPS_CLOSE_ORBIT_SPEED_SCALE, closeOrbitFactor);
+      const locomotionSpeedScale = THREE.MathUtils.lerp(1, closeOrbitScale, lateralInputWeight);
+      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * locomotionSpeedScale);
       this.p1.state = "WALK";
     } else {
       this.p1.state = "IDLE";

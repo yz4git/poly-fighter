@@ -573,16 +573,25 @@ try {
     game.release('right', 'tps-camera-orbit');
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
+    const canvas = game.renderer.domElement;
+    const playerScreen = game.p1.position.clone();
+    const enemyScreen = game.p2.position.clone();
+    playerScreen.y = 1.2;
+    enemyScreen.y = 1.2;
+    playerScreen.project(game.camera);
+    enemyScreen.project(game.camera);
+    const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
     return {
       maxCameraStep,
       maxLookTargetStep,
+      screenSeparation,
       fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
       shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,
       backDistance: game.camera.userData.tpsBackDistance ?? 0,
       closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,
     };
   `);
-  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.backDistance > 4.65)) {
+  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.backDistance > 4.65)) {
     throw new Error(`TPS camera continuity exceeded the playtest comfort envelope: ${JSON.stringify(cameraContinuityProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-camera-continuity.png`);

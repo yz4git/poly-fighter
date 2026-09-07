@@ -8,12 +8,12 @@ TAP version 13
 # Subtest: TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera
 ok 1 - TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera
   ---
-  duration_ms: 6.455989
+  duration_ms: 6.080747
   ...
 # Subtest: TPS player combat is ATTACK plus directional STEP with range attacks, combos, dash attacks, and flank punishment
 not ok 2 - TPS player combat is ATTACK plus directional STEP with range attacks, combos, dash attacks, and flank punishment
   ---
-  duration_ms: 9.644773
+  duration_ms: 5.686159
   location: '/home/runner/work/poly-fighter/poly-fighter/tests/tps-mode.test.ts:2:2511'
   failureType: 'testCodeFailure'
   error: |-
@@ -2133,17 +2133,17 @@ not ok 2 - TPS player combat is ATTACK plus directional STEP with range attacks,
 # Subtest: TPS enemy decisions use the shared player-fun director without losing circular movement
 ok 3 - TPS enemy decisions use the shared player-fun director without losing circular movement
   ---
-  duration_ms: 5.885949
+  duration_ms: 7.33414
   ...
 # Subtest: TPS result records a visible winner instead of a zero-zero duel score
 ok 4 - TPS result records a visible winner instead of a zero-zero duel score
   ---
-  duration_ms: 2.054964
+  duration_ms: 0.959766
   ...
 # Subtest: TPS main UI exposes exactly ATTACK and STEP with no legacy duel route
 not ok 5 - TPS main UI exposes exactly ATTACK and STEP with no legacy duel route
   ---
-  duration_ms: 2.592753
+  duration_ms: 1.444458
   location: '/home/runner/work/poly-fighter/poly-fighter/tests/tps-mode.test.ts:2:6873'
   failureType: 'testCodeFailure'
   error: |-
@@ -2900,17 +2900,17 @@ not ok 5 - TPS main UI exposes exactly ATTACK and STEP with no legacy duel route
 # Subtest: TPS KO presentation waits for the defeated fighter to land before RESULT
 ok 6 - TPS KO presentation waits for the defeated fighter to land before RESULT
   ---
-  duration_ms: 3.336435
+  duration_ms: 2.116539
   ...
 # Subtest: TPS messages use a face-safe HUD lane and RESULT removes live fight controls
 ok 7 - TPS messages use a face-safe HUD lane and RESULT removes live fight controls
   ---
-  duration_ms: 4.770037
+  duration_ms: 3.495235
   ...
 # Subtest: TPS reactive two-button HUD makes threat, windup, and punish turns explicit
 not ok 8 - TPS reactive two-button HUD makes threat, windup, and punish turns explicit
   ---
-  duration_ms: 3.992822
+  duration_ms: 2.259736
   location: '/home/runner/work/poly-fighter/poly-fighter/tests/tps-mode.test.ts:2:9594'
   failureType: 'testCodeFailure'
   error: |-
@@ -3667,7 +3667,7 @@ not ok 8 - TPS reactive two-button HUD makes threat, windup, and punish turns ex
 # Subtest: TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact
 ok 9 - TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact
   ---
-  duration_ms: 6.196703
+  duration_ms: 2.49322
   ...
 1..9
 # tests 9
@@ -3677,7 +3677,7 @@ ok 9 - TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction gra
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 275.487499
+# duration_ms 257.85511
 --- lint ---
 
 > poly-fighter@0.1.0 lint
@@ -3693,37 +3693,38 @@ Running bounded vinext build...
 
   vinext build  (Vite 8.0.13)
 
-(node:2480) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(node:2494) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
 [34m[1/5] analyze client references...[39m
-[2Ktransforming...(node:2480) ExperimentalWarning: glob is an experimental feature and might change at any time
+[2Ktransforming...(node:2494) ExperimentalWarning: glob is an experimental feature and might change at any time
 ✓ 135 modules transformed.
 rendering chunks...
 [33m[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
-  - vinext:jsx-in-js (30%)
-  - vite-plugin-commonjs (30%)
-  - rsc:use-server (23%)
-  - vite:css (8%)
-  - rsc:virtual:vite-rsc/assets-manifest (8%)
+  - rsc:use-client (23%)
+  - vinext:jsx-in-js (23%)
+  - vinext:og-inline-fetch-assets (23%)
+  - vinext:react-canary (8%)
+  - vinext:og-font-patch (8%)
 See https://rolldown.rs/options/checks#plugintimings for more details.
 [39m
-[32m✓ built in 46.05s[39m
+[32m✓ built in 47.28s[39m
 [34m[2/5] analyze server references...[39m
 [2Ktransforming...✓ 101 modules transformed.
 rendering chunks...
-[32m✓ built in 346ms[39m
+[32m✓ built in 367ms[39m
 [34m[3/5] build rsc environment...[39m
 [2Ktransforming...✓ 141 modules transformed.
 rendering chunks...
 computing gzip size...
 [33m[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
-  - rsc:virtual-client-package (84%)
-  - vinext:config (7%)
-  - rsc:react-server-dom-webpack-alias (7%)
-  - vite:css (2%)
+  - vinext:mdx (38%)
+  - vinext:optimize-imports (23%)
+  - vinext:jsx-in-js (15%)
+  - vinext:strip-server-exports (8%)
+  - rsc:rsc-css-export-transform (8%)
 See https://rolldown.rs/options/checks#plugintimings for more details.
 [39m
-[32m✓ built in 45.37s[39m
+[32m✓ built in 46.10s[39m
 [34m[4/5] build client environment...[39m
 [2Ktransforming...✓ 109 modules transformed.
 rendering chunks...
@@ -3733,12 +3734,12 @@ computing gzip size...
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
-[32m✓ built in 505ms[39m
+[32m✓ built in 509ms[39m
 [34m[5/5] build ssr environment...[39m
 [2Ktransforming...✓ 107 modules transformed.
 rendering chunks...
 computing gzip size...
-[32m✓ built in 598ms[39m
+[32m✓ built in 614ms[39m
 [0m
   Route (app)
   ─ ? /

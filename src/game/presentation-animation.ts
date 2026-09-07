@@ -82,6 +82,25 @@ export class PresentationAnimationController extends FighterAnimationController 
       visual.root.updateMatrixWorld(true);
     }
 
+    // CPU telegraphs are gameplay commitments, so make them readable on the body
+    // as well as the lock ring. This pose is deliberately small enough to preserve
+    // authored silhouettes but large enough to read from the iPhone shoulder camera.
+    const telegraphProgress = Number(fighter.visual.root.userData.tpsEnemyTelegraphProgress ?? 0);
+    const telegraphMove = String(fighter.visual.root.userData.tpsEnemyTelegraphMove ?? "");
+    if (fighter.visual.root.userData.combatTps && telegraphProgress > 0 && telegraphMove) {
+      const load = THREE.MathUtils.smoothstep(telegraphProgress, 0, 1);
+      const kickLike = ["kick", "lowKick", "risingKick", "dashKick"].includes(telegraphMove);
+      const heavy = ["power", "risingKick", "dashKick", "throw", "counter"].includes(telegraphMove);
+      const twist = (kickLike ? -0.10 : 0.14) * load * (heavy ? 1.25 : 1);
+      fighter.visual.rig.bones.spineLower.rotation.y += twist * 0.55;
+      fighter.visual.rig.bones.spineUpper.rotation.y += twist;
+      fighter.visual.rig.bones.chest.rotation.x += (kickLike ? 0.055 : -0.035) * load;
+      fighter.visual.rig.bones.leftShoulder.rotation.z += 0.055 * load;
+      fighter.visual.rig.bones.rightShoulder.rotation.z -= 0.075 * load;
+      fighter.visual.root.userData.tpsEnemyTelegraphPoseApplied = load;
+      fighter.visual.root.updateMatrixWorld(true);
+    }
+
     const authoredAttack = fighter.state === "ATTACK"
       && Boolean(fighter.currentMove)
       && BLENDER_AUTHORED_ATTACKS.has(fighter.currentMove?.id ?? "");

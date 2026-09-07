@@ -121,3 +121,21 @@ test("training requires fresh resolved successes, never headlines or a KO", asyn
   }
   assert.equal(advanceTpsTrainingStage(5, hud, EMPTY_TPS_TRAINING), 5);
 });
+
+
+test("Rival Core phase 9 makes every CPU attack reactable from a visible commitment", async () => {
+  const [source, presentation] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /TPS_REACTABLE_TELEGRAPH_TICKS/);
+  assert.match(source, /NORMAL: 18/);
+  assert.match(source, /HARD: 15/);
+  assert.match(source, /minimumEnemyTelegraphTicks/);
+  assert.match(source, /TPS_REACTIVE_STEP_WINDOW_TICKS/);
+  assert.match(source, /pendingReaction/);
+  assert.match(source, /lateWindup/);
+  assert.match(source, /tpsEnemyTelegraphPhase/);
+  assert.match(presentation, /tpsEnemyTelegraphProgress/);
+  assert.match(presentation, /tpsEnemyTelegraphPoseApplied/);
+});

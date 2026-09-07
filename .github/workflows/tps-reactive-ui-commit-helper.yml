@@ -1,0 +1,110 @@
+name: TPS reactive UI commit helper
+
+on:
+  push:
+    branches: [tps-reactive-readability-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tps-reactive-readability-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply visible reactive cue UI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected exactly one match")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'app/page.tsx',
+              '              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}\n',
+              '              {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}\n',
+          )
+
+          css_path = Path('app/playtest-polish.css')
+          css = css_path.read_text()
+          start = css.index('.action-buttons .tps-threat-action {')
+          end = css.index('\n\n\n/* Combat readability pass v1 */', start)
+          replacement = "\n".join([
+              '.action-buttons .tps-threat-action {',
+              '  outline: 3px solid rgba(255, 80, 111, .98);',
+              '  outline-offset: 3px;',
+              '  box-shadow: 0 0 0 3px rgba(255, 80, 111, .14), 0 0 28px rgba(255, 60, 94, .44), inset 0 0 18px rgba(255, 88, 117, .12);',
+              '  color: #fff4f6;',
+              '  animation: tps-threat-pulse .34s ease-in-out infinite alternate;',
+              '}',
+              '.action-buttons .tps-windup-action {',
+              '  outline: 2px solid rgba(255, 196, 90, .88);',
+              '  outline-offset: 3px;',
+              '  color: #ffe09a;',
+              '  box-shadow: 0 0 22px rgba(255, 184, 76, .28), inset 0 0 16px rgba(255, 207, 100, .09);',
+              '}',
+              '.action-buttons .tps-ready-action {',
+              '  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);',
+              '}',
+              '.action-buttons .tps-punish-action {',
+              '  outline: 3px solid rgba(255, 226, 104, .96);',
+              '  outline-offset: 3px;',
+              '  color: #fff9cf;',
+              '  box-shadow: 0 0 0 3px rgba(255, 226, 104, .12), 0 0 30px rgba(255, 210, 76, .44), inset 0 0 18px rgba(255, 230, 126, .13);',
+              '  animation: tps-punish-pulse .46s ease-in-out infinite alternate;',
+              '}',
+              '.action-buttons .tps-step-action.tps-threat-action {',
+              '  letter-spacing: .025em;',
+              '  font-size: clamp(10px, 1.35vw, 14px);',
+              '}',
+              '@keyframes tps-threat-pulse {',
+              '  from { filter: brightness(1); transform: scale(1); }',
+              '  to { filter: brightness(1.30); transform: scale(1.055); }',
+              '}',
+              '@keyframes tps-punish-pulse {',
+              '  from { filter: brightness(1); }',
+              '  to { filter: brightness(1.18); }',
+              '}',
+              '@media (orientation: landscape) and (max-height: 430px) {',
+              '  .action-buttons .tps-step-action.tps-threat-action {',
+              '    font-size: 9px;',
+              '    letter-spacing: 0;',
+              '  }',
+              '  .action-buttons .tps-attack-action.tps-punish-action {',
+              '    font-size: 11px;',
+              '  }',
+              '}',
+              '',
+          ])
+          css_path.write_text(css[:start] + replacement + css[end:])
+
+          replace_once(
+              'tests/tps-mode.test.ts',
+              '  assert.match(css, /content: "STEP NOW"/);\n  assert.match(css, /content: "READY"/);\n  assert.match(css, /content: "PUNISH"/);\n',
+              '  assert.match(page, /tpsIncoming \\? "STEP NOW" : tpsWindup \\? "READY" : "STEP"/);\n  assert.match(page, /tpsPunish \\? "PUNISH" : "ATTACK"/);\n  assert.match(css, /tps-step-action\\.tps-threat-action/);\n  assert.match(css, /tps-attack-action\\.tps-punish-action/);\n',
+          )
+          PY
+          git diff --check
+          node --import tsx --test tests/tps-mode.test.ts
+          npm run lint
+      - name: Commit UI changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts
+          git commit -m "Make TPS reactive cues visible in play"
+          git push origin HEAD:tps-reactive-readability-v1

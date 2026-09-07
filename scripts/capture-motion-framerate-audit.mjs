@@ -110,7 +110,10 @@ function poseDelta(a, b) {
     if (position > maxPosition) { maxPosition = position; worstPositionBone = name; }
     const qa = a[name].quaternion;
     const qb = b[name].quaternion;
-    const dot = Math.min(1, Math.abs(qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]));
+    const normA = Math.hypot(qa[0], qa[1], qa[2], qa[3]);
+    const normB = Math.hypot(qb[0], qb[1], qb[2], qb[3]);
+    const rawDot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3];
+    const dot = Math.min(1, Math.abs(rawDot / Math.max(1e-12, normA * normB)));
     const angle = 2 * Math.acos(dot);
     if (angle > maxAngle) { maxAngle = angle; worstAngleBone = name; }
   }
@@ -171,7 +174,9 @@ try {
   assert.ok(ready?.every(item => item.state === "ready" && item.clips >= 27), `motion preload failed: ${JSON.stringify(ready)}`);
   await execute(`${lookup}const g=findGame();cancelAnimationFrame(g.raf);g.running=false;g.finished=false;g.input.clear();g.__frActors=[g.p1,g.p2];g.__frTime=100;return true;`);
 
-  const moves = ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick", "counter", "throw"];
+  const defaultMoves = ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "dashKick", "counter", "throw"];
+  const requestedMoves = process.env.MOTION_AUDIT_MOVES?.split(",").map(value => value.trim()).filter(Boolean);
+  const moves = requestedMoves?.length ? requestedMoves : defaultMoves;
   for (const [actorIndex, actorName] of [[0, "kairo"], [1, "sera"]]) {
     const actorReport = {};
     report.actors[actorName] = actorReport;
@@ -184,10 +189,11 @@ try {
           resetFighter(g.p1); resetFighter(g.p2);
           g.p1.position.set(0,0,.8); g.p2.position.set(0,0,-1.4);
           g.__enemyVisualForward=null;
-          let time=(g.__frTime ?? 100) + .25;
+          let time=(g.__frTime ?? 100);
           const fps=arguments[2];
-          const settleFrames=Math.max(1,Math.round(fps*.5));
-          for(let i=0;i<settleFrames;i++){time+=1/fps;renderAt(g,time);}
+          // Normalize the pre-attack history. The audit varies ATTACK render
+          // cadence only; Ready-loop phase must not be an accidental variable.
+          for(let i=0;i<30;i++){time+=1/60;renderAt(g,time);}
           g.p1.beginMove(arguments[1]);
           const m=g.p1.currentMove;
           const renderTick=(tick, dt) => {
@@ -245,8 +251,7 @@ try {
       return {before,after};
     `, [actorIndex]);
     const freezeDelta = poseDelta(freeze.before.pose, freeze.after.pose);
-    assert.ok(freezeDelta.maxPosition < 1e-8, `${actorName}: startup hitstop position drift ${JSON.stringify(freezeDelta)}`);
-    assert.ok(freezeDelta.maxAngle < 1e-8, `${actorName}: startup hitstop rotation drift ${JSON.stringify(freezeDelta)}`);
+    assert.deepEqual(freeze.after.pose, freeze.before.pose, `${actorName}: startup hitstop changed raw local bone pose`);
     assert.equal(freeze.before.meta.previousPoseWeight, freeze.after.meta.previousPoseWeight, `${actorName}: hitstop changed entry blend weight`);
     report.hitstop[actorName] = freezeDelta;
   }

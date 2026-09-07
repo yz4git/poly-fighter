@@ -140,8 +140,8 @@ test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", as
   assert.match(page, /TPS_MATCH/);
   assert.doesNotMatch(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /tps-two-button-actions/);
-  assert.match(page, /"guard", "Step", "STEP"/);
-  assert.match(page, /"punch", "Attack", "ATTACK"/);
+  assert.match(page, /"guard", "Step", tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
+  assert.match(page, /"punch", "Attack", tpsPunish \? "PUNISH" : "ATTACK"/);
   assert.match(page, /AUTO PUNCH \/ KICK/);
   assert.match(page, /TAP COMBO/);
   assert.match(page, /PERFECT STEP/);

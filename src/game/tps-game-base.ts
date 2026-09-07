@@ -46,6 +46,7 @@ const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
+const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
@@ -243,6 +244,8 @@ export class TpsFightGame {
   private readonly cameraTarget = new THREE.Vector3();
   private readonly cameraLookTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
+  private readonly cameraFrameStart = new THREE.Vector3();
+  private readonly cameraFrameDelta = new THREE.Vector3();
   private readonly cameraPairMidpoint = new THREE.Vector3();
   private readonly cameraAnchor = new THREE.Vector3();
   private readonly cameraFocus = new THREE.Vector3();
@@ -963,6 +966,7 @@ export class TpsFightGame {
   }
 
   private updateCamera(delta: number): void {
+    this.cameraFrameStart.copy(this.camera.position);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
@@ -1027,6 +1031,14 @@ export class TpsFightGame {
       this.cameraImpact *= Math.exp(-10 * delta);
       this.camera.position.addScaledVector(right, Math.sin(this.renderTime * 76) * impact);
       this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
+    }
+    // Cap the complete frame displacement after both follow motion and impact shake.
+    // Close orbit can rotate a wide shoulder rig quickly; the cap preserves the
+    // composition and hit feel while preventing a single-frame camera surge.
+    const maxCameraTravel = TPS_CAMERA_MAX_TRAVEL_SPEED * delta;
+    this.cameraFrameDelta.copy(this.camera.position).sub(this.cameraFrameStart);
+    if (maxCameraTravel > 0 && this.cameraFrameDelta.lengthSq() > maxCameraTravel * maxCameraTravel) {
+      this.camera.position.copy(this.cameraFrameStart).add(this.cameraFrameDelta.setLength(maxCameraTravel));
     }
     // Smooth the look target as well as camera position. Close-range lock-on can
     // rotate the target basis quickly during sidesteps, blocks, and hit-stop;

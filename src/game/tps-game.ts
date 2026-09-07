@@ -40,6 +40,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   playerStepForwardWeight: number;
   playerStepSideWeight: number;
   playerComboStage: number;
+  playerComboPursuitBudget: number;
   playerComboGraceTicks: number;
   playerAttackQueued: boolean;
   playerFlankWindowTicks: number;
@@ -127,6 +128,7 @@ const prototype = TpsFightGame.prototype as unknown as {
 prototype.beginContextAttack = function beginContextAttack(): boolean {
   const game = extended(this as unknown as TpsFightGame);
   if (!game.p1.canAct()) return false;
+  game.playerComboPursuitBudget = 0;
   const distance = Math.hypot(
     game.p2.position.x - game.p1.position.x,
     game.p2.position.z - game.p1.position.z,
@@ -264,7 +266,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     }
 
     const inLinkWindow = game.p1.moveTick >= linkWindow.linkStart && game.p1.moveTick <= linkWindow.linkEnd;
-    if (game.playerAttackQueued && inLinkWindow) {
+    if (game.playerAttackQueued && inLinkWindow && game.p1.hitStop <= 0) {
       const linkTick = game.p1.moveTick;
       const distance = Math.hypot(
         game.p2.position.x - game.p1.position.x,
@@ -305,6 +307,8 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
       game.playerAttackQueued = false;
       game.__comboQueuedBranch = undefined;
       if (prototype.beginContextAttack.call(this)) {
+        game.playerComboPursuitBudget = 0.40;
+        game.p1.visual.root.userData.tpsComboPursuitDistance = 0;
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);
@@ -481,10 +485,20 @@ prototype.resolveAttack = function resolveAttack(
   const blocked = defender.blockStun > beforeBlockStun || defender.state === "BLOCK_STUN";
   const madeContact = defender.health < beforeHealth || blocked || defender.hitStop > beforeHitStop;
   if (!madeContact) return;
+  // The base runtime already resolved the strike's body-region contact. Reuse
+  // that point for every impact layer instead of drawing a second burst at the
+  // old, shorter character height (head strikes previously flashed at the waist).
+  const pairContact: unknown = defender.visual.root.userData.tpsImpactPairContact;
+  const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
+  if (Array.isArray(pairContact) && pairContact.length === 3 && pairContact.every(Number.isFinite)) {
+    impactPosition.set(pairContact[0], pairContact[1], pairContact[2]);
+  } else {
+    impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
+  }
   const lethalImpact = !blocked && beforeHealth > 0 && defender.health <= 0;
   if (lethalImpact) {
     game.__finalImpactSeconds = 0.68;
-    game.__finalImpactContact = attacker.position.clone().lerp(defender.position, 0.55);
+    game.__finalImpactContact = impactPosition.clone();
     game.camera.userData.tpsFinalImpactStage = "HOLD";
     game.camera.userData.tpsFinalImpactMove = move.id;
     defender.visual.root.userData.tpsFinalImpact = true;
@@ -509,8 +523,6 @@ prototype.resolveAttack = function resolveAttack(
     }
   }
 
-  const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,
@@ -601,3 +613,4 @@ prototype.destroy = function destroy(): void {
   game.__hypeDirector = undefined;
   coreDestroy.call(this);
 };
+

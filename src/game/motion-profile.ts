@@ -263,3 +263,15 @@ export function tpsComboMoveForRoute(
   const selected = routes[route][index];
   return definition.moves[selected] ? selected : "jab";
 }
+
+
+
+/** A hit-confirmed continuation may recover a small knockback gap during startup.
+ * Never chase a distant target, slide through hit-stop, or spend more than the
+ * one-link budget. The ordinary attack approach remains a separate fallback. */
+export function tpsComboPursuitStep(distance: number, contactDistance: number, budget: number, hitStop: number, inStartup: boolean): number {
+  if (!inStartup || hitStop > 0 || budget <= 0 || !Number.isFinite(distance)) return 0;
+  const gap = distance - contactDistance;
+  if (gap <= 0 || gap > 1.0) return 0;
+  return Math.min(gap, budget, 0.065);
+}

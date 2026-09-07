@@ -264,10 +264,14 @@ try {
       beat: game.combatBeatLabel,
       pendingMove: game.enemyDirectorPendingMove,
       telegraphTicks: game.enemyDirectorTelegraphTicks,
+      impactHeight: game.p2.visual.root.userData.tpsImpactPairContact?.[1],
+      impactRingError: Math.min(...game.__hypeDirector.group.children
+        .filter((mesh) => mesh.visible && mesh.name.startsWith('tps-hype-shock-ring'))
+        .map((mesh) => Math.hypot(...mesh.position.toArray().map((v, i) => v - game.p2.visual.root.userData.tpsImpactPairContact[i])))),
     };
   `);
   await delay(60);
-  if (intercept?.reaction !== 'INTERCEPT' || intercept?.p2Health >= 100 || !['INTERCEPT', 'BREAK LINE', 'BLUE SHIFT'].includes(intercept?.beat)) {
+  if (!(intercept?.impactRingError < .08) || intercept?.reaction !== 'INTERCEPT' || intercept?.p2Health >= 100 || !['INTERCEPT', 'BREAK LINE', 'BLUE SHIFT'].includes(intercept?.beat)) {
     throw new Error(`INTERCEPT browser probe failed: ${JSON.stringify(intercept)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-v2-intercept.png`);
@@ -447,4 +451,5 @@ try {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");
 }
+
 

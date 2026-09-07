@@ -1,0 +1,73 @@
+name: Reactable Reward Fix Helper
+
+on:
+  push:
+    branches: [reactable-enemy-attacks-v1]
+    paths:
+      - .github/workflows/reactable-reward-fix-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reactable-enemy-attacks-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Delay Perfect STEP reward until confirmed evade
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/game/tps-game-base.ts')
+          text = path.read_text()
+          old = '''      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
+      if (reactiveSideStep) {
+        // The opponent has already committed to an in-range strike. The lateral
+        // STEP is therefore an earned read even if its burst movement exits the
+        // eventual contact radius before the move reaches its active frames.
+        this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
+        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks;
+      }
+'''
+          new = '''      // During a committed late windup, remember the lateral STEP long enough
+      // for the strike to become active. Do not award Perfect STEP / flank advantage
+      // yet: resolveAttack grants those only when the enemy attack actually reaches
+      // its active frames and the tracked STEP has genuinely evaded it.
+      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
+'''
+          if old not in text:
+              raise SystemExit('reactive reward block not found')
+          path.write_text(text.replace(old, new, 1))
+
+          test_path = Path('tests/tps-mode.test.ts')
+          test_text = test_path.read_text()
+          old_test = '  assert.match(source, /TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n'
+          new_test = '  assert.doesNotMatch(source, /this\\.playerFlankWindowTicks = TPS_STEP_TICKS \\+ TPS_FLANK_WINDOW_TICKS/);\n'
+          if old_test not in test_text:
+              raise SystemExit('old immediate-reward contract not found')
+          test_path.write_text(test_text.replace(old_test, new_test, 1))
+          PY
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "Delay Perfect STEP reward until confirmed evade"
+          git push origin HEAD:reactable-enemy-attacks-v1

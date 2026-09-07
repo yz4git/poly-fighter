@@ -1138,7 +1138,22 @@ export class TpsFightGame {
     this.effects.hit(event);
     this.graphics.hit(event, this.camera);
     this.audio.impact(event);
-    if (!blocked && this.settings.get().vibration && attacker.id === "p1") navigator.vibrate?.(lethalImpact ? 34 : move.power > 1.45 ? 22 : 9);
+    if (!blocked) {
+      const attackerDna = attacker === this.p1 ? this.p1Dna : this.p2Dna;
+      if (lethalImpact) this.audio.combatSignature("FINAL_IMPACT", attackerDna.id);
+      else if (interceptStrike) this.audio.combatSignature("INTERCEPT", attackerDna.id);
+      else if (reversalStrike) this.audio.combatSignature("REVERSAL", attackerDna.id);
+    }
+    if (!blocked && this.settings.get().vibration && attacker.id === "p1") {
+      const hapticPattern: number | number[] = lethalImpact
+        ? [28, 18, 42]
+        : interceptStrike
+          ? [8, 14, 16]
+          : reversalStrike
+            ? [12, 12, 22]
+            : move.power > 1.45 ? 22 : 9;
+      navigator.vibrate?.(hapticPattern);
+    }
   }
 
   private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {

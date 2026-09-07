@@ -61,3 +61,42 @@ test("Rival Core phase 5 drives match drama through presentation and tempo, not 
   assert.match(source, /dramaCinematicFactor/);
   assert.match(source, /dramaTempo/);
 });
+
+
+test("Rival Core phase 6 makes DNA authoritative in the real TPS extension and adds a bounded final-impact lens beat", async () => {
+  const source = await readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
+  assert.match(source, /resolveContextAttack/);
+  assert.match(source, /useSignatureContext/);
+  assert.match(source, /game\.p1Dna\.stepSpeedScale/);
+  assert.match(source, /game\.p2Dna\.moveSpeedScale/);
+  assert.match(source, /__finalImpactSeconds/);
+  assert.match(source, /tpsFinalImpactFactor/);
+  assert.match(source, /baseFov - factor \* 3\.2/);
+});
+
+test("Rival Core phase 7 layers signature audio and distinct haptic patterns", async () => {
+  const [audio, source] = await Promise.all([
+    readFile(new URL("../src/game/audio.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(audio, /combatSignature/);
+  assert.match(audio, /FINAL_IMPACT/);
+  assert.match(source, /combatSignature\("INTERCEPT"/);
+  assert.match(source, /combatSignature\("REVERSAL"/);
+  assert.match(source, /\[28, 18, 42\]/);
+});
+
+test("Rival Core phase 8 exposes a six-step interactive training path on the audited TPS runtime", async () => {
+  const [training, page, css] = await Promise.all([
+    readFile(new URL("../src/game/tps-training.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(training, /PERFECT STEP/);
+  assert.match(training, /INTERCEPT/);
+  assert.match(training, /advanceTpsTrainingStage/);
+  assert.match(page, /TRAINING/);
+  assert.match(page, /startTraining/);
+  assert.match(page, /training-coach/);
+  assert.match(css, /\.training-coach/);
+});

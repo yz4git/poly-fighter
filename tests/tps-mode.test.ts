@@ -185,7 +185,7 @@ test("TPS messages use a face-safe HUD lane and RESULT removes live fight contro
   assert.match(page, /tps-face-safe-badge/);
   assert.match(page, /tps-combo-badge/);
   assert.match(page, /tps-ko-badge/);
-  assert.match(page, /const isGameSurface = screen === "TPS_MATCH";/);
+  assert.match(page, /const isGameSurface = screen === "TPS_MATCH" \|\| screen === "TRAINING";/);
   assert.match(page, /tps-face-safe-active/);
   assert.match(css, /\.tps-badge\.tps-face-safe-badge/);
   assert.match(css, /\.tps-badge\.tps-combo-badge/);

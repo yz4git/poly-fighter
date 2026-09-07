@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
+import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
   chooseTpsComboContinuationRoute,
@@ -49,12 +50,19 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   enemyOrbitSign: number;
   simulationTicks: number;
   difficulty: "EASY" | "NORMAL" | "HARD";
+  p1Dna: FighterDna;
+  p2Dna: FighterDna;
+  playerInterceptTicks: number;
+  playerReversalTicks: number;
+  setCombatBeat(label: string, ticks?: number): void;
   __enemyVisualForward?: THREE.Vector3;
   __hypeDirector?: TpsHypeDirector;
   __comboRoute?: TpsComboRoute;
   __comboRouteSeed?: number;
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
+  __finalImpactSeconds?: number;
+  __finalImpactContact?: THREE.Vector3;
 };
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -126,6 +134,46 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   const stage = Math.min(2, game.playerComboStage);
   const flank = game.playerFlankWindowTicks > 0 && game.playerStepSideWeight > 0.45;
   const perfect = game.playerPerfectEvadeTicks > 0 && flank;
+  const reversalOpen = game.playerReversalTicks > 0 && game.playerStepSideWeight > 0.45;
+  const interceptOpen = game.playerInterceptTicks > 0;
+  const defenderNearWall = Math.hypot(game.p2.position.x, game.p2.position.z) >= 5.45;
+  const defenderAttacking = game.p2.state === "ATTACK";
+  const desperation = game.p1.health <= 24 && game.p2.health <= 34 && distance <= 1.82;
+  const signatureChoice = resolveContextAttack({
+    fighterName: game.p1.definition.name,
+    distance,
+    comboStage: stage,
+    flankOpen: flank,
+    reversalOpen,
+    interceptOpen,
+    defenderAttacking,
+    defenderNearWall,
+    selfHealth: game.p1.health,
+    defenderHealth: game.p2.health,
+  });
+  const useSignatureContext = reversalOpen
+    || interceptOpen
+    || desperation
+    || (flank && stage === 0)
+    || (defenderNearWall && stage >= 1)
+    || (defenderAttacking && stage === 0 && distance <= 1.48);
+  if (useSignatureContext) {
+    if (!game.p1.beginMove(signatureChoice.moveId)) return false;
+    game.__comboRoute = undefined;
+    game.playerComboStage = 1;
+    game.playerComboGraceTicks = 34;
+    game.p1.visual.root.userData.tpsFighterDna = game.p1Dna.id;
+    game.p1.visual.root.userData.tpsContextMove = signatureChoice.moveId;
+    game.p1.visual.root.userData.tpsSignatureAction = signatureChoice.signature;
+    game.p1.visual.root.userData.tpsContextBeat = signatureChoice.beat;
+    if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);
+    if (reversalOpen) game.playerReversalTicks = 0;
+    if (flank) {
+      game.playerFlankAttackTicks = 28;
+      game.playerFlankWindowTicks = 0;
+    }
+    return true;
+  }
 
   if (stage === 0 || !game.__comboRoute) {
     game.__comboRouteSeed = (game.__comboRouteSeed ?? 0) + 1;
@@ -272,14 +320,14 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   // displacement once more so forward/back/left/right/diagonal STEP all travel
   // exactly 2x without changing duration, cooldown, or dodge timing.
   if (game.p1.state === "SIDESTEP" && game.playerStepDirection.lengthSq() > 1e-6) {
-    const moveSpeed = game.p1.definition.archetype === "SPEED" ? 4.0 : 3.35;
+    const moveSpeed = (game.p1.definition.archetype === "SPEED" ? 4.0 : 3.35) * game.p1Dna.moveSpeedScale;
     const baseStepMultiplier = game.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;
     const directionalStepBonus = game.playerStepForwardWeight < -0.45
       ? 0.48
       : game.playerStepForwardWeight > 0.45
         ? -0.16
         : 0.08;
-    const stepMultiplier = baseStepMultiplier + directionalStepBonus;
+    const stepMultiplier = (baseStepMultiplier + directionalStepBonus) * game.p1Dna.stepSpeedScale;
     game.p1.position.addScaledVector(
       game.playerStepDirection,
       FIXED_STEP * moveSpeed * stepMultiplier * (TPS_STEP_DISTANCE_SCALE - 1),
@@ -396,7 +444,7 @@ prototype.updateEnemy = function updateEnemy(): void {
   }
 
   movement.normalize();
-  const baseSpeed = game.p2.definition.archetype === "SPEED" ? 3.45 : 2.95;
+  const baseSpeed = (game.p2.definition.archetype === "SPEED" ? 3.45 : 2.95) * game.p2Dna.moveSpeedScale;
   const difficultySpeed = game.difficulty === "HARD" ? 1.08 : game.difficulty === "EASY" ? 0.9 : 1;
   game.p2.position.addScaledVector(movement, FIXED_STEP * baseSpeed * difficultySpeed);
   game.p2.state = "WALK";
@@ -424,6 +472,15 @@ prototype.resolveAttack = function resolveAttack(
   const blocked = defender.blockStun > beforeBlockStun || defender.state === "BLOCK_STUN";
   const madeContact = defender.health < beforeHealth || blocked || defender.hitStop > beforeHitStop;
   if (!madeContact) return;
+  const lethalImpact = !blocked && beforeHealth > 0 && defender.health <= 0;
+  if (lethalImpact) {
+    game.__finalImpactSeconds = 0.68;
+    game.__finalImpactContact = attacker.position.clone().lerp(defender.position, 0.55);
+    game.camera.userData.tpsFinalImpactStage = "HOLD";
+    game.camera.userData.tpsFinalImpactMove = move.id;
+    defender.visual.root.userData.tpsFinalImpact = true;
+    attacker.visual.root.userData.tpsFinalImpact = true;
+  }
 
   const tier = tpsHypeImpactTier(move.id, move.power);
   const sharedHitStop = tpsHypeHitStopForTier(tier, blocked);
@@ -487,6 +544,20 @@ prototype.updateCamera = function updateCamera(delta: number): void {
   coreUpdateCamera.call(this, delta);
   const game = extended(this as unknown as TpsFightGame);
   hype(game).update(game.camera, delta);
+  const baseFov = game.camera.aspect < 2.4 ? 52 : 47;
+  if ((game.__finalImpactSeconds ?? 0) > 0) {
+    game.__finalImpactSeconds = Math.max(0, (game.__finalImpactSeconds ?? 0) - delta);
+    const factor = THREE.MathUtils.clamp((game.__finalImpactSeconds ?? 0) / 0.68, 0, 1);
+    const targetFov = baseFov - factor * 3.2;
+    game.camera.fov = THREE.MathUtils.lerp(game.camera.fov, targetFov, Math.min(1, delta * 16));
+    game.camera.userData.tpsFinalImpactFactor = factor;
+    game.camera.userData.tpsFinalImpactStage = factor > 0.55 ? "HOLD" : factor > 0.12 ? "RELEASE" : "SETTLE";
+  } else {
+    game.camera.fov = THREE.MathUtils.lerp(game.camera.fov, baseFov, Math.min(1, delta * 9));
+    game.camera.userData.tpsFinalImpactFactor = 0;
+    game.camera.userData.tpsFinalImpactStage = null;
+  }
+  game.camera.updateProjectionMatrix();
 };
 
 prototype.resetRound = function resetRound(): void {
@@ -506,6 +577,12 @@ prototype.resetRound = function resetRound(): void {
   game.p1.visual.root.userData.tpsComboMove = null;
   game.p1.visual.root.userData.tpsComboStage = 0;
   game.p1.visual.root.userData.tpsPerfectCounterLunge = 0;
+  game.p1.visual.root.userData.tpsSignatureAction = null;
+  game.p1.visual.root.userData.tpsContextBeat = null;
+  game.__finalImpactSeconds = 0;
+  game.__finalImpactContact = undefined;
+  game.camera.userData.tpsFinalImpactFactor = 0;
+  game.camera.userData.tpsFinalImpactStage = null;
   hype(game).reset(game.camera);
 };
 

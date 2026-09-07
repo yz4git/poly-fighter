@@ -38,17 +38,19 @@ const TPS_KO_MIN_SHOW_TICKS = 72;
 const TPS_KO_SETTLED_HOLD_TICKS = 30;
 const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.50;
-const TPS_CAMERA_CLOSE_BACK_DELTA = -1.05;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.75;
+const TPS_CAMERA_CLOSE_BACK_DELTA = -0.95;
 const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
 const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
-const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.42;
+const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
-const TPS_CAMERA_IMPACT_SHOULDER = 0.38;
-const TPS_IMPACT_CONTACT_MINIMUM = 1.40;
-const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.46;
-const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.50;
+const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
+const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;
+const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
+const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
+const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
+const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
 const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   jab: 2.62,
   straight: 2.60,
@@ -241,7 +243,10 @@ export class TpsFightGame {
   private lastHudTick = -1;
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
+  private readonly cameraLookTarget = new THREE.Vector3();
   private readonly cameraDesired = new THREE.Vector3();
+  private readonly cameraFrameStart = new THREE.Vector3();
+  private readonly cameraFrameDelta = new THREE.Vector3();
   private readonly cameraPairMidpoint = new THREE.Vector3();
   private readonly cameraAnchor = new THREE.Vector3();
   private readonly cameraFocus = new THREE.Vector3();
@@ -620,7 +625,18 @@ export class TpsFightGame {
 
     if (move.lengthSq() > 0.001) {
       move.normalize();
-      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed);
+      // Near-contact pure strafing can otherwise orbit the opponent fast enough
+      // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;
+      // forward/back movement and the authored STEP burst keep their full speed.
+      const fightDistance = Math.hypot(
+        this.p2.position.x - this.p1.position.x,
+        this.p2.position.z - this.p1.position.z,
+      );
+      const closeOrbitFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
+      const lateralInputWeight = Math.abs(sideAxis) / Math.max(1, Math.abs(forwardAxis) + Math.abs(sideAxis));
+      const closeOrbitScale = THREE.MathUtils.lerp(1, TPS_CLOSE_ORBIT_SPEED_SCALE, closeOrbitFactor);
+      const locomotionSpeedScale = THREE.MathUtils.lerp(1, closeOrbitScale, lateralInputWeight);
+      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * locomotionSpeedScale);
       this.p1.state = "WALK";
     } else {
       this.p1.state = "IDLE";
@@ -962,6 +978,7 @@ export class TpsFightGame {
   }
 
   private updateCamera(delta: number): void {
+    this.cameraFrameStart.copy(this.camera.position);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
@@ -973,17 +990,10 @@ export class TpsFightGame {
       1,
     );
     const flankLaneShift = this.playerEvadeSign * flankCameraFactor * 0.56;
-    // Open a screen-space lane to the opponent at contact by widening laterally.
-    // Compact iPhone landscape gets extra shoulder separation because the player
-    // silhouette otherwise covers the opponent at melee distance.
-    // Pull back as the fighters close instead of moving the shoulder camera inward.
-    // This preserves both silhouettes during punch/throw scrambles and gives iPhone
-    // landscape enough vertical room for the HUD and touch controls.
-    // Keep a modest extra pullback at contact, but preserve the strong lateral
-    // shoulder angle that keeps both fighter centers separated on iPhone.
-    // At melee range rotate the composition toward a 3/4 side lane rather
-    // than simply pulling the shoulder camera farther away. This keeps camera-to-
-    // player distance nearly unchanged while increasing screen-space separation.
+    // Rotate the close camera toward a stronger 3/4 side lane while preserving
+    // roughly the same orbit radius. This reveals the locked target beside the
+    // foreground fighter instead of zooming toward the pair or hiding them inline.
+    // Compact iPhone landscape still receives a small additional shoulder offset.
     const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
     const backDistance = 4.70
       + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
@@ -1017,14 +1027,30 @@ export class TpsFightGame {
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
       .add(new THREE.Vector3(0, cameraHeight, 0));
-    ease(this.camera.position, this.cameraDesired, 11.6, delta);
+    // Keep distant navigation responsive, but add inertia as the fight closes.
+    // This prevents a one-frame shoulder-camera surge when approach becomes orbit.
+    const cameraPositionRate = THREE.MathUtils.lerp(10.2, 8.0, closeFactor);
+    ease(this.camera.position, this.cameraDesired, cameraPositionRate, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
       this.cameraImpact *= Math.exp(-10 * delta);
       this.camera.position.addScaledVector(right, Math.sin(this.renderTime * 76) * impact);
       this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
     }
-    this.camera.lookAt(this.cameraTarget);
+    // Cap the complete frame displacement after both follow motion and impact shake.
+    // Close orbit can rotate a wide shoulder rig quickly; the cap preserves the
+    // composition and hit feel while preventing a single-frame camera surge.
+    const maxCameraTravel = TPS_CAMERA_MAX_TRAVEL_SPEED * delta;
+    this.cameraFrameDelta.copy(this.camera.position).sub(this.cameraFrameStart);
+    if (maxCameraTravel > 0 && this.cameraFrameDelta.lengthSq() > maxCameraTravel * maxCameraTravel) {
+      this.camera.position.copy(this.cameraFrameStart).add(this.cameraFrameDelta.setLength(maxCameraTravel));
+    }
+    // Smooth the look target as well as camera position. Close-range lock-on can
+    // rotate the target basis quickly during sidesteps, blocks, and hit-stop;
+    // smoothing both halves of the rig prevents a visible aim snap while keeping
+    // the opponent centered.
+    ease(this.cameraLookTarget, this.cameraTarget, 12.0, delta);
+    this.camera.lookAt(this.cameraLookTarget);
   }
 
   private updateLockOn(): void {

@@ -366,7 +366,7 @@ try {
   const afterPunch = await state(sessionId);
   if (!(afterPunch?.p2?.health < 100)) throw new Error(`TPS punch failed to damage locked target: ${JSON.stringify({ punchProbe, afterPunch })}`);
   if (!(punchProbe?.screenSeparation >= 72)) throw new Error(`TPS close-range camera still overlaps fighter centers too heavily: ${JSON.stringify(punchProbe)}`);
-  if (punchProbe?.spacingMode !== "IMPACT_PAIR" || !(punchProbe?.spacingMinimum >= 1.40) || !(punchProbe?.impactWorldSeparation >= 1.39) || !(punchProbe?.impactScreenSeparation >= 90)) throw new Error(`TPS resolved impact did not open the v3.1 contact lane: ${JSON.stringify(punchProbe)}`);
+  if (punchProbe?.spacingMode !== "IMPACT_PAIR" || !(punchProbe?.spacingMinimum >= 1.52) || !(punchProbe?.impactWorldSeparation >= 1.51) || !(punchProbe?.impactScreenSeparation >= 96)) throw new Error(`TPS resolved impact did not open the v3.2 contact lane: ${JSON.stringify(punchProbe)}`);
   if (punchProbe?.impactFxMove !== "jab" || !(punchProbe?.impactFxHeight >= 2.5)) throw new Error(`TPS impact FX did not follow the procedural strike contact height: ${JSON.stringify(punchProbe)}`);
   if (!punchProbe?.targetGroundRing) throw new Error(`TPS target ground ring was not present: ${JSON.stringify(punchProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-punch.png`);
@@ -416,6 +416,186 @@ try {
     throw new Error(`TPS damage reaction mode mismatch after gameplay recovery: ${JSON.stringify(damageAfterfeelProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-damage-afterfeel.png`);
+
+
+  // Verify a real blocked strike at the same close range used by the damage probe.
+  // TPS exposes STEP to the player, while the CPU still owns authored GUARD states;
+  // this capture checks guard pose -> BLOCK_STUN -> impact spacing as one visual beat.
+  const guardProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    game.effects.update(2);
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.guardDamage = 0;
+      fighter.hitStop = 0;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.76);
+    game.p2.position.set(0, 0, -0.44);
+    game.p2.state = 'GUARD';
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (game.p2.state !== 'BLOCK_STUN') game.p2.state = 'GUARD';
+    };
+    for (let index = 0; index < 24; index += 1) game.updateCamera(1 / 60);
+    game.press('punch', 'tps-audit-guard-punch');
+    game.step();
+    const moveId = game.p1.currentMove?.id ?? null;
+    game.release('punch', 'tps-audit-guard-punch');
+    let steps = 1;
+    while (steps < 60 && game.p2.state !== 'BLOCK_STUN') { game.step(); steps += 1; }
+    for (let index = 0; index < 8; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return {
+      moveId,
+      steps,
+      p2Health: game.p2.health,
+      p2State: game.p2.state,
+      guardDamage: game.p2.guardDamage,
+      spacingMode: game.p1.visual.root.userData.tpsContactSpacingMode ?? null,
+      spacingMinimum: game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0,
+      worldSeparation: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
+      cameraShoulder: game.camera.userData.tpsShoulderOffset ?? 0,
+    };
+  `);
+  if (guardProbe.moveId !== 'jab' || guardProbe.p2Health !== 100 || guardProbe.p2State !== 'BLOCK_STUN' || !(guardProbe.guardDamage > 0) || guardProbe.spacingMode !== 'IMPACT_PAIR' || !(guardProbe.spacingMinimum >= 1.52) || !(guardProbe.worldSeparation >= 1.51)) {
+    throw new Error(`TPS guard/block visual sequence failed: ${JSON.stringify(guardProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-guard.png`);
+
+  // Exercise an explicit gameplay kick through the real combat step/resolve path.
+  // Context ATTACK selection is covered elsewhere; this probe isolates kick contact readability.
+  const kickContactProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    game.effects.update(2);
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.hitStop = 0;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.playerFlankWindowTicks = 0;
+    game.playerFlankAttackTicks = 0;
+    game.p1.position.set(0, 0, 0.94);
+    game.p2.position.set(0, 0, -0.72);
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (game.p2.state !== 'HIT') game.p2.state = 'IDLE';
+    };
+    for (let index = 0; index < 24; index += 1) game.updateCamera(1 / 60);
+    if (!game.p1.beginMove('kick')) throw new Error('TPS kick probe could not start kick');
+    game.step();
+    const moveId = game.p1.currentMove?.id ?? null;
+    let steps = 1;
+    while (steps < 80 && game.p2.health === 100) { game.step(); steps += 1; }
+    for (let index = 0; index < 8; index += 1) game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return {
+      moveId,
+      steps,
+      p2Health: game.p2.health,
+      p2State: game.p2.state,
+      spacingMode: game.p1.visual.root.userData.tpsContactSpacingMode ?? null,
+      spacingMinimum: game.p1.visual.root.userData.tpsContactSpacingMinimum ?? 0,
+      worldSeparation: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
+      cameraShoulder: game.camera.userData.tpsShoulderOffset ?? 0,
+      cameraBack: game.camera.userData.tpsBackDistance ?? 0,
+    };
+  `);
+  if (kickContactProbe.moveId !== 'kick' || !(kickContactProbe.p2Health < 100) || kickContactProbe.spacingMode !== 'IMPACT_PAIR' || !(kickContactProbe.spacingMinimum >= 1.62) || !(kickContactProbe.worldSeparation >= 1.61)) {
+    throw new Error(`TPS kick contact visual sequence failed: ${JSON.stringify(kickContactProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-kick-contact.png`);
+
+  // Drive a continuous approach -> orbit sequence through real gameplay steps and
+  // sample every camera frame. This catches sudden shoulder-camera jumps that are
+  // invisible in single before/after screenshots.
+  const cameraContinuityProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.health = 100;
+      fighter.hitStop = 0;
+      fighter.state = 'IDLE';
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 2.6);
+    game.p2.position.set(0, 0, -0.2);
+    game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
+    for (let index = 0; index < 30; index += 1) game.updateCamera(1 / 60);
+    let previousCamera = game.camera.position.clone();
+    let previousLook = game.cameraLookTarget.clone();
+    let maxCameraStep = 0;
+    let maxLookTargetStep = 0;
+    const sampleFrame = () => {
+      game.renderTime += 1 / 60;
+      game.step();
+      game.updateCamera(1 / 60);
+      maxCameraStep = Math.max(maxCameraStep, game.camera.position.distanceTo(previousCamera));
+      maxLookTargetStep = Math.max(maxLookTargetStep, game.cameraLookTarget.distanceTo(previousLook));
+      previousCamera.copy(game.camera.position);
+      previousLook.copy(game.cameraLookTarget);
+    };
+    game.press('up', 'tps-camera-approach');
+    for (let index = 0; index < 34; index += 1) sampleFrame();
+    game.release('up', 'tps-camera-approach');
+    game.press('right', 'tps-camera-orbit');
+    for (let index = 0; index < 36; index += 1) sampleFrame();
+    game.release('right', 'tps-camera-orbit');
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const canvas = game.renderer.domElement;
+    const playerScreen = game.p1.position.clone();
+    const enemyScreen = game.p2.position.clone();
+    playerScreen.y = 1.2;
+    enemyScreen.y = 1.2;
+    playerScreen.project(game.camera);
+    enemyScreen.project(game.camera);
+    const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
+    return {
+      maxCameraStep,
+      maxLookTargetStep,
+      screenSeparation,
+      fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
+      shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,
+      backDistance: game.camera.userData.tpsBackDistance ?? 0,
+      cameraOrbitRadius: Math.hypot(game.camera.userData.tpsShoulderOffset ?? 0, game.camera.userData.tpsBackDistance ?? 0),
+      closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,
+    };
+  `);
+  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.cameraOrbitRadius > 6.6) || !(cameraContinuityProbe.backDistance > 3.6)) {
+    throw new Error(`TPS camera continuity exceeded the playtest comfort envelope: ${JSON.stringify(cameraContinuityProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-camera-continuity.png`);
 
   // A completed heavy attack gets the same treatment: gameplay is already free
   // to accept a new action while the rendered body holds/recenters for a short
@@ -828,7 +1008,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

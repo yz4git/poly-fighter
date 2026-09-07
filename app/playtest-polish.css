@@ -340,3 +340,20 @@
   .tps-two-button-actions .tps-step-action { width: 68px; height: 52px; }
   .tps-two-button-actions .tps-attack-action { width: 84px; height: 60px; }
 }
+
+
+/* TPS Combat v2 */
+.action-buttons .tps-intercept-action {
+  outline: 3px solid rgba(112, 226, 255, .96);
+  outline-offset: 3px;
+  color: #effcff;
+  box-shadow: 0 0 0 3px rgba(112, 226, 255, .12), 0 0 30px rgba(76, 215, 255, .40), inset 0 0 18px rgba(255, 201, 92, .10);
+  animation: tps-intercept-pulse .42s ease-in-out infinite alternate;
+}
+@keyframes tps-intercept-pulse {
+  from { filter: brightness(1); transform: scale(1); }
+  to { filter: brightness(1.22); transform: scale(1.04); }
+}
+@media (orientation: landscape) and (max-height: 430px) {
+  .action-buttons .tps-attack-action.tps-intercept-action { font-size: 9px; letter-spacing: 0; }
+}

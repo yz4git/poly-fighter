@@ -971,7 +971,25 @@ try {
     };
     game.press('right', 'tps-flank-side');
     game.press('guard', 'tps-flank-step');
-    for (let index = 0; index < 9; index += 1) game.step();
+    const evadeTrace = [];
+    for (let index = 0; index < 9; index += 1) {
+      game.step();
+      evadeTrace.push({
+        frame: index + 1,
+        p2State: game.p2.state,
+        p2Move: game.p2.currentMove?.id ?? null,
+        p2MoveTick: game.p2.moveTick,
+        p2Active: game.p2.isActive(),
+        threatTicks: game.playerStepThreatTicks,
+        threatMove: game.playerStepThreatMoveId ?? null,
+        sideWeight: game.playerStepSideWeight,
+        evadeTicks: game.playerEvadeTicks,
+        perfectTicks: game.playerPerfectEvadeTicks,
+        flankTicks: game.playerFlankWindowTicks,
+        p2HitPlayer: game.p2.hitTargets.has(game.p1.id),
+        p1Health: game.p1.health,
+      });
+    }
     game.release('guard', 'tps-flank-step');
     game.release('right', 'tps-flank-side');
     const healthAfterEvade = game.p1.health;
@@ -999,7 +1017,7 @@ try {
     playerScreen.project(game.camera);
     enemyScreen.project(game.camera);
     const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
-    return { healthAfterEvade, perfectAfterEvade, flankWindowAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks, screenSeparation };
+    return { healthAfterEvade, perfectAfterEvade, flankWindowAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks, screenSeparation, evadeTrace };
   `);
   if (flankProbe.healthAfterEvade !== 100) throw new Error(`TPS lateral STEP failed to evade strike: ${JSON.stringify(flankProbe)}`);
   if (!(flankProbe.perfectAfterEvade > 0) || !(flankProbe.flankWindowAfterEvade > 0)) throw new Error(`TPS successful lateral dodge did not award PERFECT STEP: ${JSON.stringify(flankProbe)}`);

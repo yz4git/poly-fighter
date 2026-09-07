@@ -150,6 +150,10 @@ try {
       game.input.clear();
       game.enemyDirectorPendingMove = null;
       game.enemyDirectorTelegraphTicks = 0;
+      game.enemyDirectorTelegraphTotalTicks = 0;
+      game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+      game.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+      game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'NONE';
       game.playerPerfectEvadeTicks = 0;
       game.playerFlankWindowTicks = 0;
       game.playerStepSideWeight = 0;
@@ -167,7 +171,11 @@ try {
       game.p2.position.set(0, 0, -0.52);
       if (arguments[0] === 'WINDUP') {
         game.enemyDirectorPendingMove = 'power';
-        game.enemyDirectorTelegraphTicks = 6;
+        game.enemyDirectorTelegraphTicks = 18;
+        game.enemyDirectorTelegraphTotalTicks = 23;
+        game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 18 / 23;
+        game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'power';
+        game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'LOAD';
       } else if (arguments[0] === 'INCOMING') {
         game.p2.beginMove('jab');
         game.p2.state = 'ATTACK';

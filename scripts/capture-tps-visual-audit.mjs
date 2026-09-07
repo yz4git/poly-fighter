@@ -285,14 +285,32 @@ try {
     game.finished = false;
     game.input.clear();
     game.effects.update(2);
+    game.p2.currentMove = null;
+    game.p2.moveTick = 0;
+    game.p2.hitStop = 0;
+    game.p2.hitStun = 0;
+    game.p2.blockStun = 0;
+    game.p2.hitTargets.clear();
+    game.p2.velocity.set(0, 0, 0);
+    game.p2.state = 'IDLE';
+    game.enemyDirectorPendingMove = null;
+    game.enemyDirectorTelegraphTicks = 0;
+    game.enemyDirectorTelegraphTotalTicks = 0;
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
     game.p1.currentMove = null;
     game.p1.moveTick = 0;
+    game.p1.hitStop = 0;
+    game.p1.hitStun = 0;
+    game.p1.blockStun = 0;
     game.p1.velocity.set(0, 0, 0);
     game.p1.state = 'IDLE';
     game.playerEvadeTicks = 0;
     game.playerEvadeCooldown = 0;
     game.playerEvadeSign = 0;
+    game.playerFlankWindowTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerStepThreatTicks = 0;
+    game.playerStepThreatMoveId = null;
     game.p1.position.set(0, 0, 1.4);
     game.p2.position.set(0, 0, -0.3);
     // The real-time strafe probe above can leave FighterRuntime.input on RIGHT
@@ -671,6 +689,10 @@ try {
       fighter.moveTick = 0;
       fighter.velocity.set(0, 0, 0);
       fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
@@ -708,6 +730,10 @@ try {
       fighter.moveTick = 0;
       fighter.velocity.set(0, 0, 0);
       fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
@@ -865,6 +891,10 @@ try {
       fighter.moveTick = 0;
       fighter.velocity.set(0, 0, 0);
       fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
@@ -911,6 +941,10 @@ try {
       fighter.moveTick = 0;
       fighter.velocity.set(0, 0, 0);
       fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
@@ -952,6 +986,10 @@ try {
       fighter.moveTick = 0;
       fighter.velocity.set(0, 0, 0);
       fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
@@ -964,6 +1002,12 @@ try {
     game.playerEvadeCooldown = 0;
     game.playerFlankWindowTicks = 0;
     game.playerFlankAttackTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerStepThreatTicks = 0;
+    game.playerStepThreatMoveId = null;
+    game.enemyDirectorPendingMove = null;
+    game.enemyDirectorTelegraphTicks = 0;
+    game.enemyDirectorTelegraphTotalTicks = 0;
     game.p2.beginMove('straight');
     game.updateEnemy = () => {
       if (game.p2.state === 'ATTACK') game.p2.advanceAttack();
@@ -971,7 +1015,25 @@ try {
     };
     game.press('right', 'tps-flank-side');
     game.press('guard', 'tps-flank-step');
-    for (let index = 0; index < 9; index += 1) game.step();
+    const evadeTrace = [];
+    for (let index = 0; index < 9; index += 1) {
+      game.step();
+      evadeTrace.push({
+        frame: index + 1,
+        p2State: game.p2.state,
+        p2Move: game.p2.currentMove?.id ?? null,
+        p2MoveTick: game.p2.moveTick,
+        p2Active: game.p2.isActive(),
+        threatTicks: game.playerStepThreatTicks,
+        threatMove: game.playerStepThreatMoveId ?? null,
+        sideWeight: game.playerStepSideWeight,
+        evadeTicks: game.playerEvadeTicks,
+        perfectTicks: game.playerPerfectEvadeTicks,
+        flankTicks: game.playerFlankWindowTicks,
+        p2HitPlayer: game.p2.hitTargets.has(game.p1.id),
+        p1Health: game.p1.health,
+      });
+    }
     game.release('guard', 'tps-flank-step');
     game.release('right', 'tps-flank-side');
     const healthAfterEvade = game.p1.health;
@@ -999,7 +1061,7 @@ try {
     playerScreen.project(game.camera);
     enemyScreen.project(game.camera);
     const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;
-    return { healthAfterEvade, perfectAfterEvade, flankWindowAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks, screenSeparation };
+    return { healthAfterEvade, perfectAfterEvade, flankWindowAfterEvade, p2Health: game.p2.health, p2State: game.p2.state, moveId, flankTicks: game.playerFlankAttackTicks, screenSeparation, evadeTrace };
   `);
   if (flankProbe.healthAfterEvade !== 100) throw new Error(`TPS lateral STEP failed to evade strike: ${JSON.stringify(flankProbe)}`);
   if (!(flankProbe.perfectAfterEvade > 0) || !(flankProbe.flankWindowAfterEvade > 0)) throw new Error(`TPS successful lateral dodge did not award PERFECT STEP: ${JSON.stringify(flankProbe)}`);

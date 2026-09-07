@@ -38,6 +38,20 @@ const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const TPS_INTERCEPT_TICKS = 26;
 const TPS_REVERSAL_TICKS = 24;
+// Human-readable CPU commitment windows for iPhone touch play. Even the fastest
+// jab gets a short authored load before its normal startup frames begin.
+const TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
+  EASY: 22,
+  NORMAL: 18,
+  HARD: 15,
+});
+const TPS_REACTIVE_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
+  EASY: 14,
+  NORMAL: 12,
+  HARD: 10,
+});
+const TPS_HEAVY_TELEGRAPH_BONUS_TICKS = 5;
+const TPS_HEAVY_TELEGRAPH_MOVES = new Set(["power", "risingKick", "dashKick", "throw", "counter"]);
 const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
@@ -281,6 +295,7 @@ export class TpsFightGame {
   private playerFlankAttackTicks = 0;
   private playerPerfectEvadeTicks = 0;
   private playerStepThreatTicks = 0;
+  private playerStepThreatMoveId: string | null = null;
   private playerInterceptTicks = 0;
   private playerReversalTicks = 0;
   private combatBeatLabel: string | null = null;
@@ -307,6 +322,7 @@ export class TpsFightGame {
   private enemyDirectorDecision: CpuDecision | null = null;
   private enemyDirectorHoldTicks = 0;
   private enemyDirectorTelegraphTicks = 0;
+  private enemyDirectorTelegraphTotalTicks = 0;
   private enemyDirectorPendingMove: string | null = null;
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
@@ -683,24 +699,32 @@ export class TpsFightGame {
       // inside resolveAttack, when an in-range enemy strike is actually evaded.
       this.playerFlankWindowTicks = 0;
       this.playerPerfectEvadeTicks = 0;
-      const incomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
+      const activeIncomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
+      const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
+      const pendingReaction = Boolean(
+        pendingMove
+        && this.enemyDirectorTelegraphTicks > 0
+        && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
+      );
+      const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);
       const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
-      const incomingFrames = incomingMove ? incomingMove.startup + incomingMove.active - this.p2.moveTick : 0;
+      const incomingThreatReach = incomingMove
+        ? incomingMove.reach + (this.enemyDirectorPendingMove === "dashKick" ? 1.8 : 0.9)
+        : 0;
+      const incomingFrames = activeIncomingMove
+        ? activeIncomingMove.startup + activeIncomingMove.active - this.p2.moveTick
+        : pendingReaction && incomingMove
+          ? this.enemyDirectorTelegraphTicks + incomingMove.startup + incomingMove.active
+          : 0;
       const reactiveSideStep = Boolean(
         this.playerStepSideWeight > 0.45
         && incomingMove
         && incomingMove.hitLevel !== "THROW"
         && incomingFrames > 0
-        && incomingDistance <= incomingMove.reach + 0.9
+        && incomingDistance <= incomingThreatReach
       );
-      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
-      if (reactiveSideStep) {
-        // The opponent has already committed to an in-range strike. The lateral
-        // STEP is therefore an earned read even if its burst movement exits the
-        // eventual contact radius before the move reaches its active frames.
-        this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
-        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks;
-      }
+      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;
+      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;
     }
 
     if (this.playerEvadeTicks > 0) {
@@ -806,6 +830,15 @@ export class TpsFightGame {
     this.p1.velocity.x = toEnemy.x * burstSpeed;
     this.p1.velocity.z = toEnemy.z * burstSpeed;
     return true;
+  }
+
+  private minimumEnemyTelegraphTicks(moveId: string): number {
+    const baseTicks = TPS_REACTABLE_TELEGRAPH_TICKS[this.difficulty];
+    return baseTicks + (TPS_HEAVY_TELEGRAPH_MOVES.has(moveId) ? TPS_HEAVY_TELEGRAPH_BONUS_TICKS : 0);
+  }
+
+  private enemyReactionWindowTicks(): number {
+    return TPS_REACTIVE_STEP_WINDOW_TICKS[this.difficulty];
   }
 
   private updateEnemy(): void {
@@ -934,6 +967,9 @@ export class TpsFightGame {
       rootData.tpsCpuDirectorMove = moveId;
       rootData.tpsCpuDirectorIntent = intent;
       rootData.tpsCpuDirectorTelegraphTicks = 0;
+      rootData.tpsEnemyTelegraphProgress = 0;
+      rootData.tpsEnemyTelegraphPhase = "STRIKE";
+      this.enemyDirectorTelegraphTotalTicks = 0;
       if (moveId === "dashKick") {
         const burstSpeed = this.p2.definition.archetype === "SPEED" ? 5.0 : 4.45;
         this.p2.velocity.x = towardPlayer.x * burstSpeed;
@@ -950,6 +986,13 @@ export class TpsFightGame {
       if (this.enemyDirectorTelegraphTicks > 0) {
         this.enemyDirectorTelegraphTicks -= 1;
         rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+        const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
+        const progress = THREE.MathUtils.clamp(1 - this.enemyDirectorTelegraphTicks / totalTicks, 0, 1);
+        const reactionWindow = this.enemyReactionWindowTicks();
+        rootData.tpsEnemyTelegraphProgress = progress;
+        rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
+        rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow ? "REACT" : "LOAD";
+        rootData.tpsEnemyReactionWindowTicks = reactionWindow;
         const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
         this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent) ? "GUARD" : "IDLE";
         this.p2.updatePhysics(FIXED_STEP);
@@ -1019,14 +1062,15 @@ export class TpsFightGame {
       const moveId = TPS_CPU_ATTACK_MOVES[decision.intent] ?? null;
       if (moveId) {
         rootData.tpsCpuDirectorMove = moveId;
-        if (decision.telegraphTicks > 0) {
-          this.enemyDirectorPendingMove = moveId;
-          this.enemyDirectorTelegraphTicks = decision.telegraphTicks;
-          rootData.tpsCpuDirectorTelegraphTicks = decision.telegraphTicks;
-          this.p2.state = ["POWER", "THROW", "COUNTER"].includes(decision.intent) ? "GUARD" : "IDLE";
-        } else {
-          beginDirectorMove(moveId, decision.intent);
-        }
+        const telegraphTicks = Math.max(decision.telegraphTicks, this.minimumEnemyTelegraphTicks(moveId));
+        this.enemyDirectorPendingMove = moveId;
+        this.enemyDirectorTelegraphTicks = telegraphTicks;
+        this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
+        rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;
+        rootData.tpsEnemyTelegraphProgress = 0;
+        rootData.tpsEnemyTelegraphMove = moveId;
+        rootData.tpsEnemyTelegraphPhase = "LOAD";
+        this.p2.state = ["POWER", "THROW", "COUNTER"].includes(decision.intent) ? "GUARD" : "IDLE";
         this.p2.updatePhysics(FIXED_STEP);
         return;
       }
@@ -1060,11 +1104,13 @@ export class TpsFightGame {
     const trackedSideEvade = defender === this.p1
       && attacker === this.p2
       && this.playerStepThreatTicks > 0
+      && this.playerStepThreatMoveId === move.id
       && this.playerStepSideWeight > 0.45
       && move.hitLevel !== "THROW";
     if (trackedSideEvade) {
       attacker.hitTargets.add(defender.id);
       this.playerStepThreatTicks = 0;
+      this.playerStepThreatMoveId = null;
       this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
       this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
       this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
@@ -1112,6 +1158,10 @@ export class TpsFightGame {
       this.playerInterceptTicks = 0;
       this.enemyDirectorPendingMove = null;
       this.enemyDirectorTelegraphTicks = 0;
+      this.enemyDirectorTelegraphTotalTicks = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+      this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "INTERRUPTED";
       this.enemyDirectorDecision = null;
       this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);
       this.setCombatBeat(this.p1Dna.signature.intercept);
@@ -1339,9 +1389,24 @@ export class TpsFightGame {
   }
 
   private enemyThreatStatus(): { windup: boolean; incoming: boolean } {
-    const windup = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
+    const pending = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
+    const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
+    const pendingDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const pendingThreatReach = pendingMove
+      ? pendingMove.reach + (pendingMove.id === "dashKick" ? 1.8 : 0.9)
+      : 0;
+    const lateWindup = Boolean(
+      pending
+      && pendingMove
+      && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
+      && pendingDistance <= pendingThreatReach
+    );
+    const windup = pending && !lateWindup;
     const move = this.p2.currentMove;
-    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: false };
+    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: lateWindup };
     const distance = Math.hypot(
       this.p2.position.x - this.p1.position.x,
       this.p2.position.z - this.p1.position.z,
@@ -1404,7 +1469,11 @@ export class TpsFightGame {
     this.enemyDirectorDecision = null;
     this.enemyDirectorHoldTicks = 0;
     this.enemyDirectorTelegraphTicks = 0;
+    this.enemyDirectorTelegraphTotalTicks = 0;
     this.enemyDirectorPendingMove = null;
+    this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+    this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+    this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "NONE";
     this.playerEvadeTicks = 0;
     this.playerEvadeCooldown = 0;
     this.playerEvadeSign = 0;
@@ -1418,6 +1487,7 @@ export class TpsFightGame {
     this.playerFlankAttackTicks = 0;
     this.playerPerfectEvadeTicks = 0;
     this.playerStepThreatTicks = 0;
+    this.playerStepThreatMoveId = null;
     this.playerInterceptTicks = 0;
     this.playerReversalTicks = 0;
     this.combatBeatLabel = null;

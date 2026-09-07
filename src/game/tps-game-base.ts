@@ -707,6 +707,9 @@ export class TpsFightGame {
       );
       const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);
       const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+      const incomingThreatReach = incomingMove
+        ? incomingMove.reach + (this.enemyDirectorPendingMove === "dashKick" ? 1.8 : 0.9)
+        : 0;
       const incomingFrames = activeIncomingMove
         ? activeIncomingMove.startup + activeIncomingMove.active - this.p2.moveTick
         : pendingReaction && incomingMove
@@ -717,7 +720,7 @@ export class TpsFightGame {
         && incomingMove
         && incomingMove.hitLevel !== "THROW"
         && incomingFrames > 0
-        && incomingDistance <= incomingMove.reach + 0.9
+        && incomingDistance <= incomingThreatReach
       );
       this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
       if (reactiveSideStep) {
@@ -1158,6 +1161,10 @@ export class TpsFightGame {
       this.playerInterceptTicks = 0;
       this.enemyDirectorPendingMove = null;
       this.enemyDirectorTelegraphTicks = 0;
+      this.enemyDirectorTelegraphTotalTicks = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+      this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "INTERRUPTED";
       this.enemyDirectorDecision = null;
       this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);
       this.setCombatBeat(this.p1Dna.signature.intercept);
@@ -1386,7 +1393,20 @@ export class TpsFightGame {
 
   private enemyThreatStatus(): { windup: boolean; incoming: boolean } {
     const pending = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
-    const lateWindup = pending && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks();
+    const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
+    const pendingDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const pendingThreatReach = pendingMove
+      ? pendingMove.reach + (pendingMove.id === "dashKick" ? 1.8 : 0.9)
+      : 0;
+    const lateWindup = Boolean(
+      pending
+      && pendingMove
+      && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
+      && pendingDistance <= pendingThreatReach
+    );
     const windup = pending && !lateWindup;
     const move = this.p2.currentMove;
     if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: lateWindup };

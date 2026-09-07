@@ -113,7 +113,11 @@ const resetSnippet = `
   game.enemyOpeningGraceTicks = 0;
   game.enemyDirectorPendingMove = null;
   game.enemyDirectorTelegraphTicks = 0;
+  game.enemyDirectorTelegraphTotalTicks = 0;
   game.enemyDirectorDecision = null;
+  game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+  game.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+  game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'NONE';
   game.enemyDirectorHoldTicks = 0;
   game.enemyCooldown = 0;
   game.enemyAdaptation = 'NEUTRAL';
@@ -232,13 +236,61 @@ try {
     throw new Error(`CPU adaptation probe failed: ${JSON.stringify(adaptationProbe)}`);
   }
 
+  const reactableStep = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    ${resetSnippet}
+    game.p1.position.set(0, 0, 0.72);
+    game.p2.position.set(0, 0, -0.72);
+    game.enemyDirectorPendingMove = 'jab';
+    game.enemyDirectorTelegraphTicks = 12;
+    game.enemyDirectorTelegraphTotalTicks = 18;
+    game.enemyDirectorDecision = {
+      intent: 'JAB', holdTicks: 1, telegraphTicks: 18,
+      reason: 'reactable-step-audit', comebackMercy: 0, pressure: 0,
+    };
+    game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 12 / 18;
+    game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
+    game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
+    const threatBefore = game.enemyThreatStatus();
+    game.press('right', 'reactable-step-side');
+    game.press('guard', 'reactable-step');
+    game.step();
+    game.release('guard', 'reactable-step');
+    game.release('right', 'reactable-step-side');
+    const trackedBeforeAttack = game.playerStepThreatTicks;
+    let steps = 1;
+    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {
+      game.renderTime += 1 / 60;
+      game.step();
+      steps += 1;
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return {
+      steps,
+      threatBefore,
+      trackedBeforeAttack,
+      perfectEvades: game.trainingProgress.perfectEvades,
+      p1Health: game.p1.health,
+      reversalTicks: game.playerReversalTicks,
+      beat: game.combatBeatLabel,
+    };
+  `);
+  await delay(60);
+  if (!reactableStep?.threatBefore?.incoming || reactableStep?.threatBefore?.windup || reactableStep?.trackedBeforeAttack <= 0 || reactableStep?.perfectEvades < 1 || reactableStep?.p1Health < 100) {
+    throw new Error(`REACTABLE STEP browser probe failed: ${JSON.stringify(reactableStep)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-reactable-step.png`);
+
   const intercept = await execute(sessionId, `${gameLookup}
     const game = findGame();
     ${resetSnippet}
     game.enemyDirectorPendingMove = 'power';
-    game.enemyDirectorTelegraphTicks = 10;
+    game.enemyDirectorTelegraphTicks = 18;
+    game.enemyDirectorTelegraphTotalTicks = 23;
     game.enemyDirectorDecision = {
-      intent: 'POWER', holdTicks: 1, telegraphTicks: 10,
+      intent: 'POWER', holdTicks: 1, telegraphTicks: 18,
       reason: 'tps-v2-audit-windup', comebackMercy: 0, pressure: 0,
     };
     game.p2.state = 'GUARD';

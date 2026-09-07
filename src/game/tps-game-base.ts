@@ -723,13 +723,6 @@ export class TpsFightGame {
         && incomingDistance <= incomingThreatReach
       );
       this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;
-      if (reactiveSideStep) {
-        // The opponent has already committed to an in-range strike. The lateral
-        // STEP is therefore an earned read even if its burst movement exits the
-        // eventual contact radius before the move reaches its active frames.
-        this.playerFlankWindowTicks = TPS_STEP_TICKS + TPS_FLANK_WINDOW_TICKS;
-        this.playerPerfectEvadeTicks = TPS_STEP_TICKS + TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks;
-      }
     }
 
     if (this.playerEvadeTicks > 0) {

@@ -72,6 +72,8 @@ test("Rival Core phase 6 makes DNA authoritative in the real TPS extension and a
   assert.match(source, /__finalImpactSeconds/);
   assert.match(source, /tpsFinalImpactFactor/);
   assert.match(source, /baseFov - factor \* 3\.2/);
+  assert.match(source, /tpsSignaturePursuitLunge/);
+  assert.match(source, /PERFECT_COUNTER_MAX_LUNGE/);
 });
 
 test("Rival Core phase 7 layers signature audio and distinct haptic patterns", async () => {

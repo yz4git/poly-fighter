@@ -167,7 +167,16 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     game.p1.visual.root.userData.tpsSignatureAction = signatureChoice.signature;
     game.p1.visual.root.userData.tpsContextBeat = signatureChoice.beat;
     if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);
-    if (reversalOpen) game.playerReversalTicks = 0;
+    if (reversalOpen) {
+      // Signature reversals share the large lateral STEP, so preserve the same bounded pursuit used by PERFECT counters.
+      const towardTarget = horizontalDirection(game.p1.position, game.p2.position);
+      const currentDistance = Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z);
+      const lunge = THREE.MathUtils.clamp(currentDistance - PERFECT_COUNTER_TARGET_DISTANCE, 0, PERFECT_COUNTER_MAX_LUNGE);
+      game.p1.position.addScaledVector(towardTarget, lunge);
+      game.p1.visual.root.userData.tpsPerfectCounterLunge = lunge;
+      game.p1.visual.root.userData.tpsSignaturePursuitLunge = lunge;
+      game.playerReversalTicks = 0;
+    }
     if (flank) {
       game.playerFlankAttackTicks = 28;
       game.playerFlankWindowTicks = 0;

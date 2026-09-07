@@ -1018,7 +1018,10 @@ export class TpsFightGame {
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
       .add(new THREE.Vector3(0, cameraHeight, 0));
-    ease(this.camera.position, this.cameraDesired, 11.6, delta);
+    // Keep distant navigation responsive, but add inertia as the fight closes.
+    // This prevents a one-frame shoulder-camera surge when approach becomes orbit.
+    const cameraPositionRate = THREE.MathUtils.lerp(10.2, 8.0, closeFactor);
+    ease(this.camera.position, this.cameraDesired, cameraPositionRate, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
       this.cameraImpact *= Math.exp(-10 * delta);

@@ -321,7 +321,7 @@ try {
   const back = await clickButton(sessionId, "TITLE");
   if (!back?.clicked) throw new Error(`TITLE button not found from Model View: ${JSON.stringify(back)}`);
   await delay(150);
-  const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START MATCH'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
+  const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START FIGHT'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
   await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, proceduralFrontKick, blenderFrontKick, proceduralLowKick, blenderLowKick, proceduralRisingKick, blenderRisingKick, proceduralDashKick, blenderDashKick, proceduralHitHeavy, blenderHitHeavy, proceduralGuardBreak, blenderGuardBreak, kairo, kairoMotionReady, titleState }, null, 2));

@@ -1,36 +1,29 @@
-import type { HudSnapshot } from "./types";
+import type { HudSnapshot, TpsTrainingProgress } from "./types";
 
 export type TpsTrainingStage = 0 | 1 | 2 | 3 | 4 | 5;
 
+export const EMPTY_TPS_TRAINING: Readonly<TpsTrainingProgress> = Object.freeze({
+  hits: 0, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 0,
+});
+
 export const TPS_TRAINING_STEPS = [
-  { title: "ATTACK", detail: "Close distance and land one ATTACK." },
-  { title: "STEP", detail: "Use a sideways STEP. Direction matters." },
-  { title: "PERFECT STEP", detail: "Read STEP NOW and evade the committed strike." },
-  { title: "PUNISH", detail: "Attack the opening. A REVERSAL also clears this lesson." },
-  { title: "INTERCEPT", detail: "When READY appears, ATTACK during WINDUP to intercept." },
-  { title: "RIVAL READY", detail: "Training complete. Continue sparring or return to title." },
+  { title: "ATTACK", detail: "近づいて ATTACK を当てる。" },
+  { title: "STEP", detail: "左右に方向入力しながら STEP。" },
+  { title: "PERFECT STEP", detail: "相手の攻撃に合わせて横 STEP で回避。" },
+  { title: "PUNISH", detail: "回避後に ATTACK を当てて反撃。STEP 中の先行入力も可能。" },
+  { title: "INTERCEPT", detail: "WINDUP の予告中に ATTACK を当てて迎撃。" },
+  { title: "RIVAL READY", detail: "全課題クリア。そのまま練習を続けられます。" },
 ] as const;
 
-function isSignature(message: string): boolean {
-  return ["BREAK LINE", "BLUE SHIFT", "INTERCEPT"].some((token) => message.includes(token));
-}
-
-function isReversal(message: string): boolean {
-  return ["REVERSAL", "RED REVERSAL", "PHANTOM COUNTER"].some((token) => message.includes(token));
-}
-
+// Counters come from resolved simulation events. HUD headlines may persist,
+// change for drama, or name an attack that has not connected yet.
 export function advanceTpsTrainingStage(
   stage: TpsTrainingStage,
   hud: HudSnapshot,
-  previousEnemyHealth: number,
+  previous: Readonly<TpsTrainingProgress>,
 ): TpsTrainingStage {
-  const message = hud.message ?? "";
-  const landedHit = hud.p2Health < previousEnemyHealth;
-  if (stage === 0 && landedHit) return 1;
-  if (stage === 1 && ["SIDE STEP", "PERFECT STEP", "REVERSAL"].some((token) => message.includes(token))) return 2;
-  if (stage === 2 && isReversal(message)) return 4;
-  if (stage === 2 && message.includes("PERFECT STEP")) return 3;
-  if (stage === 3 && (landedHit || isReversal(message))) return 4;
-  if (stage === 4 && isSignature(message)) return 5;
-  return stage;
+  const current = hud.tpsTraining;
+  if (!current || stage === 5) return stage;
+  const key = (["hits", "sideSteps", "perfectEvades", "punishes", "intercepts"] as const)[stage];
+  return current[key] > previous[key] ? (stage + 1) as TpsTrainingStage : stage;
 }

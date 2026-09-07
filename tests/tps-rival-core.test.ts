@@ -102,3 +102,22 @@ test("Rival Core phase 8 exposes a six-step interactive training path on the aud
   assert.match(page, /training-coach/);
   assert.match(css, /\.training-coach/);
 });
+
+
+
+test("training requires fresh resolved successes, never headlines or a KO", async () => {
+  const { advanceTpsTrainingStage, EMPTY_TPS_TRAINING } = await import("../src/game/tps-training");
+  const hud = { phase: "MATCH", round: 1, timer: 99, p1Health: 100, p2Health: 0,
+    p1Wins: 1, p2Wins: 0, p1Name: "KAIRO", p2Name: "SERA", message: "RED REVERSAL",
+    p1State: "IDLE", p2State: "KO", tpsTraining: { ...EMPTY_TPS_TRAINING } } as const;
+  assert.equal(advanceTpsTrainingStage(2, hud, EMPTY_TPS_TRAINING), 2);
+  assert.equal(advanceTpsTrainingStage(4, { ...hud, message: "BREAK LINE" }, EMPTY_TPS_TRAINING), 4);
+  const keys = ["hits", "sideSteps", "perfectEvades", "punishes", "intercepts"] as const;
+  for (const stage of [0, 1, 2, 3, 4] as const) {
+    const progress = { ...EMPTY_TPS_TRAINING, [keys[stage]]: 1 };
+    const success = { ...hud, message: "MOMENTUM SHIFT", tpsTraining: progress };
+    assert.equal(advanceTpsTrainingStage(stage, success, EMPTY_TPS_TRAINING), stage + 1);
+    assert.equal(advanceTpsTrainingStage(stage, success, progress), stage, "old successes cannot clear the next lesson");
+  }
+  assert.equal(advanceTpsTrainingStage(5, hud, EMPTY_TPS_TRAINING), 5);
+});

@@ -170,7 +170,17 @@ export interface HitEvent {
   position: { x: number; y: number; z: number };
 }
 
+export interface TpsTrainingProgress {
+  hits: number;
+  sideSteps: number;
+  perfectEvades: number;
+  punishes: number;
+  intercepts: number;
+}
+
 export interface HudSnapshot {
+  tpsTraining?: TpsTrainingProgress;
+  tpsCue?: "INCOMING" | "WINDUP" | "PUNISH" | "RANGE" | "NONE";
   phase: "TITLE" | "SELECT" | "MATCH" | "RESULT";
   round: number;
   timer: number;
@@ -200,3 +210,4 @@ export function isInputEmpty(input: InputFrame): boolean {
     input.guard
   );
 }
+

@@ -588,10 +588,11 @@ try {
       fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
       shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,
       backDistance: game.camera.userData.tpsBackDistance ?? 0,
+      cameraOrbitRadius: Math.hypot(game.camera.userData.tpsShoulderOffset ?? 0, game.camera.userData.tpsBackDistance ?? 0),
       closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,
     };
   `);
-  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.backDistance > 4.65)) {
+  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.cameraOrbitRadius > 6.6) || !(cameraContinuityProbe.backDistance > 3.6)) {
     throw new Error(`TPS camera continuity exceeded the playtest comfort envelope: ${JSON.stringify(cameraContinuityProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-camera-continuity.png`);

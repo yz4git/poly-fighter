@@ -38,8 +38,8 @@ const TPS_KO_MIN_SHOW_TICKS = 72;
 const TPS_KO_SETTLED_HOLD_TICKS = 30;
 const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.80;
-const TPS_CAMERA_CLOSE_BACK_DELTA = 0.15;
+const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.75;
+const TPS_CAMERA_CLOSE_BACK_DELTA = -0.95;
 const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
 const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
 const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
@@ -990,17 +990,10 @@ export class TpsFightGame {
       1,
     );
     const flankLaneShift = this.playerEvadeSign * flankCameraFactor * 0.56;
-    // Open a screen-space lane to the opponent at contact by widening laterally.
-    // Compact iPhone landscape gets extra shoulder separation because the player
-    // silhouette otherwise covers the opponent at melee distance.
-    // Pull back as the fighters close instead of moving the shoulder camera inward.
-    // This preserves both silhouettes during punch/throw scrambles and gives iPhone
-    // landscape enough vertical room for the HUD and touch controls.
-    // Keep a modest extra pullback at contact, but preserve the strong lateral
-    // shoulder angle that keeps both fighter centers separated on iPhone.
-    // At melee range rotate the composition toward a 3/4 side lane rather
-    // than simply pulling the shoulder camera farther away. This keeps camera-to-
-    // player distance nearly unchanged while increasing screen-space separation.
+    // Rotate the close camera toward a stronger 3/4 side lane while preserving
+    // roughly the same orbit radius. This reveals the locked target beside the
+    // foreground fighter instead of zooming toward the pair or hiding them inline.
+    // Compact iPhone landscape still receives a small additional shoulder offset.
     const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
     const backDistance = 4.70
       + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA

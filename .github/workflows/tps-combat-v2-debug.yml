@@ -1,0 +1,61 @@
+name: TPS Combat v2 debug
+
+on:
+  push:
+    branches: [tps-combat-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  debug:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tps-combat-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Diagnose corrected patch
+        shell: bash
+        run: |
+          set +e
+          {
+            python3 - <<'PY'
+          from pathlib import Path
+          import re, textwrap
+          helper = Path('.github/workflows/tps-combat-v2-impl.yml').read_text()
+          match = re.search(r"python3 - <<'PY'\n(.*?)\n          PY", helper, flags=re.S)
+          print('helper extraction:', bool(match))
+          if not match:
+              raise SystemExit('unable to extract TPS Combat v2 patch helper')
+          script = textwrap.dedent(match.group(1))
+          print('script lines:', len(script.splitlines()))
+          script = script.replace('&& distance > 1.65', '&& liveDistance > 1.65')
+          script = script.replace('&& distance < 1.85', '&& liveDistance < 1.85')
+          script = script.replace('&& distance < 2.0', '&& liveDistance < 2.0')
+          exec(compile(script, 'tps-combat-v2-extracted.py', 'exec'), {'__name__': '__main__'})
+          print('patch execution: success')
+          PY
+            echo '--- diff check ---'
+            git diff --check
+            echo '--- targeted tests ---'
+            node --import tsx --test tests/tps-mode.test.ts
+            echo '--- lint ---'
+            npm run lint
+            echo '--- build ---'
+            npm run build
+          } > tps-v2-debug.log 2>&1
+          status=$?
+          cat tps-v2-debug.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tps-v2-debug.log
+          git commit -m "Capture TPS Combat v2 debug log" || true
+          git push origin HEAD:tps-combat-v2
+          exit $status

@@ -8,7 +8,9 @@ import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
+import { sampleCombatClipPose } from "./combat-pose-sampler";
 import { retargetMotionClips } from "./motion-retarget";
+import { attackEntryPreviousPoseWeight, motionPoseOwner, shouldAdvanceMixerFromRenderTime, shouldApplyLocomotionFootLock, shouldResamplePose } from "./motion-pose-policy";
 export { retargetMotionClips } from "./motion-retarget";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -568,13 +570,13 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   runtime.host.userData.quaterniusCurrentClip = clip.name;
 }
 
-function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false): number {
+function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false, advanceMixer = true): number {
   const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;
   runtime.lastTime = timeSeconds;
   if (!frozen) {
     runtime.clock += delta;
     runtime.transitionAge += delta;
-    runtime.mixer.update(delta);
+    if (advanceMixer) runtime.mixer.update(delta);
   }
   return frozen ? 0 : delta;
 }
@@ -608,18 +610,41 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
   else if (fighter.state === "JUMP") phase = Math.min(1, ticks / 38);
   else if (runtime.currentClip === "CM_Land") phase = Math.min(1, 1 - (runtime.landingEnd - runtime.clock) / .18);
   if (phase !== null) {
-    action.setEffectiveTimeScale(0);
-    action.time = clip.duration * phase;
-    runtime.mixer.update(0);
+    if (fighter.state === "ATTACK") {
+      // The gameplay tick owns the final attack skeleton. Evaluate the already-
+      // retargeted clip tracks directly so PropertyMixer original-state history
+      // and render cadence cannot leak into Counter/Throw or any Blender strike.
+      const appliedTracks = sampleCombatClipPose(clip, phase, runtime.bones);
+      runtime.host.userData.combatMotionDirectPoseSampler = "ABSOLUTE_TRACK_INTERPOLANT_V1";
+      runtime.host.userData.combatMotionDirectTrackCount = appliedTracks;
+    } else {
+      action.setEffectiveTimeScale(0);
+      action.time = clip.duration * phase;
+      runtime.mixer.update(0);
+    }
   }
+  const poseOwner = motionPoseOwner(fighter.state);
+  runtime.host.userData.combatMotionPoseOwner = poseOwner;
   if (runtime.transitionPose.size) {
-    const weight = 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
+    const attackOwned = poseOwner === "AUTHORED_COMBAT_TIMELINE" && Boolean(move);
+    const weight = attackOwned && move
+      ? attackEntryPreviousPoseWeight(move, fighter.moveTick)
+      : 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
+    runtime.host.userData.combatMotionTransitionPolicy = attackOwned
+      ? "GAMEPLAY_TICK_ATTACK_ENTRY"
+      : "RENDER_TIME_STATE_TRANSITION";
+    runtime.host.userData.combatMotionTransitionPreviousPoseWeight = weight;
     if (weight <= 0) runtime.transitionPose.clear();
     else for (const [name, from] of runtime.transitionPose) {
       const bone = runtime.bones.get(name)!;
       bone.quaternion.slerp(from.rotation, weight);
       bone.position.lerp(from.position, weight);
     }
+  } else {
+    runtime.host.userData.combatMotionTransitionPolicy = poseOwner === "AUTHORED_COMBAT_TIMELINE"
+      ? "GAMEPLAY_TICK_ATTACK_ENTRY"
+      : "RENDER_TIME_STATE_TRANSITION";
+    runtime.host.userData.combatMotionTransitionPreviousPoseWeight = 0;
   }
   runtime.model.updateMatrixWorld(true);
 }
@@ -793,10 +818,19 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   if (!runtime) return;
   const delta = runtime.lastTime > 0 ? THREE.MathUtils.clamp(timeSeconds - runtime.lastTime, 0, .05) : 0;
   observeMotion(runtime, fighter, delta);
-  const stateChanged = runtime.lastState !== fighter.state;
-  const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;
-  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);
-  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;
+  const previousState = runtime.lastState;
+  const previousStateTicks = runtime.lastStateTicks;
+  const previousMoveTick = runtime.lastMoveTick;
+  const previousReactionSerial = runtime.lastReactionSerial;
+  const stateChanged = previousState !== fighter.state;
+  const restartedState = fighter.stateMachine.stateTicks < previousStateTicks;
+  const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < previousMoveTick);
+  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== previousReactionSerial;
+  const poseSampleChanged =
+    stateChanged
+    || fighter.stateMachine.stateTicks !== previousStateTicks
+    || fighter.moveTick !== previousMoveTick
+    || fighter.reactionSerial !== previousReactionSerial;
   if (stateChanged || restartedState || restartingReaction) {
     runtime.stateDuration = fighter.stateMachine.stateTicks + (fighter.state === "HIT" ? fighter.hitStun : fighter.blockStun);
     runtime.plantedFeet.l = null; runtime.plantedFeet.r = null;
@@ -808,8 +842,24 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = fighter.reactionSerial;
   const desired = desiredClip(fighter, runtime);
+  const resamplePose = shouldResamplePose(fighter.hitStop, poseSampleChanged);
+  const advanceMixerFromRenderTime = shouldAdvanceMixerFromRenderTime(fighter.state);
+  runtime.host.userData.combatMotionHitStopPoseFrozen = !resamplePose;
+  runtime.host.userData.combatMotionRenderTimeMixerAdvance = advanceMixerFromRenderTime;
+  fighter.visual.root.userData.combatMotionHitStopPoseFrozen = !resamplePose;
+  fighter.visual.root.userData.combatMotionRenderTimeMixerAdvance = advanceMixerFromRenderTime;
+  if (!resamplePose) {
+    // Hitstop holds the already-rendered gameplay sample byte-for-byte. Keep the
+    // wall/render clock current so release cannot create a catch-up delta burst.
+    advance(runtime, timeSeconds, true, false);
+    fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;
+    fighter.visual.root.userData.combatMotionSingleMixer = true;
+    fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
+    runtime.model.updateMatrixWorld(true);
+    return;
+  }
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
-  advance(runtime, timeSeconds, fighter.hitStop > 0);
+  advance(runtime, timeSeconds, fighter.hitStop > 0, advanceMixerFromRenderTime);
   synchronizeMotion(runtime, fighter);
   const correctionsEnabled = motionCorrectionsEnabled();
   // New clips already contain an anatomical guard. The legacy assistance toggle
@@ -833,9 +883,13 @@ export function finalizeQuaterniusModelPose(fighter: FighterRuntime, timeSeconds
   const runtime = runtimes.get(fighter.visual.root);
   if (!runtime || runtime.finalTime === timeSeconds) return;
   runtime.finalTime = timeSeconds;
-  const walking = fighter.state === "WALK";
-  if (!walking || fighter.hitStop > 0) {
-    if (!walking) { runtime.plantedFeet.l = null; runtime.plantedFeet.r = null; }
+  const footLockActive = shouldApplyLocomotionFootLock(fighter.state, fighter.hitStop);
+  fighter.visual.root.userData.combatMotionPoseOwner = motionPoseOwner(fighter.state);
+  fighter.visual.root.userData.combatMotionFootLockPolicy = footLockActive
+    ? "LOCOMOTION_OWNER_ONLY"
+    : "DISABLED_FOR_CURRENT_POSE_OWNER";
+  if (!footLockActive) {
+    if (fighter.state !== "WALK") { runtime.plantedFeet.l = null; runtime.plantedFeet.r = null; }
     return;
   }
   runtime.model.updateMatrixWorld(true);

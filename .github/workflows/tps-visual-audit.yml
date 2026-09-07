@@ -77,7 +77,7 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
           for image in \
-            tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled tps-throw \
+            tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled tps-throw \
             tps-motion-jab tps-motion-straight tps-motion-bodyblow tps-motion-backfist \
             tps-motion-power tps-motion-kick tps-motion-lowkick tps-motion-risingkick \
             tps-motion-dashkick tps-motion-throw tps-motion-counter \

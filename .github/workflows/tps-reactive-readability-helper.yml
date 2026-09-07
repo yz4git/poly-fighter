@@ -1,0 +1,96 @@
+name: TPS reactive readability helper
+
+on:
+  push:
+    branches: [tps-reactive-readability-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tps-reactive-readability-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Implement reactive TPS readability pass
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, got {count}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Game: threat semantics should describe only a move that can still hit,
+          # while heavy pre-attack telegraphs get a separate readable windup state.
+          game = 'src/game/tps-game-base.ts'
+          marker = '  private updateLockOn(): void {\n'
+          helper = '''  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {\n    const windup = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;\n    const move = this.p2.currentMove;\n    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: false };\n    const distance = Math.hypot(\n      this.p2.position.x - this.p1.position.x,\n      this.p2.position.z - this.p1.position.z,\n    );\n    const canStillHit = this.p2.moveTick < move.startup + Math.max(1, move.active);\n    const inThreatReach = distance <= move.reach + 0.9;\n    return { windup, incoming: canStillHit && inThreatReach };\n  }\n\n'''
+          replace_once(game, marker, helper + marker)
+          replace_once(game,
+              '    const threat = this.p2.state === "ATTACK";\n    const inStrikeRange = distance < TPS_STRIKE_RANGE;\n',
+              '    const { windup, incoming: threat } = this.enemyThreatStatus();\n    const inStrikeRange = distance < TPS_STRIKE_RANGE;\n')
+          replace_once(game,
+              '    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;\n',
+              '    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff506f : windup ? 0xffc45a : inStrikeRange ? 0xffd45c : 0x7ce8ff;\n')
+          replace_once(game,
+              '    const pulseRate = threat ? 11.5 : 5.5;\n    const pulse = (threat ? 0.94 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * 0.045;\n',
+              '    const pulseRate = threat ? 14.0 : windup ? 8.5 : 5.5;\n    const pulse = (threat ? 1.02 : windup ? 0.96 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.075 : windup ? 0.06 : 0.045);\n')
+          replace_once(game,
+              '    const groundPulse = 0.95 + Math.sin(this.renderTime * pulseRate) * 0.06;\n    this.targetGroundRing.scale.setScalar(groundPulse);\n    this.targetGroundRing.material.opacity = threat ? 0.48 : inStrikeRange ? 0.34 : 0.22;\n',
+              '    const groundPulse = (threat ? 1.08 : windup ? 1.02 : 0.95) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.10 : 0.06);\n    this.targetGroundRing.scale.setScalar(groundPulse);\n    this.targetGroundRing.material.opacity = threat ? 0.68 : windup ? 0.46 : inStrikeRange ? 0.34 : 0.22;\n')
+          replace_once(game,
+              '    const snapshot: HudSnapshot = {\n',
+              '    const enemyThreat = this.enemyThreatStatus();\n    const snapshot: HudSnapshot = {\n')
+          replace_once(game,
+              '                : this.enemyOpeningGraceTicks > 0\n                  ? "READ THE TARGET"\n                  : this.p2.state === "ATTACK"\n                    ? "INCOMING"\n                    : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE\n',
+              '                : this.enemyOpeningGraceTicks > 0\n                  ? "READ THE TARGET"\n                  : enemyThreat.windup\n                    ? "WINDUP"\n                    : enemyThreat.incoming\n                      ? "INCOMING"\n                      : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE\n')
+
+          # UI: separate PREPARE / STEP NOW / PUNISH beats so the two-button scheme
+          # communicates exactly which action owns the current exchange.
+          page = 'app/page.tsx'
+          replace_once(page,
+              '  const tpsIncoming = hud?.message === "INCOMING";\n  const tpsStrikeRange = ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");\n',
+              '  const tpsIncoming = hud?.message === "INCOMING";\n  const tpsWindup = hud?.message === "WINDUP";\n  const tpsPunish = ["PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");\n  const tpsStrikeRange = hud?.message === "STRIKE RANGE";\n')
+          replace_once(page,
+              '              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsStrikeRange ? "tps-ready-action" : ""))}\n',
+              '              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}\n')
+
+          css = 'app/playtest-polish.css'
+          old_css = '''.action-buttons .tps-threat-action {\n  outline: 2px solid rgba(255, 102, 127, .92);\n  outline-offset: 3px;\n  animation: tps-threat-pulse .48s ease-in-out infinite alternate;\n}\n.action-buttons .tps-ready-action {\n  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);\n}\n@keyframes tps-threat-pulse {\n  from { filter: brightness(1); }\n  to { filter: brightness(1.28); }\n}\n'''
+          new_css = '''.action-buttons .tps-threat-action {\n  outline: 3px solid rgba(255, 80, 111, .98);\n  outline-offset: 3px;\n  box-shadow: 0 0 0 3px rgba(255, 80, 111, .14), 0 0 28px rgba(255, 60, 94, .44), inset 0 0 18px rgba(255, 88, 117, .12);\n  animation: tps-threat-pulse .34s ease-in-out infinite alternate;\n}\n.action-buttons .tps-threat-action::before,\n.action-buttons .tps-windup-action::before,\n.action-buttons .tps-punish-action::before {\n  position: absolute;\n  left: 50%;\n  bottom: calc(100% + 7px);\n  transform: translateX(-50%);\n  min-width: max-content;\n  padding: 4px 7px;\n  border: 1px solid currentColor;\n  border-radius: 4px;\n  background: rgba(4, 10, 20, .94);\n  font-size: 8px;\n  font-weight: 950;\n  line-height: 1;\n  letter-spacing: .15em;\n  text-shadow: 0 2px 6px rgba(0, 0, 0, .85);\n  pointer-events: none;\n}\n.action-buttons .tps-threat-action::before {\n  content: "STEP NOW";\n  color: #ff8ca3;\n  background: rgba(38, 5, 14, .96);\n}\n.action-buttons .tps-windup-action {\n  outline: 2px solid rgba(255, 196, 90, .82);\n  outline-offset: 3px;\n  box-shadow: 0 0 22px rgba(255, 184, 76, .24), inset 0 0 16px rgba(255, 207, 100, .08);\n}\n.action-buttons .tps-windup-action::before {\n  content: "READY";\n  color: #ffd36f;\n}\n.action-buttons .tps-ready-action {\n  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);\n}\n.action-buttons .tps-punish-action {\n  outline: 3px solid rgba(255, 226, 104, .92);\n  outline-offset: 3px;\n  box-shadow: 0 0 0 3px rgba(255, 226, 104, .12), 0 0 30px rgba(255, 210, 76, .42), inset 0 0 18px rgba(255, 230, 126, .12);\n  animation: tps-punish-pulse .46s ease-in-out infinite alternate;\n}\n.action-buttons .tps-punish-action::before {\n  content: "PUNISH";\n  color: #ffe66e;\n  background: rgba(31, 24, 4, .96);\n}\n@keyframes tps-threat-pulse {\n  from { filter: brightness(1); transform: scale(1); }\n  to { filter: brightness(1.30); transform: scale(1.055); }\n}\n@keyframes tps-punish-pulse {\n  from { filter: brightness(1); }\n  to { filter: brightness(1.18); }\n}\n@media (orientation: landscape) and (max-height: 430px) {\n  .action-buttons .tps-threat-action::before,\n  .action-buttons .tps-windup-action::before,\n  .action-buttons .tps-punish-action::before {\n    bottom: calc(100% + 5px);\n    padding: 3px 5px;\n    font-size: 7px;\n  }\n}\n'''
+          replace_once(css, old_css, new_css)
+
+          tests = 'tests/tps-mode.test.ts'
+          replace_once(tests,
+              '  assert.match(source, /lockLift = inStrikeRange \\? 0\\.62 : 0\\.46/);\n  assert.match(source, /tps-target-ground-ring/);\n',
+              '  assert.match(source, /lockLift = inStrikeRange \\? 0\\.62 : 0\\.46/);\n  assert.match(source, /enemyThreatStatus/);\n  assert.match(source, /enemyThreat\\.windup/);\n  assert.match(source, /enemyThreat\\.incoming/);\n  assert.match(source, /tps-target-ground-ring/);\n')
+          replace_once(tests,
+              '  assert.match(page, /SIDE STEP/);\n  assert.match(page, /BACK STEP = SPACE/);\n',
+              '  assert.match(page, /SIDE STEP/);\n  assert.match(page, /tpsWindup/);\n  assert.match(page, /tpsPunish/);\n  assert.match(page, /tps-threat-action/);\n  assert.match(page, /tps-windup-action/);\n  assert.match(page, /tps-punish-action/);\n  assert.match(page, /BACK STEP = SPACE/);\n')
+          with Path(tests).open('a') as f:
+              f.write('''\n\ntest("TPS reactive two-button HUD makes threat, windup, and punish turns explicit", async () => {\n  const [source, page, css] = await Promise.all([\n    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),\n    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),\n    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),\n  ]);\n  assert.match(source, /enemyThreatStatus/);\n  assert.match(source, /enemyDirectorPendingMove !== null/);\n  assert.match(source, /canStillHit/);\n  assert.match(source, /inThreatReach/);\n  assert.match(source, /\"WINDUP\"/);\n  assert.match(page, /hud\\?\\.message === \"WINDUP\"/);\n  assert.match(page, /\[\"PERFECT STEP\", \"FLANK OPEN\"\]/);\n  assert.match(css, /content: \"STEP NOW\"/);\n  assert.match(css, /content: \"READY\"/);\n  assert.match(css, /content: \"PUNISH\"/);\n});\n''')
+          PY
+          git diff --check
+          node --import tsx --test tests/tps-mode.test.ts
+          npm run lint
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game-base.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts
+          git commit -m "Improve TPS reactive combat readability"
+          git push origin HEAD:tps-reactive-readability-v1

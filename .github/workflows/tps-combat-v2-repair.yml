@@ -36,6 +36,21 @@ jobs:
           script = script.replace('&& distance < 1.85', '&& liveDistance < 1.85')
           script = script.replace('&& distance < 2.0', '&& liveDistance < 2.0')
           exec(compile(script, 'tps-combat-v2-extracted.py', 'exec'), {'__name__': '__main__'})
+
+          tests = Path('tests/tps-mode.test.ts')
+          text = tests.read_text()
+          replacements = {
+              'assert.match(source, /const flankStrike = attacker === this\\.p1/);': 'assert.match(source, /const interceptStrike = attacker === this\\.p1/);',
+              'assert.match(source, /&& !flankStrike/);': 'assert.match(source, /&& !reversalStrike && !interceptStrike/);',
+              'assert.match(page, /"punch", "Attack", tpsPunish \\? "PUNISH" : "ATTACK"/);': 'assert.match(page, /"punch", "Attack", tpsPunish \\? "PUNISH" : tpsIntercept \\? "INTERCEPT" : "ATTACK"/);',
+              'assert.match(page, /tpsPunish \\? "PUNISH" : "ATTACK"/);': 'assert.match(page, /tpsPunish \\? "PUNISH" : tpsIntercept \\? "INTERCEPT" : "ATTACK"/);',
+              'assert.match(page, /\\["PERFECT STEP", "FLANK OPEN"\\]/);': 'assert.match(page, /\\["PERFECT STEP", "FLANK OPEN", "REVERSAL"\\]/);',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing test expectation anchor: {old}')
+              text = text.replace(old, new, 1)
+          tests.write_text(text)
           PY
           git diff --check
           node --import tsx --test tests/tps-mode.test.ts

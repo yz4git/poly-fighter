@@ -1,0 +1,44 @@
+name: Update TPS main mode tests
+
+on:
+  push:
+    branches: [tps-main-mode-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tps-main-mode-v1
+      - name: Update legacy duel assertions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/tps-mode.test.ts')
+          s = p.read_text()
+          changes = [
+            ('test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps legacy controls", async () => {', 'test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", async () => {'),
+            ('  assert.match(page, /TPS LOCK-ON BATTLE/);', '  assert.doesNotMatch(page, /TPS LOCK-ON BATTLE/);'),
+            ('  assert.match(page, /battleMode === "TPS" \\? "TPS_MATCH" : "MATCH"/);', '  assert.match(page, /setScreen\\("TPS_MATCH"\\)/);\n  assert.doesNotMatch(page, /battleMode/);\n  assert.doesNotMatch(page, /setScreen\\("MATCH"\\)/);'),
+            ('  assert.match(page, /const isGameSurface = screen === "MATCH" \\|\\| screen === "TPS_MATCH";/);', '  assert.match(page, /const isGameSurface = screen === "TPS_MATCH";/);'),
+          ]
+          for old, new in changes:
+            if s.count(old) != 1:
+              raise SystemExit(f'expected one match for {old!r}, got {s.count(old)}')
+            s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          node --import tsx --test tests/tps-mode.test.ts tests/tps-main-mode.test.mjs
+          git diff --check
+      - name: Commit tests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/tps-mode.test.ts
+          git commit -m "Align TPS tests with main mode flow"
+          git push origin HEAD:tps-main-mode-v1

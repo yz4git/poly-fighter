@@ -20,6 +20,7 @@ export interface TpsFightGameOptions {
   p1Model?: FighterModelId;
   p2Model?: FighterModelId;
   difficulty?: CpuDifficulty;
+  training?: boolean;
   onHud?: (snapshot: HudSnapshot) => void;
   onResult?: (winner: "p1" | "p2" | "draw") => void;
   onFallback?: (message: string) => void;
@@ -240,6 +241,9 @@ export class TpsFightGame {
   private raf = 0;
   private running = false;
   private paused = false;
+  private playerStepAttackQueued = false;
+  // Cumulative across practice rounds so HUD sampling cannot lose a success.
+  private readonly trainingProgress = { hits: 0, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 0 };
   private lastTime = 0;
   private renderTime = 0;
   private timerTicks = ROUND_TICKS;
@@ -342,6 +346,7 @@ export class TpsFightGame {
       if (!document.hidden) return;
       this.clock.reset();
       this.lastTime = performance.now();
+      this.playerStepAttackQueued = false;
       this.input.clear();
     };
     document.addEventListener("visibilitychange", this.visibilityHandler);
@@ -410,7 +415,7 @@ export class TpsFightGame {
   press(action: InputAction, owner: number | string): void { this.interact(); this.input.press(action, owner); }
   release(action: InputAction, owner: number | string): void { this.input.release(action, owner); }
   releaseOwner(owner: number | string): void { this.input.releaseOwner(owner); }
-  pause(): void { this.paused = true; this.input.clear(); }
+  pause(): void { this.paused = true; this.playerStepAttackQueued = false; this.input.clear(); }
   resume(): void { this.paused = false; this.lastTime = performance.now(); }
 
   updateSettings(patch: Parameters<SettingsManager["update"]>[0]): void {
@@ -505,14 +510,15 @@ export class TpsFightGame {
         this.finished = true;
         const winner = this.resultWinner ?? "draw";
         this.publishHud(true);
-        this.options.onResult?.(winner);
+        if (this.options.training) this.rematch();
+        else this.options.onResult?.(winner);
       } else {
         this.publishHud(false);
       }
       return;
     }
     this.simulationTicks += 1;
-    this.timerTicks = Math.max(0, this.timerTicks - 1);
+    if (!this.options.training) this.timerTicks = Math.max(0, this.timerTicks - 1);
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
@@ -642,10 +648,20 @@ export class TpsFightGame {
 
     if (this.advanceLockedState(this.p1)) {
       this.playerEvadeTicks = 0;
+      this.playerStepAttackQueued = false;
       this.playerAttackQueued = false;
       this.playerComboStage = 0;
       this.playerComboGraceTicks = 0;
       this.playerFlankAttackTicks = 0;
+      return;
+    }
+
+    // Consume once at the first actionable tick after STEP. Never shorten the
+    // evade itself, carry it through a hit, or turn held ATTACK into auto-fire.
+    if (this.playerStepAttackQueued && this.playerEvadeTicks <= 0) {
+      this.playerStepAttackQueued = false;
+      this.beginContextAttack();
+      this.p1.updatePhysics(FIXED_STEP);
       return;
     }
 
@@ -657,6 +673,7 @@ export class TpsFightGame {
       this.playerStepForwardWeight = stepVector.dot(toEnemy);
       this.playerStepSideWeight = Math.abs(stepVector.dot(right));
       this.playerEvadeSign = sideAxis === 0 ? 0 : sideAxis > 0 ? 1 : -1;
+      if (this.playerStepSideWeight > 0.45) this.trainingProgress.sideSteps += 1;
       if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
       else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
       if (this.playerStepForwardWeight < -0.45) this.playerRetreatSamples += 1;
@@ -687,6 +704,7 @@ export class TpsFightGame {
     }
 
     if (this.playerEvadeTicks > 0) {
+      if (attackPressed && this.playerStepForwardWeight <= 0.45) this.playerStepAttackQueued = true;
       if (attackPressed && this.playerStepForwardWeight > 0.45) {
         this.playerEvadeTicks = 0;
         this.playerFlankWindowTicks = 0;
@@ -1050,6 +1068,7 @@ export class TpsFightGame {
       this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
       this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
       this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
+      this.trainingProgress.perfectEvades += 1;
       this.setCombatBeat("REVERSAL");
       return;
     }
@@ -1071,6 +1090,11 @@ export class TpsFightGame {
         : defenderWasAttacking ? 1.12 : 1;
     const resolvedDamage = blocked ? 0 : Math.max(1, Math.round(move.damage * damageScale));
     const lethalImpact = !blocked && defender.health <= resolvedDamage;
+    if (attacker === this.p1 && !blocked) {
+      this.trainingProgress.hits += 1;
+      if (interceptStrike) this.trainingProgress.intercepts += 1;
+      if (reversalStrike) this.trainingProgress.punishes += 1;
+    }
     const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);
 
     if (blocked) {
@@ -1368,6 +1392,7 @@ export class TpsFightGame {
   }
 
   private resetRound(): void {
+    this.playerStepAttackQueued = false;
     this.p1.resetForRound(0, 3.2, 1);
     this.p2.resetForRound(0, -2.2, -1);
     this.enemyCooldown = 52;
@@ -1431,12 +1456,20 @@ export class TpsFightGame {
   }
 
   private publishHud(force: boolean): void {
-    if (!force && this.timerTicks % 4 !== 0) return;
-    if (!force && this.lastHudTick === this.timerTicks) return;
-    this.lastHudTick = this.timerTicks;
+    if (!force && this.simulationTicks % 4 !== 0) return;
+    if (!force && this.lastHudTick === this.simulationTicks) return;
+    this.lastHudTick = this.simulationTicks;
     const enemyThreat = this.enemyThreatStatus();
     const snapshot: HudSnapshot = {
       phase: "MATCH",
+      tpsTraining: { ...this.trainingProgress },
+      // Action cues describe the current opportunity, independently of a
+      // signature/combo/drama headline that can remain on screen for 30+ ticks.
+      tpsCue: this.finishPending || this.finished ? "NONE"
+        : enemyThreat.incoming ? "INCOMING"
+          : this.playerReversalTicks > 0 || this.playerPerfectEvadeTicks > 0 ? "PUNISH"
+            : enemyThreat.windup ? "WINDUP"
+              : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE ? "RANGE" : "NONE",
       round: 1,
       timer: Math.ceil(this.timerTicks / 60),
       p1Health: this.p1.health,
@@ -1494,3 +1527,4 @@ export class TpsFightGame {
     this.mount.replaceChildren();
   }
 }
+

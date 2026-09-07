@@ -8,7 +8,7 @@ import { ReferenceReconstructionPanel } from "@/src/components/reference-reconst
 import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
-import { advanceTpsTrainingStage, TPS_TRAINING_STEPS, type TpsTrainingStage } from "@/src/game/tps-training";
+import { advanceTpsTrainingStage, EMPTY_TPS_TRAINING, TPS_TRAINING_STEPS, type TpsTrainingStage } from "@/src/game/tps-training";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
 import {
   directionToInput,
@@ -214,7 +214,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [paused, setPaused] = useState(false);
   const [trainingStage, setTrainingStage] = useState<TpsTrainingStage>(0);
-  const trainingEnemyHealthRef = useRef(100);
+  const trainingProgressRef = useRef(EMPTY_TPS_TRAINING);
   const [referenceMode, setReferenceMode] = useState(false);
   const [settings, setSettings] = useState<SettingsDraft>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
@@ -257,6 +257,7 @@ export default function Home() {
         p1Model: modelChoice,
         p2Model: modelChoice,
         difficulty: screen === "TRAINING" ? "EASY" : difficulty,
+        training: screen === "TRAINING",
         onHud: setHud,
         onFallback: (message) => {
           reportedFallback = true;
@@ -264,11 +265,7 @@ export default function Home() {
         },
         onResult: (winner) => {
           setHud((current) => (current ? { ...current, message: winner === "draw" ? "DRAW" : `${winner === "p1" ? "PLAYER 1" : "PLAYER 2"} WINS` } : current));
-          if (screen === "TRAINING") {
-            setTrainingStage(5);
-          } else {
-            setScreen("RESULT");
-          }
+          if (screen !== "TRAINING") setScreen("RESULT");
         },
       });
     } catch (error) {
@@ -312,14 +309,14 @@ export default function Home() {
 
   useEffect(() => {
     if (screen !== "TRAINING" || !hud) return;
-    const previousHealth = trainingEnemyHealthRef.current;
-    setTrainingStage((stage) => advanceTpsTrainingStage(stage, hud, previousHealth));
-    trainingEnemyHealthRef.current = hud.p2Health;
+    const previous = trainingProgressRef.current;
+    setTrainingStage((stage) => advanceTpsTrainingStage(stage, hud, previous));
+    trainingProgressRef.current = hud.tpsTraining ?? previous;
   }, [hud, screen]);
 
   const startTraining = () => {
     requestLandscape();
-    trainingEnemyHealthRef.current = 100;
+    trainingProgressRef.current = EMPTY_TPS_TRAINING;
     setTrainingStage(0);
     setHud(null);
     setPaused(false);
@@ -351,11 +348,11 @@ export default function Home() {
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "TPS_MATCH" || screen === "TRAINING";
   const trainingStep = TPS_TRAINING_STEPS[trainingStage];
-  const tpsIncoming = hud?.message === "INCOMING";
-  const tpsWindup = hud?.message === "WINDUP";
-  const tpsPunish = ["PERFECT STEP", "FLANK OPEN", "REVERSAL"].includes(hud?.message ?? "");
-  const tpsIntercept = ["WINDUP", "INTERCEPT"].includes(hud?.message ?? "");
-  const tpsStrikeRange = hud?.message === "STRIKE RANGE";
+  const tpsIncoming = hud?.tpsCue === "INCOMING";
+  const tpsWindup = hud?.tpsCue === "WINDUP";
+  const tpsPunish = hud?.tpsCue === "PUNISH";
+  const tpsIntercept = hud?.tpsCue === "WINDUP";
+  const tpsStrikeRange = hud?.tpsCue === "RANGE";
   const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
   const tpsKoMessage = ["KO", "FINAL IMPACT"].includes(hud?.message ?? "");
   const tpsFaceSafeMessage = Boolean(hud?.message);
@@ -496,3 +493,4 @@ export default function Home() {
     </main>
   );
 }
+

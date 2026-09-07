@@ -371,9 +371,9 @@
   backdrop-filter: blur(8px);
   pointer-events: none;
 }
-.training-coach > span { display:block; font-size:8px; letter-spacing:.14em; color:#7ce8ff; }
+.training-coach > span { display:block; font-size:12px; letter-spacing:.04em; color:#7ce8ff; }
 .training-coach > strong { display:block; margin-top:4px; font-size:17px; letter-spacing:.06em; }
-.training-coach > p { margin:3px 0 7px; font-size:10px; line-height:1.25; color:#b9cbd9; }
+.training-coach > p { margin:3px 0 7px; font-size:14px; line-height:1.45; color:#d4e5ee; }
 .training-coach > div { display:flex; gap:4px; }
 .training-coach > div i { width:20px; height:3px; background:rgba(124,232,255,.18); }
 .training-coach > div i.done { background:rgba(124,232,255,.92); }
@@ -382,5 +382,6 @@
 @media (orientation: landscape) and (max-height: 430px) {
   .training-coach { top:max(62px, calc(env(safe-area-inset-top) + 50px)); width:min(250px,32vw); padding:7px 9px; }
   .training-coach > strong { font-size:14px; }
-  .training-coach > p { font-size:9px; }
+  .training-coach > p { font-size:14px; }
 }
+

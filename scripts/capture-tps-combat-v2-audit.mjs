@@ -296,15 +296,18 @@ try {
       game.p2.velocity.set(0, 0, 0);
       if (!['HIT', 'KNOCKDOWN', 'KO'].includes(game.p2.state)) game.p2.state = 'IDLE';
     };
+    const bufferedDuringStep = game.playerEvadeTicks > 0;
+    game.press('punch', 'tps-v2-reversal-attack');
+    game.step();
+    const didNotCancelStep = game.p1.state === 'SIDESTEP';
+    game.release('punch', 'tps-v2-reversal-attack');
     while (game.playerEvadeTicks > 0 && evadeSteps < 20) {
       game.renderTime += 1 / 60;
       game.step();
       evadeSteps += 1;
     }
-    game.press('punch', 'tps-v2-reversal-attack');
     game.step();
     const move = game.p1.currentMove?.id ?? null;
-    game.release('punch', 'tps-v2-reversal-attack');
     let attackSteps = 1;
     while (attackSteps < 55 && game.p2.visual.root.userData.tpsReactionType !== 'REVERSAL') {
       game.renderTime += 1 / 60;
@@ -316,6 +319,8 @@ try {
     game.renderer.render(game.scene, game.camera);
     return {
       earnedWindow,
+      bufferedDuringStep,
+      didNotCancelStep,
       evadeSteps,
       attackSteps,
       move,
@@ -326,7 +331,7 @@ try {
     };
   `);
   await delay(60);
-  if (reversal?.earnedWindow <= 0 || reversal?.move !== 'counter' || reversal?.reaction !== 'REVERSAL' || reversal?.p2Health >= 100) {
+  if (!reversal?.bufferedDuringStep || !reversal?.didNotCancelStep || reversal?.earnedWindow <= 0 || reversal?.move !== 'counter' || reversal?.reaction !== 'REVERSAL' || reversal?.p2Health >= 100) {
     throw new Error(`REVERSAL browser probe failed: ${JSON.stringify(reversal)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-v2-reversal.png`);
@@ -377,7 +382,61 @@ try {
     throw new Error(`TPS v2 two-button contract failed: ${JSON.stringify(uiProbe)}`);
   }
 
-  const report = { viewport, adaptationProbe, intercept, reversal, finalImpact, ui: {
+  await command(`/session/${sessionId}/url`, "POST", { url });
+  await delay(650);
+  const trainingStart = await clickButton(sessionId, "TRAINING");
+  if (!trainingStart?.clicked) throw new Error("Training entry missing");
+  let trainingReady = false;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    trainingReady = await execute(sessionId, `${gameLookup}
+      const game = findGame();
+      return Boolean(game && document.querySelector('.scene-host canvas'));
+    `);
+    if (trainingReady) break;
+    await delay(100);
+  }
+  if (!trainingReady) throw new Error("Training runtime unavailable");
+  await delay(1200);
+  const trainingProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    if (!game || !game.options.training) return { error: 'not-training' };
+    cancelAnimationFrame(game.raf);
+    game.paused = false;
+    game.input.clear();
+    game.p1.resetForRound(0, .72, 1);
+    game.p2.resetForRound(0, -.72, -1);
+    game.updateEnemy = () => game.p2.updatePhysics(1 / 60);
+    game.p1.beginMove('jab');
+    for (let n = 0; n < 40; n++) game.step();
+    game.publishHud(true);
+    return { hits: game.trainingProgress.hits, timer: game.timerTicks, training: game.options.training };
+  `);
+  await delay(100);
+  const lessonAfterHit = await execute(sessionId, `return document.querySelector('.training-coach strong')?.textContent;`);
+  if (trainingProbe?.hits !== 1 || lessonAfterHit !== 'STEP') throw new Error('Training hit did not advance: ' + JSON.stringify({trainingProbe, lessonAfterHit}));
+  const practiceReset = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.p2.health = 0;
+    for (let n = 0; n < 165; n++) game.step();
+    game.publishHud(true);
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { health: game.p2.health, finished: game.finished, hits: game.trainingProgress.hits, timer: game.timerTicks };
+  `);
+  await delay(100);
+  const trainingLayout = await execute(sessionId, `
+    const coach = document.querySelector('.training-coach');
+    const box = coach?.getBoundingClientRect();
+    return { lesson: coach?.querySelector('strong')?.textContent, fontSize: coach ? getComputedStyle(coach.querySelector('p')).fontSize : null,
+      onScreen: !!box && box.top >= 0 && box.bottom <= innerHeight && box.right <= innerWidth };
+  `);
+  if (practiceReset?.health !== 100 || practiceReset?.finished || practiceReset?.hits !== 1 || trainingLayout?.lesson !== 'STEP' || !trainingLayout.onScreen) {
+    throw new Error('Training KO incorrectly completed or froze practice: ' + JSON.stringify({practiceReset, trainingLayout}));
+  }
+  await screenshot(sessionId, `${outputDir}/tps-training-practice.png`);
+
+  const report = { viewport, adaptationProbe, intercept, reversal, finalImpact, trainingProbe, practiceReset, trainingLayout, ui: {
     stepButton: uiProbe.stepButton,
     attackButton: uiProbe.attackButton,
     touchActionLabels: uiProbe.touchActionLabels,
@@ -388,3 +447,4 @@ try {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");
 }
+

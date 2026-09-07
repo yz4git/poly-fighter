@@ -21,7 +21,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Make reactive cue text visible and add deterministic captures
+      - name: Make reactive cue text visible and wire deterministic audit
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -39,20 +39,61 @@ jobs:
               '              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}\n',
               '              {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}\n              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}\n')
 
-          css = 'app/playtest-polish.css'
-          p = Path(css)
-          text = p.read_text()
+          css = Path('app/playtest-polish.css')
+          text = css.read_text()
           start = text.index('.action-buttons .tps-threat-action {')
           end = text.index('\n\n\n/* Combat readability pass v1 */', start)
-          replacement = '''.action-buttons .tps-threat-action {\n  outline: 3px solid rgba(255, 80, 111, .98);\n  outline-offset: 3px;\n  box-shadow: 0 0 0 3px rgba(255, 80, 111, .14), 0 0 28px rgba(255, 60, 94, .44), inset 0 0 18px rgba(255, 88, 117, .12);\n  color: #fff4f6;\n  animation: tps-threat-pulse .34s ease-in-out infinite alternate;\n}\n.action-buttons .tps-windup-action {\n  outline: 2px solid rgba(255, 196, 90, .88);\n  outline-offset: 3px;\n  color: #ffe09a;\n  box-shadow: 0 0 22px rgba(255, 184, 76, .28), inset 0 0 16px rgba(255, 207, 100, .09);\n}\n.action-buttons .tps-ready-action {\n  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);\n}\n.action-buttons .tps-punish-action {\n  outline: 3px solid rgba(255, 226, 104, .96);\n  outline-offset: 3px;\n  color: #fff9cf;\n  box-shadow: 0 0 0 3px rgba(255, 226, 104, .12), 0 0 30px rgba(255, 210, 76, .44), inset 0 0 18px rgba(255, 230, 126, .13);\n  animation: tps-punish-pulse .46s ease-in-out infinite alternate;\n}\n.action-buttons .tps-step-action.tps-threat-action {\n  letter-spacing: .025em;\n  font-size: clamp(10px, 1.35vw, 14px);\n}\n@keyframes tps-threat-pulse {\n  from { filter: brightness(1); transform: scale(1); }\n  to { filter: brightness(1.30); transform: scale(1.055); }\n}\n@keyframes tps-punish-pulse {\n  from { filter: brightness(1); }\n  to { filter: brightness(1.18); }\n}\n@media (orientation: landscape) and (max-height: 430px) {\n  .action-buttons .tps-step-action.tps-threat-action {\n    font-size: 9px;\n    letter-spacing: 0;\n  }\n  .action-buttons .tps-attack-action.tps-punish-action {\n    font-size: 11px;\n  }\n}\n'''
-          p.write_text(text[:start] + replacement + text[end:])
-
-          script = 'scripts/capture-tps-visual-audit.mjs'
-          marker = '  await screenshot(sessionId, `${outputDir}/tps-quickstep.png`);\n\n'
-          cue_block = r'''  // Deterministically prove the two-button reactive cues in the real rendered UI.\n  // The live CPU capture is intentionally variable, so force each semantic state\n  // while RAF is stopped and assert both React button text and class ownership.\n  const reactiveCueProbe = {};\n  async function captureReactiveCue(kind) {\n    const gameState = await execute(sessionId, `${gameLookup}\n      const game = findGame();\n      game.enemyOpeningGraceTicks = 0;\n      game.finished = false;\n      game.finishPending = false;\n      game.input.clear();\n      game.enemyDirectorPendingMove = null;\n      game.enemyDirectorTelegraphTicks = 0;\n      game.playerPerfectEvadeTicks = 0;\n      game.playerFlankWindowTicks = 0;\n      game.playerStepSideWeight = 0;\n      game.p1.position.set(0, 0, 0.82);\n      game.p2.position.set(0, 0, -0.52);\n      game.p2.currentMove = null;\n      game.p2.moveTick = 0;\n      game.p2.hitStop = 0;\n      game.p2.state = 'IDLE';\n      if (arguments[0] === 'WINDUP') {\n        game.enemyDirectorPendingMove = 'power';\n        game.enemyDirectorTelegraphTicks = 6;\n      } else if (arguments[0] === 'INCOMING') {\n        game.p2.beginMove('jab');\n        game.p2.state = 'ATTACK';\n        game.p2.moveTick = Math.max(0, (game.p2.currentMove?.startup ?? 1) - 1);\n      } else if (arguments[0] === 'PUNISH') {\n        game.playerPerfectEvadeTicks = 18;\n        game.playerFlankWindowTicks = 30;\n        game.playerStepSideWeight = 1;\n      }\n      game.publishHud(true);\n      game.updateCamera(1 / 60);\n      game.updateLockOn();\n      game.renderer.render(game.scene, game.camera);\n      return { kind: arguments[0], threat: game.enemyThreatStatus(), p2State: game.p2.state, move: game.p2.currentMove?.id ?? null };\n    `, [kind]);\n    await delay(100);\n    const ui = await execute(sessionId, `\n      const step = document.querySelector('button[aria-label="Step"]');\n      const attack = document.querySelector('button[aria-label="Attack"]');\n      return {\n        stepText: step?.textContent?.trim() ?? null,\n        attackText: attack?.textContent?.trim() ?? null,\n        stepClass: step?.className ?? null,\n        attackClass: attack?.className ?? null,\n      };\n    `);\n    reactiveCueProbe[kind] = { gameState, ui };\n    const expected = kind === 'WINDUP'\n      ? ui.stepText === 'READY' && ui.stepClass.includes('tps-windup-action')\n      : kind === 'INCOMING'\n        ? ui.stepText === 'STEP NOW' && ui.stepClass.includes('tps-threat-action')\n        : ui.attackText === 'PUNISH' && ui.attackClass.includes('tps-punish-action');\n    if (!expected) throw new Error(`TPS reactive ${kind} cue mismatch: ${JSON.stringify({ gameState, ui })}`);\n    await screenshot(sessionId, `${outputDir}/tps-${kind.toLowerCase()}-cue.png`);\n  }\n  await captureReactiveCue('WINDUP');\n  await captureReactiveCue('INCOMING');\n  await captureReactiveCue('PUNISH');\n  await writeFile(`${outputDir}/tps-reactive-cues.json`, JSON.stringify(reactiveCueProbe, null, 2));\n\n'''
-          replace_once(script, marker, marker + cue_block)
+          replacement = '''.action-buttons .tps-threat-action {
+  outline: 3px solid rgba(255, 80, 111, .98);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(255, 80, 111, .14), 0 0 28px rgba(255, 60, 94, .44), inset 0 0 18px rgba(255, 88, 117, .12);
+  color: #fff4f6;
+  animation: tps-threat-pulse .34s ease-in-out infinite alternate;
+}
+.action-buttons .tps-windup-action {
+  outline: 2px solid rgba(255, 196, 90, .88);
+  outline-offset: 3px;
+  color: #ffe09a;
+  box-shadow: 0 0 22px rgba(255, 184, 76, .28), inset 0 0 16px rgba(255, 207, 100, .09);
+}
+.action-buttons .tps-ready-action {
+  box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);
+}
+.action-buttons .tps-punish-action {
+  outline: 3px solid rgba(255, 226, 104, .96);
+  outline-offset: 3px;
+  color: #fff9cf;
+  box-shadow: 0 0 0 3px rgba(255, 226, 104, .12), 0 0 30px rgba(255, 210, 76, .44), inset 0 0 18px rgba(255, 230, 126, .13);
+  animation: tps-punish-pulse .46s ease-in-out infinite alternate;
+}
+.action-buttons .tps-step-action.tps-threat-action {
+  letter-spacing: .025em;
+  font-size: clamp(10px, 1.35vw, 14px);
+}
+@keyframes tps-threat-pulse {
+  from { filter: brightness(1); transform: scale(1); }
+  to { filter: brightness(1.30); transform: scale(1.055); }
+}
+@keyframes tps-punish-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.18); }
+}
+@media (orientation: landscape) and (max-height: 430px) {
+  .action-buttons .tps-step-action.tps-threat-action {
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+  .action-buttons .tps-attack-action.tps-punish-action {
+    font-size: 11px;
+  }
+}
+'''
+          css.write_text(text[:start] + replacement + text[end:])
 
           workflow = '.github/workflows/tps-visual-audit.yml'
+          replace_once(workflow,
+              '          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-entry-audit.mjs\n          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-visual-audit.mjs\n',
+              '          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-entry-audit.mjs\n          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-reactive-cues.mjs\n          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-visual-audit.mjs\n')
           replace_once(workflow,
               '            tps-title-iphone tps-loadout-iphone tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-punch tps-punch-settled tps-throw \\\n',
               '            tps-title-iphone tps-loadout-iphone tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-windup-cue tps-incoming-cue tps-punish-cue tps-punch tps-punch-settled tps-throw \\\n')
@@ -61,20 +102,18 @@ jobs:
               '          test -s artifacts/tps-visual-audit/tps-runtime-state.json\n          test -s artifacts/tps-visual-audit/tps-reactive-cues.json\n')
 
           tests = 'tests/tps-mode.test.ts'
-          p = Path(tests)
-          t = p.read_text()
-          t = t.replace('  assert.match(css, /content: \\"STEP NOW\\"/);\n  assert.match(css, /content: \\"READY\\"/);\n  assert.match(css, /content: \\"PUNISH\\"/);\n',
-                        '  assert.match(page, /tpsIncoming \\? \\"STEP NOW\\" : tpsWindup \\? \\"READY\\" : \\"STEP\\"/);\n  assert.match(page, /tpsPunish \\? \\"PUNISH\\" : \\"ATTACK\\"/);\n  assert.match(css, /tps-step-action\\.tps-threat-action/);\n  assert.match(css, /tps-attack-action\\.tps-punish-action/);\n')
-          p.write_text(t)
+          replace_once(tests,
+              '  assert.match(css, /content: "STEP NOW"/);\n  assert.match(css, /content: "READY"/);\n  assert.match(css, /content: "PUNISH"/);\n',
+              '  assert.match(page, /tpsIncoming \\? "STEP NOW" : tpsWindup \\? "READY" : "STEP"/);\n  assert.match(page, /tpsPunish \\? "PUNISH" : "ATTACK"/);\n  assert.match(css, /tps-step-action\\.tps-threat-action/);\n  assert.match(css, /tps-attack-action\\.tps-punish-action/);\n')
           PY
           git diff --check
-          node --check scripts/capture-tps-visual-audit.mjs
+          node --check scripts/capture-tps-reactive-cues.mjs
           node --import tsx --test tests/tps-mode.test.ts
           npm run lint
-      - name: Commit visual fix and audit
+      - name: Commit visual fix and audit wiring
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/page.tsx app/playtest-polish.css scripts/capture-tps-visual-audit.mjs .github/workflows/tps-visual-audit.yml tests/tps-mode.test.ts
+          git add app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts .github/workflows/tps-visual-audit.yml
           git commit -m "Make TPS reactive cues visible in play"
           git push origin HEAD:tps-reactive-readability-v1

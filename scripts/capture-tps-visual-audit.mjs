@@ -473,8 +473,8 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/tps-guard.png`);
 
-  // Force the ATTACK button into its far-range kick branch and validate the real
-  // contact frame rather than only the isolated motion-library pose.
+  // Exercise an explicit gameplay kick through the real combat step/resolve path.
+  // Context ATTACK selection is covered elsewhere; this probe isolates kick contact readability.
   const kickContactProbe = await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -492,6 +492,11 @@ try {
       fighter.input = { ...neutral };
       fighter.previousInput = { ...neutral };
     }
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.playerFlankWindowTicks = 0;
+    game.playerFlankAttackTicks = 0;
     game.p1.position.set(0, 0, 0.94);
     game.p2.position.set(0, 0, -0.72);
     game.updateEnemy = () => {
@@ -499,10 +504,9 @@ try {
       if (game.p2.state !== 'HIT') game.p2.state = 'IDLE';
     };
     for (let index = 0; index < 24; index += 1) game.updateCamera(1 / 60);
-    game.press('punch', 'tps-audit-kick-contact');
+    if (!game.p1.beginMove('kick')) throw new Error('TPS kick probe could not start kick');
     game.step();
     const moveId = game.p1.currentMove?.id ?? null;
-    game.release('punch', 'tps-audit-kick-contact');
     let steps = 1;
     while (steps < 80 && game.p2.health === 100) { game.step(); steps += 1; }
     for (let index = 0; index < 8; index += 1) game.updateCamera(1 / 60);

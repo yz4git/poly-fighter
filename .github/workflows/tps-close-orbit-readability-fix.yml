@@ -1,0 +1,54 @@
+name: Apply TPS close orbit readability fix
+
+on:
+  push:
+    branches: [tps-continuous-play-polish-v1]
+    paths:
+      - .github/workflows/tps-close-orbit-readability-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Taper close orbit and audit target readability
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/game/tps-game-base.ts')
+          s = p.read_text()
+          anchor = 'const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;\n'
+          assert anchor in s
+          s = s.replace(anchor, anchor + 'const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;\n', 1)
+          old = '''    if (move.lengthSq() > 0.001) {\n      move.normalize();\n      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed);\n      this.p1.state = "WALK";\n    } else {'''
+          new = '''    if (move.lengthSq() > 0.001) {\n      move.normalize();\n      // Near-contact pure strafing can otherwise orbit the opponent fast enough\n      // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;\n      // forward/back movement and the authored STEP burst keep their full speed.\n      const fightDistance = Math.hypot(\n        this.p2.position.x - this.p1.position.x,\n        this.p2.position.z - this.p1.position.z,\n      );\n      const closeOrbitFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);\n      const lateralInputWeight = Math.abs(sideAxis) / Math.max(1, Math.abs(forwardAxis) + Math.abs(sideAxis));\n      const closeOrbitScale = THREE.MathUtils.lerp(1, TPS_CLOSE_ORBIT_SPEED_SCALE, closeOrbitFactor);\n      const locomotionSpeedScale = THREE.MathUtils.lerp(1, closeOrbitScale, lateralInputWeight);\n      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * locomotionSpeedScale);\n      this.p1.state = "WALK";\n    } else {'''
+          assert old in s
+          p.write_text(s.replace(old, new, 1))
+
+          t = Path('tests/tps-mode.test.ts')
+          ts = t.read_text()
+          anchor = '  assert.match(source, /TPS_CAMERA_MAX_TRAVEL_SPEED = 15\\.0/);\n'
+          assert anchor in ts
+          ts = ts.replace(anchor, anchor + '  assert.match(source, /TPS_CLOSE_ORBIT_SPEED_SCALE = 0\\.65/);\n  assert.match(source, /locomotionSpeedScale/);\n', 1)
+          t.write_text(ts)
+
+          a = Path('scripts/capture-tps-visual-audit.mjs')
+          au = a.read_text()
+          old = '''    game.updateLockOn();\n    game.renderer.render(game.scene, game.camera);\n    return {\n      maxCameraStep,\n      maxLookTargetStep,\n      fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),\n      shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,\n      backDistance: game.camera.userData.tpsBackDistance ?? 0,\n      closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,\n    };\n  `);\n  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.backDistance > 4.65)) {'''
+          new = '''    game.updateLockOn();\n    game.renderer.render(game.scene, game.camera);\n    const canvas = game.renderer.domElement;\n    const playerScreen = game.p1.position.clone();\n    const enemyScreen = game.p2.position.clone();\n    playerScreen.y = 1.2;\n    enemyScreen.y = 1.2;\n    playerScreen.project(game.camera);\n    enemyScreen.project(game.camera);\n    const screenSeparation = Math.abs(enemyScreen.x - playerScreen.x) * canvas.width * 0.5;\n    return {\n      maxCameraStep,\n      maxLookTargetStep,\n      screenSeparation,\n      fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),\n      shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,\n      backDistance: game.camera.userData.tpsBackDistance ?? 0,\n      closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,\n    };\n  `);\n  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.backDistance > 4.65)) {'''
+          assert old in au
+          a.write_text(au.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit fix and remove helper workflow
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
+          git rm .github/workflows/tps-close-orbit-readability-fix.yml
+          git commit -m "Improve TPS close orbit readability"
+          git push

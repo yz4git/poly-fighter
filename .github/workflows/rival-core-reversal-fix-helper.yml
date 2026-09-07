@@ -27,50 +27,18 @@ jobs:
           from pathlib import Path
           path = Path('src/game/tps-game.ts')
           source = path.read_text()
-          old = '''    if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);
-    if (reversalOpen) game.playerReversalTicks = 0;
-    if (flank) {
-'''
-          new = '''    if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);
-    if (reversalOpen) {
-      // Signature reversals are earned from the same large lateral STEP as the
-      // legacy PERFECT route. Preserve its bounded pursuit so the counter does
-      // not whiff only because the successful evade created extra separation.
-      const towardTarget = horizontalDirection(game.p1.position, game.p2.position);
-      const currentDistance = Math.hypot(
-        game.p2.position.x - game.p1.position.x,
-        game.p2.position.z - game.p1.position.z,
-      );
-      const lunge = THREE.MathUtils.clamp(
-        currentDistance - PERFECT_COUNTER_TARGET_DISTANCE,
-        0,
-        PERFECT_COUNTER_MAX_LUNGE,
-      );
-      game.p1.position.addScaledVector(towardTarget, lunge);
-      game.p1.visual.root.userData.tpsPerfectCounterLunge = lunge;
-      game.p1.visual.root.userData.tpsSignaturePursuitLunge = lunge;
-      game.playerReversalTicks = 0;
-    }
-    if (flank) {
-'''
+          old = "    if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);\n    if (reversalOpen) game.playerReversalTicks = 0;\n    if (flank) {\n"
+          new = "    if (signatureChoice.beat) game.setCombatBeat(signatureChoice.beat);\n    if (reversalOpen) {\n      // Signature reversals share the large lateral STEP, so preserve the same bounded pursuit used by PERFECT counters.\n      const towardTarget = horizontalDirection(game.p1.position, game.p2.position);\n      const currentDistance = Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z);\n      const lunge = THREE.MathUtils.clamp(currentDistance - PERFECT_COUNTER_TARGET_DISTANCE, 0, PERFECT_COUNTER_MAX_LUNGE);\n      game.p1.position.addScaledVector(towardTarget, lunge);\n      game.p1.visual.root.userData.tpsPerfectCounterLunge = lunge;\n      game.p1.visual.root.userData.tpsSignaturePursuitLunge = lunge;\n      game.playerReversalTicks = 0;\n    }\n    if (flank) {\n"
           if old not in source:
               raise SystemExit('missing signature reversal anchor')
           path.write_text(source.replace(old, new, 1))
-
           test_path = Path('tests/tps-rival-core.test.ts')
           tests = test_path.read_text()
-          anchor = '''  assert.match(source, /baseFov - factor \\* 3\\.2/);
-});
-'''
-          replacement = '''  assert.match(source, /baseFov - factor \\* 3\\.2/);
-  assert.match(source, /if \\(reversalOpen\\) \\{/);
-  assert.match(source, /PERFECT_COUNTER_MAX_LUNGE/);
-  assert.match(source, /tpsSignaturePursuitLunge/);
-});
-'''
-          if anchor not in tests:
+          old_test = "  assert.match(source, /baseFov - factor \\\\* 3\\\\.2/);\n});\n"
+          new_test = "  assert.match(source, /baseFov - factor \\\\* 3\\\\.2/);\n  assert.match(source, /tpsSignaturePursuitLunge/);\n  assert.match(source, /PERFECT_COUNTER_MAX_LUNGE/);\n});\n"
+          if old_test not in tests:
               raise SystemExit('missing phase 6 test anchor')
-          test_path.write_text(tests.replace(anchor, replacement, 1))
+          test_path.write_text(tests.replace(old_test, new_test, 1))
           PY
       - run: npm ci --no-audit --no-fund
       - name: TPS regression suite

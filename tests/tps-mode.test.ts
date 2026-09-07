@@ -75,9 +75,7 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /__comboQueuedBranch/);
   assert.match(source, /const comboConfirmed = this\.p1\.hitTargets\.has\(this\.p2\.id\)/);
   assert.match(source, /!comboConfirmed \|\| this\.playerComboStage >= 3/);
-  assert.match(source, /closeMoves = \["jab", "straight", "power"\]/);
-  assert.match(source, /farMoves = \["kick", "lowKick", "risingKick"\]/);
-  assert.match(source, /distance <= TPS_CLOSE_ATTACK_RANGE \? closeMoves\[stage\] : farMoves\[stage\]/);
+  assert.match(source, /resolveContextAttack/);
   assert.match(source, /this\.playerEvadeTicks = TPS_STEP_TICKS/);
   assert.match(source, /this\.playerStepDirection\.copy\(stepVector\)/);
   assert.match(source, /this\.playerStepForwardWeight > 0\.45/);
@@ -94,7 +92,7 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /incomingDistance <= incomingMove\.reach \+ 0\.9/);
   assert.match(source, /TPS_STEP_TICKS \+ TPS_FLANK_WINDOW_TICKS/);
   assert.match(source, /Math\.max\(this\.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS\)/);
-  assert.match(source, /Math\.max\(this\.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS\)/);
+  assert.match(source, /TPS_PERFECT_EVADE_TICKS \+ this\.p1Dna\.perfectEvadeBonusTicks/);
   assert.match(source, /const trackedSideEvade/);
   assert.match(source, /const interceptStrike = attacker === this\.p1/);
   assert.match(source, /&& !reversalStrike && !interceptStrike/);
@@ -230,7 +228,7 @@ test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grad
   assert.match(source, /playerReversalTicks/);
   assert.match(source, /setCombatBeat\("INTERCEPT"\)/);
   assert.match(source, /setCombatBeat\("REVERSAL"\)/);
-  assert.match(source, /moveId = reversalStrike \? "counter"/);
+  assert.match(source, /reversalOpen: reversalStrike/);
   assert.match(source, /defenderWasAttacking/);
   assert.match(source, /counter: defenderWasAttacking \|\| interceptStrike/);
   assert.match(source, /tpsReactionType/);

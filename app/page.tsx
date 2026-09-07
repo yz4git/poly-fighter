@@ -425,8 +425,8 @@ export default function Home() {
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons tps-two-button-actions">
-              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
-              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
+              {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
+              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
           <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</div>

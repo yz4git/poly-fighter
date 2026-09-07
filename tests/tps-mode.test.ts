@@ -211,7 +211,8 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
   assert.match(source, /"WINDUP"/);
   assert.match(page, /hud\?\.message === "WINDUP"/);
   assert.match(page, /\["PERFECT STEP", "FLANK OPEN"\]/);
-  assert.match(css, /content: "STEP NOW"/);
-  assert.match(css, /content: "READY"/);
-  assert.match(css, /content: "PUNISH"/);
+  assert.match(page, /tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
+  assert.match(page, /tpsPunish \? "PUNISH" : "ATTACK"/);
+  assert.match(css, /tps-step-action\.tps-threat-action/);
+  assert.match(css, /tps-attack-action\.tps-punish-action/);
 });

@@ -36,3 +36,28 @@ test("Rival Core phase 2 records an impact pair and reaction matrix for presenta
   assert.match(fighter, /reactionVariant/);
   assert.match(fighter, /counterTwist/);
 });
+
+
+test("Rival Core phase 4 learns retreat, directional step, and intercept habits without frame-perfect reads", async () => {
+  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  assert.match(source, /CUT_RETREAT/);
+  assert.match(source, /MIRROR_LEFT/);
+  assert.match(source, /MIRROR_RIGHT/);
+  assert.match(source, /HUNT_INTERCEPT/);
+  assert.match(source, /playerRetreatSamples/);
+  assert.match(source, /playerLeftStepSamples/);
+  assert.match(source, /playerRightStepSamples/);
+  assert.match(source, /adapt-hunt-intercept-feint/);
+  assert.match(source, /RIVAL:/);
+});
+
+test("Rival Core phase 5 drives match drama through presentation and tempo, not hidden damage buffs", async () => {
+  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  assert.match(source, /MatchDramaPhase/);
+  assert.match(source, /updateMatchDrama/);
+  assert.match(source, /MOMENTUM SHIFT/);
+  assert.match(source, /FINAL STAND/);
+  assert.match(source, /tpsDramaIntensity/);
+  assert.match(source, /dramaCinematicFactor/);
+  assert.match(source, /dramaTempo/);
+});

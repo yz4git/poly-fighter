@@ -13,6 +13,7 @@ import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame } from "./types";
 import { EMPTY_INPUT } from "./types";
+import { tpsComboPursuitStep } from "./motion-profile";
 
 export interface TpsFightGameOptions {
   p1Definition: FighterDefinition;
@@ -242,6 +243,7 @@ export class TpsFightGame {
   private running = false;
   private paused = false;
   private playerStepAttackQueued = false;
+  private playerComboPursuitBudget = 0;
   // Cumulative across practice rounds so HUD sampling cannot lose a success.
   private readonly trainingProgress = { hits: 0, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 0 };
   private lastTime = 0;
@@ -1182,9 +1184,18 @@ export class TpsFightGame {
 
   private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {
     const move = attacker.currentMove;
-    if (attacker.state !== "ATTACK" || !move || attacker.moveTick > move.startup) return;
+    if (attacker.state !== "ATTACK" || !move || attacker.hitStop > 0 || attacker.moveTick > move.startup) return;
     const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
     const desiredContact = Math.max(1.02, move.reach + 0.52);
+    if (attacker === this.p1 && this.playerComboPursuitBudget > 0) {
+      const pursuit = tpsComboPursuitStep(distance, desiredContact, this.playerComboPursuitBudget, attacker.hitStop, attacker.moveTick < move.startup);
+      if (pursuit > 0) {
+        attacker.position.addScaledVector(horizontalDirection(attacker.position, defender.position), pursuit);
+        this.playerComboPursuitBudget -= pursuit;
+        attacker.visual.root.userData.tpsComboPursuitDistance = (attacker.visual.root.userData.tpsComboPursuitDistance ?? 0) + pursuit;
+        return;
+      }
+    }
     if (distance <= desiredContact || distance > desiredContact + 0.72) return;
     const remaining = distance - desiredContact;
     const stepDistance = Math.min(remaining, 0.038 + move.power * 0.014);
@@ -1392,6 +1403,7 @@ export class TpsFightGame {
   }
 
   private resetRound(): void {
+    this.playerComboPursuitBudget = 0;
     this.playerStepAttackQueued = false;
     this.p1.resetForRound(0, 3.2, 1);
     this.p2.resetForRound(0, -2.2, -1);
@@ -1527,4 +1539,5 @@ export class TpsFightGame {
     this.mount.replaceChildren();
   }
 }
+
 

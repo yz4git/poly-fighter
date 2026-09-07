@@ -40,6 +40,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   playerStepForwardWeight: number;
   playerStepSideWeight: number;
   playerComboStage: number;
+  playerComboPursuitBudget: number;
   playerComboGraceTicks: number;
   playerAttackQueued: boolean;
   playerFlankWindowTicks: number;
@@ -127,6 +128,7 @@ const prototype = TpsFightGame.prototype as unknown as {
 prototype.beginContextAttack = function beginContextAttack(): boolean {
   const game = extended(this as unknown as TpsFightGame);
   if (!game.p1.canAct()) return false;
+  game.playerComboPursuitBudget = 0;
   const distance = Math.hypot(
     game.p2.position.x - game.p1.position.x,
     game.p2.position.z - game.p1.position.z,
@@ -264,7 +266,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     }
 
     const inLinkWindow = game.p1.moveTick >= linkWindow.linkStart && game.p1.moveTick <= linkWindow.linkEnd;
-    if (game.playerAttackQueued && inLinkWindow) {
+    if (game.playerAttackQueued && inLinkWindow && game.p1.hitStop <= 0) {
       const linkTick = game.p1.moveTick;
       const distance = Math.hypot(
         game.p2.position.x - game.p1.position.x,
@@ -305,6 +307,8 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
       game.playerAttackQueued = false;
       game.__comboQueuedBranch = undefined;
       if (prototype.beginContextAttack.call(this)) {
+        game.playerComboPursuitBudget = 0.40;
+        game.p1.visual.root.userData.tpsComboPursuitDistance = 0;
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);

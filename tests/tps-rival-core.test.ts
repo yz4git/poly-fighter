@@ -121,3 +121,21 @@ test("training requires fresh resolved successes, never headlines or a KO", asyn
   }
   assert.equal(advanceTpsTrainingStage(5, hud, EMPTY_TPS_TRAINING), 5);
 });
+
+
+
+test("confirmed combo pursuit is bounded and preserves the impact freeze", async () => {
+  const { tpsComboPursuitStep } = await import("../src/game/motion-profile");
+  assert.equal(tpsComboPursuitStep(2.2, 1.4, .4, 2, true), 0);
+  assert.equal(tpsComboPursuitStep(2.2, 1.4, .4, 0, false), 0);
+  assert.equal(tpsComboPursuitStep(4, 1.4, .4, 0, true), 0);
+  assert.equal(tpsComboPursuitStep(1.2, 1.4, .4, 0, true), 0);
+  let budget = .4, distance = 2.2, travelled = 0;
+  for (let tick = 0; tick < 30; tick++) {
+    const step = tpsComboPursuitStep(distance, 1.4, budget, 0, true);
+    assert.ok(step >= 0 && step <= .065);
+    travelled += step; budget -= step; distance -= step;
+  }
+  assert.ok(Math.abs(travelled - .4) < 1e-8);
+  assert.ok(distance >= 1.4);
+});

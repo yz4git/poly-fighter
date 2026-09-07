@@ -327,10 +327,11 @@ export default function Home() {
   const isGameSurface = screen === "TPS_MATCH";
   const tpsIncoming = hud?.message === "INCOMING";
   const tpsWindup = hud?.message === "WINDUP";
-  const tpsPunish = ["PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
+  const tpsPunish = ["PERFECT STEP", "FLANK OPEN", "REVERSAL"].includes(hud?.message ?? "");
+  const tpsIntercept = ["WINDUP", "INTERCEPT"].includes(hud?.message ?? "");
   const tpsStrikeRange = hud?.message === "STRIKE RANGE";
   const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
-  const tpsKoMessage = hud?.message === "KO";
+  const tpsKoMessage = ["KO", "FINAL IMPACT"].includes(hud?.message ?? "");
   const tpsFaceSafeMessage = Boolean(hud?.message);
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
@@ -426,10 +427,10 @@ export default function Home() {
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons tps-two-button-actions">
               {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
-              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
+              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
-          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</div>
+          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> <b>WINDUP</b> STEP OR INTERCEPT <span>•</span> <b>PERFECT STEP</b> → REVERSAL <span>•</span> FORWARD STEP → ATTACK = DASH</div>
         </>
       )}
 

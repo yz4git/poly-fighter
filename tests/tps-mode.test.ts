@@ -96,8 +96,8 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /Math\.max\(this\.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS\)/);
   assert.match(source, /Math\.max\(this\.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS\)/);
   assert.match(source, /const trackedSideEvade/);
-  assert.match(source, /const flankStrike = attacker === this\.p1/);
-  assert.match(source, /&& !flankStrike/);
+  assert.match(source, /const interceptStrike = attacker === this\.p1/);
+  assert.match(source, /&& !reversalStrike && !interceptStrike/);
   assert.match(source, /distance > move\.reach \+ 0\.72/);
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
   assert.match(source, /enemyTactic/);
@@ -141,17 +141,17 @@ test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", as
   assert.doesNotMatch(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /tps-two-button-actions/);
   assert.match(page, /"guard", "Step", tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
-  assert.match(page, /"punch", "Attack", tpsPunish \? "PUNISH" : "ATTACK"/);
+  assert.match(page, /"punch", "Attack", tpsPunish \? "PUNISH" : tpsIntercept \? "INTERCEPT" : "ATTACK"/);
   assert.match(page, /AUTO PUNCH \/ KICK/);
-  assert.match(page, /TAP COMBO/);
+  assert.match(page, /STEP OR INTERCEPT/);
   assert.match(page, /PERFECT STEP/);
-  assert.match(page, /SIDE STEP/);
+  assert.match(page, /→ REVERSAL/);
   assert.match(page, /tpsWindup/);
   assert.match(page, /tpsPunish/);
   assert.match(page, /tps-threat-action/);
   assert.match(page, /tps-windup-action/);
   assert.match(page, /tps-punish-action/);
-  assert.match(page, /BACK STEP = SPACE/);
+  assert.match(page, /WINDUP/);
   assert.match(page, /FORWARD STEP → ATTACK = DASH/);
   assert.doesNotMatch(page, /G\+K/);
   assert.doesNotMatch(page, /G\+P/);
@@ -210,9 +210,40 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
   assert.match(source, /inThreatReach/);
   assert.match(source, /"WINDUP"/);
   assert.match(page, /hud\?\.message === "WINDUP"/);
-  assert.match(page, /\["PERFECT STEP", "FLANK OPEN"\]/);
+  assert.match(page, /\["PERFECT STEP", "FLANK OPEN", "REVERSAL"\]/);
   assert.match(page, /tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
-  assert.match(page, /tpsPunish \? "PUNISH" : "ATTACK"/);
+  assert.match(page, /tpsPunish \? "PUNISH" : tpsIntercept \? "INTERCEPT" : "ATTACK"/);
   assert.match(css, /tps-step-action\.tps-threat-action/);
   assert.match(css, /tps-attack-action\.tps-punish-action/);
+});
+
+
+test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact", async () => {
+  const [source, page, css] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /TPS_INTERCEPT_TICKS = 26/);
+  assert.match(source, /TPS_REVERSAL_TICKS = 24/);
+  assert.match(source, /playerInterceptTicks/);
+  assert.match(source, /playerReversalTicks/);
+  assert.match(source, /setCombatBeat\("INTERCEPT"\)/);
+  assert.match(source, /setCombatBeat\("REVERSAL"\)/);
+  assert.match(source, /moveId = reversalStrike \? "counter"/);
+  assert.match(source, /defenderWasAttacking/);
+  assert.match(source, /counter: defenderWasAttacking \|\| interceptStrike/);
+  assert.match(source, /tpsReactionType/);
+  assert.match(source, /"FINISHER"/);
+  assert.match(source, /setCombatBeat\("FINAL IMPACT"/);
+  assert.match(source, /EnemyPersona = "BRAWLER" \| "SKIRMISHER"/);
+  assert.match(source, /EnemyAdaptation = "NEUTRAL" \| "ANTI_STEP" \| "ANTI_RUSH"/);
+  assert.match(source, /tpsCpuPersona/);
+  assert.match(source, /tpsCpuAdaptation/);
+  assert.match(source, /adapt-anti-step-counter/);
+  assert.match(page, /tpsIntercept/);
+  assert.match(page, /tpsIntercept \? "INTERCEPT" : "ATTACK"/);
+  assert.match(page, /"PERFECT STEP", "FLANK OPEN", "REVERSAL"/);
+  assert.match(page, /"KO", "FINAL IMPACT"/);
+  assert.match(css, /tps-intercept-action/);
 });

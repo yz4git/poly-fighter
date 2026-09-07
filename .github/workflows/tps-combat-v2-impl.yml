@@ -1,0 +1,183 @@
+name: TPS Combat v2 robust implementation
+
+on:
+  push:
+    branches: [tps-combat-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tps-combat-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply TPS Combat v2
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          core = Path('src/game/tps-game-base.ts')
+          text = core.read_text()
+
+          def exact(old, new, label):
+              global text
+              if old not in text:
+                  raise SystemExit(f'missing anchor: {label}')
+              text = text.replace(old, new, 1)
+
+          def rx(pattern, replacement, label):
+              global text
+              text2, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'missing regex anchor: {label} ({count})')
+              text = text2
+
+          exact(
+              'const TPS_PERFECT_EVADE_TICKS = 18;\n',
+              'const TPS_PERFECT_EVADE_TICKS = 18;\nconst TPS_INTERCEPT_TICKS = 26;\nconst TPS_REVERSAL_TICKS = 24;\nconst TPS_COMBAT_BEAT_TICKS = 34;\nconst TPS_FINISHER_BEAT_TICKS = 72;\nconst TPS_ADAPT_REVIEW_TICKS = 180;\n',
+              'v2 constants',
+          )
+          exact(
+              'type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";\n',
+              'type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";\ntype EnemyPersona = "BRAWLER" | "SKIRMISHER";\ntype EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH";\n',
+              'v2 types',
+          )
+          exact(
+              '  private playerStepThreatTicks = 0;\n  private simulationTicks = 0;\n',
+              '  private playerStepThreatTicks = 0;\n  private playerInterceptTicks = 0;\n  private playerReversalTicks = 0;\n  private combatBeatLabel: string | null = null;\n  private combatBeatTicks = 0;\n  private playerAttackSamples = 0;\n  private playerStepSamples = 0;\n  private enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;\n  private enemyPersona: EnemyPersona = "BRAWLER";\n  private enemyAdaptation: EnemyAdaptation = "NEUTRAL";\n  private simulationTicks = 0;\n',
+              'v2 fields',
+          )
+          exact(
+              '    this.scene.add(this.p1.visual.root, this.p2.visual.root);\n    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);\n',
+              '    this.scene.add(this.p1.visual.root, this.p2.visual.root);\n    this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";\n    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);\n',
+              'persona init',
+          )
+          exact(
+              '  private step(): void {\n    if (this.paused || this.finished) return;\n',
+              '  private step(): void {\n    if (this.paused || this.finished) return;\n    if (this.combatBeatTicks > 0) this.combatBeatTicks -= 1;\n    else this.combatBeatLabel = null;\n',
+              'combat beat clock',
+          )
+          exact(
+              '    const legacyKickPressed = this.p1.justPressed("kick");\n\n    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;\n',
+              '    const legacyKickPressed = this.p1.justPressed("kick");\n    if (attackPressed) this.playerAttackSamples += 1;\n    if (stepPressed) this.playerStepSamples += 1;\n\n    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;\n',
+              'player samples',
+          )
+          exact(
+              '    if (this.playerPerfectEvadeTicks > 0) this.playerPerfectEvadeTicks -= 1;\n    if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;\n',
+              '    if (this.playerPerfectEvadeTicks > 0) this.playerPerfectEvadeTicks -= 1;\n    if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;\n    if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;\n    if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;\n',
+              'v2 window clocks',
+          )
+          exact(
+              '    if (attackPressed) this.beginContextAttack();\n    this.p1.updatePhysics(FIXED_STEP);\n',
+              '    if (attackPressed) {\n      const threat = this.enemyThreatStatus();\n      if (threat.windup && !threat.incoming) {\n        this.playerInterceptTicks = TPS_INTERCEPT_TICKS;\n        this.setCombatBeat("INTERCEPT");\n      }\n      this.beginContextAttack();\n    }\n    this.p1.updatePhysics(FIXED_STEP);\n',
+              'intercept input',
+          )
+
+          rx(
+              r'  private beginContextAttack\(\): boolean \{.*?\n  \}\n\n  private beginDashAttack',
+              '''  private beginContextAttack(): boolean {\n    if (!this.p1.canAct()) return false;\n    const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);\n    const stage = Math.min(2, this.playerComboStage);\n    const closeMoves = ["jab", "straight", "power"] as const;\n    const farMoves = ["kick", "lowKick", "risingKick"] as const;\n    const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;\n    const moveId = reversalStrike ? "counter" : distance <= TPS_CLOSE_ATTACK_RANGE ? closeMoves[stage] : farMoves[stage];\n    const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;\n    if (!this.p1.beginMove(moveId)) return false;\n    this.playerComboStage = reversalStrike ? 1 : stage + 1;\n    this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;\n    if (reversalStrike) {\n      this.playerReversalTicks = 0;\n      this.setCombatBeat("REVERSAL");\n    }\n    if (flankStrike) {\n      this.playerFlankAttackTicks = 28;\n      this.playerFlankWindowTicks = 0;\n    }\n    return true;\n  }\n\n  private beginDashAttack''',
+              'context attack',
+          )
+
+          exact(
+              '    this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);\n    if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;\n    this.enemyTacticTicks -= 1;\n',
+              '    this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);\n    if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;\n    this.enemyAdaptReviewTicks -= 1;\n    if (this.enemyAdaptReviewTicks <= 0) {\n      const samples = this.playerAttackSamples + this.playerStepSamples;\n      if (samples >= 4) {\n        const stepRatio = this.playerStepSamples / samples;\n        const attackRatio = this.playerAttackSamples / samples;\n        this.enemyAdaptation = stepRatio >= 0.58 ? "ANTI_STEP" : attackRatio >= 0.62 ? "ANTI_RUSH" : "NEUTRAL";\n      }\n      this.playerAttackSamples = Math.floor(this.playerAttackSamples * 0.45);\n      this.playerStepSamples = Math.floor(this.playerStepSamples * 0.45);\n      this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;\n    }\n    this.enemyTacticTicks -= 1;\n',
+              'adaptation clock',
+          )
+          rx(
+              r'    if \(this\.enemyTacticTicks <= 0\) \{\n      const slot = .*?\n    \}\n\n    const towardPlayer',
+              '''    if (this.enemyTacticTicks <= 0) {\n      const slot = Math.floor(this.simulationTicks / ENEMY_TACTIC_INTERVAL);\n      const healthPressure = this.p2.health < this.p1.health ? 1 : 0;\n      const personaBias = this.enemyPersona === "SKIRMISHER" ? 1 : 0;\n      const tacticIndex = (slot + healthPressure + personaBias + (this.difficulty === "HARD" ? 1 : 0)) % 3;\n      this.enemyTactic = this.enemyAdaptation === "ANTI_STEP"\n        ? "BAIT"\n        : this.enemyAdaptation === "ANTI_RUSH"\n          ? "ORBIT"\n          : tacticIndex === 0 ? "PRESSURE" : tacticIndex === 1 ? "ORBIT" : "BAIT";\n      this.enemyOrbitSign = (slot + (this.difficulty === "EASY" ? 1 : 0)) % 2 === 0 ? 1 : -1;\n      this.enemyTacticTicks = this.difficulty === "HARD" ? 56 : this.difficulty === "EASY" ? 90 : ENEMY_TACTIC_INTERVAL;\n    }\n\n    const towardPlayer''',
+              'adaptive tactic',
+          )
+          exact(
+              '      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;\n      rootData.tpsCpuDirectorMove = moveId;\n    };\n',
+              '      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;\n      rootData.tpsCpuDirectorMove = moveId;\n      rootData.tpsCpuPersona = this.enemyPersona;\n      rootData.tpsCpuAdaptation = this.enemyAdaptation;\n    };\n',
+              'cpu telemetry',
+          )
+          exact(
+              '    if (decision.intent === "JUMP") decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-as-orbit` };\n    this.enemyDirectorDecision = decision;\n',
+              '    if (decision.intent === "JUMP") decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-as-orbit` };\n    if (this.enemyPersona === "BRAWLER" && decision.intent === "RETREAT" && liveDistance > 1.65) {\n      decision = { ...decision, intent: "APPROACH", reason: `${decision.reason}-brawler-pressure` };\n    } else if (this.enemyPersona === "SKIRMISHER" && decision.intent === "APPROACH" && liveDistance < 1.85) {\n      decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-skirmisher-angle` };\n    }\n    if (this.enemyAdaptation === "ANTI_STEP" && isAttackIntent(decision.intent) && this.simulationTicks % 3 === 0) {\n      decision = { ...decision, intent: "COUNTER", telegraphTicks: Math.max(4, decision.telegraphTicks), reason: "adapt-anti-step-counter" };\n    } else if (this.enemyAdaptation === "ANTI_RUSH" && decision.intent === "WAIT" && liveDistance < 2.0) {\n      decision = { ...decision, intent: "RETREAT", reason: "adapt-anti-rush-reset" };\n    }\n    this.enemyDirectorDecision = decision;\n',
+              'persona decisions',
+          )
+
+          rx(
+              r'  private resolveAttack\(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean\): void \{.*?\n  \}\n\n  private applyAttackStepIn',
+              '''  private resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void {\n    const move = attacker.currentMove;\n    if (attacker.state !== "ATTACK" || !move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return;\n    const trackedSideEvade = defender === this.p1\n      && attacker === this.p2\n      && this.playerStepThreatTicks > 0\n      && this.playerStepSideWeight > 0.45\n      && move.hitLevel !== "THROW";\n    if (trackedSideEvade) {\n      attacker.hitTargets.add(defender.id);\n      this.playerStepThreatTicks = 0;\n      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);\n      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS);\n      this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);\n      this.setCombatBeat("REVERSAL");\n      return;\n    }\n    const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);\n    if (distance > move.reach + 0.72) return;\n\n    attacker.hitTargets.add(defender.id);\n    const defenderWasAttacking = defender.state === "ATTACK";\n    const interceptStrike = attacker === this.p1 && defender === this.p2 && this.playerInterceptTicks > 0;\n    const reversalStrike = attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";\n    const blocked = defenderGuarding && move.hitLevel !== "THROW" && !reversalStrike && !interceptStrike;\n    const direction = horizontalDirection(attacker.position, defender.position);\n    const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);\n    impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);\n    const damageScale = interceptStrike ? 1.22 : reversalStrike ? 1.18 : defenderWasAttacking ? 1.12 : 1;\n    const resolvedDamage = blocked ? 0 : Math.max(1, Math.round(move.damage * damageScale));\n    const lethalImpact = !blocked && defender.health <= resolvedDamage;\n    const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);\n\n    if (blocked) {\n      defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);\n      defender.velocity.x = direction.x * move.knockback * 5;\n      defender.velocity.z = direction.z * move.knockback * 5;\n    } else {\n      defender.receiveDamage(resolvedDamage, move.hitStun, move.knockback, direction.x >= 0 ? 1 : -1, Boolean(move.knockdown), move.hitStop);\n      const knockback = move.knockback * 18 * reactionStrength;\n      defender.velocity.x = direction.x * knockback;\n      defender.velocity.z = direction.z * knockback;\n    }\n\n    if (interceptStrike) {\n      this.playerInterceptTicks = 0;\n      this.enemyDirectorPendingMove = null;\n      this.enemyDirectorTelegraphTicks = 0;\n      this.enemyDirectorDecision = null;\n      this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);\n      this.setCombatBeat("INTERCEPT");\n    } else if (reversalStrike) {\n      this.setCombatBeat("REVERSAL");\n    } else if (defenderWasAttacking && !blocked) {\n      this.setCombatBeat("COUNTER HIT");\n    }\n\n    const reactionType = lethalImpact ? "FINISHER" : interceptStrike ? "INTERCEPT" : reversalStrike ? "REVERSAL" : defenderWasAttacking ? "COUNTER" : blocked ? "BLOCK" : move.power >= 1.45 ? "HEAVY" : "NORMAL";\n    defender.visual.root.userData.tpsReactionType = reactionType;\n    defender.visual.root.userData.tpsReactionStrength = reactionStrength;\n    defender.visual.root.userData.tpsReactionDirectionX = direction.x;\n    defender.visual.root.userData.tpsReactionDirectionZ = direction.z;\n    defender.visual.root.userData.tpsReactionTick = this.simulationTicks;\n    if (lethalImpact) {\n      defender.hitStop = Math.max(defender.hitStop, move.hitStop + 5);\n      attacker.hitStop = Math.max(attacker.hitStop, move.hitStop + 3);\n      this.cameraImpact = Math.max(this.cameraImpact, 0.078);\n      this.setCombatBeat("FINAL IMPACT", TPS_FINISHER_BEAT_TICKS);\n    }\n\n    const event: HitEvent = {\n      attacker: attacker.id,\n      defender: defender.id,\n      move,\n      blocked,\n      counter: defenderWasAttacking || interceptStrike,\n      throwEscape: false,\n      damage: resolvedDamage,\n      position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },\n    };\n    this.effects.hit(event);\n    this.graphics.hit(event, this.camera);\n    this.audio.impact(event);\n    if (!blocked && this.settings.get().vibration && attacker.id === "p1") navigator.vibrate?.(lethalImpact ? 34 : move.power > 1.45 ? 22 : 9);\n  }\n\n  private applyAttackStepIn''',
+              'resolveAttack v2',
+          )
+
+          exact(
+              '  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {\n',
+              '  private setCombatBeat(label: string, ticks = TPS_COMBAT_BEAT_TICKS): void {\n    if (ticks >= this.combatBeatTicks || label === "FINAL IMPACT") {\n      this.combatBeatLabel = label;\n      this.combatBeatTicks = ticks;\n    }\n  }\n\n  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {\n',
+              'combat beat method',
+          )
+          exact(
+              '    this.playerPerfectEvadeTicks = 0;\n    this.playerStepThreatTicks = 0;\n    this.simulationTicks = 0;\n',
+              '    this.playerPerfectEvadeTicks = 0;\n    this.playerStepThreatTicks = 0;\n    this.playerInterceptTicks = 0;\n    this.playerReversalTicks = 0;\n    this.combatBeatLabel = null;\n    this.combatBeatTicks = 0;\n    this.playerAttackSamples = 0;\n    this.playerStepSamples = 0;\n    this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;\n    this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";\n    this.enemyAdaptation = "NEUTRAL";\n    this.simulationTicks = 0;\n',
+              'reset v2',
+          )
+          exact(
+              '      message: this.finished\n        ? "BATTLE COMPLETE"\n        : this.finishPending\n          ? "KO"\n',
+              '      message: this.finished\n        ? "BATTLE COMPLETE"\n        : this.combatBeatTicks > 0 && this.combatBeatLabel\n          ? this.combatBeatLabel\n          : this.finishPending\n            ? "KO"\n',
+              'hud combat beat',
+          )
+          core.write_text(text)
+
+          page = Path('app/page.tsx')
+          p = page.read_text()
+          def pexact(old, new, label):
+              global p
+              if old not in p: raise SystemExit(f'missing page anchor: {label}')
+              p = p.replace(old, new, 1)
+          pexact(
+              '  const tpsPunish = ["PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");\n  const tpsStrikeRange = hud?.message === "STRIKE RANGE";\n',
+              '  const tpsPunish = ["PERFECT STEP", "FLANK OPEN", "REVERSAL"].includes(hud?.message ?? "");\n  const tpsIntercept = ["WINDUP", "INTERCEPT"].includes(hud?.message ?? "");\n  const tpsStrikeRange = hud?.message === "STRIKE RANGE";\n',
+              'v2 ui state',
+          )
+          pexact('  const tpsKoMessage = hud?.message === "KO";\n', '  const tpsKoMessage = ["KO", "FINAL IMPACT"].includes(hud?.message ?? "");\n', 'final impact ui')
+          pexact(
+              '{pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}',
+              '{pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}',
+              'intercept button',
+          )
+          pexact(
+              '<div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</div>',
+              '<div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> <b>WINDUP</b> STEP OR INTERCEPT <span>•</span> <b>PERFECT STEP</b> → REVERSAL <span>•</span> FORWARD STEP → ATTACK = DASH</div>',
+              'v2 hint',
+          )
+          page.write_text(p)
+
+          css = Path('app/playtest-polish.css')
+          c = css.read_text()
+          if '/* TPS Combat v2 */' not in c:
+              c += '''\n\n/* TPS Combat v2 */\n.action-buttons .tps-intercept-action {\n  outline: 3px solid rgba(112, 226, 255, .96);\n  outline-offset: 3px;\n  color: #effcff;\n  box-shadow: 0 0 0 3px rgba(112, 226, 255, .12), 0 0 30px rgba(76, 215, 255, .40), inset 0 0 18px rgba(255, 201, 92, .10);\n  animation: tps-intercept-pulse .42s ease-in-out infinite alternate;\n}\n@keyframes tps-intercept-pulse {\n  from { filter: brightness(1); transform: scale(1); }\n  to { filter: brightness(1.22); transform: scale(1.04); }\n}\n@media (orientation: landscape) and (max-height: 430px) {\n  .action-buttons .tps-attack-action.tps-intercept-action { font-size: 9px; letter-spacing: 0; }\n}\n'''
+          css.write_text(c)
+
+          tests = Path('tests/tps-mode.test.ts')
+          t = tests.read_text()
+          if 'TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact' not in t:
+              t += '''\n\ntest("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact", async () => {\n  const [source, page, css] = await Promise.all([\n    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),\n    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),\n    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),\n  ]);\n  assert.match(source, /TPS_INTERCEPT_TICKS = 26/);\n  assert.match(source, /TPS_REVERSAL_TICKS = 24/);\n  assert.match(source, /playerInterceptTicks/);\n  assert.match(source, /playerReversalTicks/);\n  assert.match(source, /setCombatBeat\("INTERCEPT"\)/);\n  assert.match(source, /setCombatBeat\("REVERSAL"\)/);\n  assert.match(source, /moveId = reversalStrike \? "counter"/);\n  assert.match(source, /defenderWasAttacking/);\n  assert.match(source, /counter: defenderWasAttacking \|\| interceptStrike/);\n  assert.match(source, /tpsReactionType/);\n  assert.match(source, /"FINISHER"/);\n  assert.match(source, /setCombatBeat\("FINAL IMPACT"/);\n  assert.match(source, /EnemyPersona = "BRAWLER" \| "SKIRMISHER"/);\n  assert.match(source, /EnemyAdaptation = "NEUTRAL" \| "ANTI_STEP" \| "ANTI_RUSH"/);\n  assert.match(source, /tpsCpuPersona/);\n  assert.match(source, /tpsCpuAdaptation/);\n  assert.match(source, /adapt-anti-step-counter/);\n  assert.match(page, /tpsIntercept/);\n  assert.match(page, /tpsIntercept \? "INTERCEPT" : "ATTACK"/);\n  assert.match(page, /"PERFECT STEP", "FLANK OPEN", "REVERSAL"/);\n  assert.match(page, /"KO", "FINAL IMPACT"/);\n  assert.match(css, /tps-intercept-action/);\n});\n'''
+          tests.write_text(t)
+          PY
+          git diff --check
+          node --import tsx --test tests/tps-mode.test.ts
+          npm run lint
+          npm run build
+      - name: Commit TPS Combat v2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game-base.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts
+          git commit -m "Implement TPS Combat v2"
+          git push origin HEAD:tps-combat-v2

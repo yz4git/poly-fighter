@@ -207,8 +207,8 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
   assert.match(source, /canStillHit/);
   assert.match(source, /inThreatReach/);
   assert.match(source, /"WINDUP"/);
-  assert.match(page, /hud\?\.message === "WINDUP"/);
-  assert.match(page, /\["PERFECT STEP", "FLANK OPEN", "REVERSAL"\]/);
+  assert.match(page, /hud\?\.tpsCue === "WINDUP"/);
+  assert.match(page, /hud\?\.tpsCue === "PUNISH"/);
   assert.match(page, /tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
   assert.match(page, /tpsPunish \? "PUNISH" : tpsIntercept \? "INTERCEPT" : "ATTACK"/);
   assert.match(css, /tps-step-action\.tps-threat-action/);
@@ -241,7 +241,8 @@ test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grad
   assert.match(source, /adapt-anti-step-counter/);
   assert.match(page, /tpsIntercept/);
   assert.match(page, /tpsIntercept \? "INTERCEPT" : "ATTACK"/);
-  assert.match(page, /"PERFECT STEP", "FLANK OPEN", "REVERSAL"/);
+  assert.match(page, /hud\?\.tpsCue === "PUNISH"/);
   assert.match(page, /"KO", "FINAL IMPACT"/);
   assert.match(css, /tps-intercept-action/);
 });
+

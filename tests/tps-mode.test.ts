@@ -48,6 +48,9 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /tpsCloseAnchorBlend/);
   assert.match(source, /cameraAnchor\.copy\(this\.p1\.position\)\.lerp\(this\.cameraPairMidpoint/);
   assert.match(source, /lockLift = inStrikeRange \? 0\.62 : 0\.46/);
+  assert.match(source, /enemyThreatStatus/);
+  assert.match(source, /enemyThreat\.windup/);
+  assert.match(source, /enemyThreat\.incoming/);
   assert.match(source, /tps-target-ground-ring/);
 });
 
@@ -143,6 +146,11 @@ test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", as
   assert.match(page, /TAP COMBO/);
   assert.match(page, /PERFECT STEP/);
   assert.match(page, /SIDE STEP/);
+  assert.match(page, /tpsWindup/);
+  assert.match(page, /tpsPunish/);
+  assert.match(page, /tps-threat-action/);
+  assert.match(page, /tps-windup-action/);
+  assert.match(page, /tps-punish-action/);
   assert.match(page, /BACK STEP = SPACE/);
   assert.match(page, /FORWARD STEP → ATTACK = DASH/);
   assert.doesNotMatch(page, /G\+K/);
@@ -187,4 +195,23 @@ test("TPS messages use a face-safe HUD lane and RESULT removes live fight contro
   assert.match(css, /left: max\(24px/);
   assert.match(css, /transform: none/);
   assert.match(css, /\.tps-face-safe-active \.round-readout small/);
+});
+
+
+test("TPS reactive two-button HUD makes threat, windup, and punish turns explicit", async () => {
+  const [source, page, css] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /enemyThreatStatus/);
+  assert.match(source, /enemyDirectorPendingMove !== null/);
+  assert.match(source, /canStillHit/);
+  assert.match(source, /inThreatReach/);
+  assert.match(source, /"WINDUP"/);
+  assert.match(page, /hud\?\.message === "WINDUP"/);
+  assert.match(page, /\["PERFECT STEP", "FLANK OPEN"\]/);
+  assert.match(css, /content: "STEP NOW"/);
+  assert.match(css, /content: "READY"/);
+  assert.match(css, /content: "PUNISH"/);
 });

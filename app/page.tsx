@@ -326,7 +326,9 @@ export default function Home() {
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const isGameSurface = screen === "TPS_MATCH";
   const tpsIncoming = hud?.message === "INCOMING";
-  const tpsStrikeRange = ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
+  const tpsWindup = hud?.message === "WINDUP";
+  const tpsPunish = ["PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
+  const tpsStrikeRange = hud?.message === "STRIKE RANGE";
   const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
   const tpsKoMessage = hud?.message === "KO";
   const tpsFaceSafeMessage = Boolean(hud?.message);
@@ -423,8 +425,8 @@ export default function Home() {
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons tps-two-button-actions">
-              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : ""))}
-              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsStrikeRange ? "tps-ready-action" : ""))}
+              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
+              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
           <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</div>

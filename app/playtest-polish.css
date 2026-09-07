@@ -196,16 +196,74 @@
 
 /* TPS /goal pass: tactical status moves onto the actions, leaving the center lane clear. */
 .action-buttons .tps-threat-action {
-  outline: 2px solid rgba(255, 102, 127, .92);
+  outline: 3px solid rgba(255, 80, 111, .98);
   outline-offset: 3px;
-  animation: tps-threat-pulse .48s ease-in-out infinite alternate;
+  box-shadow: 0 0 0 3px rgba(255, 80, 111, .14), 0 0 28px rgba(255, 60, 94, .44), inset 0 0 18px rgba(255, 88, 117, .12);
+  animation: tps-threat-pulse .34s ease-in-out infinite alternate;
+}
+.action-buttons .tps-threat-action::before,
+.action-buttons .tps-windup-action::before,
+.action-buttons .tps-punish-action::before {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  min-width: max-content;
+  padding: 4px 7px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: rgba(4, 10, 20, .94);
+  font-size: 8px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: .15em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .85);
+  pointer-events: none;
+}
+.action-buttons .tps-threat-action::before {
+  content: "STEP NOW";
+  color: #ff8ca3;
+  background: rgba(38, 5, 14, .96);
+}
+.action-buttons .tps-windup-action {
+  outline: 2px solid rgba(255, 196, 90, .82);
+  outline-offset: 3px;
+  box-shadow: 0 0 22px rgba(255, 184, 76, .24), inset 0 0 16px rgba(255, 207, 100, .08);
+}
+.action-buttons .tps-windup-action::before {
+  content: "READY";
+  color: #ffd36f;
 }
 .action-buttons .tps-ready-action {
   box-shadow: 0 0 0 2px rgba(255, 212, 92, .34), 0 0 22px rgba(255, 212, 92, .24), inset 0 0 16px rgba(255, 212, 92, .08);
 }
+.action-buttons .tps-punish-action {
+  outline: 3px solid rgba(255, 226, 104, .92);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(255, 226, 104, .12), 0 0 30px rgba(255, 210, 76, .42), inset 0 0 18px rgba(255, 230, 126, .12);
+  animation: tps-punish-pulse .46s ease-in-out infinite alternate;
+}
+.action-buttons .tps-punish-action::before {
+  content: "PUNISH";
+  color: #ffe66e;
+  background: rgba(31, 24, 4, .96);
+}
 @keyframes tps-threat-pulse {
+  from { filter: brightness(1); transform: scale(1); }
+  to { filter: brightness(1.30); transform: scale(1.055); }
+}
+@keyframes tps-punish-pulse {
   from { filter: brightness(1); }
-  to { filter: brightness(1.28); }
+  to { filter: brightness(1.18); }
+}
+@media (orientation: landscape) and (max-height: 430px) {
+  .action-buttons .tps-threat-action::before,
+  .action-buttons .tps-windup-action::before,
+  .action-buttons .tps-punish-action::before {
+    bottom: calc(100% + 5px);
+    padding: 3px 5px;
+    font-size: 7px;
+  }
 }
 
 

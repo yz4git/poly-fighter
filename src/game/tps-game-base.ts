@@ -1053,31 +1053,44 @@ export class TpsFightGame {
     this.camera.lookAt(this.cameraLookTarget);
   }
 
+  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {
+    const windup = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
+    const move = this.p2.currentMove;
+    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: false };
+    const distance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const canStillHit = this.p2.moveTick < move.startup + Math.max(1, move.active);
+    const inThreatReach = distance <= move.reach + 0.9;
+    return { windup, incoming: canStillHit && inThreatReach };
+  }
+
   private updateLockOn(): void {
     this.p2.visual.root.updateMatrixWorld(true);
     const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
-    const threat = this.p2.state === "ATTACK";
+    const { windup, incoming: threat } = this.enemyThreatStatus();
     const inStrikeRange = distance < TPS_STRIKE_RANGE;
     // Keep the lock cue above the torso at melee range so authored arms, chest
     // rotation, and hit reactions remain visible instead of sitting under a ring.
     const lockLift = inStrikeRange ? 0.62 : 0.46;
     const target = this.p2.visual.root.localToWorld(new THREE.Vector3(0, this.p2.visual.layout.ribY + lockLift, 0));
     const perfectEvade = this.playerPerfectEvadeTicks > 0;
-    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff667f : inStrikeRange ? 0xffd45c : 0x7ce8ff;
+    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff506f : windup ? 0xffc45a : inStrikeRange ? 0xffd45c : 0x7ce8ff;
     this.lockRing.material.color.setHex(lockColor);
     this.lockStem.material.color.setHex(lockColor);
     this.targetGroundRing.material.color.setHex(lockColor);
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
-    const pulseRate = threat ? 11.5 : 5.5;
-    const pulse = (threat ? 0.94 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * 0.045;
+    const pulseRate = threat ? 14.0 : windup ? 8.5 : 5.5;
+    const pulse = (threat ? 1.02 : windup ? 0.96 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.075 : windup ? 0.06 : 0.045);
     this.lockRing.scale.setScalar(pulse);
     this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.30, 0));
     this.lockStem.lookAt(this.camera.position);
     this.targetGroundRing.position.set(this.p2.position.x, 0.035, this.p2.position.z);
-    const groundPulse = 0.95 + Math.sin(this.renderTime * pulseRate) * 0.06;
+    const groundPulse = (threat ? 1.08 : windup ? 1.02 : 0.95) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.10 : 0.06);
     this.targetGroundRing.scale.setScalar(groundPulse);
-    this.targetGroundRing.material.opacity = threat ? 0.48 : inStrikeRange ? 0.34 : 0.22;
+    this.targetGroundRing.material.opacity = threat ? 0.68 : windup ? 0.46 : inStrikeRange ? 0.34 : 0.22;
   }
 
   private checkFinish(): void {
@@ -1143,6 +1156,7 @@ export class TpsFightGame {
     if (!force && this.timerTicks % 4 !== 0) return;
     if (!force && this.lastHudTick === this.timerTicks) return;
     this.lastHudTick = this.timerTicks;
+    const enemyThreat = this.enemyThreatStatus();
     const snapshot: HudSnapshot = {
       phase: "MATCH",
       round: 1,
@@ -1169,9 +1183,11 @@ export class TpsFightGame {
                 ? `COMBO ${this.playerComboStage}`
                 : this.enemyOpeningGraceTicks > 0
                   ? "READ THE TARGET"
-                  : this.p2.state === "ATTACK"
-                    ? "INCOMING"
-                    : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
+                  : enemyThreat.windup
+                    ? "WINDUP"
+                    : enemyThreat.incoming
+                      ? "INCOMING"
+                      : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
                       ? "STRIKE RANGE"
                       : "TARGET LOCKED",
       p1State: this.p1.state,

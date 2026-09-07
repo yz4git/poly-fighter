@@ -1,0 +1,115 @@
+name: Reactable Enemy Attack Helper
+
+on:
+  push:
+    branches: [reactable-enemy-attacks-v1]
+    paths:
+      - .github/workflows/reactable-enemy-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reactable-enemy-attacks-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Make every CPU strike visually reactable
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base = Path('src/game/tps-game-base.ts')
+          source = base.read_text()
+
+          old = '''const TPS_INTERCEPT_TICKS = 26;\nconst TPS_REVERSAL_TICKS = 24;\n'''
+          new = '''const TPS_INTERCEPT_TICKS = 26;\nconst TPS_REVERSAL_TICKS = 24;\n// Human-readable CPU commitment windows for iPhone touch play. Even the fastest\n// jab gets a short authored load before its normal startup frames begin.\nconst TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({\n  EASY: 22,\n  NORMAL: 18,\n  HARD: 15,\n});\nconst TPS_REACTIVE_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({\n  EASY: 14,\n  NORMAL: 12,\n  HARD: 10,\n});\nconst TPS_HEAVY_TELEGRAPH_BONUS_TICKS = 5;\nconst TPS_HEAVY_TELEGRAPH_MOVES = new Set([\"power\", \"risingKick\", \"dashKick\", \"throw\", \"counter\"]);\n'''
+          if old not in source:
+              raise SystemExit('missing timing constants anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''  private enemyDirectorTelegraphTicks = 0;\n  private enemyDirectorPendingMove: string | null = null;\n'''
+          new = '''  private enemyDirectorTelegraphTicks = 0;\n  private enemyDirectorTelegraphTotalTicks = 0;\n  private enemyDirectorPendingMove: string | null = null;\n'''
+          if old not in source:
+              raise SystemExit('missing telegraph fields anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''  private updateEnemy(): void {\n'''
+          new = '''  private minimumEnemyTelegraphTicks(moveId: string): number {\n    const baseTicks = TPS_REACTABLE_TELEGRAPH_TICKS[this.difficulty];\n    return baseTicks + (TPS_HEAVY_TELEGRAPH_MOVES.has(moveId) ? TPS_HEAVY_TELEGRAPH_BONUS_TICKS : 0);\n  }\n\n  private enemyReactionWindowTicks(): number {\n    return TPS_REACTIVE_STEP_WINDOW_TICKS[this.difficulty];\n  }\n\n  private updateEnemy(): void {\n'''
+          if old not in source:
+              raise SystemExit('missing updateEnemy anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''      rootData.tpsCpuDirectorTelegraphTicks = 0;\n      if (moveId === \"dashKick\") {\n'''
+          new = '''      rootData.tpsCpuDirectorTelegraphTicks = 0;\n      rootData.tpsEnemyTelegraphProgress = 0;\n      rootData.tpsEnemyTelegraphPhase = \"STRIKE\";\n      this.enemyDirectorTelegraphTotalTicks = 0;\n      if (moveId === \"dashKick\") {\n'''
+          if old not in source:
+              raise SystemExit('missing beginDirectorMove anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''      if (this.enemyDirectorTelegraphTicks > 0) {\n        this.enemyDirectorTelegraphTicks -= 1;\n        rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;\n        const intent = this.enemyDirectorDecision?.intent ?? \"WAIT\";\n'''
+          new = '''      if (this.enemyDirectorTelegraphTicks > 0) {\n        this.enemyDirectorTelegraphTicks -= 1;\n        rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;\n        const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);\n        const progress = THREE.MathUtils.clamp(1 - this.enemyDirectorTelegraphTicks / totalTicks, 0, 1);\n        const reactionWindow = this.enemyReactionWindowTicks();\n        rootData.tpsEnemyTelegraphProgress = progress;\n        rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;\n        rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow ? \"REACT\" : \"LOAD\";\n        rootData.tpsEnemyReactionWindowTicks = reactionWindow;\n        const intent = this.enemyDirectorDecision?.intent ?? \"WAIT\";\n'''
+          if old not in source:
+              raise SystemExit('missing pending telegraph anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''        if (decision.telegraphTicks > 0) {\n          this.enemyDirectorPendingMove = moveId;\n          this.enemyDirectorTelegraphTicks = decision.telegraphTicks;\n          rootData.tpsCpuDirectorTelegraphTicks = decision.telegraphTicks;\n          this.p2.state = [\"POWER\", \"THROW\", \"COUNTER\"].includes(decision.intent) ? \"GUARD\" : \"IDLE\";\n        } else {\n          beginDirectorMove(moveId, decision.intent);\n        }\n'''
+          new = '''        const telegraphTicks = Math.max(decision.telegraphTicks, this.minimumEnemyTelegraphTicks(moveId));\n        this.enemyDirectorPendingMove = moveId;\n        this.enemyDirectorTelegraphTicks = telegraphTicks;\n        this.enemyDirectorTelegraphTotalTicks = telegraphTicks;\n        rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;\n        rootData.tpsEnemyTelegraphProgress = 0;\n        rootData.tpsEnemyTelegraphMove = moveId;\n        rootData.tpsEnemyTelegraphPhase = \"LOAD\";\n        this.p2.state = [\"POWER\", \"THROW\", \"COUNTER\"].includes(decision.intent) ? \"GUARD\" : \"IDLE\";\n'''
+          if old not in source:
+              raise SystemExit('missing attack scheduling anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''      const incomingMove = this.p2.state === \"ATTACK\" ? this.p2.currentMove : null;\n      const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);\n      const incomingFrames = incomingMove ? incomingMove.startup + incomingMove.active - this.p2.moveTick : 0;\n      const reactiveSideStep = Boolean(\n        this.playerStepSideWeight > 0.45\n        && incomingMove\n        && incomingMove.hitLevel !== \"THROW\"\n        && incomingFrames > 0\n        && incomingDistance <= incomingMove.reach + 0.9\n      );\n'''
+          new = '''      const activeIncomingMove = this.p2.state === \"ATTACK\" ? this.p2.currentMove : null;\n      const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;\n      const pendingReaction = Boolean(\n        pendingMove\n        && this.enemyDirectorTelegraphTicks > 0\n        && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()\n      );\n      const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);\n      const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);\n      const incomingFrames = activeIncomingMove\n        ? activeIncomingMove.startup + activeIncomingMove.active - this.p2.moveTick\n        : pendingReaction && incomingMove\n          ? this.enemyDirectorTelegraphTicks + incomingMove.startup + incomingMove.active\n          : 0;\n      const reactiveSideStep = Boolean(\n        this.playerStepSideWeight > 0.45\n        && incomingMove\n        && incomingMove.hitLevel !== \"THROW\"\n        && incomingFrames > 0\n        && incomingDistance <= incomingMove.reach + 0.9\n      );\n'''
+          if old not in source:
+              raise SystemExit('missing reactive step anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {\n    const windup = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;\n    const move = this.p2.currentMove;\n    if (this.p2.state !== \"ATTACK\" || !move) return { windup, incoming: false };\n'''
+          new = '''  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {\n    const pending = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;\n    const lateWindup = pending && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks();\n    const windup = pending && !lateWindup;\n    const move = this.p2.currentMove;\n    if (this.p2.state !== \"ATTACK\" || !move) return { windup, incoming: lateWindup };\n'''
+          if old not in source:
+              raise SystemExit('missing threat status anchor')
+          source = source.replace(old, new, 1)
+
+          old = '''    this.enemyDirectorTelegraphTicks = 0;\n    this.enemyDirectorPendingMove = null;\n'''
+          new = '''    this.enemyDirectorTelegraphTicks = 0;\n    this.enemyDirectorTelegraphTotalTicks = 0;\n    this.enemyDirectorPendingMove = null;\n    this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;\n    this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;\n    this.p2.visual.root.userData.tpsEnemyTelegraphPhase = \"NONE\";\n'''
+          if old not in source:
+              raise SystemExit('missing reset telegraph anchor')
+          source = source.replace(old, new, 1)
+
+          base.write_text(source)
+
+          presentation = Path('src/game/presentation-animation.ts')
+          psource = presentation.read_text()
+          old = '''    const authoredAttack = fighter.state === \"ATTACK\"\n'''
+          new = '''    // CPU telegraphs are gameplay commitments, so make them readable on the body\n    // as well as the lock ring. This pose is deliberately small enough to preserve\n    // authored silhouettes but large enough to read from the iPhone shoulder camera.\n    const telegraphProgress = Number(fighter.visual.root.userData.tpsEnemyTelegraphProgress ?? 0);\n    const telegraphMove = String(fighter.visual.root.userData.tpsEnemyTelegraphMove ?? \"\");\n    if (fighter.visual.root.userData.combatTps && telegraphProgress > 0 && telegraphMove) {\n      const load = THREE.MathUtils.smoothstep(telegraphProgress, 0, 1);\n      const kickLike = [\"kick\", \"lowKick\", \"risingKick\", \"dashKick\"].includes(telegraphMove);\n      const heavy = [\"power\", \"risingKick\", \"dashKick\", \"throw\", \"counter\"].includes(telegraphMove);\n      const twist = (kickLike ? -0.10 : 0.14) * load * (heavy ? 1.25 : 1);\n      fighter.visual.rig.bones.spineLower.rotation.y += twist * 0.55;\n      fighter.visual.rig.bones.spineUpper.rotation.y += twist;\n      fighter.visual.rig.bones.chest.rotation.x += (kickLike ? 0.055 : -0.035) * load;\n      fighter.visual.rig.bones.leftShoulder.rotation.z += 0.055 * load;\n      fighter.visual.rig.bones.rightShoulder.rotation.z -= 0.075 * load;\n      fighter.visual.root.userData.tpsEnemyTelegraphPoseApplied = load;\n      fighter.visual.root.updateMatrixWorld(true);\n    }\n\n    const authoredAttack = fighter.state === \"ATTACK\"\n'''
+          if old not in psource:
+              raise SystemExit('missing presentation anchor')
+          presentation.write_text(psource.replace(old, new, 1))
+
+          tests = Path('tests/tps-rival-core.test.ts')
+          tsource = tests.read_text()
+          addition = '''\n\ntest(\"Rival Core phase 9 makes every CPU attack reactable from a visible commitment\", async () => {\n  const [source, presentation] = await Promise.all([\n    readFile(new URL(\"../src/game/tps-game-base.ts\", import.meta.url), \"utf8\"),\n    readFile(new URL(\"../src/game/presentation-animation.ts\", import.meta.url), \"utf8\"),\n  ]);\n  assert.match(source, /TPS_REACTABLE_TELEGRAPH_TICKS/);\n  assert.match(source, /NORMAL: 18/);\n  assert.match(source, /HARD: 15/);\n  assert.match(source, /minimumEnemyTelegraphTicks/);\n  assert.match(source, /TPS_REACTIVE_STEP_WINDOW_TICKS/);\n  assert.match(source, /pendingReaction/);\n  assert.match(source, /lateWindup/);\n  assert.match(source, /tpsEnemyTelegraphPhase/);\n  assert.match(presentation, /tpsEnemyTelegraphProgress/);\n  assert.match(presentation, /tpsEnemyTelegraphPoseApplied/);\n});\n'''
+          if 'Rival Core phase 9 makes every CPU attack reactable' not in tsource:
+              tests.write_text(tsource + addition)
+          PY
+      - run: npm ci --no-audit --no-fund
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game/tps-game-base.ts src/game/presentation-animation.ts tests/tps-rival-core.test.ts
+          git commit -m "Make enemy attacks reactable on sight"
+          git push origin HEAD:reactable-enemy-attacks-v1

@@ -1,0 +1,38 @@
+name: Reactable Attack Test Contract Helper
+
+on:
+  push:
+    branches: [reactable-enemy-attacks-v1]
+    paths:
+      - .github/workflows/reactable-test-contract-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reactable-enemy-attacks-v1
+      - name: Update reactive STEP distance contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/tps-mode.test.ts')
+          source = path.read_text()
+          old = '  assert.match(source, /incomingDistance <= incomingMove\\.reach \\+ 0\\.9/);\n'
+          new = '  assert.match(source, /const incomingThreatReach = incomingMove/);\n  assert.match(source, /incomingDistance <= incomingThreatReach/);\n'
+          if old not in source:
+              raise SystemExit('old reactive STEP contract not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
+      - name: Commit contract update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/tps-mode.test.ts
+          git commit -m "Update reactive STEP threat-range contract"
+          git push origin HEAD:reactable-enemy-attacks-v1

@@ -1,0 +1,52 @@
+name: Reactable Cue Fixture Helper
+
+on:
+  push:
+    branches: [reactable-enemy-attacks-v1]
+    paths:
+      - .github/workflows/reactable-cue-fixture-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reactable-enemy-attacks-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Move WINDUP fixture into early load phase
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/capture-tps-reactive-cues.mjs')
+          source = path.read_text()
+          old = """      game.enemyDirectorPendingMove = null;\n      game.enemyDirectorTelegraphTicks = 0;\n      game.playerPerfectEvadeTicks = 0;\n"""
+          new = """      game.enemyDirectorPendingMove = null;\n      game.enemyDirectorTelegraphTicks = 0;\n      game.enemyDirectorTelegraphTotalTicks = 0;\n      game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;\n      game.p2.visual.root.userData.tpsEnemyTelegraphMove = null;\n      game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'NONE';\n      game.playerPerfectEvadeTicks = 0;\n"""
+          if old not in source:
+              raise SystemExit('reactive cue reset anchor missing')
+          source = source.replace(old, new, 1)
+          old = """      if (arguments[0] === 'WINDUP') {\n        game.enemyDirectorPendingMove = 'power';\n        game.enemyDirectorTelegraphTicks = 6;\n      } else if (arguments[0] === 'INCOMING') {\n"""
+          new = """      if (arguments[0] === 'WINDUP') {\n        game.enemyDirectorPendingMove = 'power';\n        game.enemyDirectorTelegraphTicks = 18;\n        game.enemyDirectorTelegraphTotalTicks = 23;\n        game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 18 / 23;\n        game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'power';\n        game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'LOAD';\n      } else if (arguments[0] === 'INCOMING') {\n"""
+          if old not in source:
+              raise SystemExit('WINDUP fixture anchor missing')
+          path.write_text(source.replace(old, new, 1))
+          PY
+      - run: npm ci --no-audit --no-fund
+      - name: TPS regression suite
+        run: npm run test:ci:tps
+      - name: Lint
+        run: npm run lint
+      - name: Commit audit fixture
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/capture-tps-reactive-cues.mjs
+          git commit -m "Update WINDUP audit for reactable timing"
+          git push origin HEAD:reactable-enemy-attacks-v1

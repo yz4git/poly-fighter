@@ -32,13 +32,17 @@ jobs:
           if old not in source:
               raise SystemExit('missing signature reversal anchor')
           path.write_text(source.replace(old, new, 1))
+
           test_path = Path('tests/tps-rival-core.test.ts')
-          tests = test_path.read_text()
-          old_test = "  assert.match(source, /baseFov - factor \\\\* 3\\\\.2/);\n});\n"
-          new_test = "  assert.match(source, /baseFov - factor \\\\* 3\\\\.2/);\n  assert.match(source, /tpsSignaturePursuitLunge/);\n  assert.match(source, /PERFECT_COUNTER_MAX_LUNGE/);\n});\n"
-          if old_test not in tests:
-              raise SystemExit('missing phase 6 test anchor')
-          test_path.write_text(tests.replace(old_test, new_test, 1))
+          lines = test_path.read_text().splitlines()
+          index = next((i for i, line in enumerate(lines) if 'baseFov - factor' in line), -1)
+          if index < 0:
+              raise SystemExit('missing phase 6 test line')
+          lines[index + 1:index + 1] = [
+              '  assert.match(source, /tpsSignaturePursuitLunge/);',
+              '  assert.match(source, /PERFECT_COUNTER_MAX_LUNGE/);',
+          ]
+          test_path.write_text('\n'.join(lines) + '\n')
           PY
       - run: npm ci --no-audit --no-fund
       - name: TPS regression suite

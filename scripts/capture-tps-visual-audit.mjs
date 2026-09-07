@@ -139,10 +139,29 @@ try {
   sessionId = session.sessionId;
   await command(`/session/${sessionId}/url`, "POST", { url });
   await delay(650);
-  const click = await clickButton(sessionId, "TPS LOCK-ON BATTLE");
-  if (!click?.clicked) throw new Error(`TPS title button not found: ${JSON.stringify(click)}`);
-  await delay(120);
-  const engage = await clickButton(sessionId, "ENGAGE TPS");
+  await mkdir(outputDir, { recursive: true });
+  const titleProbe = await execute(sessionId, `
+    const labels = [...document.querySelectorAll('button')].map((entry) => entry.textContent ?? '');
+    return {
+      startFight: labels.some((label) => label.includes('START FIGHT')),
+      legacyStartMatch: labels.some((label) => label.includes('START MATCH')),
+      legacyTpsModeButton: labels.some((label) => label.includes('TPS LOCK-ON BATTLE')),
+      modelView: labels.some((label) => label.includes('MODEL VIEW')),
+    };
+  `);
+  if (!titleProbe.startFight || titleProbe.legacyStartMatch || titleProbe.legacyTpsModeButton || !titleProbe.modelView) throw new Error(`TPS-first title route mismatch: ${JSON.stringify(titleProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-title.png`);
+  const click = await clickButton(sessionId, "START FIGHT");
+  if (!click?.clicked) throw new Error(`TPS main title button not found: ${JSON.stringify(click)}`);
+  await delay(140);
+  const loadoutProbe = await execute(sessionId, `return {
+    tpsLoadout: document.body.innerText.includes('TPS LOADOUT'),
+    legacyCharacterSelect: document.body.innerText.includes('CHARACTER SELECT'),
+    engage: [...document.querySelectorAll('button')].some((entry) => entry.textContent?.includes('ENGAGE')),
+  };`);
+  if (!loadoutProbe.tpsLoadout || loadoutProbe.legacyCharacterSelect || !loadoutProbe.engage) throw new Error(`TPS-first loadout route mismatch: ${JSON.stringify(loadoutProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-loadout.png`);
+  const engage = await clickButton(sessionId, "ENGAGE");
   if (!engage?.clicked) throw new Error(`TPS loadout engage button not found: ${JSON.stringify(engage)}`);
 
   let initial = null;

@@ -8,11 +8,11 @@ future architecture.
 ## Play
 
 - Open the published Site in Safari in landscape orientation.
-- Choose a fighter and CPU difficulty.
-- Use the left direction pad for movement, crouch, jump, and sidestep.
-- Use `P` for punch, `K` for kick, and `G` for guard.
-- Direction + button commands include low attacks, rising attacks, dash kicks,
-  counters, power attacks, and throws.
+- `START FIGHT` opens the TPS loadout; the legacy side-view match is no longer a player-facing mode.
+- Choose a fighter, opponent, visual model, and CPU difficulty.
+- Use the left 8-way pad for approach, retreat, and circular movement.
+- Use `ATTACK` for context-sensitive punch/kick strings and `STEP` for evasive movement.
+- Side-step incoming strikes to open flanks; forward step into ATTACK for dash pressure.
 
 ## Included systems
 

@@ -12,89 +12,41 @@ permissions:
 jobs:
   patch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           ref: reactable-enemy-attacks-v1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.13.0"
-          cache: npm
-      - name: Pin reactive STEP tracking to the committed move
+      - name: Patch tracker
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
+          p = Path('src/game/tps-game-base.ts')
+          s = p.read_text()
+          pairs = [
+            ('  private playerStepThreatTicks = 0;\n  private playerInterceptTicks = 0;', '  private playerStepThreatTicks = 0;\n  private playerStepThreatMoveId: string | null = null;\n  private playerInterceptTicks = 0;'),
+            ('      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;', '      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;\n      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;'),
+            ('      && this.playerStepThreatTicks > 0\n      && this.playerStepSideWeight > 0.45', '      && this.playerStepThreatTicks > 0\n      && this.playerStepThreatMoveId === move.id\n      && this.playerStepSideWeight > 0.45'),
+            ('      attacker.hitTargets.add(defender.id);\n      this.playerStepThreatTicks = 0;\n      this.playerFlankWindowTicks', '      attacker.hitTargets.add(defender.id);\n      this.playerStepThreatTicks = 0;\n      this.playerStepThreatMoveId = null;\n      this.playerFlankWindowTicks'),
+            ('    this.playerPerfectEvadeTicks = 0;\n    this.playerStepThreatTicks = 0;\n    this.playerInterceptTicks = 0;', '    this.playerPerfectEvadeTicks = 0;\n    this.playerStepThreatTicks = 0;\n    this.playerStepThreatMoveId = null;\n    this.playerInterceptTicks = 0;'),
+          ]
+          for old, new in pairs:
+            if old not in s:
+              raise SystemExit('anchor not found: ' + old[:60])
+            s = s.replace(old, new, 1)
+          p.write_text(s)
 
-          path = Path('src/game/tps-game-base.ts')
-          text = path.read_text()
-
-          old = '  private playerStepThreatTicks = 0;\n  private playerInterceptTicks = 0;'
-          new = '  private playerStepThreatTicks = 0;\n  private playerStepThreatMoveId: string | null = null;\n  private playerInterceptTicks = 0;'
-          if old not in text:
-              raise SystemExit('tracker field anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS, incomingFrames + 2) : 0;'
-          new = '''      this.playerStepThreatTicks = reactiveSideStep
-        ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2)
-        : 0;
-      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;'''
-          if old not in text:
-              raise SystemExit('tracker assignment anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''      && this.playerStepThreatTicks > 0
-      && this.playerStepSideWeight > 0.45
-      && move.hitLevel !== "THROW";'''
-          new = '''      && this.playerStepThreatTicks > 0
-      && this.playerStepThreatMoveId === move.id
-      && this.playerStepSideWeight > 0.45
-      && move.hitLevel !== "THROW";'''
-          if old not in text:
-              raise SystemExit('tracked evade condition anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''      attacker.hitTargets.add(defender.id);
-      this.playerStepThreatTicks = 0;
-      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);'''
-          new = '''      attacker.hitTargets.add(defender.id);
-      this.playerStepThreatTicks = 0;
-      this.playerStepThreatMoveId = null;
-      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);'''
-          if old not in text:
-              raise SystemExit('tracked evade clear anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''    this.playerPerfectEvadeTicks = 0;
-    this.playerStepThreatTicks = 0;
-    this.playerInterceptTicks = 0;'''
-          new = '''    this.playerPerfectEvadeTicks = 0;
-    this.playerStepThreatTicks = 0;
-    this.playerStepThreatMoveId = null;
-    this.playerInterceptTicks = 0;'''
-          if old not in text:
-              raise SystemExit('round reset tracker anchor not found')
-          text = text.replace(old, new, 1)
-
-          path.write_text(text)
-
-          test_path = Path('tests/tps-mode.test.ts')
-          test_text = test_path.read_text()
-          anchor = '  assert.match(source, /playerStepThreatTicks/);\n'
-          replacement = anchor + '  assert.match(source, /playerStepThreatMoveId/);\n  assert.match(source, /this\\.playerStepThreatMoveId === move\\.id/);\n'
-          if anchor not in test_text:
-              raise SystemExit('TPS tracker test anchor not found')
-          test_path.write_text(test_text.replace(anchor, replacement, 1))
+          t = Path('tests/tps-mode.test.ts')
+          q = t.read_text()
+          a = '  assert.match(source, /playerStepThreatTicks/);\n'
+          b = a + '  assert.match(source, /playerStepThreatMoveId/);\n  assert.match(source, /this\\.playerStepThreatMoveId === move\\.id/);\n'
+          if a not in q:
+            raise SystemExit('test anchor not found')
+          t.write_text(q.replace(a, b, 1))
           PY
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: TPS regression suite
-        run: npm run test:ci:tps
-      - name: Lint
-        run: npm run lint
-      - name: Commit fix
+      - name: Commit patch
+        shell: bash
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com

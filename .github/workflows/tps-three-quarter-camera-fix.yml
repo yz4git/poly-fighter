@@ -1,0 +1,57 @@
+name: Apply TPS three-quarter camera framing
+
+on:
+  push:
+    branches: [tps-continuous-play-polish-v1]
+    paths:
+      - .github/workflows/tps-three-quarter-camera-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rotate close camera laterally without zooming in
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/game/tps-game-base.ts')
+          s = p.read_text()
+          assert 'const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.80;' in s
+          assert 'const TPS_CAMERA_CLOSE_BACK_DELTA = 0.15;' in s
+          s = s.replace('const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2.80;', 'const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.75;', 1)
+          s = s.replace('const TPS_CAMERA_CLOSE_BACK_DELTA = 0.15;', 'const TPS_CAMERA_CLOSE_BACK_DELTA = -0.95;', 1)
+          old = '''    // Open a screen-space lane to the opponent at contact by widening laterally.\n    // Compact iPhone landscape gets extra shoulder separation because the player\n    // silhouette otherwise covers the opponent at melee distance.\n    // Pull back as the fighters close instead of moving the shoulder camera inward.\n    // This preserves both silhouettes during punch/throw scrambles and gives iPhone\n    // landscape enough vertical room for the HUD and touch controls.\n    // Keep a modest extra pullback at contact, but preserve the strong lateral\n    // shoulder angle that keeps both fighter centers separated on iPhone.\n    // At melee range rotate the composition toward a 3/4 side lane rather\n    // than simply pulling the shoulder camera farther away. This keeps camera-to-\n    // player distance nearly unchanged while increasing screen-space separation.\n'''
+          new = '''    // Rotate the close camera toward a stronger 3/4 side lane while preserving\n    // roughly the same orbit radius. This reveals the locked target beside the\n    // foreground fighter instead of zooming toward the pair or hiding them inline.\n    // Compact iPhone landscape still receives a small additional shoulder offset.\n'''
+          assert old in s
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          t = Path('tests/tps-mode.test.ts')
+          ts = t.read_text()
+          assert 'TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2\\.80' in ts
+          assert 'TPS_CAMERA_CLOSE_BACK_DELTA = 0\\.15' in ts
+          ts = ts.replace('TPS_CAMERA_CLOSE_SHOULDER_BONUS = 2\\.80', 'TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3\\.75', 1)
+          ts = ts.replace('TPS_CAMERA_CLOSE_BACK_DELTA = 0\\.15', 'TPS_CAMERA_CLOSE_BACK_DELTA = -0\\.95', 1)
+          t.write_text(ts)
+
+          a = Path('scripts/capture-tps-visual-audit.mjs')
+          au = a.read_text()
+          old = '''      screenSeparation,\n      fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),\n      shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,\n      backDistance: game.camera.userData.tpsBackDistance ?? 0,\n      closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,\n    };\n  `);\n  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.backDistance > 4.65)) {'''
+          new = '''      screenSeparation,\n      fightDistance: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),\n      shoulderOffset: game.camera.userData.tpsShoulderOffset ?? 0,\n      backDistance: game.camera.userData.tpsBackDistance ?? 0,\n      cameraOrbitRadius: Math.hypot(game.camera.userData.tpsShoulderOffset ?? 0, game.camera.userData.tpsBackDistance ?? 0),\n      closeFactor: game.camera.userData.tpsCloseReadabilityFactor ?? 0,\n    };\n  `);\n  if (!(cameraContinuityProbe.maxCameraStep < 0.28) || !(cameraContinuityProbe.maxLookTargetStep < 0.22) || !(cameraContinuityProbe.screenSeparation >= 64) || !(cameraContinuityProbe.cameraOrbitRadius > 6.6) || !(cameraContinuityProbe.backDistance > 3.6)) {'''
+          assert old in au
+          a.write_text(au.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit fix and remove helper workflow
+        run: |
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game-base.ts tests/tps-mode.test.ts scripts/capture-tps-visual-audit.mjs
+          git rm .github/workflows/tps-three-quarter-camera-fix.yml
+          git commit -m "Strengthen TPS close three-quarter framing"
+          git push

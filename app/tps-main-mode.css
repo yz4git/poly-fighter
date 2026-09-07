@@ -1,0 +1,190 @@
+/* TPS is the primary game flow. Keep the complete loadout visible in one landscape viewport. */
+@media (orientation: landscape) and (max-height: 760px) {
+  .select-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    column-gap: clamp(14px, 2.2vw, 28px);
+    row-gap: 9px;
+    align-content: center;
+    justify-items: stretch;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-right: max(58px, calc(env(safe-area-inset-right) + 18px));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: max(58px, calc(env(safe-area-inset-left) + 18px));
+    overflow: hidden;
+  }
+
+  .select-screen .screen-heading {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+    padding-bottom: 8px;
+  }
+
+  .select-screen > .fighter-select-grid {
+    width: 100%;
+    margin: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-self: center;
+  }
+
+  .select-screen > .fighter-select-grid:not(.opponent-grid) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .select-screen > .opponent-grid {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .select-screen .fighter-card {
+    min-height: 96px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 9px;
+    padding: 10px 11px;
+  }
+
+  .select-screen .fighter-orb {
+    width: 30px;
+    height: 48px;
+  }
+
+  .select-screen .fighter-card strong {
+    font-size: clamp(15px, 1.7vw, 21px);
+  }
+
+  .select-screen .fighter-card small,
+  .select-screen .fighter-card em {
+    font-size: 7px;
+    line-height: 1.25;
+  }
+
+  .select-screen .versus-line {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    top: 46%;
+    width: auto;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .select-screen .versus-line span {
+    display: none;
+  }
+
+  .select-screen > .difficulty {
+    grid-column: 1;
+    grid-row: 3;
+    width: 100%;
+    max-width: none;
+    margin-top: 0 !important;
+    align-self: end;
+  }
+
+  .select-screen > .difficulty + div {
+    display: none;
+  }
+
+  .select-screen .select-bottom {
+    grid-column: 2;
+    grid-row: 3;
+    width: 100%;
+    margin: 0;
+    gap: 10px;
+    align-items: end;
+  }
+
+  .select-screen .select-bottom .difficulty {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .select-screen .difficulty {
+    gap: 5px;
+  }
+
+  .select-screen .difficulty span {
+    font-size: 7px;
+  }
+
+  .select-screen .difficulty button {
+    padding: 7px 8px;
+    font-size: 8px;
+  }
+
+  .select-screen .primary-button.compact {
+    min-width: clamp(150px, 16vw, 210px);
+    padding: 10px 14px 9px;
+  }
+
+  .select-screen .primary-button.compact span {
+    font-size: 14px;
+  }
+
+  .select-screen .primary-button.compact small {
+    font-size: 7px;
+  }
+
+  .select-screen .back-button {
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 9px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .select-screen {
+    row-gap: 6px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .select-screen .screen-heading {
+    padding-bottom: 5px;
+  }
+
+  .select-screen .screen-heading i {
+    font-size: 7px;
+  }
+
+  .select-screen .fighter-card {
+    min-height: 76px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 7px 8px;
+  }
+
+  .select-screen .fighter-orb {
+    width: 25px;
+    height: 40px;
+  }
+
+  .select-screen .fighter-card strong {
+    font-size: 14px;
+  }
+
+  .select-screen .fighter-card small {
+    display: none;
+  }
+
+  .select-screen .fighter-card em {
+    font-size: 6px;
+  }
+
+  .select-screen .difficulty button {
+    padding: 6px 7px;
+    font-size: 7px;
+  }
+
+  .select-screen .primary-button.compact {
+    min-width: 138px;
+    padding: 8px 10px 7px;
+  }
+}

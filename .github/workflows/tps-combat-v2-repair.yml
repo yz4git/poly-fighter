@@ -45,6 +45,9 @@ jobs:
               'assert.match(page, /"punch", "Attack", tpsPunish \\? "PUNISH" : "ATTACK"/);': 'assert.match(page, /"punch", "Attack", tpsPunish \\? "PUNISH" : tpsIntercept \\? "INTERCEPT" : "ATTACK"/);',
               'assert.match(page, /tpsPunish \\? "PUNISH" : "ATTACK"/);': 'assert.match(page, /tpsPunish \\? "PUNISH" : tpsIntercept \\? "INTERCEPT" : "ATTACK"/);',
               'assert.match(page, /\\["PERFECT STEP", "FLANK OPEN"\\]/);': 'assert.match(page, /\\["PERFECT STEP", "FLANK OPEN", "REVERSAL"\\]/);',
+              'assert.match(page, /TAP COMBO/);': 'assert.match(page, /STEP OR INTERCEPT/);',
+              'assert.match(page, /SIDE STEP/);': 'assert.match(page, /→ REVERSAL/);',
+              'assert.match(page, /BACK STEP = SPACE/);': 'assert.match(page, /WINDUP/);',
           }
           for old, new in replacements.items():
               if old not in text:

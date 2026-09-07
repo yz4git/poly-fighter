@@ -132,10 +132,10 @@ test("TPS result records a visible winner instead of a zero-zero duel score", as
   assert.match(source, /p2Wins: this\.finished && this\.resultWinner === "p2" \? 1 : 0/);
 });
 
-test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps legacy controls", async () => {
+test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /TPS_MATCH/);
-  assert.match(page, /TPS LOCK-ON BATTLE/);
+  assert.doesNotMatch(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /tps-two-button-actions/);
   assert.match(page, /"guard", "Step", "STEP"/);
   assert.match(page, /"punch", "Attack", "ATTACK"/);
@@ -148,7 +148,9 @@ test("TPS touch UI exposes exactly ATTACK and STEP while the duel mode keeps leg
   assert.doesNotMatch(page, /G\+K/);
   assert.doesNotMatch(page, /G\+P/);
   assert.doesNotMatch(page, /P\+K/);
-  assert.match(page, /battleMode === "TPS" \? "TPS_MATCH" : "MATCH"/);
+  assert.match(page, /setScreen\("TPS_MATCH"\)/);
+  assert.doesNotMatch(page, /battleMode/);
+  assert.doesNotMatch(page, /setScreen\("MATCH"\)/);
 });
 
 
@@ -177,7 +179,7 @@ test("TPS messages use a face-safe HUD lane and RESULT removes live fight contro
   assert.match(page, /tps-face-safe-badge/);
   assert.match(page, /tps-combo-badge/);
   assert.match(page, /tps-ko-badge/);
-  assert.match(page, /const isGameSurface = screen === "MATCH" \|\| screen === "TPS_MATCH";/);
+  assert.match(page, /const isGameSurface = screen === "TPS_MATCH";/);
   assert.match(page, /tps-face-safe-active/);
   assert.match(css, /\.tps-badge\.tps-face-safe-badge/);
   assert.match(css, /\.tps-badge\.tps-combo-badge/);

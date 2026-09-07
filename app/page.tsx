@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
-import { PolyFightGame } from "@/src/game/game";
 import { TpsFightGame } from "@/src/game/tps-game";
 import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
 import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
@@ -17,9 +16,8 @@ import {
   type DigitalDirection,
 } from "@/src/game/virtual-pad";
 
-type Screen = "TITLE" | "SELECT" | "MODEL_VIEW" | "MATCH" | "TPS_MATCH" | "RESULT";
-type BattleMode = "DUEL" | "TPS";
-type GameRuntime = PolyFightGame | TpsFightGame;
+type Screen = "TITLE" | "SELECT" | "MODEL_VIEW" | "TPS_MATCH" | "RESULT";
+type GameRuntime = TpsFightGame;
 type SettingsDraft = {
   quality: "LOW" | "NORMAL" | "HIGH";
   cameraShake: boolean;
@@ -206,7 +204,6 @@ export default function Home() {
   const mountRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<GameRuntime | null>(null);
   const [screen, setScreen] = useState<Screen>("TITLE");
-  const [battleMode, setBattleMode] = useState<BattleMode>("DUEL");
   const [p1Choice, setP1Choice] = useState("red");
   const [p2Choice, setP2Choice] = useState("blue");
   const [modelChoice, setModelChoice] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
@@ -246,12 +243,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if ((screen !== "MATCH" && screen !== "TPS_MATCH") || !mountRef.current) return undefined;
+    if (screen !== "TPS_MATCH" || !mountRef.current) return undefined;
     setFallback(null);
     let game: GameRuntime;
     let reportedFallback = false;
     try {
-      game = new (screen === "TPS_MATCH" ? TpsFightGame : PolyFightGame)(mountRef.current, {
+      game = new TpsFightGame(mountRef.current, {
         p1Definition: FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red,
         p2Definition: FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue,
         p1Model: modelChoice,
@@ -308,14 +305,6 @@ export default function Home() {
 
   const startMatch = () => {
     requestLandscape();
-    setBattleMode("DUEL");
-    setHud(null);
-    setScreen("MATCH");
-  };
-
-  const startTpsMatch = () => {
-    requestLandscape();
-    setBattleMode("TPS");
     setHud(null);
     setPaused(false);
     setScreen("TPS_MATCH");
@@ -335,12 +324,12 @@ export default function Home() {
 
   const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
   const p2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
-  const isGameSurface = screen === "MATCH" || screen === "TPS_MATCH";
-  const tpsIncoming = battleMode === "TPS" && hud?.message === "INCOMING";
-  const tpsStrikeRange = battleMode === "TPS" && ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
-  const tpsComboMessage = battleMode === "TPS" && (hud?.message ?? "").startsWith("COMBO ");
-  const tpsKoMessage = battleMode === "TPS" && hud?.message === "KO";
-  const tpsFaceSafeMessage = battleMode === "TPS" && Boolean(hud?.message);
+  const isGameSurface = screen === "TPS_MATCH";
+  const tpsIncoming = hud?.message === "INCOMING";
+  const tpsStrikeRange = ["STRIKE RANGE", "PERFECT STEP", "FLANK OPEN"].includes(hud?.message ?? "");
+  const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
+  const tpsKoMessage = hud?.message === "KO";
+  const tpsFaceSafeMessage = Boolean(hud?.message);
 
   if (referenceMode) return <ReferenceReconstructionPanel />;
 
@@ -355,14 +344,13 @@ export default function Home() {
           <h1>POLY<span>FIGHTER</span></h1>
           <p className="title-subtitle">HIGH-POLY FLAT SHADING // RING 01</p>
           <div className="title-mark"><span /> <b>01</b> <span /></div>
-          <p className="title-copy">A textureless 3D duel built from light, color, and sharp geometry.</p>
-          <button type="button" className="primary-button" onClick={() => { setBattleMode("DUEL"); setScreen("SELECT"); requestLandscape(); }}>
-            <span>START MATCH</span><small>PRESS TO ENTER THE RING</small>
+          <p className="title-copy">A close-range 3D lock-on fighter built for direct movement, readable impact, and fast rematches.</p>
+          <button type="button" className="primary-button" onClick={() => { setScreen("SELECT"); requestLandscape(); }}>
+            <span>START FIGHT</span><small>TPS LOCK-ON / LOADOUT SELECT</small>
           </button>
-          <button type="button" className="ghost-button tps-mode-button" onClick={() => { setBattleMode("TPS"); setScreen("SELECT"); requestLandscape(); }}><span>TPS LOCK-ON BATTLE</span><small>360° CIRCULAR ARENA / LOADOUT SELECT</small></button>
           <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
-          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.1 // LOCAL DUEL</span></div>
+          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.1 // TPS LOCK-ON</span></div>
         </section>
       )}
 
@@ -370,7 +358,7 @@ export default function Home() {
 
       {screen === "SELECT" && (
         <section className="select-screen screen-panel">
-          <div className="screen-heading"><span>{battleMode === "TPS" ? "TPS LOADOUT" : "CHARACTER SELECT"}</span><i>{battleMode === "TPS" ? "LOCK-ON FIGHTER / CPU / DIFFICULTY" : "CHOOSE YOUR VECTOR"}</i></div>
+          <div className="screen-heading"><span>TPS LOADOUT</span><i>LOCK-ON FIGHTER / CPU / DIFFICULTY</i></div>
           <div className="fighter-select-grid">
             {[FIGHTER_DEFINITIONS.red, FIGHTER_DEFINITIONS.blue].map((fighter) => {
               const selected = fighter.id === p1Choice;
@@ -417,7 +405,7 @@ export default function Home() {
           </div>
           <div className="select-bottom">
             <div className="difficulty"><span>CPU DIFFICULTY</span>{(["EASY", "NORMAL", "HARD"] as CpuDifficulty[]).map((level) => <button key={level} type="button" className={difficulty === level ? "active" : ""} onClick={() => setDifficulty(level)}>{level}</button>)}</div>
-            <button type="button" className="primary-button compact" onClick={battleMode === "TPS" ? startTpsMatch : startMatch}><span>{battleMode === "TPS" ? "ENGAGE TPS" : "ENTER RING"}</span><small>{p1.name} / {p2.name} / {difficulty}</small></button>
+            <button type="button" className="primary-button compact" onClick={startMatch}><span>ENGAGE</span><small>{p1.name} / {p2.name} / {difficulty}</small></button>
           </div>
           <button type="button" className="back-button" onClick={backToTitle}>← TITLE</button>
         </section>
@@ -430,26 +418,16 @@ export default function Home() {
             <div className="round-readout"><span>ROUND {hud?.round ?? 1}</span><b>{String(hud?.timer ?? 60).padStart(2, "0")}</b><small>{hud?.message ?? "ROUND 1"}</small></div>
             <div className="hud-player right-player"><div className="hud-name"><span>CPU // PLAYER 2</span><strong>{hud?.p2Name ?? p2.name}</strong></div><HealthBar value={hud?.p2Health ?? 100} reverse /><div className="win-pips"><i className={(hud?.p2Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p2Wins ?? 0) > 1 ? "won" : ""} /></div></div>
           </section>
-          <div className={`match-badge ${battleMode === "TPS" ? "tps-badge" : ""} ${tpsFaceSafeMessage ? "tps-face-safe-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""} ${tpsKoMessage ? "tps-ko-badge" : ""}`}>{battleMode === "TPS" ? (tpsFaceSafeMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>) : <>HIGH-POLY FLAT SHADING <span>•</span> RING OUT ACTIVE</>}</div>
-          <button type="button" className={`pause-button ${battleMode === "TPS" ? "tps-pause-button" : ""}`} aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
+          <div className={`match-badge tps-badge ${tpsFaceSafeMessage ? "tps-face-safe-badge" : ""} ${tpsComboMessage ? "tps-combo-badge" : ""} ${tpsKoMessage ? "tps-ko-badge" : ""}`}>{tpsFaceSafeMessage ? <strong>{hud?.message}</strong> : <><strong>{hud?.message ?? "TARGET LOCKED"}</strong><span>•</span><b>{hud?.p2Name ?? p2.name}</b></>}</div>
+          <button type="button" className="pause-button tps-pause-button" aria-label={paused ? "Resume" : "Pause"} onClick={() => { const next = !paused; setPaused(next); if (next) gameRef.current?.pause(); else gameRef.current?.resume(); }}> {paused ? "▶" : "Ⅱ"} </button>
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
-            <div className={`action-buttons ${battleMode === "TPS" ? "tps-two-button-actions" : ""}`}>
-              {battleMode === "TPS" ? (
-                <>
-                  {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : ""))}
-                  {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsStrikeRange ? "tps-ready-action" : ""))}
-                </>
-              ) : (
-                <>
-                  {pressableAction(gameRef, "guard", "Guard", "G", "guard")}
-                  {pressableAction(gameRef, "punch", "Punch", "P", "punch")}
-                  {pressableAction(gameRef, "kick", "Kick", "K", "kick")}
-                </>
-              )}
+            <div className="action-buttons tps-two-button-actions">
+              {pressableAction(gameRef, "guard", "Step", "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : ""))}
+              {pressableAction(gameRef, "punch", "Attack", "ATTACK", "punch tps-attack-action " + (tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
-          <div className={`input-hint ${battleMode === "TPS" ? "tps-input-hint" : ""}`}>{battleMode === "TPS" ? <><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</> : <>PUNCH <b>P</b> / KICK <b>K</b> / GUARD <b>G</b> <span>•</span> HOLD G + 8-WAY TO SIDESTEP</>}</div>
+          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> TAP COMBO <span>•</span> <b>SIDE STEP</b> ENEMY STRIKE → FLANK <span>•</span> BACK STEP = SPACE <span>•</span> FORWARD STEP → ATTACK = DASH</div>
         </>
       )}
 
@@ -458,7 +436,7 @@ export default function Home() {
           <span className="result-kicker">MATCH COMPLETE</span>
           <h2>{hud?.message ?? "RESULT"}</h2>
           <div className="result-score"><b>{hud?.p1Wins ?? 0}</b><span>—</span><b>{hud?.p2Wins ?? 0}</b></div>
-          <button type="button" className="primary-button compact" onClick={() => setScreen(battleMode === "TPS" ? "TPS_MATCH" : "MATCH")}><span>REMATCH</span><small>{battleMode === "TPS" ? "RE-ENGAGE TARGET" : "RUN IT BACK"}</small></button>
+          <button type="button" className="primary-button compact" onClick={() => setScreen("TPS_MATCH")}><span>REMATCH</span><small>RE-ENGAGE TARGET</small></button>
           <button type="button" className="ghost-button" onClick={backToTitle}>TITLE</button>
         </section>
       )}

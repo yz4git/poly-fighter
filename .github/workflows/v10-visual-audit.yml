@@ -1,4 +1,4 @@
-name: POLY FIGHTER WebGL visual audit
+name: POLY FIGHTER Model View WebGL audit
 
 on:
   workflow_dispatch:
@@ -15,7 +15,6 @@ on:
       - public/models/**
       - package-lock.json
       - scripts/capture-model-view-audit.mjs
-      - scripts/capture-v10-visual-audit.mjs
       - .github/workflows/v10-visual-audit.yml
   pull_request:
     branches: [main]
@@ -30,20 +29,19 @@ on:
       - public/models/**
       - package-lock.json
       - scripts/capture-model-view-audit.mjs
-      - scripts/capture-v10-visual-audit.mjs
       - .github/workflows/v10-visual-audit.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: full-webgl-audit-${{ github.ref }}
+  group: model-view-webgl-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,28 +81,10 @@ jobs:
             file "artifacts/visual-audit/model-view-${fighter}.png" | grep -q "PNG image data"
           done
           test -s artifacts/visual-audit/model-view-state.json
-      - name: Capture representative match poses with ChromeDriver
-        run: |
-          mkdir -p artifacts/visual-audit artifacts/kairo-visual-audit
-          DRIVER="$(command -v chromedriver || true)"
-          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
-          test -n "$DRIVER"
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" AUDIT_OUTPUT="artifacts/visual-audit/sera-v10-canvas-idle.png" node scripts/capture-v10-visual-audit.mjs
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" AUDIT_FIGHTER="KAIRO" AUDIT_DIR="artifacts/kairo-visual-audit" AUDIT_OUTPUT="artifacts/kairo-visual-audit/kairo-v1-canvas-idle.png" node scripts/capture-v10-visual-audit.mjs
-          for pose in idle guard punch kick; do
-            test -s "artifacts/visual-audit/sera-v10-canvas-${pose}.png"
-            test -s "artifacts/kairo-visual-audit/kairo-v1-canvas-${pose}.png"
-          done
-          test -s artifacts/visual-audit/blender-runtime-state.json
-          test -s artifacts/kairo-visual-audit/runtime-state.json
-          test -s artifacts/kairo-visual-audit/pose-separation.json
           cp /tmp/poly-fighter-server.log artifacts/visual-audit/server.log
-          cp /tmp/poly-fighter-server.log artifacts/kairo-visual-audit/server.log
       - uses: actions/upload-artifact@v4
         with:
-          name: poly-fighter-webgl-visual-audit
-          path: |
-            artifacts/visual-audit
-            artifacts/kairo-visual-audit
+          name: poly-fighter-model-view-webgl-audit
+          path: artifacts/visual-audit
           if-no-files-found: error
           retention-days: 7

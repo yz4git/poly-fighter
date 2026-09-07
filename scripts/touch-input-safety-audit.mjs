@@ -130,9 +130,9 @@ try {
   sessionId = session.sessionId;
   await command(`/session/${sessionId}/url`, "POST", { url });
   await delay(650);
-  if (!(await clickButton(sessionId, "TPS LOCK-ON BATTLE"))) throw new Error("TPS title button not found");
+  if (!(await clickButton(sessionId, "START FIGHT"))) throw new Error("TPS title button not found");
   await delay(120);
-  if (!(await clickButton(sessionId, "ENGAGE TPS"))) throw new Error("TPS engage button not found");
+  if (!(await clickButton(sessionId, "ENGAGE"))) throw new Error("TPS engage button not found");
 
   let neutral = null;
   for (let attempt = 0; attempt < 100; attempt += 1) {

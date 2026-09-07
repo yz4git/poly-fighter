@@ -15,7 +15,7 @@
     "test:legacy-visual": "node --import tsx --test tests/reference-v6.test.ts tests/visual-v8.test.ts",
     "test:rules:tps": "node --import tsx --test tests/fight-rules.test.ts tests/input-rules.test.ts tests/runtime-regression.test.ts tests/combat-motion-timeline.test.ts tests/quaternius-motion.test.ts tests/quaternius-model-skin.test.ts tests/quaternius-character-graphics-v2.test.ts tests/quaternius-shoulder.test.ts tests/tps-mode.test.ts tests/tps-graphics.test.ts tests/motion-expansion.test.ts tests/motion-dna-readability.test.ts tests/cpu-director.test.ts tests/motion-correction-safe-assist.test.mjs tests/tps-audit-motion-policy.test.mjs",
     "test:ci:tps": "npm run test:rules:tps",
-    "test:pwa": "node --test tests/pwa-cache.test.mjs tests/startup-safety.test.mjs tests/model-viewer.test.mjs",
+    "test:pwa": "node --test tests/pwa-cache.test.mjs tests/startup-safety.test.mjs tests/model-viewer.test.mjs tests/tps-main-mode.test.mjs",
     "test:hero-pipeline": "node --test tests/sera-hero-pipeline.test.mjs",
     "test:ci:static": "npm run test:rules && npm run test:pwa && npm run test:hero-pipeline",
     "test:ci:postbuild": "node --test tests/rendered-html.test.mjs",

@@ -3,6 +3,7 @@ import TouchInputSafety from "./TouchInputSafety";
 import "./globals.css";
 import "./playtest-polish.css";
 import "./hud-face-safe.css";
+import "./tps-main-mode.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

@@ -301,10 +301,17 @@ function applyTpsImportedThrowReleaseTilt(fighter: FighterRuntime): void {
   host.rotation.x = 0;
   host.rotation.z = 0;
   root.userData.tpsThrowImportedBreak = 0;
-  const beingThrown = fighter.state === "THROW"
+  const legacyThrowState = fighter.state === "THROW"
     || (fighter.knockdownTicks > 72 && !fighter.grounded && fighter.velocity.y > 0);
-  const release = THREE.MathUtils.clamp(Number(root.userData.tpsThrowRelease ?? 0), 0, 1);
-  if (!beingThrown || release <= 1e-4) {
+  const tpsThrowKnockdown = fighter.state === "KNOCKDOWN"
+    && root.userData.tpsImpactPairRole === "DEFENDER"
+    && root.userData.tpsImpactPairMove === "throw";
+  const legacyRelease = THREE.MathUtils.clamp(Number(root.userData.tpsThrowRelease ?? 0), 0, 1);
+  const knockdownRelease = tpsThrowKnockdown
+    ? THREE.MathUtils.smoothstep(THREE.MathUtils.clamp((fighter.knockdownTicks - 56) / 16, 0, 1), 0, 1)
+    : 0;
+  const release = Math.max(legacyRelease, knockdownRelease);
+  if ((!legacyThrowState && !tpsThrowKnockdown) || release <= 1e-4) {
     root.updateMatrixWorld(true);
     return;
   }

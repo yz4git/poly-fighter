@@ -29,6 +29,7 @@ export const TPS_HYPE_PROFILE = Object.freeze({
 });
 
 type ImpactTier = 1 | 2 | 3;
+type ShockRingSource = "NONE" | "IMPACT" | "STEP";
 
 interface ShockRing {
   mesh: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
@@ -36,6 +37,7 @@ interface ShockRing {
   maxLife: number;
   startScale: number;
   baseOpacity: number;
+  source: ShockRingSource;
 }
 
 interface BurstSpokes {
@@ -142,7 +144,7 @@ export class TpsHypeDirector {
       mesh.visible = false;
       mesh.renderOrder = 28;
       this.group.add(mesh);
-      this.rings.push({ mesh, life: 0, maxLife: 0, startScale: 1, baseOpacity: 0 });
+      this.rings.push({ mesh, life: 0, maxLife: 0, startScale: 1, baseOpacity: 0, source: "NONE" });
     }
 
     for (let index = 0; index < TPS_HYPE_PROFILE.maxBurstSpokes; index += 1) {
@@ -162,6 +164,30 @@ export class TpsHypeDirector {
     }
   }
 
+  private retirePreviousImpactFx(): void {
+    let retiredRings = 0;
+    let retiredBursts = 0;
+    for (const ring of this.rings) {
+      if (ring.life <= 0 || ring.source !== "IMPACT") continue;
+      ring.life = 0;
+      ring.baseOpacity = 0;
+      ring.source = "NONE";
+      ring.mesh.visible = false;
+      ring.mesh.material.opacity = 0;
+      retiredRings += 1;
+    }
+    for (const burst of this.bursts) {
+      if (burst.life <= 0) continue;
+      burst.life = 0;
+      burst.baseOpacity = 0;
+      burst.lines.visible = false;
+      burst.lines.material.opacity = 0;
+      retiredBursts += 1;
+    }
+    this.group.userData.lastHypeRetiredImpactRings = retiredRings;
+    this.group.userData.lastHypeRetiredBursts = retiredBursts;
+  }
+
   hit(event: HitEvent, camera: THREE.PerspectiveCamera): void {
     const tier = event.blocked ? 1 : tpsHypeImpactTier(event.move.id, event.move.power);
     const color = event.blocked
@@ -176,15 +202,20 @@ export class TpsHypeDirector {
     const visualPoint = point.clone().addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias);
     const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
 
+    // One combo beat should have one visual center. Retire only prior hit-created
+    // rings/bursts before allocating this strike; STEP ground rings are tagged
+    // separately and keep their authored lifetime. Heavy strikes can still own
+    // two concentric rings from this same hit, preserving their extra weight.
+    this.retirePreviousImpactFx();
+
     for (let index = 0; index < ringCount; index += 1) {
       const ring = this.rings.find((entry) => entry.life <= 0) ?? this.rings[index % this.rings.length];
-      // Keep the current impact bright while clearing the previous combo beat
-      // before the next strike lands. STEP rings keep their longer authored life.
       ring.life = TPS_HYPE_PROFILE.impactRingBaseLife
         + tier * TPS_HYPE_PROFILE.impactRingTierLife
         + index * TPS_HYPE_PROFILE.impactRingLayerLife;
       ring.maxLife = ring.life;
       ring.startScale = 0.56 + tier * 0.14 + index * 0.10;
+      ring.source = "IMPACT";
       ring.mesh.visible = true;
       ring.mesh.position.copy(visualPoint);
       ring.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
@@ -252,6 +283,7 @@ export class TpsHypeDirector {
     ring.life = perfect ? 0.28 : 0.20;
     ring.maxLife = ring.life;
     ring.startScale = perfect ? 1.18 : 0.90;
+    ring.source = "STEP";
     ring.mesh.visible = true;
     ring.mesh.position.copy(fighter.position).add(new THREE.Vector3(0, 0.05, 0));
     ring.mesh.rotation.set(-Math.PI / 2, 0, Math.atan2(forward.z, forward.x));
@@ -288,6 +320,7 @@ export class TpsHypeDirector {
       ring.mesh.scale.setScalar(ring.startScale * (1 + progress * TPS_HYPE_PROFILE.impactRingExpansion));
       ring.mesh.material.opacity = Math.max(0, (1 - progress) * ring.baseOpacity);
       if (ring.life <= 0) {
+        ring.source = "NONE";
         ring.mesh.visible = false;
         ring.mesh.material.opacity = 0;
       }
@@ -351,6 +384,7 @@ export class TpsHypeDirector {
     for (const ring of this.rings) {
       ring.life = 0;
       ring.baseOpacity = 0;
+      ring.source = "NONE";
       ring.mesh.visible = false;
       ring.mesh.material.opacity = 0;
     }

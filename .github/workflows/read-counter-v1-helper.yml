@@ -1,0 +1,39 @@
+name: Read Counter v1 Helper
+
+on:
+  push:
+    branches: [read-counter-combat-v1]
+    paths:
+      - .github/workflows/read-counter-v1-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: read-counter-combat-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply Read & Counter combat
+        run: python3 scripts/read-counter-v1-patch.py
+      - name: TPS regression
+        run: npm run test:rules:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/tps-game-base.ts src/game/types.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts
+          git commit -m "Implement Read & Counter combat rhythm"
+          git push origin HEAD:read-counter-combat-v1

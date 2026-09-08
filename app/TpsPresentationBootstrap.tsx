@@ -1,6 +1,7 @@
 "use client";
 
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
+import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
 import { installTpsPunishReadyPresentation } from "@/src/game/tps-punish-ready";
 import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-body";
 import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph-handoff";
@@ -11,6 +12,7 @@ installTpsThrowStagingPresentation();
 installTpsQuickstepBodyPresentation();
 installTpsTelegraphHandoffPresentation();
 installTpsPunishReadyPresentation();
+installTpsInterceptSilhouettePresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

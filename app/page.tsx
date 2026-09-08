@@ -351,7 +351,11 @@ export default function Home() {
   const tpsIncoming = hud?.tpsCue === "INCOMING";
   const tpsWindup = hud?.tpsCue === "WINDUP";
   const tpsPunish = hud?.tpsCue === "PUNISH";
-  const tpsIntercept = hud?.tpsCue === "WINDUP";
+  const tpsRead = hud?.tpsTimingCue === "READ";
+  const tpsWatch = hud?.tpsTimingCue === "WATCH";
+  const tpsSlip = hud?.tpsTimingCue === "SLIP";
+  const tpsBreakCounter = hud?.tpsTimingCue === "BREAK_COUNTER";
+  const tpsIntercept = tpsWindup && tpsRead;
   const tpsStrikeRange = hud?.tpsCue === "RANGE";
   const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
   const tpsKoMessage = ["KO", "FINAL IMPACT"].includes(hud?.message ?? "");
@@ -450,11 +454,11 @@ export default function Home() {
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons tps-two-button-actions">
-              {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
-              {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
+              {pressableAction(gameRef, "guard", "Step", tpsSlip ? "SLIP NOW" : tpsWatch ? "WATCH" : tpsRead ? "READ" : tpsIncoming ? "STEP NOW" : "STEP", "guard tps-step-action " + (tpsSlip ? "tps-slip-action" : tpsWatch ? "tps-watch-action" : tpsRead ? "tps-read-action" : tpsIncoming ? "tps-threat-action" : ""))}
+              {pressableAction(gameRef, "punch", "Attack", tpsBreakCounter ? "BREAK COUNTER" : tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsBreakCounter ? "tps-break-counter-action" : tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
-          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> <b>WINDUP</b> STEP OR INTERCEPT <span>•</span> <b>PERFECT STEP</b> → REVERSAL <span>•</span> FORWARD STEP → ATTACK = DASH</div>
+          <div className="input-hint tps-input-hint"><b>READ</b> → WATCH → <b>SLIP NOW</b> <span>•</span> JUST STEP → <b>BREAK COUNTER</b> <span>•</span> EARLY STEP = EVADE <span>•</span> READ + ATTACK = INTERCEPT</div>
           {screen === "TRAINING" && (
             <section className={`training-coach ${trainingStage === 5 ? "complete" : ""}`} aria-live="polite">
               <span>RIVAL CORE TRAINING // {Math.min(trainingStage + 1, 6)}/6</span>

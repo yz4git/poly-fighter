@@ -134,7 +134,11 @@ test("Rival Core phase 9 makes every CPU attack reactable from a visible commitm
   assert.match(source, /minimumEnemyTelegraphTicks/);
   assert.match(source, /TPS_REACTIVE_STEP_WINDOW_TICKS/);
   assert.match(source, /pendingReaction/);
-  assert.match(source, /lateWindup/);
+  assert.match(source, /inReactionWindow/);
+  assert.match(source, /pendingTiming: TpsThreatTiming/);
+  assert.match(source, /"READ"/);
+  assert.match(source, /"WATCH"/);
+  assert.match(source, /"SLIP"/);
   assert.match(source, /tpsEnemyTelegraphPhase/);
   assert.match(source, /INTERRUPTED/);
   assert.match(source, /pendingThreatReach/);

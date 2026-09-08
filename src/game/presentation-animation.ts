@@ -322,6 +322,42 @@ function applyTpsImportedThrowReleaseTilt(fighter: FighterRuntime): void {
   root.updateMatrixWorld(true);
 }
 
+function applyTpsImportedCounterSlip(fighter: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
+  const host = root.children.find((child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"));
+  if (!host) return;
+
+  const previousAccent = Number(root.userData.tpsCounterImportedAccent ?? 0);
+  const move = fighter.currentMove;
+  const countering = fighter.state === "ATTACK" && move?.id === "counter";
+  if (!countering || !move) {
+    if (previousAccent > 1e-4) {
+      host.position.x = 0;
+      host.rotation.y = 0;
+      host.rotation.z = 0;
+      root.updateMatrixWorld(true);
+    }
+    root.userData.tpsCounterImportedAccent = 0;
+    return;
+  }
+
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const slipIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 4), activeStart + 1);
+  const slipOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 1, activeEnd + 8);
+  const accent = THREE.MathUtils.clamp(slipIn * slipOut, 0, 1);
+  const side = move.visualContact === "LEFT_FIST" ? -1 : 1;
+  const scale = root.scale.x;
+
+  host.position.x = side * 0.065 * scale * accent;
+  host.rotation.y = -side * 0.08 * accent;
+  host.rotation.z = side * 0.065 * accent;
+  root.userData.tpsCounterImportedAccent = accent;
+  root.userData.tpsCounterImportedSlip = host.position.x;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -416,6 +452,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     }
     updateQuaterniusModelSkin(fighter, timeSeconds);
     applyTpsImportedThrowReleaseTilt(fighter);
+    applyTpsImportedCounterSlip(fighter);
     if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled

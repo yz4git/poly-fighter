@@ -25,7 +25,12 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   impactDepthBias: 0.07,
   perfectStepFovRush: 4.8,
   dashFovRush: 3.8,
-  heavyImpactFovPunch: -5.2,
+  heavyImpactFovPunch: -3.8,
+  counterImpactFovPunch: -4.6,
+  lightImpactCameraSide: 0.034,
+  mediumImpactCameraSide: 0.072,
+  heavyImpactCameraSide: 0.145,
+  counterImpactCameraSide: 0.175,
 });
 
 type ImpactTier = 1 | 2 | 3;
@@ -255,19 +260,26 @@ export class TpsHypeDirector {
       return;
     }
 
-    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -2.9 : -1.2;
+    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -2.6 : -1.1;
+    const tierSide = tier === 3
+      ? TPS_HYPE_PROFILE.heavyImpactCameraSide
+      : tier === 2
+        ? TPS_HYPE_PROFILE.mediumImpactCameraSide
+        : TPS_HYPE_PROFILE.lightImpactCameraSide;
     this.fovOffset = Math.min(this.fovOffset, tierFov);
-    this.cameraKick = Math.max(this.cameraKick, tier === 3 ? 0.22 : tier === 2 ? 0.105 : 0.045);
+    this.cameraKick = Math.max(this.cameraKick, tier === 3 ? 0.20 : tier === 2 ? 0.098 : 0.042);
     this.cameraSide = (event.attacker === "p1" ? 1 : -1)
-      * Math.max(Math.abs(this.cameraSide), tier === 3 ? 0.105 : tier === 2 ? 0.052 : 0.024);
+      * Math.max(Math.abs(this.cameraSide), tierSide);
     this.cameraRoll = (event.attacker === "p1" ? -1 : 1)
-      * Math.max(Math.abs(this.cameraRoll), tier === 3 ? 0.012 : tier === 2 ? 0.006 : 0.003);
-    this.cameraShake = Math.max(this.cameraShake, tier === 3 ? 0.115 : tier === 2 ? 0.060 : 0.030);
+      * Math.max(Math.abs(this.cameraRoll), tier === 3 ? 0.010 : tier === 2 ? 0.005 : 0.0025);
+    this.cameraShake = Math.max(this.cameraShake, tier === 3 ? 0.110 : tier === 2 ? 0.058 : 0.028);
 
     if (event.counter) {
-      this.fovOffset = Math.min(this.fovOffset, -6.4);
-      this.cameraKick = Math.max(this.cameraKick, 0.26);
-      this.cameraShake = Math.max(this.cameraShake, 0.14);
+      this.fovOffset = Math.min(this.fovOffset, TPS_HYPE_PROFILE.counterImpactFovPunch);
+      this.cameraKick = Math.max(this.cameraKick, 0.24);
+      this.cameraSide = (event.attacker === "p1" ? 1 : -1)
+        * Math.max(Math.abs(this.cameraSide), TPS_HYPE_PROFILE.counterImpactCameraSide);
+      this.cameraShake = Math.max(this.cameraShake, 0.135);
     }
 
     this.group.userData.lastHypeImpactTier = tier;
@@ -275,6 +287,8 @@ export class TpsHypeDirector {
     this.group.userData.lastHypeCounter = event.counter;
     this.group.userData.lastHypeBurstAspect = burst.aspect;
     this.group.userData.lastHypeBurstAngle = burstAngle;
+    this.group.userData.lastHypeCameraSide = this.cameraSide;
+    this.group.userData.lastHypeFovOffset = this.fovOffset;
   }
 
   step(fighter: FighterRuntime, opponent: FighterRuntime, perfect: boolean): void {

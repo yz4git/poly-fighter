@@ -54,10 +54,19 @@ jobs:
               text = text.replace(previous, current)
           tests.write_text(text)
 
+          rival = Path('tests/tps-rival-core.test.ts')
+          rival_text = rival.read_text()
+          old_phase9 = '  assert.match(source, /pendingReaction/);\n  assert.match(source, /lateWindup/);\n  assert.match(source, /tpsEnemyTelegraphPhase/);'
+          new_phase9 = '  assert.match(source, /pendingReaction/);\n  assert.match(source, /inReactionWindow/);\n  assert.match(source, /pendingTiming: TpsThreatTiming/);\n  assert.match(source, /"READ"/);\n  assert.match(source, /"WATCH"/);\n  assert.match(source, /"SLIP"/);\n  assert.match(source, /tpsEnemyTelegraphPhase/);'
+          if old_phase9 not in rival_text:
+              raise SystemExit('Rival Core phase 9 timing anchor missing')
+          rival.write_text(rival_text.replace(old_phase9, new_phase9, 1))
+
           required = {
             'src/game/tps-game-base.ts': ['TPS_JUST_STEP_WINDOW_TICKS', 'setCombatBeat("JUST STEP")', 'setCombatBeat("BREAK COUNTER")', '"BREAK_COUNTER"'],
             'app/page.tsx': ['SLIP NOW', 'BREAK COUNTER', 'EARLY STEP = EVADE'],
             'tests/tps-mode.test.ts': ['const justStepSideStep = Boolean', 'reversalOpen: breakCounterStrike', 'TPS timing mastery separates WATCH from JUST STEP'],
+            'tests/tps-rival-core.test.ts': ['inReactionWindow', 'pendingTiming: TpsThreatTiming', '/"SLIP"/'],
             'scripts/capture-tps-combat-v2-audit.mjs': ['earlyStep', 'justStep: reactableStep', 'breakCounter: reversal'],
           }
           for path, markers in required.items():
@@ -79,6 +88,6 @@ jobs:
           rm .github/workflows/just-step-break-counter-repair2.yml
           git config user.name "yz4git"
           git config user.email "65384484+yz4git@users.noreply.github.com"
-          git add src/game/tps-game-base.ts src/game/types.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts scripts/capture-tps-reactive-cues.mjs scripts/capture-tps-combat-v2-audit.mjs .github/workflows/just-step-break-counter-impl.yml .github/workflows/just-step-break-counter-repair.yml .github/workflows/just-step-break-counter-repair2.yml
+          git add src/game/tps-game-base.ts src/game/types.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts tests/tps-rival-core.test.ts scripts/capture-tps-reactive-cues.mjs scripts/capture-tps-combat-v2-audit.mjs .github/workflows/just-step-break-counter-impl.yml .github/workflows/just-step-break-counter-repair.yml .github/workflows/just-step-break-counter-repair2.yml
           git commit -m "Implement JUST STEP and BREAK COUNTER timing"
           git push origin HEAD:just-step-break-counter-v1

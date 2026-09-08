@@ -2,10 +2,8 @@ name: JUST STEP frame trace
 
 on:
   push:
-    branches:
-      - just-step-break-counter-v1
-    paths:
-      - .github/workflows/just-step-frame-debug.yml
+    branches: [just-step-break-counter-v1]
+    paths: [.github/workflows/just-step-frame-debug.yml]
 
 permissions:
   contents: read
@@ -21,55 +19,38 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Add temporary per-frame trace to browser audit
+      - name: Add temporary frame trace
         run: |
-          python3 <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
-          path = Path('scripts/capture-tps-combat-v2-audit.mjs')
-          text = path.read_text()
-          old = '''    let steps = 1;
-    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {
-      game.renderTime += 1 / 60;
-      game.step();
-      steps += 1;
-    }
-'''
-          new = '''    let steps = 1;
-    const trace = [];
-    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {
-      trace.push({
-        step: steps,
-        tracker: game.playerStepThreatTicks,
-        trackedMove: game.playerStepThreatMoveId,
-        wasJust: game.playerStepThreatWasJust,
-        sideWeight: game.playerStepSideWeight,
-        p2State: game.p2.state,
-        p2Move: game.p2.currentMove?.id ?? null,
-        p2MoveTick: game.p2.moveTick,
-        p2Active: game.p2.isActive(),
-        telegraph: game.enemyDirectorTelegraphTicks,
-        pending: game.enemyDirectorPendingMove,
-        p1Health: game.p1.health,
-      });
-      game.renderTime += 1 / 60;
-      game.step();
-      steps += 1;
-    }
-'''
-          if old not in text:
-              raise SystemExit('reactable loop anchor missing')
-          text = text.replace(old, new, 1)
-          old_return = '''      beat: game.combatBeatLabel,
-    };
-'''
-          new_return = '''      beat: game.combatBeatLabel,
-      trace,
-    };
-'''
-          if old_return not in text:
-              raise SystemExit('reactable return anchor missing')
-          text = text.replace(old_return, new_return, 1)
-          path.write_text(text)
+          p = Path('scripts/capture-tps-combat-v2-audit.mjs')
+          t = p.read_text()
+          old = "\n".join([
+            "    let steps = 1;",
+            "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
+            "      game.renderTime += 1 / 60;",
+            "      game.step();",
+            "      steps += 1;",
+            "    }",
+            "",
+          ])
+          new = "\n".join([
+            "    let steps = 1;",
+            "    const trace = [];",
+            "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
+            "      trace.push({ step: steps, tracker: game.playerStepThreatTicks, trackedMove: game.playerStepThreatMoveId, wasJust: game.playerStepThreatWasJust, sideWeight: game.playerStepSideWeight, p2State: game.p2.state, p2Move: game.p2.currentMove?.id ?? null, p2MoveTick: game.p2.moveTick, p2Active: game.p2.isActive(), telegraph: game.enemyDirectorTelegraphTicks, pending: game.enemyDirectorPendingMove, p1Health: game.p1.health });",
+            "      game.renderTime += 1 / 60;",
+            "      game.step();",
+            "      steps += 1;",
+            "    }",
+            "",
+          ])
+          if old not in t: raise SystemExit('reactable loop anchor missing')
+          t = t.replace(old, new, 1)
+          old_ret = "      beat: game.combatBeatLabel,\n    };\n"
+          new_ret = "      beat: game.combatBeatLabel,\n      trace,\n    };\n"
+          if old_ret not in t: raise SystemExit('reactable return anchor missing')
+          p.write_text(t.replace(old_ret, new_ret, 1))
           PY
       - run: npm run build
       - name: Start production server

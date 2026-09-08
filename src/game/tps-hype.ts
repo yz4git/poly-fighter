@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import { PresentationAnimationController } from "./presentation-animation";
 import type { HitEvent } from "./types";
 
 export const TPS_HYPE_PROFILE = Object.freeze({
@@ -25,16 +26,16 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   impactDepthBias: 0.07,
   perfectStepFovRush: 4.8,
   dashFovRush: 3.8,
-  heavyImpactFovPunch: -3.8,
-  counterImpactFovPunch: -4.6,
-  lightImpactCameraSide: 0.040,
-  mediumImpactCameraSide: 0.088,
-  heavyImpactCameraSide: 0.180,
-  counterImpactCameraSide: 0.235,
-  lightImpactAimWeight: 0.22,
-  mediumImpactAimWeight: 0.38,
-  heavyImpactAimWeight: 0.58,
-  counterImpactAimWeight: 0.72,
+  heavyImpactFovPunch: -4.4,
+  counterImpactFovPunch: -5.2,
+  lightImpactCameraSide: 0.030,
+  mediumImpactCameraSide: 0.062,
+  heavyImpactCameraSide: 0.125,
+  counterImpactCameraSide: 0.158,
+  lightImpactAimWeight: 0.12,
+  mediumImpactAimWeight: 0.22,
+  heavyImpactAimWeight: 0.34,
+  counterImpactAimWeight: 0.46,
 });
 
 type ImpactTier = 1 | 2 | 3;
@@ -57,6 +58,103 @@ interface BurstSpokes {
   aspect: number;
   baseOpacity: number;
 }
+
+type ImpactLaneState = {
+  appliedX: number;
+  appliedZ: number;
+};
+
+const impactLaneStates = new WeakMap<FighterRuntime, ImpactLaneState>();
+const TPS_IMPACT_LANE = Object.freeze({
+  LIGHT: 0.035,
+  MID: 0.052,
+  HEAVY: 0.075,
+  COUNTER: 0.095,
+});
+
+function ensureImpactLaneState(fighter: FighterRuntime): ImpactLaneState {
+  let state = impactLaneStates.get(fighter);
+  if (state) return state;
+  state = { appliedX: 0, appliedZ: 0 };
+  impactLaneStates.set(fighter, state);
+  return state;
+}
+
+function removeImpactLane(fighter: FighterRuntime, state: ImpactLaneState): void {
+  if (Math.abs(state.appliedX) <= 1e-7 && Math.abs(state.appliedZ) <= 1e-7) return;
+  fighter.visual.root.position.x -= state.appliedX;
+  fighter.visual.root.position.z -= state.appliedZ;
+  state.appliedX = 0;
+  state.appliedZ = 0;
+  fighter.visual.root.userData.tpsImpactLane = 0;
+  fighter.visual.root.updateMatrixWorld(true);
+}
+
+function applyImpactLane(fighter: FighterRuntime, opponent: FighterRuntime, state: ImpactLaneState): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps) {
+    root.userData.tpsImpactLane = 0;
+    return;
+  }
+
+  const blocked = fighter.state === "BLOCK_STUN";
+  const hit = fighter.state === "HIT";
+  const contactKnockdown = fighter.state === "KNOCKDOWN" && fighter.hitStop > 0;
+  if (!blocked && !hit && !contactKnockdown) {
+    root.userData.tpsImpactLane = 0;
+    return;
+  }
+
+  // Hitstop owns the exact contact beat. Once it releases, ease the lane out
+  // using remaining stun so the defender does not snap back through the attacker.
+  const stunTicks = blocked ? fighter.blockStun : fighter.hitStun;
+  const release = fighter.hitStop > 0
+    ? 1
+    : THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(stunTicks / 12, 0, 1), 0, 1);
+  if (release <= 1e-4) {
+    root.userData.tpsImpactLane = 0;
+    return;
+  }
+
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-8) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+
+  // The perpendicular of the combat axis is approximately screen-horizontal in
+  // the shoulder camera. Use reactionSide so left/right authored contacts push
+  // the rendered torso into a consistent readable lane instead of one generic offset.
+  const sideSign = fighter.reactionSide === "LEFT" ? -1 : 1;
+  const laneDirection = new THREE.Vector3(-away.z, 0, away.x).multiplyScalar(sideSign);
+  const laneBase = blocked ? 0.022 : TPS_IMPACT_LANE[fighter.reactionKind];
+  const lane = laneBase * release;
+  state.appliedX = laneDirection.x * lane;
+  state.appliedZ = laneDirection.z * lane;
+  root.position.x += state.appliedX;
+  root.position.z += state.appliedZ;
+  root.userData.tpsImpactLane = lane;
+  root.userData.tpsImpactLaneX = state.appliedX;
+  root.userData.tpsImpactLaneZ = state.appliedZ;
+  root.userData.tpsImpactLaneSide = sideSign;
+  root.updateMatrixWorld(true);
+}
+
+// Presentation-only lane: remove the previous rendered contribution before the
+// regular pose stack samples, then add a tiny screen-side separation afterward.
+// The simulation position, reach, hitboxes, knockback and deterministic timing
+// never see this offset. motion-reaction.ts wraps this controller later and can
+// safely layer its imported-model afterfeel on top of the already-separated root.
+const basePresentationUpdate = PresentationAnimationController.prototype.update;
+PresentationAnimationController.prototype.update = function updateWithTpsImpactLane(
+  fighter: FighterRuntime,
+  opponent: FighterRuntime,
+  timeSeconds: number,
+): void {
+  const state = ensureImpactLaneState(fighter);
+  removeImpactLane(fighter, state);
+  basePresentationUpdate.call(this, fighter, opponent, timeSeconds);
+  applyImpactLane(fighter, opponent, state);
+};
 
 export function tpsHypeImpactTier(moveId: string, power: number): ImpactTier {
   if (["power", "risingKick", "dashKick", "counter", "backfist"].includes(moveId) || power >= 1.6) return 3;
@@ -215,13 +313,9 @@ export class TpsHypeDirector {
     const visualPoint = point.clone().addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias);
     const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
 
-    // Keep a short-lived authored contact focus. The final camera can translate
-    // laterally and partially re-aim at this point, producing a tiny orbit around
-    // the actual strike instead of sliding the whole composition sideways. This
-    // creates parallax between overlapping fighters without touching gameplay.
     if (!event.blocked) {
       this.impactFocus.copy(point);
-      this.impactFocusDuration = event.counter ? 0.22 : tier === 3 ? 0.19 : tier === 2 ? 0.15 : 0.11;
+      this.impactFocusDuration = event.counter ? 0.20 : tier === 3 ? 0.17 : tier === 2 ? 0.14 : 0.10;
       this.impactFocusLife = this.impactFocusDuration;
       this.impactAimWeight = event.counter
         ? TPS_HYPE_PROFILE.counterImpactAimWeight
@@ -232,10 +326,6 @@ export class TpsHypeDirector {
             : TPS_HYPE_PROFILE.lightImpactAimWeight;
     }
 
-    // One combo beat should have one visual center. Retire only prior hit-created
-    // rings/bursts before allocating this strike; STEP ground rings are tagged
-    // separately and keep their authored lifetime. Heavy strikes can still own
-    // two concentric rings from this same hit, preserving their extra weight.
     this.retirePreviousImpactFx();
 
     for (let index = 0; index < ringCount; index += 1) {
@@ -285,26 +375,26 @@ export class TpsHypeDirector {
       return;
     }
 
-    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -2.6 : -1.1;
+    const tierFov = tier === 3 ? TPS_HYPE_PROFILE.heavyImpactFovPunch : tier === 2 ? -2.7 : -1.15;
     const tierSide = tier === 3
       ? TPS_HYPE_PROFILE.heavyImpactCameraSide
       : tier === 2
         ? TPS_HYPE_PROFILE.mediumImpactCameraSide
         : TPS_HYPE_PROFILE.lightImpactCameraSide;
     this.fovOffset = Math.min(this.fovOffset, tierFov);
-    this.cameraKick = Math.max(this.cameraKick, tier === 3 ? 0.20 : tier === 2 ? 0.098 : 0.042);
+    this.cameraKick = Math.max(this.cameraKick, tier === 3 ? 0.21 : tier === 2 ? 0.102 : 0.044);
     this.cameraSide = (event.attacker === "p1" ? 1 : -1)
       * Math.max(Math.abs(this.cameraSide), tierSide);
     this.cameraRoll = (event.attacker === "p1" ? -1 : 1)
-      * Math.max(Math.abs(this.cameraRoll), tier === 3 ? 0.010 : tier === 2 ? 0.005 : 0.0025);
-    this.cameraShake = Math.max(this.cameraShake, tier === 3 ? 0.110 : tier === 2 ? 0.058 : 0.028);
+      * Math.max(Math.abs(this.cameraRoll), tier === 3 ? 0.011 : tier === 2 ? 0.0055 : 0.0028);
+    this.cameraShake = Math.max(this.cameraShake, tier === 3 ? 0.112 : tier === 2 ? 0.059 : 0.029);
 
     if (event.counter) {
       this.fovOffset = Math.min(this.fovOffset, TPS_HYPE_PROFILE.counterImpactFovPunch);
-      this.cameraKick = Math.max(this.cameraKick, 0.24);
+      this.cameraKick = Math.max(this.cameraKick, 0.245);
       this.cameraSide = (event.attacker === "p1" ? 1 : -1)
         * Math.max(Math.abs(this.cameraSide), TPS_HYPE_PROFILE.counterImpactCameraSide);
-      this.cameraShake = Math.max(this.cameraShake, 0.135);
+      this.cameraShake = Math.max(this.cameraShake, 0.137);
     }
 
     this.group.userData.lastHypeImpactTier = tier;
@@ -380,8 +470,6 @@ export class TpsHypeDirector {
       }
     }
 
-    // Match the final TPS camera's compact-landscape lens so the hype director
-    // does not pull the camera back toward the retired 52-degree framing.
     const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     if (Math.abs(this.fovOffset) > 0.01) {
       camera.fov = THREE.MathUtils.clamp(baseFov + this.fovOffset, 38, 58);

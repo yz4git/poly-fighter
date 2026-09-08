@@ -38,10 +38,24 @@ type ComboMomentumCarryState = {
   appliedRotationZ: number;
 };
 
+type AttackAfterfeelState = {
+  lastState: FighterRuntime["state"];
+  lastMoveId: string;
+  until: number;
+  duration: number;
+  side: -1 | 1;
+  kind: ComboMomentumKind;
+  appliedPositionX: number;
+  appliedRotationX: number;
+  appliedRotationY: number;
+  appliedRotationZ: number;
+};
+
 const fighters = new Map<string, FighterRuntime>();
 const reactions = new WeakMap<FighterRuntime, MotionReactionState>();
 const damageAfterfeel = new WeakMap<FighterRuntime, DamageAfterfeelState>();
 const comboMomentumCarry = new WeakMap<FighterRuntime, ComboMomentumCarryState>();
+const attackAfterfeel = new WeakMap<FighterRuntime, AttackAfterfeelState>();
 const DAMAGE_AFTERFEEL_SECONDS = 0.20;
 const DAMAGE_AFTERFEEL_SETTLE_STATES = new Set<FighterRuntime["state"]>(["IDLE", "WALK", "CROUCH"]);
 
@@ -66,6 +80,13 @@ function comboMomentumKindForMove(moveId: string): ComboMomentumKind {
   if (["power", "throw"].includes(moveId)) return "HEAVY";
   if (["backfist", "counter"].includes(moveId)) return "SWEEP";
   return "PUNCH";
+}
+
+function attackAfterfeelDuration(kind: ComboMomentumKind): number {
+  if (kind === "HEAVY") return 0.16;
+  if (kind === "SWEEP") return 0.13;
+  if (kind === "KICK") return 0.12;
+  return 0.10;
 }
 
 function ensure(fighter: FighterRuntime): MotionReactionState {
@@ -117,6 +138,25 @@ function ensureComboMomentumCarry(fighter: FighterRuntime): ComboMomentumCarrySt
   return state;
 }
 
+function ensureAttackAfterfeel(fighter: FighterRuntime): AttackAfterfeelState {
+  let state = attackAfterfeel.get(fighter);
+  if (state) return state;
+  state = {
+    lastState: fighter.state,
+    lastMoveId: fighter.currentMove?.id ?? "",
+    until: 0,
+    duration: 0.10,
+    side: 1,
+    kind: "PUNCH",
+    appliedPositionX: 0,
+    appliedRotationX: 0,
+    appliedRotationY: 0,
+    appliedRotationZ: 0,
+  };
+  attackAfterfeel.set(fighter, state);
+  return state;
+}
+
 function importedRuntimeHost(fighter: FighterRuntime) {
   return fighter.visual.root.children.find(
     (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
@@ -155,6 +195,27 @@ function removeComboMomentumTransform(fighter: FighterRuntime, state: ComboMomen
   state.appliedRotationY = 0;
   state.appliedRotationZ = 0;
   fighter.visual.root.userData.tpsComboMomentumCarry = 0;
+}
+
+function removeAttackAfterfeelTransform(fighter: FighterRuntime, state: AttackAfterfeelState): void {
+  const hasTransform = Math.abs(state.appliedPositionX) > 1e-6
+    || Math.abs(state.appliedRotationX) > 1e-6
+    || Math.abs(state.appliedRotationY) > 1e-6
+    || Math.abs(state.appliedRotationZ) > 1e-6;
+  if (!hasTransform) return;
+  const host = importedRuntimeHost(fighter);
+  if (host) {
+    host.position.x -= state.appliedPositionX;
+    host.rotation.x -= state.appliedRotationX;
+    host.rotation.y -= state.appliedRotationY;
+    host.rotation.z -= state.appliedRotationZ;
+    fighter.visual.root.updateMatrixWorld(true);
+  }
+  state.appliedPositionX = 0;
+  state.appliedRotationX = 0;
+  state.appliedRotationY = 0;
+  state.appliedRotationZ = 0;
+  fighter.visual.root.userData.tpsAttackAfterfeel = 0;
 }
 
 function smooth01(value: number): number {
@@ -241,12 +302,92 @@ function applyComboMomentumCarry(fighter: FighterRuntime, state: ComboMomentumCa
   root.updateMatrixWorld(true);
 }
 
-// Presentation-only hit residue and combo momentum carry. Wrap the final
-// presentation controller rather than the base pose controller so the imported
-// model has already been sampled and move-specific host corrections have run.
-// Previous-frame contributions are removed before normal sampling, then a small
-// residual is added back only to the rendered Quaternius host. Gameplay timing,
-// fighter position, hitboxes, reach and deterministic simulation stay untouched.
+function beginAttackAfterfeel(fighter: FighterRuntime, state: AttackAfterfeelState, timeSeconds: number, settling: boolean): void {
+  const root = fighter.visual.root;
+  if (fighter.state === "ATTACK" && fighter.currentMove) {
+    state.lastMoveId = fighter.currentMove.id;
+  }
+
+  if (state.lastState === "ATTACK" && settling && state.lastMoveId) {
+    const move = fighter.definition.moves[state.lastMoveId];
+    state.kind = comboMomentumKindForMove(state.lastMoveId);
+    state.side = sideForVisualContact(move?.visualContact);
+    state.duration = attackAfterfeelDuration(state.kind);
+    state.until = timeSeconds + state.duration;
+    root.userData.tpsAttackAfterfeelMove = state.lastMoveId;
+    root.userData.tpsAttackAfterfeelKind = state.kind;
+    root.userData.tpsAttackAfterfeelSide = state.side;
+    root.userData.tpsAttackAfterfeelDuration = state.duration;
+  } else if (!settling && fighter.state !== "ATTACK") {
+    state.until = 0;
+  }
+  state.lastState = fighter.state;
+}
+
+function applyAttackAfterfeel(fighter: FighterRuntime, state: AttackAfterfeelState, timeSeconds: number, settling: boolean): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || !settling || root.userData.quaterniusModelState !== "ready") {
+    root.userData.tpsAttackAfterfeel = 0;
+    return;
+  }
+
+  const remaining = Math.max(0, state.until - timeSeconds);
+  const normalized = state.duration > 0 ? remaining / state.duration : 0;
+  const factor = smooth01(normalized);
+  if (factor <= 1e-4) {
+    root.userData.tpsAttackAfterfeel = 0;
+    return;
+  }
+
+  const host = importedRuntimeHost(fighter);
+  if (!host) return;
+  const scale = root.scale.x;
+  let positionX = -state.side * 0.005 * scale;
+  let rotationX = -0.012;
+  let rotationY = -state.side * 0.024;
+  let rotationZ = state.side * 0.008;
+
+  if (state.kind === "SWEEP") {
+    positionX = -state.side * 0.009 * scale;
+    rotationX = -0.008;
+    rotationY = -state.side * 0.042;
+    rotationZ = state.side * 0.014;
+  } else if (state.kind === "HEAVY") {
+    positionX = -state.side * 0.007 * scale;
+    rotationX = -0.024;
+    rotationY = -state.side * 0.046;
+    rotationZ = -state.side * 0.016;
+  } else if (state.kind === "KICK") {
+    positionX = state.side * 0.005 * scale;
+    rotationX = -0.018;
+    rotationY = state.side * 0.022;
+    rotationZ = -state.side * 0.010;
+  }
+
+  state.appliedPositionX = positionX * factor;
+  state.appliedRotationX = rotationX * factor;
+  state.appliedRotationY = rotationY * factor;
+  state.appliedRotationZ = rotationZ * factor;
+  host.position.x += state.appliedPositionX;
+  host.rotation.x += state.appliedRotationX;
+  host.rotation.y += state.appliedRotationY;
+  host.rotation.z += state.appliedRotationZ;
+
+  root.userData.tpsAttackAfterfeel = factor;
+  root.userData.tpsAttackAfterfeelPositionX = state.appliedPositionX;
+  root.userData.tpsAttackAfterfeelRotationX = state.appliedRotationX;
+  root.userData.tpsAttackAfterfeelRotationY = state.appliedRotationY;
+  root.userData.tpsAttackAfterfeelRotationZ = state.appliedRotationZ;
+  root.updateMatrixWorld(true);
+}
+
+// Presentation-only hit residue, attack follow-through and combo momentum carry.
+// Wrap the final presentation controller rather than the base pose controller so
+// the imported model has already been sampled and move-specific host corrections
+// have run. Previous-frame contributions are removed before normal sampling,
+// then small residuals are added back only to the rendered Quaternius host.
+// Gameplay timing, fighter position, hitboxes, reach and deterministic simulation
+// stay untouched.
 const basePresentationUpdate = PresentationAnimationController.prototype.update;
 PresentationAnimationController.prototype.update = function updateWithDamageAfterfeel(
   fighter: FighterRuntime,
@@ -255,8 +396,10 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
 ): void {
   const afterfeel = ensureDamageAfterfeel(fighter);
   const comboCarry = ensureComboMomentumCarry(fighter);
+  const attackTail = ensureAttackAfterfeel(fighter);
   removeDamageAfterfeelTransform(fighter, afterfeel);
   removeComboMomentumTransform(fighter, comboCarry);
+  removeAttackAfterfeelTransform(fighter, attackTail);
 
   const combatTps = Boolean(fighter.visual.root.userData.combatTps);
   const settling = DAMAGE_AFTERFEEL_SETTLE_STATES.has(fighter.state);
@@ -270,11 +413,18 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   }
   afterfeel.lastState = fighter.state;
 
-  if (combatTps) beginComboMomentumCarry(fighter, comboCarry, timeSeconds);
-  else comboCarry.until = 0;
+  if (combatTps) {
+    beginComboMomentumCarry(fighter, comboCarry, timeSeconds);
+    beginAttackAfterfeel(fighter, attackTail, timeSeconds, settling);
+  } else {
+    comboCarry.until = 0;
+    attackTail.until = 0;
+    attackTail.lastState = fighter.state;
+  }
 
   basePresentationUpdate.call(this, fighter, opponent, timeSeconds);
   applyComboMomentumCarry(fighter, comboCarry, timeSeconds);
+  applyAttackAfterfeel(fighter, attackTail, timeSeconds, settling);
 
   if (!combatTps || !settling || fighter.visual.root.userData.quaterniusModelState !== "ready") {
     fighter.visual.root.userData.tpsDamageAfterfeel = 0;
@@ -392,4 +542,9 @@ export function clearMotionReaction(fighter: FighterRuntime): void {
   removeComboMomentumTransform(fighter, comboCarry);
   comboCarry.until = 0;
   comboCarry.serial = Number(fighter.visual.root.userData.tpsComboLinkSerial ?? comboCarry.serial);
+  const attackTail = ensureAttackAfterfeel(fighter);
+  removeAttackAfterfeelTransform(fighter, attackTail);
+  attackTail.until = 0;
+  attackTail.lastState = fighter.state;
+  attackTail.lastMoveId = fighter.currentMove?.id ?? "";
 }

@@ -87,6 +87,89 @@ function applyTpsImpactReadability(fighter: FighterRuntime, opponent: FighterRun
   root.updateMatrixWorld(true);
 }
 
+function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const visual = fighter.visual;
+  const root = visual.root;
+  const move = fighter.currentMove;
+  if (!root.userData.combatTps || fighter.state !== "ATTACK" || move?.id !== "dashKick") {
+    root.userData.tpsDashKickSilhouette = 0;
+    root.userData.tpsDashKickLegExtension = 0;
+    root.userData.tpsDashKickBodySeparation = 0;
+    return;
+  }
+
+  // Preserve the Blender-authored jump and ankle pose, but make the striking
+  // leg read as one long line from the close shoulder camera. The accent ramps
+  // in just before active frames and releases early in recovery. This is a
+  // presentation-only IK pass: gameplay position, reach and hitboxes stay put.
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const extendIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 4), activeStart + 1);
+  const extendOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd, activeEnd + 7);
+  const accent = THREE.MathUtils.clamp(extendIn * extendOut, 0, 1);
+  if (accent <= 1e-4) {
+    root.userData.tpsDashKickSilhouette = 0;
+    root.userData.tpsDashKickLegExtension = 0;
+    root.userData.tpsDashKickBodySeparation = 0;
+    return;
+  }
+
+  const scale = root.scale.x;
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const bodySeparation = 0.075 * scale * accent;
+  root.position.addScaledVector(away, bodySeparation);
+  root.updateMatrixWorld(true);
+
+  const bones = visual.rig.bones;
+  const hip = bones.rightThigh.getWorldPosition(new THREE.Vector3());
+  const knee = bones.rightShin.getWorldPosition(new THREE.Vector3());
+  const foot = bones.rightFoot;
+  const footPosition = foot.getWorldPosition(new THREE.Vector3());
+  const legLine = footPosition.clone().sub(hip);
+  let extension = 0;
+
+  if (legLine.lengthSq() > 1e-6) {
+    const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
+    extension = 0.17 * scale * accent;
+    const target = footPosition.clone().addScaledVector(legLine.normalize(), extension);
+    const pole = knee.clone()
+      .addScaledVector(basis.side, 0.065 * scale * accent)
+      .addScaledVector(basis.up, 0.015 * scale * accent);
+    const footWorld = foot.getWorldQuaternion(new THREE.Quaternion());
+
+    solveTwoBoneIK({
+      root: bones.rightThigh,
+      mid: bones.rightShin,
+      end: foot,
+      target,
+      pole,
+    });
+
+    // IK changes the parents of the boot, so restore the authored world-space
+    // ankle orientation afterwards instead of introducing another foot twist.
+    root.updateMatrixWorld(true);
+    const parent = foot.parent;
+    if (parent) {
+      const parentWorld = parent.getWorldQuaternion(new THREE.Quaternion());
+      foot.quaternion.copy(parentWorld.invert().multiply(footWorld)).normalize();
+    }
+  }
+
+  // Small counter-rotation separates chest and hip without re-authoring the
+  // mocap. It prevents the airborne pose from collapsing into one torso/leg blob.
+  bones.spineLower.rotation.y -= 0.035 * accent;
+  bones.spineUpper.rotation.y += 0.065 * accent;
+  bones.chest.rotation.x -= 0.025 * accent;
+
+  root.userData.tpsDashKickSilhouette = accent;
+  root.userData.tpsDashKickLegExtension = extension;
+  root.userData.tpsDashKickBodySeparation = bodySeparation;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -166,6 +249,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     // root moves a few centimetres away and the torso recoils; the simulation
     // position remains exactly where combat resolution placed it.
     applyTpsImpactReadability(fighter, opponent);
+    applyTpsDashKickSilhouette(fighter, opponent);
 
     const authoredAttack = fighter.state === "ATTACK"
       && Boolean(fighter.currentMove)

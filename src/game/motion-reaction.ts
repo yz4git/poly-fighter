@@ -23,9 +23,25 @@ type DamageAfterfeelState = {
   appliedZ: number;
 };
 
+type ComboMomentumKind = "PUNCH" | "KICK" | "HEAVY" | "SWEEP";
+
+type ComboMomentumCarryState = {
+  serial: number;
+  until: number;
+  duration: number;
+  fromMove: string;
+  side: -1 | 1;
+  kind: ComboMomentumKind;
+  appliedPositionX: number;
+  appliedRotationX: number;
+  appliedRotationY: number;
+  appliedRotationZ: number;
+};
+
 const fighters = new Map<string, FighterRuntime>();
 const reactions = new WeakMap<FighterRuntime, MotionReactionState>();
 const damageAfterfeel = new WeakMap<FighterRuntime, DamageAfterfeelState>();
+const comboMomentumCarry = new WeakMap<FighterRuntime, ComboMomentumCarryState>();
 const DAMAGE_AFTERFEEL_SECONDS = 0.20;
 const DAMAGE_AFTERFEEL_SETTLE_STATES = new Set<FighterRuntime["state"]>(["IDLE", "WALK", "CROUCH"]);
 
@@ -36,9 +52,20 @@ function tierForPower(power: number, blocked: boolean): 1 | 2 | 3 {
   return 1;
 }
 
-function sideForEvent(event: HitEvent): -1 | 1 {
-  if (event.move.visualContact === "LEFT_FIST" || event.move.visualContact === "LEFT_FOOT") return -1;
+function sideForVisualContact(contact: string | undefined): -1 | 1 {
+  if (contact === "LEFT_FIST" || contact === "LEFT_FOOT") return -1;
   return 1;
+}
+
+function sideForEvent(event: HitEvent): -1 | 1 {
+  return sideForVisualContact(event.move.visualContact);
+}
+
+function comboMomentumKindForMove(moveId: string): ComboMomentumKind {
+  if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) return "KICK";
+  if (["power", "throw"].includes(moveId)) return "HEAVY";
+  if (["backfist", "counter"].includes(moveId)) return "SWEEP";
+  return "PUNCH";
 }
 
 function ensure(fighter: FighterRuntime): MotionReactionState {
@@ -71,6 +98,25 @@ function ensureDamageAfterfeel(fighter: FighterRuntime): DamageAfterfeelState {
   return state;
 }
 
+function ensureComboMomentumCarry(fighter: FighterRuntime): ComboMomentumCarryState {
+  let state = comboMomentumCarry.get(fighter);
+  if (state) return state;
+  state = {
+    serial: Number(fighter.visual.root.userData.tpsComboLinkSerial ?? 0),
+    until: 0,
+    duration: 0.09,
+    fromMove: "",
+    side: 1,
+    kind: "PUNCH",
+    appliedPositionX: 0,
+    appliedRotationX: 0,
+    appliedRotationY: 0,
+    appliedRotationZ: 0,
+  };
+  comboMomentumCarry.set(fighter, state);
+  return state;
+}
+
 function importedRuntimeHost(fighter: FighterRuntime) {
   return fighter.visual.root.children.find(
     (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
@@ -90,16 +136,117 @@ function removeDamageAfterfeelTransform(fighter: FighterRuntime, state: DamageAf
   fighter.visual.root.userData.tpsDamageAfterfeel = 0;
 }
 
+function removeComboMomentumTransform(fighter: FighterRuntime, state: ComboMomentumCarryState): void {
+  const hasTransform = Math.abs(state.appliedPositionX) > 1e-6
+    || Math.abs(state.appliedRotationX) > 1e-6
+    || Math.abs(state.appliedRotationY) > 1e-6
+    || Math.abs(state.appliedRotationZ) > 1e-6;
+  if (!hasTransform) return;
+  const host = importedRuntimeHost(fighter);
+  if (host) {
+    host.position.x -= state.appliedPositionX;
+    host.rotation.x -= state.appliedRotationX;
+    host.rotation.y -= state.appliedRotationY;
+    host.rotation.z -= state.appliedRotationZ;
+    fighter.visual.root.updateMatrixWorld(true);
+  }
+  state.appliedPositionX = 0;
+  state.appliedRotationX = 0;
+  state.appliedRotationY = 0;
+  state.appliedRotationZ = 0;
+  fighter.visual.root.userData.tpsComboMomentumCarry = 0;
+}
+
 function smooth01(value: number): number {
   const clamped = Math.max(0, Math.min(1, value));
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-// Presentation-only hit residue. Wrap the final presentation controller rather
-// than the base pose controller so the imported model has already been sampled
-// and move-specific host corrections have already run. The previous frame's
-// contribution is removed before that normal update, then a few degrees of the
-// last recoil are added back only for the current rendered frame.
+function beginComboMomentumCarry(fighter: FighterRuntime, state: ComboMomentumCarryState, timeSeconds: number): void {
+  const root = fighter.visual.root;
+  const serial = Number(root.userData.tpsComboLinkSerial ?? 0);
+  if (!Number.isFinite(serial) || serial <= state.serial) return;
+
+  state.serial = serial;
+  const fromMove = String(root.userData.tpsComboLinkFromMove ?? "");
+  const authoredBlend = Number(root.userData.tpsComboLinkBlendSeconds ?? 0.075);
+  const blend = Number.isFinite(authoredBlend) ? authoredBlend : 0.075;
+  state.duration = Math.max(0.085, Math.min(0.11, blend * 1.25));
+  state.until = timeSeconds + state.duration;
+  state.fromMove = fromMove;
+  const move = fighter.definition.moves[fromMove];
+  state.side = sideForVisualContact(move?.visualContact);
+  state.kind = comboMomentumKindForMove(fromMove);
+
+  root.userData.tpsComboMomentumFromMove = fromMove;
+  root.userData.tpsComboMomentumKind = state.kind;
+  root.userData.tpsComboMomentumSide = state.side;
+  root.userData.tpsComboMomentumDuration = state.duration;
+}
+
+function applyComboMomentumCarry(fighter: FighterRuntime, state: ComboMomentumCarryState, timeSeconds: number): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready" || fighter.state !== "ATTACK") {
+    root.userData.tpsComboMomentumCarry = 0;
+    return;
+  }
+
+  const remaining = Math.max(0, state.until - timeSeconds);
+  const normalized = state.duration > 0 ? remaining / state.duration : 0;
+  const factor = smooth01(normalized);
+  if (factor <= 1e-4) {
+    root.userData.tpsComboMomentumCarry = 0;
+    return;
+  }
+
+  const host = importedRuntimeHost(fighter);
+  if (!host) return;
+  const scale = root.scale.x;
+  let positionX = -state.side * 0.006 * scale;
+  let rotationX = -0.014;
+  let rotationY = -state.side * 0.030;
+  let rotationZ = state.side * 0.010;
+
+  if (state.kind === "SWEEP") {
+    positionX = -state.side * 0.012 * scale;
+    rotationX = -0.008;
+    rotationY = -state.side * 0.050;
+    rotationZ = state.side * 0.020;
+  } else if (state.kind === "HEAVY") {
+    positionX = -state.side * 0.008 * scale;
+    rotationX = -0.026;
+    rotationY = -state.side * 0.038;
+    rotationZ = -state.side * 0.016;
+  } else if (state.kind === "KICK") {
+    positionX = state.side * 0.006 * scale;
+    rotationX = -0.020;
+    rotationY = state.side * 0.024;
+    rotationZ = -state.side * 0.012;
+  }
+
+  state.appliedPositionX = positionX * factor;
+  state.appliedRotationX = rotationX * factor;
+  state.appliedRotationY = rotationY * factor;
+  state.appliedRotationZ = rotationZ * factor;
+  host.position.x += state.appliedPositionX;
+  host.rotation.x += state.appliedRotationX;
+  host.rotation.y += state.appliedRotationY;
+  host.rotation.z += state.appliedRotationZ;
+
+  root.userData.tpsComboMomentumCarry = factor;
+  root.userData.tpsComboMomentumPositionX = state.appliedPositionX;
+  root.userData.tpsComboMomentumRotationX = state.appliedRotationX;
+  root.userData.tpsComboMomentumRotationY = state.appliedRotationY;
+  root.userData.tpsComboMomentumRotationZ = state.appliedRotationZ;
+  root.updateMatrixWorld(true);
+}
+
+// Presentation-only hit residue and combo momentum carry. Wrap the final
+// presentation controller rather than the base pose controller so the imported
+// model has already been sampled and move-specific host corrections have run.
+// Previous-frame contributions are removed before normal sampling, then a small
+// residual is added back only to the rendered Quaternius host. Gameplay timing,
+// fighter position, hitboxes, reach and deterministic simulation stay untouched.
 const basePresentationUpdate = PresentationAnimationController.prototype.update;
 PresentationAnimationController.prototype.update = function updateWithDamageAfterfeel(
   fighter: FighterRuntime,
@@ -107,7 +254,9 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   timeSeconds: number,
 ): void {
   const afterfeel = ensureDamageAfterfeel(fighter);
+  const comboCarry = ensureComboMomentumCarry(fighter);
   removeDamageAfterfeelTransform(fighter, afterfeel);
+  removeComboMomentumTransform(fighter, comboCarry);
 
   const combatTps = Boolean(fighter.visual.root.userData.combatTps);
   const settling = DAMAGE_AFTERFEEL_SETTLE_STATES.has(fighter.state);
@@ -121,7 +270,11 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   }
   afterfeel.lastState = fighter.state;
 
+  if (combatTps) beginComboMomentumCarry(fighter, comboCarry, timeSeconds);
+  else comboCarry.until = 0;
+
   basePresentationUpdate.call(this, fighter, opponent, timeSeconds);
+  applyComboMomentumCarry(fighter, comboCarry, timeSeconds);
 
   if (!combatTps || !settling || fighter.visual.root.userData.quaterniusModelState !== "ready") {
     fighter.visual.root.userData.tpsDamageAfterfeel = 0;
@@ -235,4 +388,8 @@ export function clearMotionReaction(fighter: FighterRuntime): void {
   removeDamageAfterfeelTransform(fighter, afterfeel);
   afterfeel.until = 0;
   afterfeel.lastState = fighter.state;
+  const comboCarry = ensureComboMomentumCarry(fighter);
+  removeComboMomentumTransform(fighter, comboCarry);
+  comboCarry.until = 0;
+  comboCarry.serial = Number(fighter.visual.root.userData.tpsComboLinkSerial ?? comboCarry.serial);
 }

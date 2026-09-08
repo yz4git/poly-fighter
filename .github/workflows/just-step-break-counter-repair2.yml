@@ -1,0 +1,58 @@
+name: Finalize JUST STEP implementation
+
+on:
+  push:
+    branches:
+      - just-step-break-counter-v1
+    paths:
+      - .github/workflows/just-step-break-counter-repair2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: just-step-break-counter-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Execute repaired implementation
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          lines = Path('.github/workflows/just-step-break-counter-repair.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(lines) if "python3 <<'PY'" in line)
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          script = textwrap.dedent('\n'.join(lines[start + 1:end]))
+          old = "script, count = re.subn(r'def replace_once\\(path, old, new\\):\\n.*?\\n\\npath =', robust + '\\n\\npath =', script, count=1, flags=re.S)"
+          new = "script, count = re.subn(r'def replace_once\\(path, old, new\\):\\n.*?\\n\\npath =', lambda _: robust + '\\n\\npath =', script, count=1, flags=re.S)"
+          if old not in script:
+              raise SystemExit('repair substitution anchor missing')
+          script = script.replace(old, new, 1)
+          exec(compile(script, 'just-step-repair.py', 'exec'), {})
+          PY
+      - name: TPS static regression
+        run: npm run test:rules:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Commit clean implementation
+        run: |
+          rm .github/workflows/just-step-break-counter-impl.yml
+          rm .github/workflows/just-step-break-counter-repair.yml
+          rm .github/workflows/just-step-break-counter-repair2.yml
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game-base.ts src/game/types.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts scripts/capture-tps-reactive-cues.mjs scripts/capture-tps-combat-v2-audit.mjs .github/workflows/just-step-break-counter-impl.yml .github/workflows/just-step-break-counter-repair.yml .github/workflows/just-step-break-counter-repair2.yml
+          git commit -m "Implement JUST STEP and BREAK COUNTER timing"
+          git push origin HEAD:just-step-break-counter-v1

@@ -51,11 +51,19 @@ type AttackAfterfeelState = {
   appliedRotationZ: number;
 };
 
+type ImportedTelegraphState = {
+  appliedPositionX: number;
+  appliedRotationX: number;
+  appliedRotationY: number;
+  appliedRotationZ: number;
+};
+
 const fighters = new Map<string, FighterRuntime>();
 const reactions = new WeakMap<FighterRuntime, MotionReactionState>();
 const damageAfterfeel = new WeakMap<FighterRuntime, DamageAfterfeelState>();
 const comboMomentumCarry = new WeakMap<FighterRuntime, ComboMomentumCarryState>();
 const attackAfterfeel = new WeakMap<FighterRuntime, AttackAfterfeelState>();
+const importedTelegraphs = new WeakMap<FighterRuntime, ImportedTelegraphState>();
 const DAMAGE_AFTERFEEL_SECONDS = 0.20;
 const DAMAGE_AFTERFEEL_SETTLE_STATES = new Set<FighterRuntime["state"]>(["IDLE", "WALK", "CROUCH"]);
 
@@ -157,6 +165,19 @@ function ensureAttackAfterfeel(fighter: FighterRuntime): AttackAfterfeelState {
   return state;
 }
 
+function ensureImportedTelegraph(fighter: FighterRuntime): ImportedTelegraphState {
+  let state = importedTelegraphs.get(fighter);
+  if (state) return state;
+  state = {
+    appliedPositionX: 0,
+    appliedRotationX: 0,
+    appliedRotationY: 0,
+    appliedRotationZ: 0,
+  };
+  importedTelegraphs.set(fighter, state);
+  return state;
+}
+
 function importedRuntimeHost(fighter: FighterRuntime) {
   return fighter.visual.root.children.find(
     (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
@@ -216,6 +237,27 @@ function removeAttackAfterfeelTransform(fighter: FighterRuntime, state: AttackAf
   state.appliedRotationY = 0;
   state.appliedRotationZ = 0;
   fighter.visual.root.userData.tpsAttackAfterfeel = 0;
+}
+
+function removeImportedTelegraphTransform(fighter: FighterRuntime, state: ImportedTelegraphState): void {
+  const hasTransform = Math.abs(state.appliedPositionX) > 1e-6
+    || Math.abs(state.appliedRotationX) > 1e-6
+    || Math.abs(state.appliedRotationY) > 1e-6
+    || Math.abs(state.appliedRotationZ) > 1e-6;
+  if (!hasTransform) return;
+  const host = importedRuntimeHost(fighter);
+  if (host) {
+    host.position.x -= state.appliedPositionX;
+    host.rotation.x -= state.appliedRotationX;
+    host.rotation.y -= state.appliedRotationY;
+    host.rotation.z -= state.appliedRotationZ;
+    fighter.visual.root.updateMatrixWorld(true);
+  }
+  state.appliedPositionX = 0;
+  state.appliedRotationX = 0;
+  state.appliedRotationY = 0;
+  state.appliedRotationZ = 0;
+  fighter.visual.root.userData.tpsImportedTelegraphPoseApplied = 0;
 }
 
 function smooth01(value: number): number {
@@ -381,13 +423,77 @@ function applyAttackAfterfeel(fighter: FighterRuntime, state: AttackAfterfeelSta
   root.updateMatrixWorld(true);
 }
 
-// Presentation-only hit residue, attack follow-through and combo momentum carry.
-// Wrap the final presentation controller rather than the base pose controller so
-// the imported model has already been sampled and move-specific host corrections
-// have run. Previous-frame contributions are removed before normal sampling,
-// then small residuals are added back only to the rendered Quaternius host.
-// Gameplay timing, fighter position, hitboxes, reach and deterministic simulation
-// stay untouched.
+function applyImportedTelegraph(fighter: FighterRuntime, state: ImportedTelegraphState): void {
+  const root = fighter.visual.root;
+  const progress = Number(root.userData.tpsEnemyTelegraphProgress ?? 0);
+  const moveId = String(root.userData.tpsEnemyTelegraphMove ?? "");
+  if (!root.userData.combatTps
+    || root.userData.quaterniusModelState !== "ready"
+    || fighter.state === "ATTACK"
+    || !moveId
+    || !Number.isFinite(progress)
+    || progress <= 0) {
+    root.userData.tpsImportedTelegraphPoseApplied = 0;
+    return;
+  }
+
+  const host = importedRuntimeHost(fighter);
+  if (!host) return;
+  const move = fighter.definition.moves[moveId];
+  const side = sideForVisualContact(move?.visualContact);
+  const kind = comboMomentumKindForMove(moveId);
+  const load = smooth01(progress);
+  const scale = root.scale.x;
+
+  let positionX = -side * 0.005 * scale;
+  let rotationX = 0.012;
+  let rotationY = side * 0.090;
+  let rotationZ = -side * 0.018;
+
+  if (kind === "KICK") {
+    positionX = -side * 0.008 * scale;
+    rotationX = 0.040;
+    rotationY = -side * 0.100;
+    rotationZ = side * 0.025;
+  } else if (kind === "HEAVY") {
+    positionX = -side * 0.007 * scale;
+    rotationX = 0.026;
+    rotationY = side * 0.140;
+    rotationZ = -side * 0.034;
+  } else if (kind === "SWEEP") {
+    positionX = side * 0.007 * scale;
+    rotationX = 0.010;
+    rotationY = side * 0.125;
+    rotationZ = -side * 0.030;
+  }
+
+  state.appliedPositionX = positionX * load;
+  state.appliedRotationX = rotationX * load;
+  state.appliedRotationY = rotationY * load;
+  state.appliedRotationZ = rotationZ * load;
+  host.position.x += state.appliedPositionX;
+  host.rotation.x += state.appliedRotationX;
+  host.rotation.y += state.appliedRotationY;
+  host.rotation.z += state.appliedRotationZ;
+
+  root.userData.tpsImportedTelegraphPoseApplied = load;
+  root.userData.tpsImportedTelegraphMove = moveId;
+  root.userData.tpsImportedTelegraphKind = kind;
+  root.userData.tpsImportedTelegraphSide = side;
+  root.userData.tpsImportedTelegraphPositionX = state.appliedPositionX;
+  root.userData.tpsImportedTelegraphRotationX = state.appliedRotationX;
+  root.userData.tpsImportedTelegraphRotationY = state.appliedRotationY;
+  root.userData.tpsImportedTelegraphRotationZ = state.appliedRotationZ;
+  root.updateMatrixWorld(true);
+}
+
+// Presentation-only hit residue, attack follow-through, imported enemy telegraph
+// and combo momentum carry. Wrap the final presentation controller rather than
+// the base pose controller so the imported model has already been sampled and
+// move-specific host corrections have run. Previous-frame contributions are
+// removed before normal sampling, then small residuals are added back only to
+// the rendered Quaternius host. Gameplay timing, fighter position, hitboxes,
+// reach and deterministic simulation stay untouched.
 const basePresentationUpdate = PresentationAnimationController.prototype.update;
 PresentationAnimationController.prototype.update = function updateWithDamageAfterfeel(
   fighter: FighterRuntime,
@@ -397,9 +503,11 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   const afterfeel = ensureDamageAfterfeel(fighter);
   const comboCarry = ensureComboMomentumCarry(fighter);
   const attackTail = ensureAttackAfterfeel(fighter);
+  const telegraph = ensureImportedTelegraph(fighter);
   removeDamageAfterfeelTransform(fighter, afterfeel);
   removeComboMomentumTransform(fighter, comboCarry);
   removeAttackAfterfeelTransform(fighter, attackTail);
+  removeImportedTelegraphTransform(fighter, telegraph);
 
   const combatTps = Boolean(fighter.visual.root.userData.combatTps);
   const settling = DAMAGE_AFTERFEEL_SETTLE_STATES.has(fighter.state);
@@ -423,6 +531,7 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   }
 
   basePresentationUpdate.call(this, fighter, opponent, timeSeconds);
+  applyImportedTelegraph(fighter, telegraph);
   applyComboMomentumCarry(fighter, comboCarry, timeSeconds);
   applyAttackAfterfeel(fighter, attackTail, timeSeconds, settling);
 
@@ -547,4 +656,6 @@ export function clearMotionReaction(fighter: FighterRuntime): void {
   attackTail.until = 0;
   attackTail.lastState = fighter.state;
   attackTail.lastMoveId = fighter.currentMove?.id ?? "";
+  const telegraph = ensureImportedTelegraph(fighter);
+  removeImportedTelegraphTransform(fighter, telegraph);
 }

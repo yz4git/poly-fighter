@@ -43,6 +43,7 @@ interface BurstSpokes {
   life: number;
   maxLife: number;
   startScale: number;
+  aspect: number;
   baseOpacity: number;
 }
 
@@ -89,6 +90,24 @@ function burstGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
   return geometry;
+}
+
+function impactBurstAspect(tier: ImpactTier, blocked: boolean): number {
+  if (blocked) return 1.12;
+  if (tier === 3) return 2.25;
+  if (tier === 2) return 1.82;
+  return 1.52;
+}
+
+function impactBurstAngle(event: HitEvent): number {
+  if (event.blocked) return 0;
+  const contact = event.move.visualContact ?? "";
+  const limbSide = contact.startsWith("LEFT") ? -1 : 1;
+  const attackerMirror = event.attacker === "p1" ? 1 : -1;
+  const kickLike = contact.includes("FOOT");
+  const baseTilt = kickLike ? 0.42 : 0.22;
+  const counterAccent = event.counter ? 0.10 : 0;
+  return attackerMirror * limbSide * (baseTilt + counterAccent);
 }
 
 export class TpsHypeDirector {
@@ -139,7 +158,7 @@ export class TpsHypeDirector {
       lines.visible = false;
       lines.renderOrder = 29;
       this.group.add(lines);
-      this.bursts.push({ lines, life: 0, maxLife: 0, startScale: 1, baseOpacity: 0 });
+      this.bursts.push({ lines, life: 0, maxLife: 0, startScale: 1, aspect: 1, baseOpacity: 0 });
     }
   }
 
@@ -186,11 +205,14 @@ export class TpsHypeDirector {
     burst.life = event.blocked ? 0.10 : tier === 3 ? 0.20 : tier === 2 ? 0.15 : 0.11;
     burst.maxLife = burst.life;
     burst.startScale = event.blocked ? 0.28 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.35 : 0.30;
+    burst.aspect = impactBurstAspect(tier, event.blocked);
     burst.lines.visible = true;
     burst.lines.position.copy(visualPoint);
     burst.lines.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), facing);
-    burst.lines.rotation.z += tier * 0.17;
-    burst.lines.scale.setScalar(burst.startScale);
+    const burstAngle = impactBurstAngle(event);
+    burst.lines.rotateZ(burstAngle);
+    const initialCrossScale = burst.startScale / Math.sqrt(burst.aspect);
+    burst.lines.scale.set(burst.startScale * burst.aspect, initialCrossScale, burst.startScale);
     burst.lines.material.color.setHex(color);
     burst.baseOpacity = event.blocked ? 0.22 : tier === 3 ? 0.46 : tier === 2 ? 0.37 : 0.29;
     burst.lines.material.opacity = burst.baseOpacity;
@@ -220,6 +242,8 @@ export class TpsHypeDirector {
     this.group.userData.lastHypeImpactTier = tier;
     this.group.userData.lastHypeMove = event.move.id;
     this.group.userData.lastHypeCounter = event.counter;
+    this.group.userData.lastHypeBurstAspect = burst.aspect;
+    this.group.userData.lastHypeBurstAngle = burstAngle;
   }
 
   step(fighter: FighterRuntime, opponent: FighterRuntime, perfect: boolean): void {
@@ -273,7 +297,9 @@ export class TpsHypeDirector {
       if (burst.life <= 0) continue;
       burst.life -= delta;
       const progress = 1 - Math.max(0, burst.life) / Math.max(1e-4, burst.maxLife);
-      burst.lines.scale.setScalar(burst.startScale * (1 + progress * 1.20));
+      const scale = burst.startScale * (1 + progress * 1.20);
+      const crossScale = scale / Math.sqrt(burst.aspect);
+      burst.lines.scale.set(scale * burst.aspect, crossScale, scale);
       burst.lines.material.opacity = Math.max(0, (1 - progress) * burst.baseOpacity);
       if (burst.life <= 0) {
         burst.lines.visible = false;
@@ -330,6 +356,7 @@ export class TpsHypeDirector {
     }
     for (const burst of this.bursts) {
       burst.life = 0;
+      burst.aspect = 1;
       burst.baseOpacity = 0;
       burst.lines.visible = false;
       burst.lines.material.opacity = 0;

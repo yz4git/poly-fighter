@@ -2,6 +2,7 @@
 
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
+import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
 import { installTpsPunishReadyPresentation } from "@/src/game/tps-punish-ready";
@@ -17,6 +18,7 @@ installTpsPunishReadyPresentation();
 installTpsInterceptSilhouettePresentation();
 installTpsBodyBlowLevelChangePresentation();
 installTpsBackfistSweepBoostPresentation();
+installTpsCounterSlipBoostPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

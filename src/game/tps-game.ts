@@ -553,7 +553,10 @@ prototype.updateCamera = function updateCamera(delta: number): void {
   coreUpdateCamera.call(this, delta);
   const game = extended(this as unknown as TpsFightGame);
   hype(game).update(game.camera, delta);
-  const baseFov = game.camera.aspect < 2.4 ? 52 : 47;
+  // Keep the iPhone shoulder view intimate without changing the audited orbit.
+  // 49° is only a modest crop from the previous 52° compact-landscape lens,
+  // while desktop remains at the established 47° framing.
+  const baseFov = game.camera.aspect < 2.4 ? 49 : 47;
   if ((game.__finalImpactSeconds ?? 0) > 0) {
     game.__finalImpactSeconds = Math.max(0, (game.__finalImpactSeconds ?? 0) - delta);
     const factor = THREE.MathUtils.clamp((game.__finalImpactSeconds ?? 0) / 0.68, 0, 1);

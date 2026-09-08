@@ -152,7 +152,7 @@
   }
 
   .select-screen .screen-heading i {
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .select-screen .fighter-card {
@@ -167,7 +167,7 @@
   }
 
   .select-screen .fighter-card strong {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .select-screen .fighter-card small {
@@ -175,16 +175,55 @@
   }
 
   .select-screen .fighter-card em {
-    font-size: 6px;
+    font-size: 8px;
+    line-height: 1.35;
+  }
+
+  .select-screen .difficulty span {
+    font-size: 8px;
   }
 
   .select-screen .difficulty button {
-    padding: 6px 7px;
-    font-size: 7px;
+    padding: 6px 8px;
+    font-size: 9px;
   }
 
   .select-screen .primary-button.compact {
     min-width: 138px;
     padding: 8px 10px 7px;
+  }
+
+  .select-screen .primary-button.compact small {
+    font-size: 8px;
+  }
+
+  /* Last-loaded iPhone overrides: combat cues must read at a glance, not only glow. */
+  .tps-two-button-actions .tps-step-action {
+    font-size: clamp(12px, 3.5vh, 15px);
+    letter-spacing: .045em;
+  }
+
+  .tps-two-button-actions .tps-attack-action {
+    font-size: clamp(12px, 3.6vh, 15px);
+    letter-spacing: .045em;
+  }
+
+  .action-buttons .tps-step-action.tps-threat-action {
+    font-size: 12px;
+    letter-spacing: .015em;
+  }
+
+  .action-buttons .tps-attack-action.tps-intercept-action,
+  .action-buttons .tps-attack-action.tps-punish-action {
+    font-size: 11px;
+    letter-spacing: .01em;
+  }
+
+  .training-coach > span {
+    font-size: 13px;
+  }
+
+  .training-coach > strong {
+    font-size: 15px;
   }
 }

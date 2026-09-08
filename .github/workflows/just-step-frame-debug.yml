@@ -27,40 +27,48 @@ jobs:
           from pathlib import Path
           p = Path('src/game/tps-game.ts')
           t = p.read_text()
-          old = '''  enemyCooldown: number;
-  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";'''
-          new = '''  enemyCooldown: number;
-  enemyDirectorPendingMove: string | null;
-  enemyDirectorTelegraphTicks: number;
-  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";'''
+          old = "\n".join([
+            "  enemyCooldown: number;",
+            '  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";',
+          ])
+          new = "\n".join([
+            "  enemyCooldown: number;",
+            "  enemyDirectorPendingMove: string | null;",
+            "  enemyDirectorTelegraphTicks: number;",
+            '  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";',
+          ])
           if old not in t: raise SystemExit('runtime type anchor missing')
           t = t.replace(old, new, 1)
-          old = '''  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);
-
-  coreUpdateEnemy.call(this);
-
-  // Do not allow a newly selected strike to fire while the visible body is
-  // still catching up to a side STEP. Existing attacks continue normally.
-  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";
-  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT) {'''
-          new = '''  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);
-  // Once the CPU has shown a telegraph all the way to zero, the strike is a
-  // commitment. A late side STEP must make that committed strike whiff rather
-  // than causing the AI to cancel it after the player already read the cue.
-  const committedDirectorMove = game.enemyDirectorPendingMove && game.enemyDirectorTelegraphTicks <= 0
-    ? game.enemyDirectorPendingMove
-    : null;
-
-  coreUpdateEnemy.call(this);
-
-  // Uncommitted strikes may still wait for the visible body to reacquire the
-  // player. Fully telegraphed strikes always follow through so JUST STEP has a
-  // real attack to evade and cannot be invalidated by the tracking layer.
-  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";
-  const committedStrikeStarted = Boolean(
-    committedDirectorMove && game.p2.currentMove?.id === committedDirectorMove,
-  );
-  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT && !committedStrikeStarted) {'''
+          old = "\n".join([
+            "  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);",
+            "",
+            "  coreUpdateEnemy.call(this);",
+            "",
+            "  // Do not allow a newly selected strike to fire while the visible body is",
+            "  // still catching up to a side STEP. Existing attacks continue normally.",
+            '  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";',
+            "  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT) {",
+          ])
+          new = "\n".join([
+            "  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);",
+            "  // Once the CPU has shown a telegraph all the way to zero, the strike is a",
+            "  // commitment. A late side STEP must make that committed strike whiff rather",
+            "  // than causing the AI to cancel it after the player already read the cue.",
+            "  const committedDirectorMove = game.enemyDirectorPendingMove && game.enemyDirectorTelegraphTicks <= 0",
+            "    ? game.enemyDirectorPendingMove",
+            "    : null;",
+            "",
+            "  coreUpdateEnemy.call(this);",
+            "",
+            "  // Uncommitted strikes may still wait for the visible body to reacquire the",
+            "  // player. Fully telegraphed strikes always follow through so JUST STEP has a",
+            "  // real attack to evade and cannot be invalidated by the tracking layer.",
+            '  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";',
+            "  const committedStrikeStarted = Boolean(",
+            "    committedDirectorMove && game.p2.currentMove?.id === committedDirectorMove,",
+            "  );",
+            "  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT && !committedStrikeStarted) {",
+          ])
           if old not in t: raise SystemExit('enemy commitment anchor missing')
           p.write_text(t.replace(old, new, 1))
           PY

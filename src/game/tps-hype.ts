@@ -17,6 +17,9 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   lightImpactRingCount: 1,
   mediumImpactRingCount: 1,
   heavyImpactRingCount: 2,
+  impactRingBaseLife: 0.12,
+  impactRingTierLife: 0.03,
+  impactRingLayerLife: 0.01,
   impactRingExpansion: 1.34,
   heavyBurstScale: 0.38,
   impactDepthBias: 0.07,
@@ -156,7 +159,11 @@ export class TpsHypeDirector {
 
     for (let index = 0; index < ringCount; index += 1) {
       const ring = this.rings.find((entry) => entry.life <= 0) ?? this.rings[index % this.rings.length];
-      ring.life = 0.16 + tier * 0.035 + index * 0.012;
+      // Keep the current impact bright while clearing the previous combo beat
+      // before the next strike lands. STEP rings keep their longer authored life.
+      ring.life = TPS_HYPE_PROFILE.impactRingBaseLife
+        + tier * TPS_HYPE_PROFILE.impactRingTierLife
+        + index * TPS_HYPE_PROFILE.impactRingLayerLife;
       ring.maxLife = ring.life;
       ring.startScale = 0.56 + tier * 0.14 + index * 0.10;
       ring.mesh.visible = true;

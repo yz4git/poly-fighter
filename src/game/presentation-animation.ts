@@ -170,6 +170,158 @@ function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRu
   root.updateMatrixWorld(true);
 }
 
+function applyTpsThrowPairReadability(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const visual = fighter.visual;
+  const root = visual.root;
+  if (!root.userData.combatTps) return;
+
+  const move = fighter.currentMove;
+  const attackingThrow = fighter.state === "ATTACK" && move?.id === "throw";
+  // Throws begin with 76 knockdown ticks while ordinary knockdowns start at 72.
+  // Keep the release pose readable even if an audit/director rewrites the
+  // transient THROW state label immediately after contact.
+  const beingThrown = fighter.state === "THROW"
+    || (fighter.knockdownTicks > 72 && !fighter.grounded && fighter.velocity.y > 0);
+  if (!attackingThrow && !beingThrown) {
+    root.userData.tpsThrowGrab = 0;
+    root.userData.tpsThrowRelease = 0;
+    root.userData.tpsThrowBodySeparation = 0;
+    return;
+  }
+
+  const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
+  const scale = root.scale.x;
+  const bones = visual.rig.bones;
+
+  if (attackingThrow && move) {
+    const activeStart = move.startup;
+    const activeEnd = move.startup + move.active;
+    const grabIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 3), activeStart + 1);
+    const grabOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 1, activeEnd + 9);
+    const grab = THREE.MathUtils.clamp(grabIn * grabOut, 0, 1);
+    const releaseIn = THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd - 1, activeEnd + 5);
+    const releaseOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 7, activeEnd + 16);
+    const release = THREE.MathUtils.clamp(releaseIn * releaseOut, 0, 1);
+
+    // Keep a small visible lane between the torsos and bridge it with the arms.
+    // This turns the old overlap/hug silhouette into an explicit two-hand grip.
+    const away = fighter.position.clone().sub(opponent.position);
+    away.y = 0;
+    if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+    else away.normalize();
+    const bodySeparation = 0.045 * scale * grab;
+    root.position.addScaledVector(away, bodySeparation);
+    root.updateMatrixWorld(true);
+
+    if (grab > 1e-4) {
+      opponent.visual.root.updateMatrixWorld(true);
+      const opponentLayout = opponent.visual.layout;
+      const shoulderX = opponentLayout.shoulderWidth * 0.34;
+      const targetY = opponentLayout.shoulderY - 0.065;
+      const targetZ = opponentLayout.chestDepth * 0.58;
+      const leftTarget = opponent.visual.root.localToWorld(new THREE.Vector3(-shoulderX, targetY, targetZ));
+      const rightTarget = opponent.visual.root.localToWorld(new THREE.Vector3(shoulderX, targetY - 0.035, targetZ * 1.08));
+
+      const solveGripArm = (side: -1 | 1, target: THREE.Vector3): void => {
+        const prefix = side < 0 ? "left" : "right";
+        const shoulder = bones[`${prefix}Shoulder`].getWorldPosition(new THREE.Vector3());
+        const hand = bones[`${prefix}Hand`];
+        const handWorld = hand.getWorldQuaternion(new THREE.Quaternion());
+        const pole = shoulder.clone()
+          .addScaledVector(basis.side, side * 0.20 * scale)
+          .addScaledVector(basis.forward, 0.12 * scale)
+          .addScaledVector(basis.up, -0.025 * scale);
+        solveTwoBoneIK({
+          root: bones[`${prefix}UpperArm`],
+          mid: bones[`${prefix}Forearm`],
+          end: hand,
+          target,
+          pole,
+        });
+        root.updateMatrixWorld(true);
+        const parent = hand.parent;
+        if (parent) {
+          const parentWorld = parent.getWorldQuaternion(new THREE.Quaternion());
+          hand.quaternion.copy(parentWorld.invert().multiply(handWorld)).normalize();
+        }
+      };
+
+      solveGripArm(-1, leftTarget);
+      solveGripArm(1, rightTarget);
+    }
+
+    // A compact opposing chest/hip turn sells leverage during the release while
+    // retaining the authored Blender throw as the base motion.
+    bones.spineLower.rotation.y -= 0.045 * grab + 0.075 * release;
+    bones.spineUpper.rotation.y += 0.075 * grab + 0.13 * release;
+    bones.chest.rotation.x -= 0.035 * grab;
+    bones.chest.rotation.z += fighter.facing * 0.055 * release;
+
+    root.userData.tpsThrowGrab = grab;
+    root.userData.tpsThrowRelease = release;
+    root.userData.tpsThrowBodySeparation = bodySeparation;
+    root.updateMatrixWorld(true);
+    return;
+  }
+
+  // On the defender, emphasize only the first upward release. Physics still owns
+  // the actual launch; this short visual break makes the shoulders/chest clearly
+  // read as being displaced by the throw instead of instantly returning to guard.
+  const launch = THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(fighter.velocity.y / 3.2, 0, 1), 0, 1);
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const bodySeparation = 0.06 * scale * launch;
+  root.position.addScaledVector(away, bodySeparation);
+  bones.spineLower.rotation.x += 0.08 * launch;
+  bones.spineUpper.rotation.x += 0.15 * launch;
+  bones.chest.rotation.x += 0.19 * launch;
+  bones.chest.rotation.z += fighter.facing * 0.08 * launch;
+  bones.leftShoulder.rotation.z += 0.14 * launch;
+  bones.rightShoulder.rotation.z -= 0.14 * launch;
+  visual.head.rotation.x += 0.055 * launch;
+
+  root.userData.tpsThrowGrab = 0;
+  root.userData.tpsThrowRelease = launch;
+  root.userData.tpsThrowBodySeparation = bodySeparation;
+  root.updateMatrixWorld(true);
+}
+
+function applyTpsImportedThrowReleaseTilt(fighter: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
+  const host = root.children.find((child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"));
+  if (!host) return;
+
+  // The authored CM_Throw already gives the attacker a clean two-arm grab. Do
+  // not re-solve those imported arms. Only tilt the visible victim model during
+  // the first release beat so grab -> off-balance reads without corrupting the
+  // authored shoulder/elbow silhouette.
+  host.rotation.x = 0;
+  host.rotation.z = 0;
+  root.userData.tpsThrowImportedBreak = 0;
+  const legacyThrowState = fighter.state === "THROW"
+    || (fighter.knockdownTicks > 72 && !fighter.grounded && fighter.velocity.y > 0);
+  const tpsThrowKnockdown = fighter.state === "KNOCKDOWN"
+    && root.userData.tpsImpactPairRole === "DEFENDER"
+    && root.userData.tpsImpactPairMove === "throw";
+  const legacyRelease = THREE.MathUtils.clamp(Number(root.userData.tpsThrowRelease ?? 0), 0, 1);
+  const knockdownRelease = tpsThrowKnockdown
+    ? THREE.MathUtils.smoothstep(THREE.MathUtils.clamp((fighter.knockdownTicks - 56) / 16, 0, 1), 0, 1)
+    : 0;
+  const release = Math.max(legacyRelease, knockdownRelease);
+  if ((!legacyThrowState && !tpsThrowKnockdown) || release <= 1e-4) {
+    root.updateMatrixWorld(true);
+    return;
+  }
+
+  host.rotation.x = -0.085 * release;
+  host.rotation.z = fighter.facing * 0.075 * release;
+  root.userData.tpsThrowImportedBreak = release;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -250,6 +402,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     // position remains exactly where combat resolution placed it.
     applyTpsImpactReadability(fighter, opponent);
     applyTpsDashKickSilhouette(fighter, opponent);
+    applyTpsThrowPairReadability(fighter, opponent);
 
     const authoredAttack = fighter.state === "ATTACK"
       && Boolean(fighter.currentMove)
@@ -262,6 +415,7 @@ export class PresentationAnimationController extends FighterAnimationController 
       fighter.visual.root.updateMatrixWorld(true);
     }
     updateQuaterniusModelSkin(fighter, timeSeconds);
+    applyTpsImportedThrowReleaseTilt(fighter);
     if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled

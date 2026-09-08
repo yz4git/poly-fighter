@@ -435,6 +435,46 @@ function applyTpsImportedPowerDrive(fighter: FighterRuntime): void {
   root.updateMatrixWorld(true);
 }
 
+function applyTpsImportedBackfistSweep(fighter: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
+  const host = root.children.find((child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"));
+  if (!host) return;
+
+  const previousAccent = Number(root.userData.tpsBackfistImportedAccent ?? 0);
+  const move = fighter.currentMove;
+  const sweeping = fighter.state === "ATTACK" && move?.id === "backfist";
+  if (!sweeping || !move) {
+    if (previousAccent > 1e-4) {
+      host.position.x = 0;
+      host.rotation.y = 0;
+      host.rotation.z = 0;
+      root.updateMatrixWorld(true);
+    }
+    root.userData.tpsBackfistImportedAccent = 0;
+    root.userData.tpsBackfistImportedSlip = 0;
+    return;
+  }
+
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const sweepIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 4), activeStart + 1);
+  const sweepOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 1, activeEnd + 8);
+  const accent = THREE.MathUtils.clamp(sweepIn * sweepOut, 0, 1);
+  const side = move.visualContact === "LEFT_FIST" ? -1 : 1;
+  const scale = root.scale.x;
+
+  // Keep the authored wrist/elbow arc intact and move the visible body around it.
+  // A small opposite-side slip plus torso yaw makes the strike read as a lateral
+  // sweep instead of another square-on straight from the shoulder camera.
+  host.position.x = -side * 0.035 * scale * accent;
+  host.rotation.y = -side * 0.14 * accent;
+  host.rotation.z = side * 0.04 * accent;
+  root.userData.tpsBackfistImportedAccent = accent;
+  root.userData.tpsBackfistImportedSlip = host.position.x;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -532,6 +572,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     applyTpsImportedThrowReleaseTilt(fighter);
     applyTpsImportedCounterSlip(fighter);
     applyTpsImportedPowerDrive(fighter);
+    applyTpsImportedBackfistSweep(fighter);
     if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled

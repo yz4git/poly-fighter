@@ -27,6 +27,66 @@ const BLENDER_AUTHORED_ATTACKS = new Set([
   "throw",
 ]);
 
+const TPS_HIT_SEPARATION = {
+  LIGHT: 0.075,
+  MID: 0.105,
+  HEAVY: 0.145,
+  COUNTER: 0.17,
+} as const;
+
+const TPS_HIT_RECOIL = {
+  LIGHT: 0.055,
+  MID: 0.085,
+  HEAVY: 0.125,
+  COUNTER: 0.15,
+} as const;
+
+function applyTpsImpactReadability(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps) return;
+
+  const blocked = fighter.state === "BLOCK_STUN";
+  const hit = fighter.state === "HIT";
+  if (!hit && !blocked) {
+    root.userData.tpsImpactReadability = 0;
+    root.userData.tpsImpactSeparation = 0;
+    root.userData.tpsImpactRecoil = 0;
+    return;
+  }
+
+  // Hitstop owns the contact frame. Afterwards, ease the visual accent out over
+  // the remaining stun so the defender does not snap back into the attacker.
+  // This never changes FighterRuntime.position, velocity, hitboxes or spacing.
+  const stunTicks = blocked ? fighter.blockStun : fighter.hitStun;
+  const release = fighter.hitStop > 0
+    ? 1
+    : THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(stunTicks / 12, 0, 1), 0, 1);
+  const kind = fighter.reactionKind;
+  const separation = blocked ? 0.045 * release : TPS_HIT_SEPARATION[kind] * release;
+  const recoil = blocked ? 0.035 * release : TPS_HIT_RECOIL[kind] * release;
+
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  root.position.addScaledVector(away, separation);
+
+  const side = fighter.reactionSide === "LEFT" ? -1 : 1;
+  const bones = fighter.visual.rig.bones;
+  bones.spineLower.rotation.x += recoil * 0.42;
+  bones.spineUpper.rotation.x += recoil * 0.72;
+  bones.chest.rotation.x += recoil;
+  bones.spineUpper.rotation.y += side * recoil * 0.42;
+  bones.chest.rotation.z += side * recoil * 0.24;
+  fighter.visual.head.rotation.x += recoil * 0.3;
+
+  root.userData.tpsImpactReadability = release;
+  root.userData.tpsImpactSeparation = separation;
+  root.userData.tpsImpactRecoil = recoil;
+  root.userData.tpsImpactReactionSerial = fighter.reactionSerial;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -100,6 +160,12 @@ export class PresentationAnimationController extends FighterAnimationController 
       fighter.visual.root.userData.tpsEnemyTelegraphPoseApplied = load;
       fighter.visual.root.updateMatrixWorld(true);
     }
+
+    // Keep the gameplay contact point untouched while giving the hit frame a
+    // readable silhouette from the close TPS camera. The defender's rendered
+    // root moves a few centimetres away and the torso recoils; the simulation
+    // position remains exactly where combat resolution placed it.
+    applyTpsImpactReadability(fighter, opponent);
 
     const authoredAttack = fighter.state === "ATTACK"
       && Boolean(fighter.currentMove)

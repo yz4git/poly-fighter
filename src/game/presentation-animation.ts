@@ -94,6 +94,7 @@ function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRu
   if (!root.userData.combatTps || fighter.state !== "ATTACK" || move?.id !== "dashKick") {
     root.userData.tpsDashKickSilhouette = 0;
     root.userData.tpsDashKickLegExtension = 0;
+    root.userData.tpsDashKickBodySeparation = 0;
     return;
   }
 
@@ -109,22 +110,30 @@ function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRu
   if (accent <= 1e-4) {
     root.userData.tpsDashKickSilhouette = 0;
     root.userData.tpsDashKickLegExtension = 0;
+    root.userData.tpsDashKickBodySeparation = 0;
     return;
   }
 
+  const scale = root.scale.x;
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const bodySeparation = 0.075 * scale * accent;
+  root.position.addScaledVector(away, bodySeparation);
   root.updateMatrixWorld(true);
+
   const bones = visual.rig.bones;
   const hip = bones.rightThigh.getWorldPosition(new THREE.Vector3());
   const knee = bones.rightShin.getWorldPosition(new THREE.Vector3());
   const foot = bones.rightFoot;
   const footPosition = foot.getWorldPosition(new THREE.Vector3());
   const legLine = footPosition.clone().sub(hip);
-  const scale = root.scale.x;
   let extension = 0;
 
   if (legLine.lengthSq() > 1e-6) {
     const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
-    extension = 0.115 * scale * accent;
+    extension = 0.17 * scale * accent;
     const target = footPosition.clone().addScaledVector(legLine.normalize(), extension);
     const pole = knee.clone()
       .addScaledVector(basis.side, 0.065 * scale * accent)
@@ -157,6 +166,7 @@ function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRu
 
   root.userData.tpsDashKickSilhouette = accent;
   root.userData.tpsDashKickLegExtension = extension;
+  root.userData.tpsDashKickBodySeparation = bodySeparation;
   root.updateMatrixWorld(true);
 }
 

@@ -87,6 +87,41 @@ function applyTpsImpactReadability(fighter: FighterRuntime, opponent: FighterRun
   root.updateMatrixWorld(true);
 }
 
+function applyTpsPowerBodySeparation(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const root = fighter.visual.root;
+  const move = fighter.currentMove;
+  if (!root.userData.combatTps || fighter.state !== "ATTACK" || move?.id !== "power") {
+    root.userData.tpsPowerDrive = 0;
+    root.userData.tpsPowerBodySeparation = 0;
+    return;
+  }
+
+  // Overdrive Impact is the slowest, heaviest punch in the kit. Preserve its
+  // authored arm path, but keep a narrow visible lane between the torsos around
+  // the strike beat so the rear hand and shoulder drive do not collapse into a
+  // close-range hug silhouette. This changes only the rendered root.
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const driveIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 5), activeStart + 1);
+  const driveOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 1, activeEnd + 8);
+  const drive = THREE.MathUtils.clamp(driveIn * driveOut, 0, 1);
+  if (drive <= 1e-4) {
+    root.userData.tpsPowerDrive = 0;
+    root.userData.tpsPowerBodySeparation = 0;
+    return;
+  }
+
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const separation = 0.07 * root.scale.x * drive;
+  root.position.addScaledVector(away, separation);
+  root.userData.tpsPowerDrive = drive;
+  root.userData.tpsPowerBodySeparation = separation;
+  root.updateMatrixWorld(true);
+}
+
 function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRuntime): void {
   const visual = fighter.visual;
   const root = visual.root;
@@ -358,6 +393,48 @@ function applyTpsImportedCounterSlip(fighter: FighterRuntime): void {
   root.updateMatrixWorld(true);
 }
 
+function applyTpsImportedPowerDrive(fighter: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
+  const host = root.children.find((child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"));
+  if (!host) return;
+
+  const previousAccent = Number(root.userData.tpsPowerImportedAccent ?? 0);
+  const move = fighter.currentMove;
+  const powering = fighter.state === "ATTACK" && move?.id === "power";
+  if (!powering || !move) {
+    if (previousAccent > 1e-4) {
+      host.rotation.x = 0;
+      host.rotation.y = 0;
+      host.rotation.z = 0;
+      root.updateMatrixWorld(true);
+    }
+    root.userData.tpsPowerImportedAccent = 0;
+    root.userData.tpsPowerImportedLoad = 0;
+    return;
+  }
+
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const loadIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 9), activeStart - 3);
+  const driveIn = THREE.MathUtils.smoothstep(fighter.moveTick, activeStart - 3, activeStart + 1);
+  const driveOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd + 1, activeEnd + 10);
+  const drive = THREE.MathUtils.clamp(driveIn * driveOut, 0, 1);
+  const load = THREE.MathUtils.clamp(loadIn * (1 - driveIn), 0, 1);
+  const side = move.visualContact === "LEFT_FIST" ? -1 : 1;
+
+  // Counter-rotate during the load, then drive chest and hip through the target.
+  // Because this is applied after the imported clip has been sampled, it accents
+  // the authored CM_Power without re-solving its fist, elbow or shoulder path.
+  host.rotation.x = 0.018 * load - 0.055 * drive;
+  host.rotation.y = side * (0.07 * load - 0.12 * drive);
+  host.rotation.z = -side * (0.025 * load + 0.045 * drive);
+  root.userData.tpsPowerImportedAccent = Math.max(load, drive);
+  root.userData.tpsPowerImportedLoad = load;
+  root.userData.tpsPowerImportedDrive = drive;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -437,6 +514,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     // root moves a few centimetres away and the torso recoils; the simulation
     // position remains exactly where combat resolution placed it.
     applyTpsImpactReadability(fighter, opponent);
+    applyTpsPowerBodySeparation(fighter, opponent);
     applyTpsDashKickSilhouette(fighter, opponent);
     applyTpsThrowPairReadability(fighter, opponent);
 
@@ -453,6 +531,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     updateQuaterniusModelSkin(fighter, timeSeconds);
     applyTpsImportedThrowReleaseTilt(fighter);
     applyTpsImportedCounterSlip(fighter);
+    applyTpsImportedPowerDrive(fighter);
     if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled

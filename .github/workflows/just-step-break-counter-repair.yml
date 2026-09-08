@@ -1,0 +1,135 @@
+name: Repair JUST STEP implementation
+
+on:
+  push:
+    branches:
+      - just-step-break-counter-v1
+    paths:
+      - .github/workflows/just-step-break-counter-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: just-step-break-counter-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Reuse implementation patch with whitespace-tolerant anchors
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re, textwrap
+
+          workflow = Path('.github/workflows/just-step-break-counter-impl.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(workflow) if "python3 <<'PY'" in line)
+          end = next(i for i in range(start + 1, len(workflow)) if workflow[i].strip() == 'PY')
+          script = textwrap.dedent('\n'.join(workflow[start + 1:end]))
+
+          robust = '''def replace_once(path, old, new):
+              import re
+              p = Path(path)
+              text = p.read_text()
+              if old in text:
+                  if text.count(old) != 1:
+                      raise SystemExit(f"anchor not unique in {path}: {text.count(old)}")
+                  p.write_text(text.replace(old, new, 1))
+                  return
+              lines = old.splitlines()
+              pattern = "(?m)" + "\\n".join(r"^[ \\t]*" + re.escape(line.strip()) + r"[ \\t]*$" for line in lines)
+              matches = list(re.finditer(pattern, text))
+              if len(matches) != 1:
+                  raise SystemExit(f"whitespace anchor count in {path}: {len(matches)} for {old[:120]!r}")
+              match = matches[0]
+              p.write_text(text[:match.start()] + new + text[match.end():])'''
+          script, count = re.subn(r'def replace_once\(path, old, new\):\n.*?\n\npath =', robust + '\n\npath =', script, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('could not upgrade replace_once')
+          exec(compile(script, 'just-step-impl.py', 'exec'), {})
+
+          # Remove an intentionally named-but-unused UI helper and update legacy
+          # static assertions that were tied to the old PERFECT STEP wording.
+          page = Path('app/page.tsx')
+          p = page.read_text().replace('  const tpsJustStep = hud?.tpsTimingCue === "JUST_STEP";\n', '')
+          page.write_text(p)
+
+          tests = Path('tests/tps-mode.test.ts')
+          t = tests.read_text()
+          t = t.replace('assert.match(page, /PERFECT STEP/);', 'assert.match(page, /JUST STEP/);')
+          t = t.replace('assert.match(page, /tps-windup-action/);', 'assert.match(page, /tps-read-action/);')
+          tests.write_text(t)
+
+          # Explicit browser probe: pressing STEP in WATCH is only movement and
+          # cannot arm the reward. SLIP remains the precise timing reward path.
+          audit = Path('scripts/capture-tps-combat-v2-audit.mjs')
+          a = audit.read_text()
+          anchor = '  const reactableStep = await execute(sessionId, `${gameLookup}\n'
+          if 'const earlyStep = await execute' not in a:
+              early = '''  const earlyStep = await execute(sessionId, `${gameLookup}
+              const game = findGame();
+              ${resetSnippet}
+              game.p1.position.set(0, 0, 0.72);
+              game.p2.position.set(0, 0, -0.72);
+              game.enemyDirectorPendingMove = 'jab';
+              game.enemyDirectorTelegraphTicks = 10;
+              game.enemyDirectorTelegraphTotalTicks = 18;
+              game.enemyDirectorDecision = {
+                intent: 'JAB', holdTicks: 1, telegraphTicks: 18,
+                reason: 'watch-step-audit', comebackMercy: 0, pressure: 0,
+              };
+              game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 10 / 18;
+              game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
+              game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
+              const threatBefore = game.enemyThreatStatus();
+              game.press('right', 'watch-step-side');
+              game.press('guard', 'watch-step');
+              game.step();
+              game.release('guard', 'watch-step');
+              game.release('right', 'watch-step-side');
+              game.updateCamera(1 / 60);
+              game.updateLockOn();
+              game.renderer.render(game.scene, game.camera);
+              return {
+                threatBefore,
+                tracked: game.playerStepThreatTicks,
+                justStepTicks: game.playerJustStepTicks,
+                breakCounterTicks: game.playerBreakCounterTicks,
+                perfectEvades: game.trainingProgress.perfectEvades,
+              };
+            `);
+            await delay(60);
+            if (earlyStep?.threatBefore?.timing !== 'WATCH' || earlyStep?.tracked !== 0 || earlyStep?.justStepTicks !== 0 || earlyStep?.breakCounterTicks !== 0 || earlyStep?.perfectEvades !== 0) {
+              throw new Error(`EARLY WATCH STEP incorrectly earned reward: ${JSON.stringify(earlyStep)}`);
+            }
+            await screenshot(sessionId, `${outputDir}/tps-watch-step.png`);
+
+          '''
+              if anchor not in a:
+                  raise SystemExit('reactableStep anchor missing')
+              a = a.replace(anchor, early + anchor, 1)
+          a = a.replace('const report = { viewport, adaptationProbe, justStep: reactableStep,', 'const report = { viewport, adaptationProbe, earlyStep, justStep: reactableStep,', 1)
+          audit.write_text(a)
+          PY
+      - name: TPS static regression
+        run: npm run test:rules:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Commit clean implementation
+        run: |
+          rm .github/workflows/just-step-break-counter-impl.yml
+          rm .github/workflows/just-step-break-counter-repair.yml
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game-base.ts src/game/types.ts app/page.tsx app/playtest-polish.css tests/tps-mode.test.ts scripts/capture-tps-reactive-cues.mjs scripts/capture-tps-combat-v2-audit.mjs .github/workflows/just-step-break-counter-impl.yml .github/workflows/just-step-break-counter-repair.yml
+          git commit -m "Implement JUST STEP and BREAK COUNTER timing"
+          git push origin HEAD:just-step-break-counter-v1

@@ -288,6 +288,33 @@ function applyTpsThrowPairReadability(fighter: FighterRuntime, opponent: Fighter
   root.updateMatrixWorld(true);
 }
 
+function applyTpsImportedThrowReleaseTilt(fighter: FighterRuntime): void {
+  const root = fighter.visual.root;
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
+  const host = root.children.find((child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"));
+  if (!host) return;
+
+  // The authored CM_Throw already gives the attacker a clean two-arm grab. Do
+  // not re-solve those imported arms. Only tilt the visible victim model during
+  // the first release beat so grab -> off-balance reads without corrupting the
+  // authored shoulder/elbow silhouette.
+  host.rotation.x = 0;
+  host.rotation.z = 0;
+  root.userData.tpsThrowImportedBreak = 0;
+  const beingThrown = fighter.state === "THROW"
+    || (fighter.knockdownTicks > 72 && !fighter.grounded && fighter.velocity.y > 0);
+  const release = THREE.MathUtils.clamp(Number(root.userData.tpsThrowRelease ?? 0), 0, 1);
+  if (!beingThrown || release <= 1e-4) {
+    root.updateMatrixWorld(true);
+    return;
+  }
+
+  host.rotation.x = -0.085 * release;
+  host.rotation.z = fighter.facing * 0.075 * release;
+  root.userData.tpsThrowImportedBreak = release;
+  root.updateMatrixWorld(true);
+}
+
 /**
  * Presentation-only animation layer applied after the deterministic gameplay
  * animation. The canonical gameplay rig always runs first; optional visual
@@ -381,6 +408,7 @@ export class PresentationAnimationController extends FighterAnimationController 
       fighter.visual.root.updateMatrixWorld(true);
     }
     updateQuaterniusModelSkin(fighter, timeSeconds);
+    applyTpsImportedThrowReleaseTilt(fighter);
     if (!fighter.visual.root.userData.combatTps) finalizeQuaterniusModelPose(fighter, timeSeconds);
     fighter.visual.root.userData.motionCorrectionsEnabled = correctionsEnabled;
     fighter.visual.root.userData.motionCorrectionPolicy = correctionsEnabled

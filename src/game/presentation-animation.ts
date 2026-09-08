@@ -177,7 +177,11 @@ function applyTpsThrowPairReadability(fighter: FighterRuntime, opponent: Fighter
 
   const move = fighter.currentMove;
   const attackingThrow = fighter.state === "ATTACK" && move?.id === "throw";
-  const beingThrown = fighter.state === "THROW";
+  // Throws begin with 76 knockdown ticks while ordinary knockdowns start at 72.
+  // Keep the release pose readable even if an audit/director rewrites the
+  // transient THROW state label immediately after contact.
+  const beingThrown = fighter.state === "THROW"
+    || (fighter.knockdownTicks > 72 && !fighter.grounded && fighter.velocity.y > 0);
   if (!attackingThrow && !beingThrown) {
     root.userData.tpsThrowGrab = 0;
     root.userData.tpsThrowRelease = 0;
@@ -212,7 +216,6 @@ function applyTpsThrowPairReadability(fighter: FighterRuntime, opponent: Fighter
     if (grab > 1e-4) {
       opponent.visual.root.updateMatrixWorld(true);
       const opponentLayout = opponent.visual.layout;
-      const opponentScale = opponent.visual.root.scale.x;
       const shoulderX = opponentLayout.shoulderWidth * 0.34;
       const targetY = opponentLayout.shoulderY - 0.065;
       const targetZ = opponentLayout.chestDepth * 0.58;

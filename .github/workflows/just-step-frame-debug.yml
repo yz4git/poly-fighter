@@ -25,6 +25,10 @@ jobs:
           from pathlib import Path
           p = Path('scripts/capture-tps-combat-v2-audit.mjs')
           t = p.read_text()
+          anchor = """  const reactableStep = await execute(sessionId, `${gameLookup}\n    const game = findGame();\n    ${resetSnippet}\n    game.p1.position.set(0, 0, 0.72);"""
+          replacement = """  const reactableStep = await execute(sessionId, `${gameLookup}\n    const game = findGame();\n    ${resetSnippet}\n    const beginLog = [];\n    const originalBeginMove = game.p2.beginMove.bind(game.p2);\n    game.p2.beginMove = (moveId) => {\n      const before = { moveId, state: game.p2.state, canAct: game.p2.canAct(), hasMove: Boolean(game.p2.definition.moves[moveId]), hitStop: game.p2.hitStop, currentMove: game.p2.currentMove?.id ?? null };\n      const result = originalBeginMove(moveId);\n      beginLog.push({ ...before, result, afterState: game.p2.state, afterMove: game.p2.currentMove?.id ?? null });\n      return result;\n    };\n    game.p1.position.set(0, 0, 0.72);"""
+          if anchor not in t: raise SystemExit('reactable fixture anchor missing')
+          t = t.replace(anchor, replacement, 1)
           old = "\n".join([
             "    let steps = 1;",
             "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
@@ -38,7 +42,7 @@ jobs:
             "    let steps = 1;",
             "    const trace = [];",
             "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
-            "      trace.push({ step: steps, tracker: game.playerStepThreatTicks, trackedMove: game.playerStepThreatMoveId, wasJust: game.playerStepThreatWasJust, sideWeight: game.playerStepSideWeight, p2State: game.p2.state, p2Move: game.p2.currentMove?.id ?? null, p2MoveTick: game.p2.moveTick, p2Active: game.p2.isActive(), telegraph: game.enemyDirectorTelegraphTicks, pending: game.enemyDirectorPendingMove, p1Health: game.p1.health });",
+            "      trace.push({ step: steps, tracker: game.playerStepThreatTicks, trackedMove: game.playerStepThreatMoveId, wasJust: game.playerStepThreatWasJust, sideWeight: game.playerStepSideWeight, p2State: game.p2.state, p2CanAct: game.p2.canAct(), p2HitStop: game.p2.hitStop, p2Move: game.p2.currentMove?.id ?? null, p2MoveTick: game.p2.moveTick, p2Active: game.p2.isActive(), telegraph: game.enemyDirectorTelegraphTicks, pending: game.enemyDirectorPendingMove, p1Health: game.p1.health });",
             "      game.renderTime += 1 / 60;",
             "      game.step();",
             "      steps += 1;",
@@ -48,7 +52,7 @@ jobs:
           if old not in t: raise SystemExit('reactable loop anchor missing')
           t = t.replace(old, new, 1)
           old_ret = "      beat: game.combatBeatLabel,\n    };\n"
-          new_ret = "      beat: game.combatBeatLabel,\n      trace,\n    };\n"
+          new_ret = "      beat: game.combatBeatLabel,\n      beginLog,\n      trace,\n    };\n"
           if old_ret not in t: raise SystemExit('reactable return anchor missing')
           p.write_text(t.replace(old_ret, new_ret, 1))
           PY

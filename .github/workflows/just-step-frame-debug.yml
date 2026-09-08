@@ -1,4 +1,4 @@
-name: JUST STEP frame trace
+name: Repair committed attack follow-through
 
 on:
   push:
@@ -6,70 +6,91 @@ on:
     paths: [.github/workflows/just-step-frame-debug.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  trace:
+  repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 14
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: just-step-break-counter-v1
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Add temporary frame trace
+      - name: Preserve telegraphed attack commitment
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('scripts/capture-tps-combat-v2-audit.mjs')
+          p = Path('src/game/tps-game.ts')
           t = p.read_text()
-          anchor = """  const reactableStep = await execute(sessionId, `${gameLookup}\n    const game = findGame();\n    ${resetSnippet}\n    game.p1.position.set(0, 0, 0.72);"""
-          replacement = """  const reactableStep = await execute(sessionId, `${gameLookup}\n    const game = findGame();\n    ${resetSnippet}\n    const beginLog = [];\n    const originalBeginMove = game.p2.beginMove.bind(game.p2);\n    game.p2.beginMove = (moveId) => {\n      const before = { moveId, state: game.p2.state, canAct: game.p2.canAct(), hasMove: Boolean(game.p2.definition.moves[moveId]), hitStop: game.p2.hitStop, currentMove: game.p2.currentMove?.id ?? null };\n      const result = originalBeginMove(moveId);\n      beginLog.push({ ...before, result, afterState: game.p2.state, afterMove: game.p2.currentMove?.id ?? null });\n      return result;\n    };\n    game.p1.position.set(0, 0, 0.72);"""
-          if anchor not in t: raise SystemExit('reactable fixture anchor missing')
-          t = t.replace(anchor, replacement, 1)
-          old = "\n".join([
-            "    let steps = 1;",
-            "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
-            "      game.renderTime += 1 / 60;",
-            "      game.step();",
-            "      steps += 1;",
-            "    }",
-            "",
-          ])
-          new = "\n".join([
-            "    let steps = 1;",
-            "    const trace = [];",
-            "    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {",
-            "      trace.push({ step: steps, tracker: game.playerStepThreatTicks, trackedMove: game.playerStepThreatMoveId, wasJust: game.playerStepThreatWasJust, sideWeight: game.playerStepSideWeight, p2State: game.p2.state, p2CanAct: game.p2.canAct(), p2HitStop: game.p2.hitStop, p2Move: game.p2.currentMove?.id ?? null, p2MoveTick: game.p2.moveTick, p2Active: game.p2.isActive(), telegraph: game.enemyDirectorTelegraphTicks, pending: game.enemyDirectorPendingMove, p1Health: game.p1.health });",
-            "      game.renderTime += 1 / 60;",
-            "      game.step();",
-            "      steps += 1;",
-            "    }",
-            "",
-          ])
-          if old not in t: raise SystemExit('reactable loop anchor missing')
+          old = '''  enemyCooldown: number;
+  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";'''
+          new = '''  enemyCooldown: number;
+  enemyDirectorPendingMove: string | null;
+  enemyDirectorTelegraphTicks: number;
+  enemyTactic: "PRESSURE" | "ORBIT" | "BAIT";'''
+          if old not in t: raise SystemExit('runtime type anchor missing')
           t = t.replace(old, new, 1)
-          old_ret = "      beat: game.combatBeatLabel,\n    };\n"
-          new_ret = "      beat: game.combatBeatLabel,\n      beginLog,\n      trace,\n    };\n"
-          if old_ret not in t: raise SystemExit('reactable return anchor missing')
-          p.write_text(t.replace(old_ret, new_ret, 1))
+          old = '''  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);
+
+  coreUpdateEnemy.call(this);
+
+  // Do not allow a newly selected strike to fire while the visible body is
+  // still catching up to a side STEP. Existing attacks continue normally.
+  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";
+  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT) {'''
+          new = '''  const enemyFacingAlignment = THREE.MathUtils.clamp(facing.dot(towardPlayer), -1, 1);
+  // Once the CPU has shown a telegraph all the way to zero, the strike is a
+  // commitment. A late side STEP must make that committed strike whiff rather
+  // than causing the AI to cancel it after the player already read the cue.
+  const committedDirectorMove = game.enemyDirectorPendingMove && game.enemyDirectorTelegraphTicks <= 0
+    ? game.enemyDirectorPendingMove
+    : null;
+
+  coreUpdateEnemy.call(this);
+
+  // Uncommitted strikes may still wait for the visible body to reacquire the
+  // player. Fully telegraphed strikes always follow through so JUST STEP has a
+  // real attack to evade and cannot be invalidated by the tracking layer.
+  const startedAttack = beforeState !== "ATTACK" && game.p2.state === "ATTACK";
+  const committedStrikeStarted = Boolean(
+    committedDirectorMove && game.p2.currentMove?.id === committedDirectorMove,
+  );
+  if (startedAttack && enemyFacingAlignment < ENEMY_ATTACK_ALIGNMENT && !committedStrikeStarted) {'''
+          if old not in t: raise SystemExit('enemy commitment anchor missing')
+          p.write_text(t.replace(old, new, 1))
           PY
-      - run: npm run build
+      - name: TPS static regression
+        run: npm run test:rules:tps
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
       - name: Start production server
         run: |
-          PORT=3000 npm start > /tmp/poly-fighter-just-step-debug.log 2>&1 &
+          PORT=3000 npm start > /tmp/poly-fighter-just-step-repair.log 2>&1 &
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/poly-fighter-just-step-debug.log
+          cat /tmp/poly-fighter-just-step-repair.log
           exit 1
-      - name: Run JUST STEP browser trace
+      - name: Verify full TPS WebGL combat audit
         run: |
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
           test -n "$DRIVER"
           mkdir -p artifacts/tps-visual-audit
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-combat-v2-audit.mjs
+      - name: Commit clean repair and remove helper
+        run: |
+          rm .github/workflows/just-step-frame-debug.yml
+          git config user.name "yz4git"
+          git config user.email "65384484+yz4git@users.noreply.github.com"
+          git add src/game/tps-game.ts .github/workflows/just-step-frame-debug.yml
+          git commit -m "Preserve committed attacks through JUST STEP"
+          git push origin HEAD:just-step-break-counter-v1

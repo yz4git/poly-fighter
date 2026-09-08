@@ -1,0 +1,90 @@
+name: JUST STEP frame trace
+
+on:
+  push:
+    branches:
+      - just-step-break-counter-v1
+    paths:
+      - .github/workflows/just-step-frame-debug.yml
+
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Add temporary per-frame trace to browser audit
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('scripts/capture-tps-combat-v2-audit.mjs')
+          text = path.read_text()
+          old = '''    let steps = 1;
+    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {
+      game.renderTime += 1 / 60;
+      game.step();
+      steps += 1;
+    }
+'''
+          new = '''    let steps = 1;
+    const trace = [];
+    while (steps < 60 && game.trainingProgress.perfectEvades < 1) {
+      trace.push({
+        step: steps,
+        tracker: game.playerStepThreatTicks,
+        trackedMove: game.playerStepThreatMoveId,
+        wasJust: game.playerStepThreatWasJust,
+        sideWeight: game.playerStepSideWeight,
+        p2State: game.p2.state,
+        p2Move: game.p2.currentMove?.id ?? null,
+        p2MoveTick: game.p2.moveTick,
+        p2Active: game.p2.isActive(),
+        telegraph: game.enemyDirectorTelegraphTicks,
+        pending: game.enemyDirectorPendingMove,
+        p1Health: game.p1.health,
+      });
+      game.renderTime += 1 / 60;
+      game.step();
+      steps += 1;
+    }
+'''
+          if old not in text:
+              raise SystemExit('reactable loop anchor missing')
+          text = text.replace(old, new, 1)
+          old_return = '''      beat: game.combatBeatLabel,
+    };
+'''
+          new_return = '''      beat: game.combatBeatLabel,
+      trace,
+    };
+'''
+          if old_return not in text:
+              raise SystemExit('reactable return anchor missing')
+          text = text.replace(old_return, new_return, 1)
+          path.write_text(text)
+          PY
+      - run: npm run build
+      - name: Start production server
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-just-step-debug.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-just-step-debug.log
+          exit 1
+      - name: Run JUST STEP browser trace
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          mkdir -p artifacts/tps-visual-audit
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-combat-v2-audit.mjs

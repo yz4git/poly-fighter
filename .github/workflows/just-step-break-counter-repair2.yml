@@ -39,6 +39,32 @@ jobs:
               raise SystemExit('repair substitution anchor missing')
           script = script.replace(old, new, 1)
           exec(compile(script, 'just-step-repair.py', 'exec'), {})
+
+          tests = Path('tests/tps-mode.test.ts')
+          text = tests.read_text()
+          replacements = {
+            'assert.match(source, /const reactiveSideStep = Boolean/);': 'assert.match(source, /const justStepSideStep = Boolean/);',
+            'assert.match(source, /reversalOpen: reversalStrike/);': 'assert.match(source, /reversalOpen: breakCounterStrike \\|\\| reversalStrike/);',
+            'assert.match(page, /AUTO PUNCH \\/ KICK/);': 'assert.match(page, /READ \\+ ATTACK = INTERCEPT/);',
+            'assert.match(page, /STEP OR INTERCEPT/);': 'assert.match(page, /SLIP NOW/);',
+            'assert.match(page, /→ REVERSAL/);': 'assert.match(page, /BREAK COUNTER/);',
+            'assert.match(page, /FORWARD STEP → ATTACK = DASH/);': 'assert.match(page, /EARLY STEP = EVADE/);',
+          }
+          for previous, current in replacements.items():
+              text = text.replace(previous, current)
+          tests.write_text(text)
+
+          required = {
+            'src/game/tps-game-base.ts': ['TPS_JUST_STEP_WINDOW_TICKS', 'setCombatBeat("JUST STEP")', 'setCombatBeat("BREAK COUNTER")', '"BREAK_COUNTER"'],
+            'app/page.tsx': ['SLIP NOW', 'BREAK COUNTER', 'EARLY STEP = EVADE'],
+            'tests/tps-mode.test.ts': ['const justStepSideStep = Boolean', 'reversalOpen: breakCounterStrike', 'TPS timing mastery separates WATCH from JUST STEP'],
+            'scripts/capture-tps-combat-v2-audit.mjs': ['earlyStep', 'justStep: reactableStep', 'breakCounter: reversal'],
+          }
+          for path, markers in required.items():
+              body = Path(path).read_text()
+              for marker in markers:
+                  if marker not in body:
+                      raise SystemExit(f'missing final marker {marker!r} in {path}')
           PY
       - name: TPS static regression
         run: npm run test:rules:tps

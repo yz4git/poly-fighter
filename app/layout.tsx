@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import TouchInputSafety from "./TouchInputSafety";
+import TpsPresentationBootstrap from "./TpsPresentationBootstrap";
 import "./globals.css";
 import "./playtest-polish.css";
 import "./hud-face-safe.css";
@@ -33,7 +34,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><TouchInputSafety />{children}</body>
+      <body><TpsPresentationBootstrap /><TouchInputSafety />{children}</body>
     </html>
   );
 }

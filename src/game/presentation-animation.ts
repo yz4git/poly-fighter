@@ -122,6 +122,87 @@ function applyTpsPowerBodySeparation(fighter: FighterRuntime, opponent: FighterR
   root.updateMatrixWorld(true);
 }
 
+function applyTpsKickSilhouette(fighter: FighterRuntime, opponent: FighterRuntime): void {
+  const visual = fighter.visual;
+  const root = visual.root;
+  const move = fighter.currentMove;
+  if (!root.userData.combatTps || fighter.state !== "ATTACK" || move?.id !== "kick") {
+    root.userData.tpsKickSilhouette = 0;
+    root.userData.tpsKickLegExtension = 0;
+    root.userData.tpsKickBodySeparation = 0;
+    return;
+  }
+
+  // The basic kick currently reads like a crowded knee lift from the shoulder
+  // camera because the shin/boot disappear into the opponent. Give only the
+  // rendered right leg a short extension and open a narrow torso lane. Gameplay
+  // reach, hitboxes and fighter positions remain untouched.
+  const activeStart = move.startup;
+  const activeEnd = move.startup + move.active;
+  const extendIn = THREE.MathUtils.smoothstep(fighter.moveTick, Math.max(0, activeStart - 3), activeStart + 1);
+  const extendOut = 1 - THREE.MathUtils.smoothstep(fighter.moveTick, activeEnd, activeEnd + 6);
+  const accent = THREE.MathUtils.clamp(extendIn * extendOut, 0, 1);
+  if (accent <= 1e-4) {
+    root.userData.tpsKickSilhouette = 0;
+    root.userData.tpsKickLegExtension = 0;
+    root.userData.tpsKickBodySeparation = 0;
+    return;
+  }
+
+  const scale = root.scale.x;
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const bodySeparation = 0.05 * scale * accent;
+  root.position.addScaledVector(away, bodySeparation);
+  root.updateMatrixWorld(true);
+
+  const bones = visual.rig.bones;
+  const hip = bones.rightThigh.getWorldPosition(new THREE.Vector3());
+  const knee = bones.rightShin.getWorldPosition(new THREE.Vector3());
+  const foot = bones.rightFoot;
+  const footPosition = foot.getWorldPosition(new THREE.Vector3());
+  const legLine = footPosition.clone().sub(hip);
+  let extension = 0;
+
+  if (legLine.lengthSq() > 1e-6) {
+    const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
+    extension = 0.10 * scale * accent;
+    const target = footPosition.clone().addScaledVector(legLine.normalize(), extension);
+    const pole = knee.clone()
+      .addScaledVector(basis.side, 0.045 * scale * accent)
+      .addScaledVector(basis.up, 0.01 * scale * accent);
+    const footWorld = foot.getWorldQuaternion(new THREE.Quaternion());
+
+    solveTwoBoneIK({
+      root: bones.rightThigh,
+      mid: bones.rightShin,
+      end: foot,
+      target,
+      pole,
+    });
+
+    // Preserve the authored ankle/boot angle exactly after the leg extension.
+    // This avoids reintroducing the foot-twist problem that older kick passes had.
+    root.updateMatrixWorld(true);
+    const parent = foot.parent;
+    if (parent) {
+      const parentWorld = parent.getWorldQuaternion(new THREE.Quaternion());
+      foot.quaternion.copy(parentWorld.invert().multiply(footWorld)).normalize();
+    }
+  }
+
+  bones.spineLower.rotation.y -= 0.018 * accent;
+  bones.spineUpper.rotation.y += 0.032 * accent;
+  bones.chest.rotation.x -= 0.014 * accent;
+
+  root.userData.tpsKickSilhouette = accent;
+  root.userData.tpsKickLegExtension = extension;
+  root.userData.tpsKickBodySeparation = bodySeparation;
+  root.updateMatrixWorld(true);
+}
+
 function applyTpsDashKickSilhouette(fighter: FighterRuntime, opponent: FighterRuntime): void {
   const visual = fighter.visual;
   const root = visual.root;
@@ -555,6 +636,7 @@ export class PresentationAnimationController extends FighterAnimationController 
     // position remains exactly where combat resolution placed it.
     applyTpsImpactReadability(fighter, opponent);
     applyTpsPowerBodySeparation(fighter, opponent);
+    applyTpsKickSilhouette(fighter, opponent);
     applyTpsDashKickSilhouette(fighter, opponent);
     applyTpsThrowPairReadability(fighter, opponent);
 

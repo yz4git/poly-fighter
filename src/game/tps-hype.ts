@@ -27,10 +27,14 @@ export const TPS_HYPE_PROFILE = Object.freeze({
   dashFovRush: 3.8,
   heavyImpactFovPunch: -3.8,
   counterImpactFovPunch: -4.6,
-  lightImpactCameraSide: 0.034,
-  mediumImpactCameraSide: 0.072,
-  heavyImpactCameraSide: 0.145,
-  counterImpactCameraSide: 0.175,
+  lightImpactCameraSide: 0.040,
+  mediumImpactCameraSide: 0.088,
+  heavyImpactCameraSide: 0.180,
+  counterImpactCameraSide: 0.235,
+  lightImpactAimWeight: 0.22,
+  mediumImpactAimWeight: 0.38,
+  heavyImpactAimWeight: 0.58,
+  counterImpactAimWeight: 0.72,
 });
 
 type ImpactTier = 1 | 2 | 3;
@@ -129,6 +133,10 @@ export class TpsHypeDirector {
   private cameraRoll = 0;
   private cameraShake = 0;
   private phase = 0;
+  private readonly impactFocus = new THREE.Vector3();
+  private impactFocusLife = 0;
+  private impactFocusDuration = 0;
+  private impactAimWeight = 0;
 
   constructor(scene: THREE.Scene) {
     this.group.name = "tps-exhilaration-director";
@@ -206,6 +214,23 @@ export class TpsHypeDirector {
     const facing = camera.position.clone().sub(point).normalize();
     const visualPoint = point.clone().addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias);
     const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
+
+    // Keep a short-lived authored contact focus. The final camera can translate
+    // laterally and partially re-aim at this point, producing a tiny orbit around
+    // the actual strike instead of sliding the whole composition sideways. This
+    // creates parallax between overlapping fighters without touching gameplay.
+    if (!event.blocked) {
+      this.impactFocus.copy(point);
+      this.impactFocusDuration = event.counter ? 0.22 : tier === 3 ? 0.19 : tier === 2 ? 0.15 : 0.11;
+      this.impactFocusLife = this.impactFocusDuration;
+      this.impactAimWeight = event.counter
+        ? TPS_HYPE_PROFILE.counterImpactAimWeight
+        : tier === 3
+          ? TPS_HYPE_PROFILE.heavyImpactAimWeight
+          : tier === 2
+            ? TPS_HYPE_PROFILE.mediumImpactAimWeight
+            : TPS_HYPE_PROFILE.lightImpactAimWeight;
+    }
 
     // One combo beat should have one visual center. Retire only prior hit-created
     // rings/bursts before allocating this strike; STEP ground rings are tagged
@@ -289,6 +314,7 @@ export class TpsHypeDirector {
     this.group.userData.lastHypeBurstAngle = burstAngle;
     this.group.userData.lastHypeCameraSide = this.cameraSide;
     this.group.userData.lastHypeFovOffset = this.fovOffset;
+    this.group.userData.lastHypeImpactAimWeight = this.impactAimWeight;
   }
 
   step(fighter: FighterRuntime, opponent: FighterRuntime, perfect: boolean): void {
@@ -372,6 +398,14 @@ export class TpsHypeDirector {
     }
     if (Math.abs(this.cameraSide) > 0.0005) {
       camera.translateX(this.cameraSide);
+      if (this.impactFocusLife > 0 && this.impactFocusDuration > 0) {
+        const currentOrientation = camera.quaternion.clone();
+        camera.lookAt(this.impactFocus);
+        const contactOrientation = camera.quaternion.clone();
+        const remaining = THREE.MathUtils.clamp(this.impactFocusLife / this.impactFocusDuration, 0, 1);
+        const eased = remaining * remaining * (3 - 2 * remaining);
+        camera.quaternion.copy(currentOrientation).slerp(contactOrientation, this.impactAimWeight * eased);
+      }
       this.cameraSide *= Math.exp(-20 * delta);
     }
     if (Math.abs(this.cameraRoll) > 0.00005) {
@@ -384,6 +418,10 @@ export class TpsHypeDirector {
       camera.translateY(Math.cos(this.phase * 149) * shake * 0.42);
       this.cameraShake *= Math.exp(-24 * delta);
     }
+
+    if (this.impactFocusLife > 0) {
+      this.impactFocusLife = Math.max(0, this.impactFocusLife - delta);
+    }
   }
 
   reset(camera: THREE.PerspectiveCamera): void {
@@ -392,6 +430,9 @@ export class TpsHypeDirector {
     this.cameraSide = 0;
     this.cameraRoll = 0;
     this.cameraShake = 0;
+    this.impactFocusLife = 0;
+    this.impactFocusDuration = 0;
+    this.impactAimWeight = 0;
     const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     camera.fov = baseFov;
     camera.updateProjectionMatrix();

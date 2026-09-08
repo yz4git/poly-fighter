@@ -1,5 +1,6 @@
 "use client";
 
+import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
@@ -15,6 +16,7 @@ installTpsTelegraphHandoffPresentation();
 installTpsPunishReadyPresentation();
 installTpsInterceptSilhouettePresentation();
 installTpsBodyBlowLevelChangePresentation();
+installTpsBackfistSweepBoostPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

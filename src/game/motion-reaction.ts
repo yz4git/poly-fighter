@@ -1,7 +1,9 @@
 import type { FighterRuntime } from "./fighter";
 import { reactionKindForMove } from "./motion-profile";
 import { PresentationAnimationController } from "./presentation-animation";
+import { TpsHypeDirector } from "./tps-hype";
 import type { HitEvent, ReactionKind } from "./types";
+import { getVisualContactPoint } from "./visual";
 
 export type MotionReactionState = {
   kind: ReactionKind;
@@ -147,6 +149,38 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
   fighter.visual.root.userData.tpsDamageAfterfeelTier = afterfeel.tier;
   fighter.visual.root.userData.tpsDamageAfterfeelSide = afterfeel.side;
   fighter.visual.root.updateMatrixWorld(true);
+};
+
+// The core impact system already samples the procedural strike limb for its own
+// contact flash. TPS Hype used a separate root-interpolated event position, so
+// its ring/burst could appear lower than the fist or foot that visibly landed.
+// Reuse the same authored visual contact point for Hype only. The original
+// HitEvent remains untouched for audio, damage, hitstop and all gameplay logic.
+const baseHypeHit = TpsHypeDirector.prototype.hit;
+TpsHypeDirector.prototype.hit = function hitAtMotionContact(
+  event: HitEvent,
+  camera: Parameters<TpsHypeDirector["hit"]>[1],
+): void {
+  const attacker = fighters.get(event.attacker);
+  const contact = event.move.visualContact;
+  if (!attacker || !attacker.visual.root.userData.combatTps || !contact || contact === "BODY") {
+    baseHypeHit.call(this, event, camera);
+    return;
+  }
+
+  const world = getVisualContactPoint(attacker.visual, contact);
+  if (![world.x, world.y, world.z].every(Number.isFinite)) {
+    baseHypeHit.call(this, event, camera);
+    return;
+  }
+
+  attacker.visual.root.userData.tpsHypeContactMode = "MOTION_CONTACT";
+  attacker.visual.root.userData.tpsHypeContactHeight = world.y;
+  attacker.visual.root.userData.tpsHypeContactPoint = { x: world.x, y: world.y, z: world.z };
+  baseHypeHit.call(this, {
+    ...event,
+    position: { x: world.x, y: world.y, z: world.z },
+  }, camera);
 };
 
 export function trackMotionFighter(fighter: FighterRuntime): MotionReactionState {

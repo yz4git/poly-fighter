@@ -274,7 +274,9 @@ export class TpsHypeDirector {
       }
     }
 
-    const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 52 : 47;
+    // Match the final TPS camera's compact-landscape lens so the hype director
+    // does not pull the camera back toward the retired 52-degree framing.
+    const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     if (Math.abs(this.fovOffset) > 0.01) {
       camera.fov = THREE.MathUtils.clamp(baseFov + this.fovOffset, 38, 58);
       camera.updateProjectionMatrix();
@@ -310,7 +312,7 @@ export class TpsHypeDirector {
     this.cameraSide = 0;
     this.cameraRoll = 0;
     this.cameraShake = 0;
-    const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 52 : 47;
+    const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     camera.fov = baseFov;
     camera.updateProjectionMatrix();
     for (const ring of this.rings) {

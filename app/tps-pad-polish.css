@@ -1,0 +1,54 @@
+/* TPS pad visual polish: keep the proven touch geometry and Pointer Events intact,
+   but reduce the glossy orb look so the left control matches the flatter fight HUD. */
+.virtual-pad {
+  opacity: .78;
+  background: rgba(6, 20, 37, .58);
+  border-color: rgba(126, 210, 246, .34);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .24), inset 0 0 0 1px rgba(92, 190, 231, .10);
+  transition: opacity .08s ease, border-color .08s ease, background-color .08s ease;
+}
+
+.virtual-pad-ring {
+  inset: 11%;
+  border-color: rgba(116, 205, 244, .22);
+}
+
+.virtual-pad-sector {
+  inset: 16%;
+  opacity: .34;
+  background: repeating-conic-gradient(
+    from -22.5deg,
+    rgba(94, 197, 238, .09) 0 43deg,
+    rgba(94, 197, 238, 0) 43deg 45deg
+  );
+}
+
+.virtual-pad-knob {
+  background: #215b7d;
+  border-color: rgba(190, 235, 252, .58);
+  box-shadow: 0 0 0 4px rgba(39, 117, 156, .18), inset 0 0 0 1px rgba(221, 248, 255, .18);
+}
+
+.virtual-pad-label {
+  color: rgba(209, 238, 250, .32);
+}
+
+.virtual-pad:active {
+  opacity: 1;
+  background: rgba(9, 31, 52, .76);
+  border-color: rgba(126, 221, 255, .62);
+}
+
+.virtual-pad:active .virtual-pad-ring {
+  border-color: rgba(141, 225, 255, .48);
+}
+
+.virtual-pad:active .virtual-pad-sector {
+  opacity: .52;
+}
+
+.virtual-pad:active .virtual-pad-knob {
+  background: #3285ad;
+  border-color: rgba(222, 249, 255, .82);
+  box-shadow: 0 0 0 4px rgba(73, 187, 231, .24), 0 0 16px rgba(79, 205, 249, .18);
+}

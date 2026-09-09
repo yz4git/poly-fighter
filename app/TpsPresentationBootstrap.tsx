@@ -9,6 +9,7 @@ import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact
 import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
 import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
+import { installTpsImpactBeatSyncPresentation } from "@/src/game/tps-impact-beat-sync";
 import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact-followthrough";
 import { installTpsImpactLensPulsePresentation } from "@/src/game/tps-impact-lens-pulse";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
@@ -39,6 +40,7 @@ installTpsCloseNeutralLanePresentation();
 installTpsLatestImpactWavePresentation();
 installTpsFinalImpactVfxReadability();
 installTpsImpactLensPulsePresentation();
+installTpsImpactBeatSyncPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

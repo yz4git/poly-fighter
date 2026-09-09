@@ -235,3 +235,20 @@
 .tps-input-hint {
   display: none;
 }
+
+/* Fighter names and color-coded health already identify both sides at a glance.
+   The tiny role labels were unreadable on iPhone landscape and added visual
+   noise above the bars. Keep the DOM text for semantics, but ship only the
+   large KAIRO / SERA names in the live combat HUD and preserve their inward
+   alignment around the central round timer. */
+.fight-hud .hud-name > span {
+  display: none;
+}
+
+.fight-hud .left-player .hud-name {
+  justify-content: flex-end;
+}
+
+.fight-hud .right-player .hud-name {
+  justify-content: flex-start;
+}

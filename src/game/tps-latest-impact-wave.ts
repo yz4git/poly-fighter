@@ -9,8 +9,9 @@ type ImpactWaveRuntime = {
   baseOpacity: number;
 };
 
-type GraphicsRuntime = TpsGraphicsDirector & {
+type GraphicsRuntime = {
   waves?: ImpactWaveRuntime[];
+  group: THREE.Group;
 };
 
 let installed = false;

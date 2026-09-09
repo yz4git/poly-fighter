@@ -8,6 +8,14 @@ type ImpactFollowthroughState = {
   rotationX: number;
   rotationY: number;
   rotationZ: number;
+  rootOffsetX: number;
+  rootOffsetZ: number;
+  leftThighX: number;
+  leftShinX: number;
+  leftFootX: number;
+  rightThighX: number;
+  rightShinX: number;
+  rightFootX: number;
   recoverySeconds: number;
   recoveryDuration: number;
   recoveryFactor: number;
@@ -27,6 +35,14 @@ function ensureState(fighter: FighterRuntime): ImpactFollowthroughState {
     rotationX: 0,
     rotationY: 0,
     rotationZ: 0,
+    rootOffsetX: 0,
+    rootOffsetZ: 0,
+    leftThighX: 0,
+    leftShinX: 0,
+    leftFootX: 0,
+    rightThighX: 0,
+    rightShinX: 0,
+    rightFootX: 0,
     recoverySeconds: 0,
     recoveryDuration: 0,
     recoveryFactor: 0,
@@ -43,18 +59,40 @@ function importedRuntimeHost(fighter: FighterRuntime): THREE.Object3D | null {
 }
 
 function removeImpactFollowthrough(fighter: FighterRuntime, state: ImpactFollowthroughState): void {
+  const root = fighter.visual.root;
+  const bones = fighter.visual.rig.bones;
   if (state.host) {
     state.host.position.y -= state.positionY;
     state.host.rotation.x -= state.rotationX;
     state.host.rotation.y -= state.rotationY;
     state.host.rotation.z -= state.rotationZ;
   }
+
+  root.position.x -= state.rootOffsetX;
+  root.position.z -= state.rootOffsetZ;
+  bones.leftThigh.rotation.x -= state.leftThighX;
+  bones.leftShin.rotation.x -= state.leftShinX;
+  bones.leftFoot.rotation.x -= state.leftFootX;
+  bones.rightThigh.rotation.x -= state.rightThighX;
+  bones.rightShin.rotation.x -= state.rightShinX;
+  bones.rightFoot.rotation.x -= state.rightFootX;
+
   state.host = null;
   state.positionY = 0;
   state.rotationX = 0;
   state.rotationY = 0;
   state.rotationZ = 0;
-  fighter.visual.root.userData.tpsImpactFollowthrough = 0;
+  state.rootOffsetX = 0;
+  state.rootOffsetZ = 0;
+  state.leftThighX = 0;
+  state.leftShinX = 0;
+  state.leftFootX = 0;
+  state.rightThighX = 0;
+  state.rightShinX = 0;
+  state.rightFootX = 0;
+  root.userData.tpsImpactFollowthrough = 0;
+  root.userData.tpsImpactFootwork = 0;
+  root.userData.tpsImpactFootworkStep = 0;
 }
 
 function reactionScale(kind: FighterRuntime["reactionKind"]): number {
@@ -76,6 +114,13 @@ function reactionRecoveryDuration(kind: FighterRuntime["reactionKind"]): number 
   if (kind === "HEAVY") return 0.15;
   if (kind === "MID") return 0.11;
   return 0.08;
+}
+
+function reactionFootworkScale(kind: FighterRuntime["reactionKind"]): number {
+  if (kind === "COUNTER") return 1;
+  if (kind === "HEAVY") return 0.88;
+  if (kind === "MID") return 0.54;
+  return 0.30;
 }
 
 function applyHostRecoil(
@@ -110,8 +155,75 @@ function applyHostRecoil(
   root.updateMatrixWorld(true);
 }
 
+function applyLowerBodyWeightTransfer(
+  fighter: FighterRuntime,
+  opponent: FighterRuntime,
+  state: ImpactFollowthroughState,
+  factor: number,
+  stepRelease: number,
+): void {
+  const root = fighter.visual.root;
+  const bones = fighter.visual.rig.bones;
+  const brace = THREE.MathUtils.clamp(factor * reactionFootworkScale(fighter.reactionKind), 0, 1.05);
+  if (brace <= 1e-4) return;
+
+  // Keep the frozen contact frame planted. Once hit-stop releases, the rendered
+  // body is allowed to give a few centimetres away from the attacker. This is a
+  // visual weight transfer only: FighterRuntime.position, velocity, collision,
+  // reach and hitboxes are untouched.
+  const away = fighter.position.clone().sub(opponent.position);
+  away.y = 0;
+  if (away.lengthSq() <= 1e-6) away.set(-fighter.facing, 0, 0);
+  else away.normalize();
+  const step = 0.0155 * root.scale.x * brace * THREE.MathUtils.clamp(stepRelease, 0, 1);
+  state.rootOffsetX = away.x * step;
+  state.rootOffsetZ = away.z * step;
+  root.position.x += state.rootOffsetX;
+  root.position.z += state.rootOffsetZ;
+
+  // One leg catches the load while the other yields. Keeping the offsets small
+  // preserves the authored mocap silhouette but removes the old symmetric,
+  // mannequin-like lower body during strong recoil and the first recovery beat.
+  const supportLeft = fighter.reactionSide === "LEFT";
+  const supportThigh = 0.040 * brace;
+  const supportShin = -0.078 * brace;
+  const supportFoot = 0.032 * brace;
+  const flowThigh = -0.018 * brace;
+  const flowShin = 0.031 * brace;
+  const flowFoot = -0.014 * brace;
+
+  if (supportLeft) {
+    state.leftThighX = supportThigh;
+    state.leftShinX = supportShin;
+    state.leftFootX = supportFoot;
+    state.rightThighX = flowThigh;
+    state.rightShinX = flowShin;
+    state.rightFootX = flowFoot;
+  } else {
+    state.rightThighX = supportThigh;
+    state.rightShinX = supportShin;
+    state.rightFootX = supportFoot;
+    state.leftThighX = flowThigh;
+    state.leftShinX = flowShin;
+    state.leftFootX = flowFoot;
+  }
+
+  bones.leftThigh.rotation.x += state.leftThighX;
+  bones.leftShin.rotation.x += state.leftShinX;
+  bones.leftFoot.rotation.x += state.leftFootX;
+  bones.rightThigh.rotation.x += state.rightThighX;
+  bones.rightShin.rotation.x += state.rightShinX;
+  bones.rightFoot.rotation.x += state.rightFootX;
+
+  root.userData.tpsImpactFootwork = brace;
+  root.userData.tpsImpactFootworkStep = step;
+  root.userData.tpsImpactFootworkSupport = supportLeft ? "LEFT" : "RIGHT";
+  root.updateMatrixWorld(true);
+}
+
 function applyImpactFollowthrough(
   fighter: FighterRuntime,
+  opponent: FighterRuntime,
   state: ImpactFollowthroughState,
   timeSeconds: number,
 ): void {
@@ -157,6 +269,13 @@ function applyImpactFollowthrough(
     root.userData.tpsImpactRecoverySeconds = state.recoverySeconds;
     root.userData.tpsImpactRecoveryKind = fighter.reactionKind;
     applyHostRecoil(fighter, state, host, factor);
+    applyLowerBodyWeightTransfer(
+      fighter,
+      opponent,
+      state,
+      factor,
+      fighter.hitStop > 0 ? 0.34 : 1,
+    );
     return;
   }
 
@@ -181,7 +300,19 @@ function applyImpactFollowthrough(
   root.userData.tpsImpactRecoverySeconds = state.recoverySeconds;
   root.userData.tpsImpactRecoveryFactor = factor;
 
-  if (factor > 1e-4) applyHostRecoil(fighter, state, host, factor);
+  if (factor > 1e-4) {
+    applyHostRecoil(fighter, state, host, factor);
+    // Legs settle a little more slowly than the torso. The defender therefore
+    // looks as if they regain their base under the body instead of instantly
+    // returning to the idle stance the moment hitstun ends.
+    applyLowerBodyWeightTransfer(
+      fighter,
+      opponent,
+      state,
+      THREE.MathUtils.clamp(factor * 2.2, 0, 1),
+      settle,
+    );
+  }
 }
 
 export function installTpsImpactFollowthroughPresentation(): void {
@@ -197,6 +328,6 @@ export function installTpsImpactFollowthroughPresentation(): void {
     const state = ensureState(fighter);
     removeImpactFollowthrough(fighter, state);
     baseUpdate.call(this, fighter, opponent, timeSeconds);
-    applyImpactFollowthrough(fighter, state, timeSeconds);
+    applyImpactFollowthrough(fighter, opponent, state, timeSeconds);
   };
 }

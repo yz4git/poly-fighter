@@ -1,5 +1,6 @@
 "use client";
 
+import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
 import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neutral-lane";
@@ -16,6 +17,7 @@ import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-bo
 import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph-handoff";
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
+installTpsArenaSpectaclePresentation();
 installTpsGuardClashPresentation();
 installTpsThrowStagingPresentation();
 installTpsQuickstepBodyPresentation();

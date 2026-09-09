@@ -252,3 +252,11 @@
 .fight-hud .right-player .hud-name {
   justify-content: flex-start;
 }
+
+/* Live tactical decisions already move onto the large STEP / ATTACK buttons.
+   Reserve the small upper status badge for outcome beats that deserve a second
+   read (combo and finish states), rather than keeping a diagnostic caption on
+   screen throughout neutral, windup, incoming, range and punish windows. */
+.tps-badge.tps-face-safe-badge:not(.tps-combo-badge):not(.tps-ko-badge) {
+  display: none;
+}

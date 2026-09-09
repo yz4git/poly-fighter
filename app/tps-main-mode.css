@@ -227,3 +227,11 @@
     font-size: 15px;
   }
 }
+
+/* The two-button UI and contextual coach already teach the live action. Keeping
+   the old all-mechanics strip on screen made every iPhone battle look like a
+   debug build, so retain the DOM for audit/accessibility hooks but remove the
+   persistent visual noise from the shipped combat surface. */
+.tps-input-hint {
+  display: none;
+}

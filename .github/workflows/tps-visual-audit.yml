@@ -55,7 +55,18 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Install Japanese fonts for training screenshots
         run: |
-          sudo apt-get update -qq
+          if fc-list :lang=ja | grep -q .; then
+            echo "Japanese font already available"
+            exit 0
+          fi
+          # The hosted runner also registers Google's Chrome apt repository.
+          # It can briefly publish a Release file before its Packages mirror has
+          # converged, producing an unrelated Hash Sum mismatch. Refresh only the
+          # Ubuntu archive here; Chrome/ChromeDriver are already installed.
+          sudo apt-get update -qq \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            -o APT::Get::List-Cleanup="0"
           sudo apt-get install -y fonts-noto-cjk
       - name: Build production preview
         run: npm run build

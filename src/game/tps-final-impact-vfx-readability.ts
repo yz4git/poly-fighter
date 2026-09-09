@@ -20,7 +20,8 @@ type RuntimeBurst = {
   baseOpacity: number;
 };
 
-type HypeRuntime = TpsHypeDirector & {
+type HypeRuntime = {
+  readonly group: THREE.Group;
   rings: RuntimeRing[];
   bursts: RuntimeBurst[];
 };

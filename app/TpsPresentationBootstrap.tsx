@@ -7,6 +7,7 @@ import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkic
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact-followthrough";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
+import { installTpsLowKickOpenLinePresentation } from "@/src/game/tps-lowkick-open-line";
 import { installTpsPowerBodyDrivePresentation } from "@/src/game/tps-power-body-drive";
 import { installTpsPunishReadyPresentation } from "@/src/game/tps-punish-ready";
 import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-body";
@@ -25,6 +26,7 @@ installTpsCounterSlipBoostPresentation();
 installTpsImpactFollowthroughPresentation();
 installTpsFrontKickOpenLinePresentation();
 installTpsPowerBodyDrivePresentation();
+installTpsLowKickOpenLinePresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

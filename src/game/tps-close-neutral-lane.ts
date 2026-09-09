@@ -17,6 +17,8 @@ const CLOSE_NEUTRAL_STATES = new Set<FighterRuntime["state"]>([
   "CROUCH",
   "GUARD",
 ]);
+const CLOSE_NEUTRAL_MAX_LANE = 0.062;
+const CLOSE_NEUTRAL_MAX_YAW = 0.024;
 
 function ensureState(fighter: FighterRuntime): CloseNeutralLaneState {
   let state = states.get(fighter);
@@ -91,8 +93,12 @@ function applyCloseNeutralLane(
 
   const scale = root.scale.x;
   state.host = host;
-  state.positionX = 0.045 * scale * factor;
-  state.rotationY = 0.018 * factor;
+  // The first production pass proved the lane concept but remained too subtle
+  // at the closest audited neutral spacing. Increase only the final imported
+  // host separation enough to preserve two distinct shoulder/torso silhouettes;
+  // gameplay roots, contact distance and floor markers remain untouched.
+  state.positionX = CLOSE_NEUTRAL_MAX_LANE * scale * factor;
+  state.rotationY = CLOSE_NEUTRAL_MAX_YAW * factor;
   host.position.x += state.positionX;
   host.rotation.y += state.rotationY;
 

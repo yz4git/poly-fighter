@@ -7,6 +7,7 @@ import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neu
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
 import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
+import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact-followthrough";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
@@ -18,6 +19,7 @@ import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
 installTpsArenaSpectaclePresentation();
+installTpsGroundingReadabilityPresentation();
 installTpsGuardClashPresentation();
 installTpsThrowStagingPresentation();
 installTpsQuickstepBodyPresentation();

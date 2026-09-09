@@ -2,6 +2,7 @@
 
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
+import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neutral-lane";
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
@@ -27,6 +28,7 @@ installTpsImpactFollowthroughPresentation();
 installTpsFrontKickOpenLinePresentation();
 installTpsPowerBodyDrivePresentation();
 installTpsLowKickOpenLinePresentation();
+installTpsCloseNeutralLanePresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

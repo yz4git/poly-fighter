@@ -153,51 +153,53 @@ function applyKickContactShape(
 
   const scale = root.scale.x;
   const side = suffix === "l" ? -1 : 1;
-  const attackerPelvis = model.getObjectByName("pelvis")?.getWorldPosition(new THREE.Vector3()) ?? currentHip.clone();
   const targetTorso = bodyTarget.pelvis.clone().lerp(bodyTarget.chest, moveId === "kick" ? 0.50 : 0.82);
-  const away = attackerPelvis.clone().sub(targetTorso);
-  away.y = 0;
-  if (away.lengthSq() > 1e-6) away.normalize();
-  else away.set(0, 0, 1);
 
   let requested: THREE.Vector3;
   let targetBlend: number;
   if (moveId === "kick") {
-    // The authored reference kick is intentionally athletic/high. In the close
-    // TPS camera it overshoots the MID gameplay target and the boot exits past
-    // the opponent's shoulder. Draw the visible boot toward the near surface of
-    // the lower chest instead: a front kick, not a high side kick. The target is
-    // only visual; CombatSystem continues using the canonical MID hitbox.
-    const surface = targetTorso.addScaledVector(away, 0.10 * scale);
-    targetBlend = 0.58 * factor;
-    requested = currentFoot.clone().lerp(surface, targetBlend);
-    state.hostX = -side * 0.030 * scale * factor;
-    state.hostYaw = -side * 0.025 * factor;
-  } else {
-    // Rising Flare should travel UP through the opponent rather than extend as a
-    // flat side kick. Keep most of the authored forward/depth position, pull a
-    // little toward the opponent's centreline, and add clear vertical travel.
-    // This preserves the Foundry windup and support foot while steepening only
-    // the strike beat.
+    // Keep the authored forward reach visible instead of magnetizing the boot
+    // into the opponent. The review showed that the source front kick already
+    // has a good line; its problem is that the contact beat sits too high and
+    // slightly outside the target. Lower it toward the MID band and nudge only
+    // a small amount toward the target centreline.
     requested = currentFoot.clone();
-    requested.x = THREE.MathUtils.lerp(currentFoot.x, targetTorso.x, 0.22 * factor);
-    requested.z = THREE.MathUtils.lerp(currentFoot.z, targetTorso.z, 0.10 * factor);
-    requested.y += 0.16 * scale * factor;
-    targetBlend = 1;
-    state.hostX = -side * 0.018 * scale * factor;
-    state.hostYaw = side * 0.018 * factor;
+    requested.x = THREE.MathUtils.lerp(currentFoot.x, targetTorso.x, 0.10 * factor);
+    requested.z = THREE.MathUtils.lerp(currentFoot.z, targetTorso.z, 0.07 * factor);
+    requested.y -= 0.070 * scale * factor;
+    targetBlend = 0.10 * factor;
+    // A small body-only retreat opens the hip/knee silhouette while the IK keeps
+    // the boot on its authored contact lane. Keep this intentionally modest so
+    // the planted foot still visually belongs to its floor marker.
+    state.hostX = -side * 0.012 * scale * factor;
+    state.hostYaw = -side * 0.010 * factor;
+  } else {
+    // Rising Flare needs a steeper upward read, but the first review pass proved
+    // that a large lift turns it into an implausible head-overhead kick. Preserve
+    // almost all authored depth/reach and add only a controlled upward finish.
+    requested = currentFoot.clone();
+    requested.x = THREE.MathUtils.lerp(currentFoot.x, targetTorso.x, 0.08 * factor);
+    requested.z = THREE.MathUtils.lerp(currentFoot.z, targetTorso.z, 0.04 * factor);
+    requested.y += 0.040 * scale * factor;
+    targetBlend = 0.08 * factor;
+    state.hostX = -side * 0.008 * scale * factor;
+    state.hostYaw = side * 0.008 * factor;
   }
 
   host.position.x += state.hostX;
   host.rotation.y += state.hostYaw;
   root.updateMatrixWorld(true);
 
-  // Use the authored knee as the pole seed, biased slightly outward/up so the
-  // solve cannot flip the knee plane. Restore the authored boot orientation
-  // after changing thigh/calf direction to avoid ankle/toe twisting.
+  // Use the authored knee as the pole seed, biased slightly upward along its own
+  // bend plane. Restore the authored boot orientation after the thigh/calf solve
+  // so the toe never corkscrews when the target height changes.
+  const bendDirection = currentKnee.clone().sub(currentHip);
+  bendDirection.y = 0;
+  if (bendDirection.lengthSq() < 1e-8) bendDirection.set(1, 0, 0);
+  bendDirection.normalize();
   const pole = currentKnee.clone()
-    .add(new THREE.Vector3(0, 0.12 * scale, 0))
-    .addScaledVector(currentKnee.clone().sub(currentHip).setY(0).normalize(), 0.04 * scale);
+    .add(new THREE.Vector3(0, 0.08 * scale, 0))
+    .addScaledVector(bendDirection, 0.03 * scale);
   solveCombatLimb(leg.thigh, leg.calf, leg.foot, requested, pole);
   setWorldQuaternion(leg.foot, footWorld);
   model.updateMatrixWorld(true);

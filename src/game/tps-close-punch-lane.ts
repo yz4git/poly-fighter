@@ -9,6 +9,13 @@ type ClosePunchLaneState = {
   rotationZ: number;
 };
 
+type ClosePunchProfile = {
+  lane: number;
+  yaw: number;
+  roll: number;
+  direction: 1 | -1;
+};
+
 const states = new WeakMap<FighterRuntime, ClosePunchLaneState>();
 const CLOSE_PUNCH_MOVES = new Set(["jab", "straight", "bodyBlow"]);
 let installed = false;
@@ -44,12 +51,13 @@ function removeClosePunchLane(fighter: FighterRuntime, state: ClosePunchLaneStat
   fighter.visual.root.userData.tpsClosePunchLane = 0;
 }
 
-function moveProfile(moveId: string): { lane: number; yaw: number; roll: number } {
-  if (moveId === "bodyBlow") return { lane: 0.044, yaw: 0.090, roll: 0.020 };
-  // Cross/straight drives the rear shoulder deepest into the opponent from the
-  // TPS camera, so it needs the widest presentation lane of the three punches.
-  if (moveId === "straight") return { lane: 0.052, yaw: 0.105, roll: 0.014 };
-  return { lane: 0.032, yaw: 0.062, roll: 0.010 };
+function moveProfile(moveId: string): ClosePunchProfile {
+  if (moveId === "bodyBlow") return { lane: 0.044, yaw: 0.090, roll: 0.020, direction: 1 };
+  // The rear-hand cross rotates through the target line in the opposite screen
+  // direction from the lead-hand punches. Mirror the host lane for this move;
+  // merely increasing the lead-hand sign makes the two chests overlap more.
+  if (moveId === "straight") return { lane: 0.044, yaw: 0.085, roll: 0.012, direction: -1 };
+  return { lane: 0.032, yaw: 0.062, roll: 0.010, direction: 1 };
 }
 
 function applyClosePunchLane(
@@ -95,6 +103,7 @@ function applyClosePunchLane(
   const side = contactSide(move.visualContact);
   const profile = moveProfile(move.id);
   const scale = root.scale.x;
+  const screenDirection = profile.direction;
 
   // Keep the authored fist/elbow path authoritative. Move only the imported
   // presentation host a few centimetres across the target line and open the
@@ -103,9 +112,9 @@ function applyClosePunchLane(
   // still crosses that strip into contact. Runtime position, reach, hitboxes and
   // lock-on/camera targeting remain untouched.
   state.host = host;
-  state.positionX = -side * profile.lane * scale * factor;
-  state.rotationY = side * profile.yaw * factor;
-  state.rotationZ = -side * profile.roll * factor;
+  state.positionX = -side * screenDirection * profile.lane * scale * factor;
+  state.rotationY = side * screenDirection * profile.yaw * factor;
+  state.rotationZ = -side * screenDirection * profile.roll * factor;
 
   host.position.x += state.positionX;
   host.rotation.y += state.rotationY;
@@ -118,6 +127,7 @@ function applyClosePunchLane(
   root.userData.tpsClosePunchLaneYaw = state.rotationY;
   root.userData.tpsClosePunchLaneRoll = state.rotationZ;
   root.userData.tpsClosePunchLaneContactSide = side;
+  root.userData.tpsClosePunchLaneDirection = screenDirection;
   root.updateMatrixWorld(true);
 }
 

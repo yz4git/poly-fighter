@@ -5,6 +5,7 @@ import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
 import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neutral-lane";
+import { installTpsClosePunchLanePresentation } from "@/src/game/tps-close-punch-lane";
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsCounterattackHandoffPresentation } from "@/src/game/tps-counterattack-handoff";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
@@ -39,6 +40,7 @@ installTpsFrontKickOpenLinePresentation();
 installTpsPowerBodyDrivePresentation();
 installTpsLowKickOpenLinePresentation();
 installTpsCloseNeutralLanePresentation();
+installTpsClosePunchLanePresentation();
 installTpsLatestImpactWavePresentation();
 installTpsFinalImpactVfxReadability();
 installTpsImpactLensPulsePresentation();

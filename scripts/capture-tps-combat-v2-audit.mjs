@@ -105,6 +105,10 @@ const resetSnippet = `
   game.playerPerfectEvadeTicks = 0;
   game.playerInterceptTicks = 0;
   game.playerReversalTicks = 0;
+  game.playerStepThreatWasJust = false;
+  game.playerJustStepTicks = 0;
+  game.playerBreakCounterTicks = 0;
+  game.playerBreakCounterAttackTicks = 0;
   game.playerComboStage = 0;
   game.playerComboGraceTicks = 0;
   game.playerAttackQueued = false;
@@ -236,19 +240,57 @@ try {
     throw new Error(`CPU adaptation probe failed: ${JSON.stringify(adaptationProbe)}`);
   }
 
+  const earlyStep = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    ${resetSnippet}
+    game.p1.position.set(0, 0, 0.72);
+    game.p2.position.set(0, 0, -0.72);
+    game.enemyDirectorPendingMove = 'jab';
+    game.enemyDirectorTelegraphTicks = 10;
+    game.enemyDirectorTelegraphTotalTicks = 18;
+    game.enemyDirectorDecision = {
+      intent: 'JAB', holdTicks: 1, telegraphTicks: 18,
+      reason: 'watch-step-audit', comebackMercy: 0, pressure: 0,
+    };
+    game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 10 / 18;
+    game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
+    game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
+    const threatBefore = game.enemyThreatStatus();
+    game.press('right', 'watch-step-side');
+    game.press('guard', 'watch-step');
+    game.step();
+    game.release('guard', 'watch-step');
+    game.release('right', 'watch-step-side');
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return {
+      threatBefore,
+      tracked: game.playerStepThreatTicks,
+      justStepTicks: game.playerJustStepTicks,
+      breakCounterTicks: game.playerBreakCounterTicks,
+      perfectEvades: game.trainingProgress.perfectEvades,
+    };
+  `);
+  await delay(60);
+  if (earlyStep?.threatBefore?.timing !== 'WATCH' || earlyStep?.tracked !== 0 || earlyStep?.justStepTicks !== 0 || earlyStep?.breakCounterTicks !== 0 || earlyStep?.perfectEvades !== 0) {
+    throw new Error(`EARLY WATCH STEP incorrectly earned reward: ${JSON.stringify(earlyStep)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-watch-step.png`);
+
   const reactableStep = await execute(sessionId, `${gameLookup}
     const game = findGame();
     ${resetSnippet}
     game.p1.position.set(0, 0, 0.72);
     game.p2.position.set(0, 0, -0.72);
     game.enemyDirectorPendingMove = 'jab';
-    game.enemyDirectorTelegraphTicks = 12;
+    game.enemyDirectorTelegraphTicks = 6;
     game.enemyDirectorTelegraphTotalTicks = 18;
     game.enemyDirectorDecision = {
       intent: 'JAB', holdTicks: 1, telegraphTicks: 18,
       reason: 'reactable-step-audit', comebackMercy: 0, pressure: 0,
     };
-    game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 12 / 18;
+    game.p2.visual.root.userData.tpsEnemyTelegraphProgress = 1 - 6 / 18;
     game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
     game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
     const threatBefore = game.enemyThreatStatus();
@@ -274,11 +316,14 @@ try {
       perfectEvades: game.trainingProgress.perfectEvades,
       p1Health: game.p1.health,
       reversalTicks: game.playerReversalTicks,
+      justStepTicks: game.playerJustStepTicks,
+      breakCounterTicks: game.playerBreakCounterTicks,
+      timing: game.enemyThreatStatus().timing,
       beat: game.combatBeatLabel,
     };
   `);
   await delay(60);
-  if (!reactableStep?.threatBefore?.incoming || reactableStep?.threatBefore?.windup || reactableStep?.trackedBeforeAttack <= 0 || reactableStep?.perfectEvades < 1 || reactableStep?.p1Health < 100) {
+  if (!reactableStep?.threatBefore?.incoming || reactableStep?.threatBefore?.timing !== 'SLIP' || reactableStep?.trackedBeforeAttack <= 0 || reactableStep?.perfectEvades < 1 || reactableStep?.breakCounterTicks <= 0 || reactableStep?.beat !== 'JUST STEP' || reactableStep?.p1Health < 100) {
     throw new Error(`REACTABLE STEP browser probe failed: ${JSON.stringify(reactableStep)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-reactable-step.png`);
@@ -361,7 +406,7 @@ try {
     game.step();
     const move = game.p1.currentMove?.id ?? null;
     let attackSteps = 1;
-    while (attackSteps < 55 && game.p2.visual.root.userData.tpsReactionType !== 'REVERSAL') {
+    while (attackSteps < 55 && game.p2.visual.root.userData.tpsReactionType !== 'BREAK_COUNTER') {
       game.renderTime += 1 / 60;
       game.step();
       attackSteps += 1;
@@ -383,7 +428,7 @@ try {
     };
   `);
   await delay(60);
-  if (!reversal?.bufferedDuringStep || !reversal?.didNotCancelStep || reversal?.earnedWindow <= 0 || reversal?.move !== 'counter' || reversal?.reaction !== 'REVERSAL' || reversal?.p2Health >= 100) {
+  if (!reversal?.bufferedDuringStep || !reversal?.didNotCancelStep || reversal?.earnedWindow <= 0 || reversal?.move !== 'counter' || reversal?.reaction !== 'BREAK_COUNTER' || reversal?.p2Health >= 100) {
     throw new Error(`REVERSAL browser probe failed: ${JSON.stringify(reversal)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-v2-reversal.png`);
@@ -488,7 +533,7 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/tps-training-practice.png`);
 
-  const report = { viewport, adaptationProbe, intercept, reversal, finalImpact, trainingProbe, practiceReset, trainingLayout, ui: {
+  const report = { viewport, adaptationProbe, earlyStep, justStep: reactableStep, intercept, breakCounter: reversal, finalImpact, trainingProbe, practiceReset, trainingLayout, ui: {
     stepButton: uiProbe.stepButton,
     attackButton: uiProbe.attackButton,
     touchActionLabels: uiProbe.touchActionLabels,

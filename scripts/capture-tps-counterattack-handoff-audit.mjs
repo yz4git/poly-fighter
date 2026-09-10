@@ -162,15 +162,26 @@ async function captureScenario(sessionId, moveId, fileStem) {
       moveTick: game.p1.moveTick,
     };
 
-    // Return to the first startup beat for the visual artifact. The bridge is
-    // started again from the still-live recovery marker by re-authoring the same
-    // one-frame handoff deterministically.
-    game.p1.state = 'IDLE';
+    // Re-author HIT -> one ready frame -> ATTACK so the PNG itself captures the
+    // live bridge rather than a fresh attack after the numeric probe has already
+    // consumed the recovery state.
     game.p1.currentMove = null;
     game.p1.moveTick = 0;
+    game.p1.setHitReactionVisual('HEAVY', 'RIGHT', false);
+    game.p1.state = 'HIT';
+    game.p1.hitStop = 0;
+    game.p1.hitStun = 2;
+    for (let frame = 0; frame < 2; frame += 1) {
+      renderPair();
+      game.p1.hitStun = Math.max(0, game.p1.hitStun - 1);
+      game.p1.stateMachine.tick();
+    }
+    game.p1.state = 'IDLE';
     renderPair();
-    game.p1.beginMove(moveId);
+    if (!game.p1.beginMove(moveId)) return { error: 'repeat-begin-move-failed', moveId, state: game.p1.state };
     renderPair();
+    const captureFactor = Number(game.p1.visual.root.userData.tpsCounterattackHandoff ?? 0);
+
     for (let frame = 0; frame < 18; frame += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
@@ -187,6 +198,7 @@ async function captureScenario(sessionId, moveId, fileStem) {
       firstFrame,
       middleFrame,
       releaseFrame,
+      captureFactor,
       simulationDrift,
       leftFootY,
       rightFootY,
@@ -208,13 +220,16 @@ async function captureScenario(sessionId, moveId, fileStem) {
   if (probe.releaseFrame.factor > 1e-4 || probe.releaseFrame.move !== moveId) {
     throw new Error(`TPS counterattack handoff survived past release point: ${JSON.stringify(probe)}`);
   }
+  if (!(probe.captureFactor > 0)) {
+    throw new Error(`TPS counterattack PNG is not on a live handoff frame: ${JSON.stringify(probe)}`);
+  }
   if (probe.actualState !== 'ATTACK' || probe.actualMove !== moveId) {
     throw new Error(`TPS counterattack authored move lost ownership: ${JSON.stringify(probe)}`);
   }
   if (!(probe.simulationDrift <= 1e-6)) {
     throw new Error(`TPS counterattack presentation changed simulation position: ${JSON.stringify(probe)}`);
   }
-  for (const value of [probe.leftFootY, probe.rightFootY, probe.firstFrame.factor, probe.middleFrame.factor, probe.releaseFrame.factor]) {
+  for (const value of [probe.leftFootY, probe.rightFootY, probe.firstFrame.factor, probe.middleFrame.factor, probe.releaseFrame.factor, probe.captureFactor]) {
     if (!Number.isFinite(value)) throw new Error(`TPS counterattack handoff produced non-finite output: ${JSON.stringify(probe)}`);
   }
 

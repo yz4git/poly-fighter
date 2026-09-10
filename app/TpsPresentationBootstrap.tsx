@@ -5,6 +5,7 @@ import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfis
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
 import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neutral-lane";
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
+import { installTpsCounterattackHandoffPresentation } from "@/src/game/tps-counterattack-handoff";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
 import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
 import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
@@ -41,6 +42,7 @@ installTpsLatestImpactWavePresentation();
 installTpsFinalImpactVfxReadability();
 installTpsImpactLensPulsePresentation();
 installTpsImpactBeatSyncPresentation();
+installTpsCounterattackHandoffPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

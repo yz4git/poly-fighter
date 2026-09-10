@@ -19,7 +19,16 @@ type ImpactFollowthroughState = {
   recoverySeconds: number;
   recoveryDuration: number;
   recoveryFactor: number;
+  bodyHandoff: number;
+  footworkHandoff: number;
+  stepHandoff: number;
   lastTimeSeconds: number;
+};
+
+type RecoveryHandoffProfile = {
+  body: number;
+  footwork: number;
+  step: number;
 };
 
 const RECOVERY_READY_STATES = new Set(["IDLE", "WALK", "CROUCH", "GUARD", "SIDESTEP"]);
@@ -46,6 +55,9 @@ function ensureState(fighter: FighterRuntime): ImpactFollowthroughState {
     recoverySeconds: 0,
     recoveryDuration: 0,
     recoveryFactor: 0,
+    bodyHandoff: 1,
+    footworkHandoff: 1,
+    stepHandoff: 1,
     lastTimeSeconds: 0,
   };
   states.set(fighter, state);
@@ -56,6 +68,17 @@ function importedRuntimeHost(fighter: FighterRuntime): THREE.Object3D | null {
   return fighter.visual.root.children.find(
     (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
   ) ?? null;
+}
+
+function resetRecoveryHandoff(fighter: FighterRuntime, state: ImpactFollowthroughState): void {
+  state.bodyHandoff = 1;
+  state.footworkHandoff = 1;
+  state.stepHandoff = 1;
+  const data = fighter.visual.root.userData;
+  data.tpsImpactRecoveryHandoffState = null;
+  data.tpsImpactRecoveryHandoffBody = 1;
+  data.tpsImpactRecoveryHandoffFootwork = 1;
+  data.tpsImpactRecoveryHandoffStep = 1;
 }
 
 function removeImpactFollowthrough(fighter: FighterRuntime, state: ImpactFollowthroughState): void {
@@ -121,6 +144,39 @@ function reactionFootworkScale(kind: FighterRuntime["reactionKind"]): number {
   if (kind === "HEAVY") return 0.88;
   if (kind === "MID") return 0.54;
   return 0.30;
+}
+
+function recoveryHandoffProfile(state: FighterRuntime["state"]): RecoveryHandoffProfile {
+  // Idle can finish the full recoil tail because it owns no locomotion. The
+  // more a ready state depends on precise foot placement, the faster the
+  // reaction layer yields control back to that authored motion.
+  if (state === "SIDESTEP") return { body: 0.50, footwork: 0.18, step: 0.12 };
+  if (state === "WALK") return { body: 0.58, footwork: 0.30, step: 0.22 };
+  if (state === "GUARD") return { body: 0.72, footwork: 0.62, step: 0.52 };
+  if (state === "CROUCH") return { body: 0.70, footwork: 0.52, step: 0.42 };
+  return { body: 1, footwork: 1, step: 1 };
+}
+
+function updateRecoveryHandoff(
+  fighter: FighterRuntime,
+  state: ImpactFollowthroughState,
+  deltaSeconds: number,
+): void {
+  const profile = recoveryHandoffProfile(fighter.state);
+  // Exponential response avoids a one-frame pop when held input changes the
+  // fighter from HIT -> WALK/GUARD/SIDESTEP. The reaction is still visible on
+  // the first actionable frame, then the newly requested move progressively
+  // becomes authoritative over roughly the next two to four rendered frames.
+  const response = 1 - Math.exp(-Math.max(0, deltaSeconds) * 28);
+  state.bodyHandoff = THREE.MathUtils.lerp(state.bodyHandoff, profile.body, response);
+  state.footworkHandoff = THREE.MathUtils.lerp(state.footworkHandoff, profile.footwork, response);
+  state.stepHandoff = THREE.MathUtils.lerp(state.stepHandoff, profile.step, response);
+
+  const data = fighter.visual.root.userData;
+  data.tpsImpactRecoveryHandoffState = fighter.state;
+  data.tpsImpactRecoveryHandoffBody = state.bodyHandoff;
+  data.tpsImpactRecoveryHandoffFootwork = state.footworkHandoff;
+  data.tpsImpactRecoveryHandoffStep = state.stepHandoff;
 }
 
 function applyHostRecoil(
@@ -237,6 +293,7 @@ function applyImpactFollowthrough(
     state.recoverySeconds = 0;
     state.recoveryDuration = 0;
     state.recoveryFactor = 0;
+    resetRecoveryHandoff(fighter, state);
     root.userData.tpsImpactRecovery = 0;
     return;
   }
@@ -264,10 +321,17 @@ function applyImpactFollowthrough(
     state.recoveryDuration = reactionRecoveryDuration(fighter.reactionKind);
     state.recoverySeconds = state.recoveryDuration;
     state.recoveryFactor = THREE.MathUtils.clamp(residual * tier, 0, 0.32);
+    state.bodyHandoff = 1;
+    state.footworkHandoff = 1;
+    state.stepHandoff = 1;
 
     root.userData.tpsImpactRecovery = 0;
     root.userData.tpsImpactRecoverySeconds = state.recoverySeconds;
     root.userData.tpsImpactRecoveryKind = fighter.reactionKind;
+    root.userData.tpsImpactRecoveryHandoffState = "HIT";
+    root.userData.tpsImpactRecoveryHandoffBody = 1;
+    root.userData.tpsImpactRecoveryHandoffFootwork = 1;
+    root.userData.tpsImpactRecoveryHandoffStep = 1;
     applyHostRecoil(fighter, state, host, factor);
     applyLowerBodyWeightTransfer(
       fighter,
@@ -283,34 +347,44 @@ function applyImpactFollowthrough(
     state.recoverySeconds = 0;
     state.recoveryDuration = 0;
     state.recoveryFactor = 0;
+    resetRecoveryHandoff(fighter, state);
     root.userData.tpsImpactRecovery = 0;
     root.userData.tpsImpactRecoverySeconds = 0;
     return;
   }
 
-  // Once hitstun releases, preserve only the final residual recoil and let it
-  // settle over a reaction-tier-specific window. Heavy/counter hits therefore
-  // feel like the defender has to regain posture, while light hits recover fast.
+  // Once hitstun releases, preserve the residual recoil but progressively hand
+  // authored foot placement back to whatever action the player is already
+  // holding. This removes the old double-motion moment where WALK or SIDESTEP
+  // started underneath a full-strength reaction-footwork overlay.
   state.recoverySeconds = Math.max(0, state.recoverySeconds - deltaSeconds);
   const remaining = THREE.MathUtils.clamp(state.recoverySeconds / state.recoveryDuration, 0, 1);
   const settle = THREE.MathUtils.smoothstep(remaining, 0, 1);
-  const factor = state.recoveryFactor * settle;
+  updateRecoveryHandoff(fighter, state, deltaSeconds);
+
+  const bodyFactor = state.recoveryFactor * settle * state.bodyHandoff;
+  const footworkFactor = THREE.MathUtils.clamp(
+    state.recoveryFactor * 2.2 * state.footworkHandoff,
+    0,
+    1,
+  );
+  const stepRelease = settle * state.stepHandoff;
 
   root.userData.tpsImpactRecovery = settle;
   root.userData.tpsImpactRecoverySeconds = state.recoverySeconds;
-  root.userData.tpsImpactRecoveryFactor = factor;
+  root.userData.tpsImpactRecoveryFactor = bodyFactor;
 
-  if (factor > 1e-4) {
-    applyHostRecoil(fighter, state, host, factor);
-    // Legs settle a little more slowly than the torso. The defender therefore
-    // looks as if they regain their base under the body instead of instantly
-    // returning to the idle stance the moment hitstun ends.
+  if (bodyFactor > 1e-4) applyHostRecoil(fighter, state, host, bodyFactor);
+  if (footworkFactor > 1e-4) {
+    // IDLE keeps the complete planted recovery. Movement states progressively
+    // reduce only the additive reaction legs/root step, allowing their existing
+    // walk/guard/quickstep solvers to take over without a visible pose cut.
     applyLowerBodyWeightTransfer(
       fighter,
       opponent,
       state,
-      THREE.MathUtils.clamp(factor * 2.2, 0, 1),
-      settle,
+      footworkFactor,
+      stepRelease,
     );
   }
 }

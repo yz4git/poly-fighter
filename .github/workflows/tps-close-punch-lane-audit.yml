@@ -1,0 +1,70 @@
+name: POLY FIGHTER close punch lane audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/TpsPresentationBootstrap.tsx
+      - src/game/tps-close-punch-lane.ts
+      - src/game/tps-bodyblow-level-change.ts
+      - scripts/capture-tps-close-punch-lane-audit.mjs
+      - .github/workflows/tps-close-punch-lane-audit.yml
+  push:
+    branches:
+      - main
+    paths:
+      - app/TpsPresentationBootstrap.tsx
+      - src/game/tps-close-punch-lane.ts
+      - src/game/tps-bodyblow-level-change.ts
+      - scripts/capture-tps-close-punch-lane-audit.mjs
+      - .github/workflows/tps-close-punch-lane-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-close-punch.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-close-punch.log
+          exit 1
+      - name: Capture close punch readability
+        run: |
+          mkdir -p artifacts/tps-close-punch-lane
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-close-punch-lane" node scripts/capture-tps-close-punch-lane-audit.mjs
+          for image in tps-close-punch-jab tps-close-punch-straight tps-close-punch-bodyblow; do
+            test -s "artifacts/tps-close-punch-lane/${image}.png"
+            file "artifacts/tps-close-punch-lane/${image}.png" | grep -q "PNG image data"
+          done
+          test -s artifacts/tps-close-punch-lane/tps-close-punch-lane.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-close-punch-lane-audit
+          path: artifacts/tps-close-punch-lane
+          if-no-files-found: error
+          retention-days: 7

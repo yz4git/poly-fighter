@@ -94,6 +94,18 @@ async function poseMove(sessionId, moveId, stage) {
     game.p2.velocity.set(0, 0, 0);
     game.p1.facing = 1;
     game.p2.facing = -1;
+
+    // The production mixer crossfades between authored clips. Start every probe
+    // from the same fully-settled neutral and then advance the requested move at
+    // 60 Hz up to the sampled tick. Jumping directly to contact would capture a
+    // synthetic blend with the previous probe rather than an in-game frame.
+    let auditTime = performance.now() / 1000;
+    for (let settle = 0; settle < 8; settle += 1) {
+      auditTime += 1 / 60;
+      game.updateVisual(game.p1, game.p2, auditTime);
+      game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+    }
+
     if (!game.p1.beginMove(moveId)) return { error: 'begin-move-failed', moveId };
     const move = game.p1.currentMove;
     const ticks = {
@@ -101,10 +113,14 @@ async function poseMove(sessionId, moveId, stage) {
       contact: move.startup,
       recovery: Math.min(move.startup + move.active + move.recovery - 1, move.startup + move.active + 5),
     };
-    game.p1.moveTick = ticks[stage];
-    game.renderTime += 1 / 60;
-    game.updateVisual(game.p1, game.p2, game.renderTime);
-    game.updateVisual(game.p2, game.p1, game.renderTime + 0.001);
+    const targetTick = ticks[stage];
+    for (let tick = 0; tick <= targetTick; tick += 1) {
+      game.p1.moveTick = tick;
+      auditTime += 1 / 60;
+      game.updateVisual(game.p1, game.p2, auditTime);
+      game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+    }
+    game.p1.moveTick = targetTick;
     for (let frame = 0; frame < 18; frame += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
@@ -221,6 +237,10 @@ try {
     }
   }
 
+  // Persist the measurements before assertions so a failed readability threshold
+  // still leaves complete evidence for the next visual correction pass.
+  await writeFile(`${outputDir}/tps-kick-sequence.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
+
   // Regression guardrails: normal/low/rising kicks must retain a planted support
   // foot in authored grounded attacks. Dash kick is intentionally airborne.
   for (const moveId of ['kick', 'lowKick', 'risingKick']) {
@@ -233,8 +253,6 @@ try {
   if (!(results.risingKick.contact.strikeHeight > results.kick.contact.strikeHeight + 0.15)) {
     throw new Error(`Rising kick no longer reads above normal kick: ${JSON.stringify(results)}`);
   }
-
-  await writeFile(`${outputDir}/tps-kick-sequence.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, 'DELETE').catch(() => {});
   driverProcess.kill('SIGTERM');

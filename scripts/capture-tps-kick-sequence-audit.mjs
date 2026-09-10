@@ -186,6 +186,16 @@ async function poseMove(sessionId, moveId, stage) {
       lowKickOpenLine: Number(data.tpsLowKickOpenLine ?? 0),
       kickSilhouette: Number(data.tpsKickSilhouette ?? 0),
       dashKickSilhouette: Number(data.tpsDashKickSilhouette ?? 0),
+      supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
+      supportFootMove: String(data.tpsKickSupportFootMove ?? 'NONE'),
+      supportFootSide: String(data.tpsKickSupportFootSide ?? 'NONE'),
+      supportFootRawDrift: Number(data.tpsKickSupportFootRawDrift ?? 0),
+      supportFootDrift: Number(data.tpsKickSupportFootDrift ?? 0),
+      supportFootRawPlanarDrift: Number(data.tpsKickSupportFootRawPlanarDrift ?? 0),
+      supportFootPlanarDrift: Number(data.tpsKickSupportFootPlanarDrift ?? 0),
+      supportFootRawAngle: Number(data.tpsKickSupportFootRawAngle ?? 0),
+      supportFootAngle: Number(data.tpsKickSupportFootAngle ?? 0),
+      supportFootAnchor: Array.isArray(data.tpsKickSupportFootAnchor) ? [...data.tpsKickSupportFootAnchor] : null,
       state: game.p1.state,
       simulationPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
     };
@@ -237,16 +247,30 @@ try {
     }
   }
 
-  // Persist the measurements before assertions so a failed readability threshold
+  // Persist measurements before assertions so a failed readability threshold
   // still leaves complete evidence for the next visual correction pass.
   await writeFile(`${outputDir}/tps-kick-sequence.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
 
-  // Regression guardrails: normal/low/rising kicks must retain a planted support
-  // foot in authored grounded attacks. Dash kick is intentionally airborne.
-  for (const moveId of ['kick', 'lowKick', 'risingKick']) {
+  // Grounded kicks must keep a believable support foot: near its entry anchor,
+  // with controlled pivot rather than skating or corkscrewing. Dash kick remains
+  // intentionally airborne and is therefore excluded from the plant contract.
+  const supportLimits = {
+    kick: { planar: 0.12, angle: 24 },
+    lowKick: { planar: 0.13, angle: 30 },
+    risingKick: { planar: 0.10, angle: 22 },
+  };
+  for (const [moveId, limit] of Object.entries(supportLimits)) {
     const contact = results[moveId].contact;
+    if (!(contact.supportFootLock > 0.8)) throw new Error(`${moveId} support-foot lock was not active at contact: ${JSON.stringify(contact)}`);
+    if (contact.supportFootMove !== moveId) throw new Error(`${moveId} support-foot marker mismatch: ${JSON.stringify(contact)}`);
+    if (!(contact.supportFootPlanarDrift <= limit.planar)) throw new Error(`${moveId} support foot still skates at contact: ${JSON.stringify(contact)}`);
+    if (!(contact.supportFootAngle <= limit.angle)) throw new Error(`${moveId} support foot still over-rotates at contact: ${JSON.stringify(contact)}`);
     if (!(contact.supportHeight < 0.48)) throw new Error(`${moveId} support foot lifted too far at contact: ${JSON.stringify(contact)}`);
+    if (Math.abs(contact.simulationPosition.x) > 1e-6 || Math.abs(contact.simulationPosition.y) > 1e-6 || Math.abs(contact.simulationPosition.z - 0.82) > 1e-6) {
+      throw new Error(`${moveId} presentation support-foot correction changed simulation position: ${JSON.stringify(contact)}`);
+    }
   }
+
   if (!(results.lowKick.contact.strikeHeight < results.kick.contact.strikeHeight - 0.45)) {
     throw new Error(`Low kick no longer reads below normal kick: ${JSON.stringify(results)}`);
   }

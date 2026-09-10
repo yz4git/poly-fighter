@@ -11,6 +11,7 @@ on:
       - src/game/model-viewer-motion.ts
       - src/game/presentation-animation.ts
       - src/game/tps-impact-followthrough.ts
+      - src/game/tps-counterattack-handoff.ts
       - src/game/quaternius-character-graphics-v2.ts
       - src/game/quaternius-graphics-polish.ts
       - public/models/**
@@ -26,6 +27,7 @@ on:
       - src/game/model-viewer-motion.ts
       - src/game/presentation-animation.ts
       - src/game/tps-impact-followthrough.ts
+      - src/game/tps-counterattack-handoff.ts
       - src/game/quaternius-character-graphics-v2.ts
       - src/game/quaternius-graphics-polish.ts
       - public/models/**

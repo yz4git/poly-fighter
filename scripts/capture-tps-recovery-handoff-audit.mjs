@@ -125,8 +125,8 @@ async function captureScenario(sessionId, targetState, fileStem) {
     game.renderer.render(game.scene, game.camera);
     game.p2.visual.root.updateMatrixWorld(true);
     const data = game.p2.visual.root.userData;
-    const leftFoot = game.p2.visual.rig.bones.leftFoot.getWorldPosition(new THREE.Vector3());
-    const rightFoot = game.p2.visual.rig.bones.rightFoot.getWorldPosition(new THREE.Vector3());
+    const leftFoot = game.p2.visual.rig.bones.leftFoot.getWorldPosition(game.p2.position.clone());
+    const rightFoot = game.p2.visual.rig.bones.rightFoot.getWorldPosition(game.p2.position.clone());
     return {
       targetState,
       actualState: game.p2.state,

@@ -91,14 +91,14 @@ async function captureScenario(sessionId, targetState, fileStem) {
     game.finished = false;
     game.input.clear();
     game.effects.update(2);
-    game.p1.resetForRound(0, 0.72, 1);
-    game.p2.resetForRound(0, -0.72, -1);
+    game.p1.resetForRound(0, 0.90, 1);
+    game.p2.resetForRound(0, -0.90, -1);
     game.p1.velocity.set(0, 0, 0);
     game.p2.velocity.set(0, 0, 0);
-    game.p2.setHitReactionVisual('HEAVY', 'RIGHT', false);
-    game.p2.state = 'HIT';
-    game.p2.hitStop = 0;
-    game.p2.hitStun = 3;
+    game.p1.setHitReactionVisual('HEAVY', 'RIGHT', false);
+    game.p1.state = 'HIT';
+    game.p1.hitStop = 0;
+    game.p1.hitStun = 3;
 
     const renderPair = () => {
       game.renderTime += 1 / 60;
@@ -110,26 +110,29 @@ async function captureScenario(sessionId, targetState, fileStem) {
     // outgoing pose before the requested action takes over.
     for (let frame = 0; frame < 3; frame += 1) {
       renderPair();
-      game.p2.hitStun = Math.max(0, game.p2.hitStun - 1);
-      game.p2.stateMachine.tick();
+      game.p1.hitStun = Math.max(0, game.p1.hitStun - 1);
+      game.p1.stateMachine.tick();
     }
-    game.p2.state = targetState;
+    game.p1.state = targetState;
 
     // Three actionable frames are enough to inspect the crossfade while the
     // reaction tail is still alive. This specifically catches the old case
     // where full reaction leg offsets sat on top of WALK/SIDESTEP footwork.
     for (let frame = 0; frame < 3; frame += 1) renderPair();
 
-    game.updateCamera(1 / 60);
+    // Let only the shoulder camera converge after resetting the pair. The pose
+    // itself stays on the exact third handoff frame so screenshots remain
+    // deterministic and the player's lower body is unobstructed in foreground.
+    for (let frame = 0; frame < 18; frame += 1) game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    game.p2.visual.root.updateMatrixWorld(true);
-    const data = game.p2.visual.root.userData;
-    const leftFoot = game.p2.visual.rig.bones.leftFoot.getWorldPosition(game.p2.position.clone());
-    const rightFoot = game.p2.visual.rig.bones.rightFoot.getWorldPosition(game.p2.position.clone());
+    game.p1.visual.root.updateMatrixWorld(true);
+    const data = game.p1.visual.root.userData;
+    const leftFoot = game.p1.visual.rig.bones.leftFoot.getWorldPosition(game.p1.position.clone());
+    const rightFoot = game.p1.visual.rig.bones.rightFoot.getWorldPosition(game.p1.position.clone());
     return {
       targetState,
-      actualState: game.p2.state,
+      actualState: game.p1.state,
       recovery: data.tpsImpactRecovery ?? 0,
       recoverySeconds: data.tpsImpactRecoverySeconds ?? 0,
       bodyFactor: data.tpsImpactRecoveryFactor ?? 0,
@@ -141,7 +144,7 @@ async function captureScenario(sessionId, targetState, fileStem) {
       handoffStep: data.tpsImpactRecoveryHandoffStep ?? 1,
       leftFootY: leftFoot.y,
       rightFootY: rightFoot.y,
-      rootY: game.p2.visual.root.position.y,
+      rootY: game.p1.visual.root.position.y,
     };
   `, [targetState]);
 

@@ -16,6 +16,7 @@ on:
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-tps-recovery-handoff-audit.mjs
       - scripts/capture-tps-counterattack-handoff-audit.mjs
+      - scripts/capture-tps-block-punish-handoff-audit.mjs
       - scripts/capture-motion-readability-audit.mjs
       - scripts/capture-motion-intent-audit.mjs
       - scripts/touch-input-safety-audit.mjs
@@ -34,6 +35,7 @@ on:
       - scripts/capture-tps-visual-audit.mjs
       - scripts/capture-tps-recovery-handoff-audit.mjs
       - scripts/capture-tps-counterattack-handoff-audit.mjs
+      - scripts/capture-tps-block-punish-handoff-audit.mjs
       - scripts/capture-motion-readability-audit.mjs
       - scripts/capture-motion-intent-audit.mjs
       - scripts/touch-input-safety-audit.mjs
@@ -103,6 +105,7 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-visual-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-recovery-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-counterattack-handoff-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-block-punish-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
@@ -110,6 +113,7 @@ jobs:
             tps-title-iphone tps-loadout-iphone tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-windup-cue tps-incoming-cue tps-punish-cue tps-v2-intercept tps-v2-reversal tps-v2-final-impact tps-punch tps-punch-settled tps-throw \
             tps-recovery-handoff-guard tps-recovery-handoff-walk tps-recovery-handoff-sidestep \
             tps-counterattack-handoff-jab tps-counterattack-handoff-kick tps-counterattack-handoff-power \
+            tps-block-punish-handoff-block-jab tps-block-punish-handoff-punish-power \
             tps-motion-jab tps-motion-straight tps-motion-bodyblow tps-motion-backfist \
             tps-motion-power tps-motion-kick tps-motion-lowkick tps-motion-risingkick \
             tps-motion-dashkick tps-motion-throw tps-motion-counter \
@@ -124,6 +128,7 @@ jobs:
           test -s artifacts/tps-visual-audit/tps-runtime-state.json
           test -s artifacts/tps-visual-audit/tps-recovery-handoff.json
           test -s artifacts/tps-visual-audit/tps-counterattack-handoff.json
+          test -s artifacts/tps-visual-audit/tps-block-punish-handoff.json
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

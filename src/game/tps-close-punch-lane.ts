@@ -46,7 +46,9 @@ function removeClosePunchLane(fighter: FighterRuntime, state: ClosePunchLaneStat
 
 function moveProfile(moveId: string): { lane: number; yaw: number; roll: number } {
   if (moveId === "bodyBlow") return { lane: 0.044, yaw: 0.090, roll: 0.020 };
-  if (moveId === "straight") return { lane: 0.038, yaw: 0.076, roll: 0.012 };
+  // Cross/straight drives the rear shoulder deepest into the opponent from the
+  // TPS camera, so it needs the widest presentation lane of the three punches.
+  if (moveId === "straight") return { lane: 0.052, yaw: 0.105, roll: 0.014 };
   return { lane: 0.032, yaw: 0.062, roll: 0.010 };
 }
 

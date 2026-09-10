@@ -1,0 +1,71 @@
+name: POLY FIGHTER TPS kick sequence audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/game/**
+      - scripts/capture-tps-kick-sequence-audit.mjs
+      - .github/workflows/tps-kick-sequence-audit.yml
+  push:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/game/**
+      - scripts/capture-tps-kick-sequence-audit.mjs
+      - .github/workflows/tps-kick-sequence-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-kick-sequence.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-kick-sequence.log
+          exit 1
+      - name: Capture kick sequences
+        run: |
+          mkdir -p artifacts/tps-kick-sequence
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-sequence-audit.mjs
+          for move in kick lowkick risingkick dashkick; do
+            for stage in startup contact recovery; do
+              image="artifacts/tps-kick-sequence/tps-kick-${move}-${stage}.png"
+              test -s "$image"
+              file "$image" | grep -q "PNG image data"
+            done
+          done
+          test -s artifacts/tps-kick-sequence/tps-kick-sequence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-tps-kick-sequence-audit
+          path: artifacts/tps-kick-sequence
+          if-no-files-found: error
+          retention-days: 7

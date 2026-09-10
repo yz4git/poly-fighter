@@ -1,6 +1,7 @@
 "use client";
 
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
+import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack-action-handoff";
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
 import { installTpsBodyBlowLevelChangePresentation } from "@/src/game/tps-bodyblow-level-change";
 import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neutral-lane";
@@ -43,6 +44,7 @@ installTpsFinalImpactVfxReadability();
 installTpsImpactLensPulsePresentation();
 installTpsImpactBeatSyncPresentation();
 installTpsCounterattackHandoffPresentation();
+installTpsAttackActionHandoffPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

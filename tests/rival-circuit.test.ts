@@ -12,6 +12,15 @@ import {
   apexBossPhaseForHealth,
 } from "../src/game/rival-circuit-apex-boss";
 import {
+  RIVAL_CIRCUIT_FINISH_CHORD_TICKS,
+  RIVAL_CIRCUIT_FINISH_HEALTH,
+  rivalCircuitFinishChordReady,
+  rivalCircuitFinishMoveForArchetype,
+  rivalCircuitFinishPursuitDistance,
+  rivalCircuitFinishWindowOpen,
+} from "../src/game/rival-circuit-finish";
+import { rivalCircuitFinishStageFromLabel } from "../src/game/rival-circuit-finish-runtime";
+import {
   EMPTY_RIVAL_CIRCUIT_MEMORY,
   classifyRivalCircuitMemory,
   rivalMemorySignatureIntervalScale,
@@ -209,4 +218,38 @@ test("Rival Memory stage parser only accepts Circuit fight strips", () => {
   assert.equal(rivalCircuitStageFromLabel("CIRCUIT 5 / 5 APEX-0 APEX"), 5);
   assert.equal(rivalCircuitStageFromLabel("TPS LOCK-ON MATCH"), 0);
   assert.equal(rivalCircuitStageFromLabel("CIRCUIT 8/5 INVALID"), 0);
+});
+
+test("Circuit FINISH only opens at critical rival health and close range", () => {
+  assert.equal(RIVAL_CIRCUIT_FINISH_HEALTH, 14);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 1, defenderHealth: 14, distance: 1.8 }), true);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 5, defenderHealth: 1, distance: 2.18 }), true);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 0, defenderHealth: 10, distance: 1.3 }), false);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 1, defenderHealth: 15, distance: 1.3 }), false);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 1, defenderHealth: 10, distance: 2.19 }), false);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 1, defenderHealth: 10, distance: 1.3, consumed: true }), false);
+  assert.equal(rivalCircuitFinishWindowOpen({ stage: 1, defenderHealth: 0, distance: 1.3, defenderState: "KO" }), false);
+});
+
+test("Circuit FINISH keeps fighter identity while sharing the same two-button chord", () => {
+  assert.equal(rivalCircuitFinishMoveForArchetype("POWER"), "power");
+  assert.equal(rivalCircuitFinishMoveForArchetype("SPEED"), "risingKick");
+  assert.equal(RIVAL_CIRCUIT_FINISH_CHORD_TICKS, 3);
+  assert.equal(rivalCircuitFinishChordReady(100, 100, 100), true);
+  assert.equal(rivalCircuitFinishChordReady(100, 102, 102), true);
+  assert.equal(rivalCircuitFinishChordReady(100, 104, 104), false);
+  assert.equal(rivalCircuitFinishChordReady(-1, 12, 12), false);
+});
+
+test("Circuit FINISH pursuit is bounded and never teleports across the arena", () => {
+  assert.equal(rivalCircuitFinishPursuitDistance(1.1), 0);
+  assert.ok(rivalCircuitFinishPursuitDistance(1.8) > 0);
+  assert.equal(rivalCircuitFinishPursuitDistance(9), 0.92);
+});
+
+test("Circuit FINISH stage parser accepts both live and audit labels only", () => {
+  assert.equal(rivalCircuitFinishStageFromLabel("CIRCUIT 1/5 GLASSLINE PRESSURE"), 1);
+  assert.equal(rivalCircuitFinishStageFromLabel("STAGE 5/5 APEX-0 FINAL RIVAL APEX"), 5);
+  assert.equal(rivalCircuitFinishStageFromLabel("START FIGHT"), 0);
+  assert.equal(rivalCircuitFinishStageFromLabel("CIRCUIT 6/5 INVALID"), 0);
 });

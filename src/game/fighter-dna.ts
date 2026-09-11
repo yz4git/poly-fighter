@@ -1,4 +1,4 @@
-export type FighterDnaId = "KAIRO" | "SERA" | "VANTA";
+export type FighterDnaId = "KAIRO" | "SERA" | "VANTA" | "BRONT";
 
 export interface FighterDna {
   id: FighterDnaId;
@@ -102,6 +102,22 @@ export const FIGHTER_DNA: Readonly<Record<FighterDnaId, FighterDna>> = Object.fr
       desperation: "VANTA COLLAPSE",
     },
   }),
+  BRONT: Object.freeze({
+    id: "BRONT",
+    moveSpeedScale: 0.90,
+    stepSpeedScale: 0.88,
+    stepCooldownScale: 1.14,
+    perfectEvadeBonusTicks: 0,
+    interceptDamageScale: 1.08,
+    reversalDamageScale: 1.12,
+    comboPressureScale: 1.04,
+    signature: {
+      intercept: "LOAD CHECK",
+      reversal: "ANCHOR BREAK",
+      flank: "BULKHEAD TURN",
+      desperation: "MASS DRIVER",
+    },
+  }),
 });
 
 export function fighterDnaForName(name: string): FighterDna {
@@ -114,6 +130,7 @@ export function resolveContextAttack(situation: ContextAttackSituation): Context
   const kairo = dna.id === "KAIRO";
   const sera = dna.id === "SERA";
   const vanta = dna.id === "VANTA";
+  const bront = dna.id === "BRONT";
   const stage = Math.max(0, Math.min(2, situation.comboStage));
 
   if (situation.reversalOpen) {
@@ -121,30 +138,32 @@ export function resolveContextAttack(situation: ContextAttackSituation): Context
   }
 
   if (situation.interceptOpen) {
-    if (kairo) return { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept };
-    if (vanta) return { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept };
+    if (kairo || vanta) return { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept };
+    if (bront) return { moveId: "bodyBlow", beat: dna.signature.intercept, signature: dna.signature.intercept };
     return { moveId: "backfist", beat: dna.signature.intercept, signature: dna.signature.intercept };
   }
 
   if (situation.selfHealth <= 24 && situation.defenderHealth <= 34 && situation.distance <= 1.82) {
-    if (kairo || vanta) return { moveId: "power", beat: dna.signature.desperation, signature: dna.signature.desperation };
+    if (kairo || vanta || bront) return { moveId: "power", beat: dna.signature.desperation, signature: dna.signature.desperation };
     return { moveId: "risingKick", beat: dna.signature.desperation, signature: dna.signature.desperation };
   }
 
   if (situation.flankOpen) {
     if (kairo) return { moveId: "backfist", beat: dna.signature.flank, signature: dna.signature.flank };
     if (vanta) return { moveId: "lowKick", beat: dna.signature.flank, signature: dna.signature.flank };
+    if (bront) return { moveId: "bodyBlow", beat: dna.signature.flank, signature: dna.signature.flank };
     return { moveId: "bodyBlow", beat: dna.signature.flank, signature: dna.signature.flank };
   }
 
   if (situation.defenderNearWall && situation.distance <= 1.62) {
     if (kairo) return { moveId: stage >= 1 ? "power" : "bodyBlow", beat: "WALL PRESSURE", signature: null };
     if (vanta) return { moveId: stage >= 1 ? "bodyBlow" : "straight", beat: "MIRROR PRESSURE", signature: null };
+    if (bront) return { moveId: stage >= 1 ? "power" : "bodyBlow", beat: "GRAVITY PRESSURE", signature: null };
     return { moveId: stage >= 1 ? "lowKick" : "bodyBlow", beat: "ANGLE PRESSURE", signature: null };
   }
 
   if (situation.defenderAttacking && situation.distance <= 1.48) {
-    return { moveId: "counter", beat: vanta ? "NULL COUNTER READ" : "COUNTER READ", signature: null };
+    return { moveId: "counter", beat: vanta ? "NULL COUNTER READ" : bront ? "ANCHOR COUNTER" : "COUNTER READ", signature: null };
   }
 
   if (situation.distance <= 1.58) {
@@ -152,7 +171,9 @@ export function resolveContextAttack(situation: ContextAttackSituation): Context
       ? ["jab", "straight", "power"]
       : sera
         ? ["jab", "bodyBlow", "straight"]
-        : ["jab", "counter", "bodyBlow"];
+        : vanta
+          ? ["jab", "counter", "bodyBlow"]
+          : ["jab", "bodyBlow", "power"];
     return { moveId: closeMoves[stage], beat: null, signature: null };
   }
 
@@ -160,6 +181,8 @@ export function resolveContextAttack(situation: ContextAttackSituation): Context
     ? ["kick", "straight", "risingKick"]
     : sera
       ? ["kick", "lowKick", "risingKick"]
-      : ["straight", "lowKick", "dashKick"];
+      : vanta
+        ? ["straight", "lowKick", "dashKick"]
+        : ["kick", "straight", "dashKick"];
   return { moveId: farMoves[stage], beat: null, signature: null };
 }

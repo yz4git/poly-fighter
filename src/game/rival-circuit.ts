@@ -53,8 +53,8 @@ export const RIVAL_CIRCUIT_ENCOUNTERS: readonly RivalCircuitEncounter[] = Object
     difficulty: "EASY",
     style: "PRESSURE",
     arenaLabel: "RING 01 // GLASSLINE",
-    rule: "BREAK THE OPENING RUSH",
-    description: "A direct opener that rewards spacing, clean ATTACK confirms, and early STEP discipline.",
+    rule: "CLEAR LINE // BREAK THE OPENING RUSH",
+    description: "The baseline ring. Read the direct opener with standard footing, clean ATTACK confirms, and disciplined STEP timing.",
   },
   {
     id: "angle-hunter",
@@ -65,8 +65,8 @@ export const RIVAL_CIRCUIT_ENCOUNTERS: readonly RivalCircuitEncounter[] = Object
     difficulty: "NORMAL",
     style: "ANGLE",
     arenaLabel: "RING 02 // OFFSET",
-    rule: "WIN THE FLANK",
-    description: "A lateral rival that turns neutral into an angle fight. Punish over-committed forward pressure.",
+    rule: "OFFSET FLOW // WIN THE FLANK",
+    description: "Ordinary grounded movement is 8% faster for both fighters, turning neutral into a quicker angle fight while STEP keeps its authored timing.",
   },
   {
     id: "counter-node",
@@ -77,8 +77,8 @@ export const RIVAL_CIRCUIT_ENCOUNTERS: readonly RivalCircuitEncounter[] = Object
     difficulty: "NORMAL",
     style: "COUNTER",
     arenaLabel: "RING 03 // COLD",
-    rule: "DRAW THE RESPONSE",
-    description: "A patient rival built around bait-and-answer rhythm. Perfect STEP and PUNISH score heavily here.",
+    rule: "COLD FOOTING // DRAW THE RESPONSE",
+    description: "Ordinary grounded movement is 8% slower for both fighters, making spacing more deliberate while STEP remains fully responsive.",
   },
   {
     id: "step-hunter",
@@ -89,8 +89,8 @@ export const RIVAL_CIRCUIT_ENCOUNTERS: readonly RivalCircuitEncounter[] = Object
     difficulty: "HARD",
     style: "STEP_HUNTER",
     arenaLabel: "RING 04 // REDLINE",
-    rule: "DON'T BECOME PREDICTABLE",
-    description: "The circuit starts reading evasive habits. Mix ATTACK timing, intercepts, and retreat routes.",
+    rule: "REDLINE CONTRACT // DON'T BECOME PREDICTABLE",
+    description: "The playable ring contracts gradually as the fight runs long. Both fighters share the same boundary, so late neutral becomes a close-range read test.",
   },
   {
     id: "apex-proxy",
@@ -101,8 +101,8 @@ export const RIVAL_CIRCUIT_ENCOUNTERS: readonly RivalCircuitEncounter[] = Object
     difficulty: "HARD",
     style: "APEX",
     arenaLabel: "RING 05 // APEX",
-    rule: "PROVE THE WHOLE KIT",
-    description: "A provisional boss profile for v0.2. It expects the full ATTACK / STEP / PUNISH / INTERCEPT loop.",
+    rule: "APEX CONVERGENCE // PROVE THE WHOLE KIT",
+    description: "APEX-0 closes the ring at each health phase. CALIBRATE, ADAPT, and ZERO progressively compress the arena without changing damage or telegraph fairness.",
   },
 ]);
 
@@ -219,30 +219,31 @@ export function scoreRivalCircuitPerformance(
     }
   }
 
-  const score = Math.round(clamp(baseScore + healthBonus + techniqueBonus + protocolBonus, 0, 100));
+  const score = clamp(Math.round(baseScore + healthBonus + techniqueBonus + protocolBonus), 0, 100);
   return {
     score,
     grade: rivalCircuitGradeForScore(score),
     baseScore,
-    protocolBonus: Math.round(protocolBonus * 10) / 10,
-    healthBonus: Math.round(healthBonus * 10) / 10,
-    techniqueBonus: Math.round(techniqueBonus * 10) / 10,
+    protocolBonus: Math.round(protocolBonus),
+    healthBonus: Math.round(healthBonus),
+    techniqueBonus: Math.round(techniqueBonus),
   };
 }
 
 export function rivalCircuitProtocolOffers(
-  stage: number,
+  stageIndex: number,
   owned: readonly RivalCircuitProtocolId[],
 ): RivalCircuitProtocol[] {
-  const ownedSet = new Set(owned);
-  const primary = OFFER_ROTATION[Math.max(0, stage) % OFFER_ROTATION.length] ?? OFFER_ROTATION[0];
-  const fallback = Object.keys(RIVAL_CIRCUIT_PROTOCOLS) as RivalCircuitProtocolId[];
-  const ordered = [...primary, ...fallback];
-  const unique = ordered.filter((id, index) => ordered.indexOf(id) === index && !ownedSet.has(id));
-  return unique.slice(0, 3).map((id) => RIVAL_CIRCUIT_PROTOCOLS[id]);
+  const preferred = OFFER_ROTATION[Math.max(0, Math.min(OFFER_ROTATION.length - 1, stageIndex))] ?? OFFER_ROTATION[0];
+  const unusedPreferred = preferred.filter((id) => !owned.includes(id));
+  const fallback = (Object.keys(RIVAL_CIRCUIT_PROTOCOLS) as RivalCircuitProtocolId[]).filter((id) => !owned.includes(id));
+  const ids = [...unusedPreferred, ...fallback.filter((id) => !unusedPreferred.includes(id))].slice(0, 3);
+  return ids.map((id) => RIVAL_CIRCUIT_PROTOCOLS[id]);
 }
 
-export function rivalCircuitRunGrade(totalScore: number, fightsWon: number): RivalCircuitGrade {
-  if (fightsWon <= 0) return "C";
-  return rivalCircuitGradeForScore(totalScore / fightsWon);
+export function rivalCircuitRunGrade(score: number, wins: number): RivalCircuitGrade {
+  if (wins <= 0) return "C";
+  const average = score / Math.max(1, wins);
+  const completionBonus = wins >= RIVAL_CIRCUIT_ENCOUNTERS.length ? 4 : 0;
+  return rivalCircuitGradeForScore(clamp(Math.round(average + completionBonus), 0, 100));
 }

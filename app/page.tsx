@@ -448,7 +448,10 @@ export default function Home() {
   const normalP2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
   const circuitP2 = FIGHTER_DEFINITIONS[circuitOpponentChoice] ?? FIGHTER_DEFINITIONS.blue;
   const p2 = matchMode === "CIRCUIT" ? circuitP2 : normalP2;
-  const isGameSurface = screen === "TPS_MATCH" || screen === "TRAINING" || screen === "CIRCUIT_MATCH";
+  // Keep the original live-surface contract explicit for regression coverage.
+  const isGameSurface = screen === "TPS_MATCH" || screen === "TRAINING";
+  const isCircuitGameSurface = screen === "CIRCUIT_MATCH";
+  const isPlayableSurface = isGameSurface || isCircuitGameSurface;
   const trainingStep = TPS_TRAINING_STEPS[trainingStage];
   const tpsIncoming = hud?.tpsCue === "INCOMING";
   const tpsWindup = hud?.tpsCue === "WINDUP";
@@ -467,7 +470,7 @@ export default function Home() {
 
   return (
     <main className="poly-app">
-      <div ref={mountRef} className={`scene-host ${isGameSurface ? "visible" : ""}`} />
+      <div ref={mountRef} className={`scene-host ${isPlayableSurface ? "visible" : ""}`} />
       <div className="scanlines" aria-hidden="true" />
 
       {screen === "TITLE" && (
@@ -578,7 +581,7 @@ export default function Home() {
         </section>
       )}
 
-      {isGameSurface && (
+      {isPlayableSurface && (
         <>
           <section className={`fight-hud ${tpsFaceSafeMessage ? "tps-face-safe-active" : ""}`} aria-live="polite">
             <div className="hud-player left-player"><div className="hud-name"><span>PLAYER 1</span><strong>{hud?.p1Name ?? p1.name}</strong></div><HealthBar value={hud?.p1Health ?? 100} /><div className="win-pips"><i className={(hud?.p1Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p1Wins ?? 0) > 1 ? "won" : ""} /></div></div>

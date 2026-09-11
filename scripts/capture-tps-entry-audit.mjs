@@ -230,8 +230,8 @@ try {
 
   const circuitMatch = await execute(sessionId, `
     const buttons = [...document.querySelectorAll('button')];
-    const actionRect = (text) => {
-      const button = buttons.find((entry) => entry.textContent?.includes(text));
+    const actionRect = (ariaLabel) => {
+      const button = buttons.find((entry) => entry.getAttribute('aria-label') === ariaLabel);
       const rect = button?.getBoundingClientRect();
       return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
     };
@@ -241,13 +241,17 @@ try {
       height: window.innerHeight,
       canvas: Boolean(document.querySelector('.scene-host.visible canvas')),
       strip: strip?.textContent ?? '',
-      attack: actionRect('ATTACK'),
-      step: actionRect('STEP'),
+      attack: actionRect('Attack'),
+      step: actionRect('Step'),
       aiPolicy: document.body.dataset.rivalCircuitAiPolicy ?? '',
       aiStyle: document.body.dataset.rivalCircuitAiStyle ?? '',
       aiPhase: document.body.dataset.rivalCircuitAiPhase ?? '',
       aiTactic: document.body.dataset.rivalCircuitAiTactic ?? '',
       signatures: Number(document.body.dataset.rivalCircuitAiSignatures ?? '0'),
+      aiMemoryRead: document.body.dataset.rivalCircuitAiMemoryRead ?? '',
+      memoryPolicy: document.body.dataset.rivalCircuitMemoryPolicy ?? '',
+      memoryRead: document.body.dataset.rivalCircuitMemoryRead ?? '',
+      memoryFights: Number(document.body.dataset.rivalCircuitMemoryFights ?? '-1'),
       arenaStage: document.body.dataset.rivalCircuitArenaStage ?? '',
       arenaId: document.body.dataset.rivalCircuitArenaId ?? '',
       arenaLabel: document.body.dataset.rivalCircuitArenaLabel ?? '',
@@ -265,6 +269,10 @@ try {
     && circuitMatch.aiPhase === 'PRESSURE'
     && circuitMatch.aiTactic === 'PRESSURE'
     && circuitMatch.signatures >= 1
+    && circuitMatch.memoryPolicy === 'RIVAL_MEMORY_V1'
+    && circuitMatch.memoryRead === 'NONE'
+    && circuitMatch.memoryFights === 0
+    && circuitMatch.aiMemoryRead === 'NONE'
     && circuitMatch.arenaStage === '1'
     && circuitMatch.arenaId === 'GLASSLINE'
     && circuitMatch.arenaLabel.includes('GLASSLINE')

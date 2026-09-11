@@ -99,9 +99,9 @@ function makeLayer(fighter: FighterRuntime): AxionLayer {
 
   const coreGeometry = new THREE.IcosahedronGeometry(0.052, 0);
   const haloGeometry = new THREE.TorusGeometry(0.09, 0.012, 6, 16);
-  const shoulderGeometry = new THREE.BoxGeometry(0.18, 0.075, 0.13);
-  const collarGeometry = new THREE.CylinderGeometry(0.055, 0.073, 0.19, 6);
-  const anchorGeometry = new THREE.OctahedronGeometry(0.038, 0);
+  const shoulderGeometry = new THREE.BoxGeometry(0.135, 0.06, 0.105);
+  const collarGeometry = new THREE.CylinderGeometry(0.045, 0.063, 0.15, 6);
+  const anchorGeometry = new THREE.OctahedronGeometry(0.04, 0);
   const geometries = [coreGeometry, haloGeometry, shoulderGeometry, collarGeometry, anchorGeometry];
 
   const core = new THREE.Mesh(coreGeometry, glow);
@@ -116,14 +116,15 @@ function makeLayer(fighter: FighterRuntime): AxionLayer {
   const shoulderPlates: THREE.Mesh[] = [];
   for (const side of [-1, 1] as const) {
     const shoulder = new THREE.Mesh(shoulderGeometry, side < 0 ? amber : gold);
-    shoulder.position.set(side * layout.shoulderWidth * 0.58, layout.shoulderY - 0.025, 0.035);
-    shoulder.rotation.z = side * -0.13;
+    shoulder.position.set(side * layout.shoulderWidth * 0.53, layout.shoulderY - 0.035, 0.025);
+    shoulder.rotation.z = side * -0.2;
+    shoulder.rotation.x = 0.08;
     group.add(shoulder);
     shoulderPlates.push(shoulder);
 
     const collar = new THREE.Mesh(collarGeometry, graphite);
-    collar.position.set(side * layout.shoulderWidth * 0.35, layout.shoulderY - 0.08, 0.03);
-    collar.rotation.z = side * 0.16;
+    collar.position.set(side * layout.shoulderWidth * 0.33, layout.shoulderY - 0.085, 0.025);
+    collar.rotation.z = side * 0.18;
     group.add(collar);
   }
 
@@ -157,12 +158,12 @@ function updateLayer(fighter: FighterRuntime, time: number): void {
   layer.core.scale.setScalar(pulse);
   layer.halo.rotation.z = time * 1.05;
   layer.shoulderPlates.forEach((plate, index) => {
-    plate.rotation.y = Math.sin(time * 1.7 + index * Math.PI) * 0.055;
+    plate.rotation.y = Math.sin(time * 1.7 + index * Math.PI) * 0.04;
   });
 
   layer.anchors.forEach((anchor, index) => {
     const angle = time * 0.72 + index * ((Math.PI * 2) / layer.anchors.length);
-    const radius = 0.17 + (index % 2) * 0.016;
+    const radius = 0.16 + (index % 2) * 0.014;
     anchor.position.set(
       Math.cos(angle) * radius,
       layout.waistY + 0.015 + Math.sin(angle * 1.2) * 0.022,

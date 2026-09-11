@@ -18,10 +18,12 @@
 
 .circuit-briefing-code {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   justify-content: center;
   min-height: 90px;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 }
 
 .circuit-briefing-code span,
@@ -45,6 +47,10 @@
   font-size: 9px;
   font-style: normal;
   letter-spacing: .12em;
+}
+
+.circuit-briefing-copy {
+  min-width: 0;
 }
 
 .circuit-briefing-copy strong {
@@ -223,8 +229,9 @@
   .title-screen .ghost-button { margin-top: 5px; padding: 6px 14px; font-size: 9px; }
   .title-footer { bottom: max(6px, env(safe-area-inset-bottom)); }
 
-  .circuit-briefing { grid-template-columns: 126px 1fr; margin: 5px 0; padding: 8px; }
-  .circuit-briefing-code { min-height: 66px; }
+  .circuit-briefing { grid-template-columns: 148px minmax(0, 1fr); margin: 5px 0; padding: 8px; gap: 8px; }
+  .circuit-briefing-code { min-height: 66px; padding-right: 8px; }
+  .circuit-briefing-code strong { font-size: 18px; letter-spacing: .04em; white-space: nowrap; }
   .circuit-briefing-copy p { margin: 4px 0; }
   .protocol-card { min-height: 86px; padding: 7px; }
   .protocol-card p { line-height: 1.3; }

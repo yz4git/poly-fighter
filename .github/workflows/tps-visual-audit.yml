@@ -113,7 +113,7 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
           for image in \
-            tps-title-iphone tps-loadout-iphone tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-windup-cue tps-incoming-cue tps-punish-cue tps-v2-intercept tps-v2-reversal tps-v2-final-impact tps-punch tps-punch-settled tps-throw \
+            tps-title-iphone rival-circuit-loadout-iphone tps-loadout-iphone tps-title tps-loadout tps-idle tps-iphone-idle tps-quickstep tps-windup-cue tps-incoming-cue tps-punish-cue tps-v2-intercept tps-v2-reversal tps-v2-final-impact tps-punch tps-punch-settled tps-throw \
             tps-recovery-handoff-guard tps-recovery-handoff-walk tps-recovery-handoff-sidestep \
             tps-counterattack-handoff-jab tps-counterattack-handoff-kick tps-counterattack-handoff-power \
             tps-block-punish-handoff-block-jab tps-block-punish-handoff-punish-power \

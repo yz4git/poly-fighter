@@ -31,20 +31,16 @@ type TrainingProgress = {
   intercepts: number;
 };
 
-type ProtocolRuntime = TpsFightGame & {
+type ProtocolRuntime = {
   p1: FighterRuntime;
   p2: FighterRuntime;
-  playerEvadeTicks: number;
   playerEvadeCooldown: number;
-  playerComboStage: number;
   playerComboGraceTicks: number;
   playerPerfectEvadeTicks: number;
   playerReversalTicks: number;
   playerInterceptTicks: number;
-  playerFlankAttackTicks: number;
   trainingProgress: TrainingProgress;
   simulationTicks: number;
-  setCombatBeat(label: string, ticks?: number): void;
 };
 
 type ProtocolRuntimeState = {

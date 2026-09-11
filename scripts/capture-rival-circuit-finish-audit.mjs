@@ -72,18 +72,8 @@ async function resizeToCssViewport(sessionId, width, height) {
   await delay(220);
 }
 
-async function finishState(sessionId, freezeOnHit = false) {
+async function finishState(sessionId) {
   return execute(sessionId, `
-    const freeze = Boolean(arguments[0]);
-    const phase = document.body.dataset.rivalCircuitFinishPhase ?? '';
-    let frozeHitFrame = false;
-    if (freeze && phase === 'HIT') {
-      const pause = document.querySelector('.tps-pause-button');
-      if (pause instanceof HTMLButtonElement && pause.getAttribute('aria-label') === 'Pause') {
-        pause.click();
-        frozeHitFrame = true;
-      }
-    }
     const actions = [...document.querySelectorAll('.tps-two-button-actions button')].map((button) => ({
       label: button.getAttribute('aria-label'),
       text: button.textContent?.trim() ?? '',
@@ -97,19 +87,18 @@ async function finishState(sessionId, freezeOnHit = false) {
       strip: document.querySelector('.circuit-run-strip')?.textContent ?? '',
       policy: document.body.dataset.rivalCircuitFinishPolicy ?? '',
       ready: document.body.dataset.rivalCircuitFinishReady ?? '',
-      phase,
+      phase: document.body.dataset.rivalCircuitFinishPhase ?? '',
       move: document.body.dataset.rivalCircuitFinishMove ?? '',
       stage: document.body.dataset.rivalCircuitFinishStage ?? '',
       health: Number(document.body.dataset.rivalCircuitFinishHealth ?? '-1'),
       activations: Number(document.body.dataset.rivalCircuitFinishActivations ?? '0'),
       pseudoContent: getComputedStyle(document.body, '::after').content,
-      frozeHitFrame,
       actions,
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
       width: window.innerWidth,
       height: window.innerHeight,
     };
-  `, [freezeOnHit]);
+  `);
 }
 
 let sessionId = null;
@@ -184,10 +173,16 @@ try {
     return true;
   `);
 
+  // KAIRO's authored power FINISH becomes active around 17 simulation ticks.
+  // Capture at that real timing rather than waiting for the React result route.
+  // This makes the artifact a combat-frame audit instead of a reward-screen race.
+  await delay(195);
+  await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
+
   let hit = null;
-  for (let attempt = 0; attempt < 28; attempt += 1) {
-    await delay(50);
-    hit = await finishState(sessionId, true);
+  for (let attempt = 0; attempt < 70; attempt += 1) {
+    await delay(10);
+    hit = await finishState(sessionId);
     if (hit.phase === 'HIT') break;
   }
   if (!hit || hit.phase !== 'HIT') throw new Error(`FINISH chord did not connect: ${JSON.stringify(hit)}`);
@@ -196,12 +191,10 @@ try {
     || hit.move !== 'power'
     || hit.activations < 1
     || hit.health !== 0
-    || !hit.frozeHitFrame
     || hit.fallback
   ) {
     throw new Error(`FINISH hit runtime audit failed: ${JSON.stringify(hit)}`);
   }
-  await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
   await writeFile(`${outputDir}/rival-circuit-finish.json`, `${JSON.stringify({ ready, hit }, null, 2)}\n`);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);

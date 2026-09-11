@@ -8,6 +8,7 @@ import { installRivalCircuitFinishRuntime } from "@/src/game/rival-circuit-finis
 import { installRivalCircuitIntelRuntime } from "@/src/game/rival-circuit-intel-runtime";
 import { installRivalCircuitMemoryRuntime } from "@/src/game/rival-circuit-memory-runtime";
 import { installRivalCircuitProtocolRuntime } from "@/src/game/rival-circuit-protocol-runtime";
+import { installVantaFighterPresentation } from "@/src/game/fighter-vanta-presentation";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
 import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack-action-handoff";
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
@@ -41,6 +42,7 @@ installRivalCircuitMemoryRuntime();
 installRivalCircuitProtocolRuntime();
 installRivalCircuitIntelRuntime();
 installRivalCircuitApexBossRuntime();
+installVantaFighterPresentation();
 installTpsArenaSpectaclePresentation();
 installRivalCircuitArenaPresentation();
 installRivalCircuitArenaTactics();

@@ -1,6 +1,12 @@
 import type { CpuDecision, CpuIntent } from "./cpu-director";
 import type { CpuDifficulty, FighterRuntime } from "./fighter";
 import type { RivalCircuitStyle } from "./rival-circuit";
+import {
+  RIVAL_MEMORY_LABELS,
+  readRivalCircuitMemoryFromDom,
+  rivalMemorySignatureIntervalScale,
+  type RivalCircuitMemoryRead,
+} from "./rival-circuit-memory";
 import { TpsFightGame } from "./tps-game";
 
 type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
@@ -30,6 +36,7 @@ type RivalRuntime = {
 type RivalAiState = {
   lastSignatureTick: number;
   lastPhase: RivalCircuitStyle | null;
+  lastMemoryRead: RivalCircuitMemoryRead;
   scheduledSignatures: number;
 };
 
@@ -73,7 +80,7 @@ const MOVE_INTENTS: Readonly<Record<string, CpuIntent>> = Object.freeze({
 function runtimeState(game: object): RivalAiState {
   let state = runtimeStates.get(game);
   if (state) return state;
-  state = { lastSignatureTick: -9999, lastPhase: null, scheduledSignatures: 0 };
+  state = { lastSignatureTick: -9999, lastPhase: null, lastMemoryRead: "NONE", scheduledSignatures: 0 };
   runtimeStates.set(game, state);
   return state;
 }
@@ -170,6 +177,8 @@ function publishDomDiagnostics(
     delete document.body.dataset.rivalCircuitAiPhase;
     delete document.body.dataset.rivalCircuitAiTactic;
     delete document.body.dataset.rivalCircuitAiSignatures;
+    delete document.body.dataset.rivalCircuitAiMemoryRead;
+    delete document.body.dataset.rivalCircuitAiMemoryApplied;
     return;
   }
   document.body.dataset.rivalCircuitAiPolicy = "RIVAL_CIRCUIT_V1";
@@ -224,17 +233,62 @@ function applyStyleIdentity(game: RivalRuntime, style: RivalCircuitStyle, state:
   return effective;
 }
 
+function applyRunMemory(game: RivalRuntime, effective: RivalCircuitStyle, state: RivalAiState): RivalCircuitMemoryRead {
+  const memory = readRivalCircuitMemoryFromDom();
+  const read = memory.read;
+
+  if (read === "RUSH" && effective !== "PRESSURE") {
+    game.enemyTactic = "BAIT";
+    game.enemyPersona = "SKIRMISHER";
+  } else if (read === "STEP") {
+    if (effective !== "PRESSURE") game.enemyTactic = "ORBIT";
+    if (game.playerEvadeSign !== 0) game.enemyOrbitSign = -game.playerEvadeSign;
+  } else if (read === "PUNISH") {
+    if (effective !== "COUNTER") game.enemyTactic = "ORBIT";
+    game.enemyPersona = "SKIRMISHER";
+  } else if (read === "INTERCEPT") {
+    game.enemyTactic = "BAIT";
+    game.enemyPersona = "SKIRMISHER";
+  }
+
+  if (read !== "NONE" && read !== "BALANCED") {
+    game.enemyTacticTicks = Math.max(game.enemyTacticTicks, 12);
+  }
+
+  const data = game.p2.visual.root.userData;
+  data.tpsRivalCircuitMemoryPolicy = memory.fights > 0 ? "RIVAL_MEMORY_V1" : "NONE";
+  data.tpsRivalCircuitMemoryRead = read;
+  data.tpsRivalCircuitMemoryConfidence = memory.confidence;
+  data.tpsRivalCircuitMemoryFights = memory.fights;
+  data.tpsRivalCircuitMemoryAppliedTactic = game.enemyTactic;
+
+  if (typeof document !== "undefined") {
+    document.body.dataset.rivalCircuitAiMemoryRead = read;
+    document.body.dataset.rivalCircuitAiMemoryApplied = game.enemyTactic;
+  }
+
+  if (state.lastMemoryRead !== read) {
+    state.lastMemoryRead = read;
+    if (memory.fights > 0 && read !== "NONE" && read !== "BALANCED") {
+      game.setCombatBeat(`RIVAL MEMORY: ${RIVAL_MEMORY_LABELS[read]}`, 32);
+    }
+  }
+  return read;
+}
+
 function tryScheduleSignature(
   game: RivalRuntime,
   style: RivalCircuitStyle,
   effective: RivalCircuitStyle,
+  memoryRead: RivalCircuitMemoryRead,
   state: RivalAiState,
 ): void {
   if (game.enemyOpeningGraceTicks > 0) return;
   if (game.enemyCooldown > 0 || game.enemyDirectorPendingMove || game.enemyDirectorTelegraphTicks > 0) return;
   if (!game.p2.canAct()) return;
 
-  const interval = style === "APEX" ? (effective === "PRESSURE" ? 108 : 126) : signatureInterval(effective);
+  const baseInterval = style === "APEX" ? (effective === "PRESSURE" ? 108 : 126) : signatureInterval(effective);
+  const interval = Math.max(84, Math.round(baseInterval * rivalMemorySignatureIntervalScale(memoryRead, effective)));
   if (game.simulationTicks - state.lastSignatureTick < interval) return;
 
   const distance = Math.hypot(
@@ -294,7 +348,8 @@ export function installRivalCircuitAiRuntime(): void {
 
     const state = runtimeState(this as unknown as object);
     const effective = applyStyleIdentity(game, style, state);
-    tryScheduleSignature(game, style, effective, state);
+    const memoryRead = applyRunMemory(game, effective, state);
+    tryScheduleSignature(game, style, effective, memoryRead, state);
     baseUpdateEnemy.call(this);
 
     const data = game.p2.visual.root.userData;
@@ -303,6 +358,7 @@ export function installRivalCircuitAiRuntime(): void {
     data.tpsRivalCircuitPhase = effective;
     data.tpsRivalCircuitTactic = game.enemyTactic;
     data.tpsRivalCircuitScheduledSignatures = state.scheduledSignatures;
+    data.tpsRivalCircuitMemoryRead = memoryRead;
     publishDomDiagnostics(style, effective, game.enemyTactic, state.scheduledSignatures);
   };
 }

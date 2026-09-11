@@ -3,6 +3,7 @@
 import { installRivalCircuitAiRuntime } from "@/src/game/rival-circuit-ai";
 import { installRivalCircuitApexBossRuntime } from "@/src/game/rival-circuit-apex-boss";
 import { installRivalCircuitArenaPresentation } from "@/src/game/rival-circuit-arena";
+import { installRivalCircuitMemoryRuntime } from "@/src/game/rival-circuit-memory-runtime";
 import { installRivalCircuitProtocolRuntime } from "@/src/game/rival-circuit-protocol-runtime";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
 import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack-action-handoff";
@@ -33,6 +34,7 @@ import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
 installRivalCircuitAiRuntime();
+installRivalCircuitMemoryRuntime();
 installRivalCircuitProtocolRuntime();
 installRivalCircuitApexBossRuntime();
 installTpsArenaSpectaclePresentation();

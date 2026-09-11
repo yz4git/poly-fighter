@@ -31,18 +31,23 @@ function makeMaterial(color: number, emissive = 0x000000): THREE.MeshStandardMat
   });
 }
 
-function ensureLayer(fighter: FighterRuntime): VantaLayer | null {
-  if (!isVanta(fighter)) return null;
-  const existing = layers.get(fighter);
-  if (existing) return existing;
+function publishVantaDiagnostics(fighter: FighterRuntime, orbiterCount: number): void {
+  fighter.visual.root.userData.tpsVantaVisual = "VANTA_V1";
+  fighter.visual.root.userData.tpsVantaOrbiterCount = orbiterCount;
+  fighter.visual.root.userData.tpsVantaFighterName = fighter.definition.name;
+  if (typeof document === "undefined") return;
+  document.body.dataset.vantaFighterVisual = "VANTA_V1";
+  document.body.dataset.vantaFighterName = fighter.definition.name;
+  document.body.dataset.vantaFighterOrbiters = String(orbiterCount);
+}
 
+function makeVantaLayer(fighter: FighterRuntime): VantaLayer {
   const group = new THREE.Group();
   group.name = "vanta-identity-v1";
   const layout = fighter.visual.layout;
 
   const violet = makeMaterial(0x6f45d7, 0x241047);
   const gold = makeMaterial(0xd7aa45, 0x3f2a09);
-  const dark = makeMaterial(0x0b0912);
   const glow = new THREE.MeshBasicMaterial({
     color: 0xb88cff,
     transparent: true,
@@ -50,7 +55,7 @@ function ensureLayer(fighter: FighterRuntime): VantaLayer | null {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  const materials: THREE.Material[] = [violet, gold, dark, glow];
+  const materials: THREE.Material[] = [violet, gold, glow];
 
   const coreGeometry = new THREE.OctahedronGeometry(0.034, 0);
   const ringGeometry = new THREE.TorusGeometry(0.058, 0.009, 5, 14);
@@ -89,10 +94,15 @@ function ensureLayer(fighter: FighterRuntime): VantaLayer | null {
   }
 
   fighter.visual.root.add(group);
-  fighter.visual.root.userData.tpsVantaVisual = "VANTA_V1";
-  fighter.visual.root.userData.tpsVantaOrbiterCount = orbiters.length;
+  publishVantaDiagnostics(fighter, orbiters.length);
+  return { group, core, ring, visor, orbiters, geometries, materials };
+}
 
-  const layer = { group, core, ring, visor, orbiters, geometries, materials };
+function ensureLayer(fighter: FighterRuntime): VantaLayer | null {
+  if (!isVanta(fighter)) return null;
+  const existing = layers.get(fighter);
+  if (existing) return existing;
+  const layer = makeVantaLayer(fighter);
   layers.set(fighter, layer);
   return layer;
 }

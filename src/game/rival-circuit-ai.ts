@@ -144,6 +144,28 @@ function circuitStyleFromDom(): RivalCircuitStyle | null {
   return resolveRivalCircuitStyleFromLabel(strip?.textContent ?? "");
 }
 
+function publishDomDiagnostics(
+  style: RivalCircuitStyle | null,
+  effective: RivalCircuitStyle | null,
+  tactic: EnemyTactic | null,
+  scheduledSignatures = 0,
+): void {
+  if (typeof document === "undefined") return;
+  if (!style || !effective || !tactic) {
+    delete document.body.dataset.rivalCircuitAiPolicy;
+    delete document.body.dataset.rivalCircuitAiStyle;
+    delete document.body.dataset.rivalCircuitAiPhase;
+    delete document.body.dataset.rivalCircuitAiTactic;
+    delete document.body.dataset.rivalCircuitAiSignatures;
+    return;
+  }
+  document.body.dataset.rivalCircuitAiPolicy = "RIVAL_CIRCUIT_V1";
+  document.body.dataset.rivalCircuitAiStyle = style;
+  document.body.dataset.rivalCircuitAiPhase = effective;
+  document.body.dataset.rivalCircuitAiTactic = tactic;
+  document.body.dataset.rivalCircuitAiSignatures = String(scheduledSignatures);
+}
+
 function telegraphTicksFor(game: RivalRuntime, moveId: string): number {
   const base = game.difficulty === "EASY" ? 24 : game.difficulty === "HARD" ? 17 : 20;
   return base + (["dashKick", "counter", "risingKick"].includes(moveId) ? 5 : 0);
@@ -249,6 +271,7 @@ export function installRivalCircuitAiRuntime(): void {
     const game = this as unknown as RivalRuntime;
     const style = circuitStyleFromDom();
     if (!style) {
+      publishDomDiagnostics(null, null, null);
       baseUpdateEnemy.call(this);
       return;
     }
@@ -267,5 +290,6 @@ export function installRivalCircuitAiRuntime(): void {
     data.tpsRivalCircuitPhase = effective;
     data.tpsRivalCircuitTactic = game.enemyTactic;
     data.tpsRivalCircuitScheduledSignatures = state.scheduledSignatures;
+    publishDomDiagnostics(style, effective, game.enemyTactic, state.scheduledSignatures);
   };
 }

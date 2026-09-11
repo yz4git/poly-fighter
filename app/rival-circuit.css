@@ -209,6 +209,20 @@
 .circuit-history-row b { color: #ff8ca2; text-align: right; }
 
 @media (max-height: 430px) {
+  /* v0.2 adds one more primary entry point. Compact the whole title stack so
+     every touch target, including SETTINGS, remains fully visible on iPhone. */
+  .title-screen h1 { margin: 3px 0 1px; font-size: 36px; }
+  .title-kicker { font-size: 8px; }
+  .title-subtitle { margin: 4px 0 0; font-size: 9px; letter-spacing: .3em; }
+  .title-mark { margin: 7px 0 6px; gap: 10px; }
+  .title-mark span { height: 1px; }
+  .title-copy { margin: 0 0 7px; font-size: 10px; line-height: 1.3; }
+  .title-screen .primary-button { padding: 9px 18px 8px; gap: 2px; }
+  .title-screen .primary-button span { font-size: 14px; }
+  .title-screen .primary-button small { font-size: 7px; }
+  .title-screen .ghost-button { margin-top: 5px; padding: 6px 14px; font-size: 9px; }
+  .title-footer { bottom: max(6px, env(safe-area-inset-bottom)); }
+
   .circuit-briefing { grid-template-columns: 126px 1fr; margin: 5px 0; padding: 8px; }
   .circuit-briefing-code { min-height: 66px; }
   .circuit-briefing-copy p { margin: 4px 0; }

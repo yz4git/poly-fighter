@@ -3,6 +3,7 @@
 import { installRivalCircuitAiRuntime } from "@/src/game/rival-circuit-ai";
 import { installRivalCircuitApexBossRuntime } from "@/src/game/rival-circuit-apex-boss";
 import { installRivalCircuitArenaPresentation } from "@/src/game/rival-circuit-arena";
+import { installRivalCircuitFinishRuntime } from "@/src/game/rival-circuit-finish-runtime";
 import { installRivalCircuitMemoryRuntime } from "@/src/game/rival-circuit-memory-runtime";
 import { installRivalCircuitProtocolRuntime } from "@/src/game/rival-circuit-protocol-runtime";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
@@ -65,6 +66,9 @@ installTpsKickContactShapingPresentation();
 installTpsKickSupportFootPresentation();
 installTpsDashKickGroundContactPresentation();
 installTpsKickPairSpacingPresentation();
+// Install last so the two-button chord is the outer gameplay guard. All existing
+// motion/readability wrappers still process the committed finisher on later ticks.
+installRivalCircuitFinishRuntime();
 
 export default function TpsPresentationBootstrap() {
   return null;

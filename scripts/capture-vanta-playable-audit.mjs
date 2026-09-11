@@ -32,9 +32,7 @@ async function command(path, method = "GET", body) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.value?.error) {
-    throw new Error(`${method} ${path} failed: ${response.status} ${JSON.stringify(payload)}`);
-  }
+  if (!response.ok || payload?.value?.error) throw new Error(`${method} ${path} failed: ${response.status} ${JSON.stringify(payload)}`);
   return payload.value;
 }
 
@@ -66,7 +64,7 @@ async function screenshot(sessionId, path) {
   const encoded = await command(`/session/${sessionId}/screenshot`);
   const bytes = Buffer.from(encoded, "base64");
   if (bytes.length < 128 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
-    throw new Error(`VANTA playable audit screenshot is not PNG: ${path}`);
+    throw new Error(`Roster playable audit screenshot is not PNG: ${path}`);
   }
   await writeFile(path, bytes);
 }
@@ -98,8 +96,6 @@ async function inspectLoadout(sessionId) {
   return execute(sessionId, `
     const p1Cards = [...document.querySelectorAll('[data-fighter-slot="P1"]')];
     const p2Cards = [...document.querySelectorAll('[data-fighter-slot="P2"]')];
-    const p1Vanta = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="violet"]');
-    const p2Vanta = document.querySelector('[data-fighter-slot="P2"][data-fighter-id="violet"]');
     return {
       width: window.innerWidth,
       height: window.innerHeight,
@@ -107,9 +103,12 @@ async function inspectLoadout(sessionId) {
       p2Count: p2Cards.length,
       p1Names: p1Cards.map((entry) => entry.querySelector('strong')?.textContent ?? ''),
       p2Names: p2Cards.map((entry) => entry.querySelector('strong')?.textContent ?? ''),
-      p1Vanta: Boolean(p1Vanta),
-      p2Vanta: Boolean(p2Vanta),
+      p1Vanta: Boolean(document.querySelector('[data-fighter-slot="P1"][data-fighter-id="violet"]')),
+      p2Vanta: Boolean(document.querySelector('[data-fighter-slot="P2"][data-fighter-id="violet"]')),
+      p1Bront: Boolean(document.querySelector('[data-fighter-slot="P1"][data-fighter-id="amber"]')),
+      p2Bront: Boolean(document.querySelector('[data-fighter-slot="P2"][data-fighter-id="amber"]')),
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      verticalOverflow: document.documentElement.scrollHeight > window.innerHeight + 1,
     };
   `);
 }
@@ -125,15 +124,28 @@ async function inspectMatch(sessionId) {
       p2Name: document.querySelector('.right-player .hud-name strong')?.textContent ?? '',
       actionCount: actions.length,
       actionLabels: actions.map((entry) => entry.getAttribute('aria-label')),
-      visual: document.body.dataset.vantaFighterVisual ?? '',
-      fighterName: document.body.dataset.vantaFighterName ?? '',
-      orbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
-      palette: document.body.dataset.vantaFighterPalette ?? '',
+      vantaVisual: document.body.dataset.vantaFighterVisual ?? '',
+      vantaName: document.body.dataset.vantaFighterName ?? '',
+      vantaOrbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
+      brontVisual: document.body.dataset.brontFighterVisual ?? '',
+      brontName: document.body.dataset.brontFighterName ?? '',
+      brontPlates: Number(document.body.dataset.brontFighterPlates ?? '0'),
+      brontPalette: document.body.dataset.brontFighterPalette ?? '',
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       verticalOverflow: document.documentElement.scrollHeight > window.innerHeight + 1,
     };
   `);
+}
+
+function commonMatchPass(state) {
+  return state.canvas
+    && state.actionCount === 2
+    && state.actionLabels.includes("Attack")
+    && state.actionLabels.includes("Step")
+    && !state.fallback
+    && !state.horizontalOverflow
+    && !state.verticalOverflow;
 }
 
 let sessionId = null;
@@ -152,83 +164,69 @@ try {
   sessionId = session.sessionId;
   await mkdir(outputDir, { recursive: true });
 
-  // Player-side VANTA: select the real third card, then boot the normal TPS match.
   await openLoadout(sessionId);
   const loadout = await inspectLoadout(sessionId);
+  const names = "KAIRO|SERA|VANTA|BRONT";
   if (
-    loadout.width !== 932
-    || loadout.height !== 430
-    || loadout.p1Count !== 3
-    || loadout.p2Count !== 3
-    || loadout.p1Names.join('|') !== 'KAIRO|SERA|VANTA'
-    || loadout.p2Names.join('|') !== 'KAIRO|SERA|VANTA'
-    || !loadout.p1Vanta
-    || !loadout.p2Vanta
-    || loadout.horizontalOverflow
-  ) {
-    throw new Error(`Three-fighter TPS loadout failed: ${JSON.stringify(loadout)}`);
-  }
+    loadout.width !== 932 || loadout.height !== 430
+    || loadout.p1Count !== 4 || loadout.p2Count !== 4
+    || loadout.p1Names.join('|') !== names || loadout.p2Names.join('|') !== names
+    || !loadout.p1Vanta || !loadout.p2Vanta || !loadout.p1Bront || !loadout.p2Bront
+    || loadout.horizontalOverflow || loadout.verticalOverflow
+  ) throw new Error(`Four-fighter TPS loadout failed: ${JSON.stringify(loadout)}`);
 
-  if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="violet"]')) {
-    throw new Error("Could not select VANTA for P1");
-  }
-  const selected = await execute(sessionId, `
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="violet"]')) throw new Error("Could not select VANTA for P1");
+  const selectedVanta = await execute(sessionId, `
     const card = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="violet"]');
-    return {
-      selected: card?.classList.contains('selected-violet') ?? false,
-      engageCopy: [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes('ENGAGE'))?.textContent ?? '',
-    };
+    return { selected: card?.classList.contains('selected-violet') ?? false };
   `);
-  if (!selected.selected || !selected.engageCopy.includes('VANTA')) {
-    throw new Error(`VANTA P1 selection did not commit: ${JSON.stringify(selected)}`);
-  }
+  if (!selectedVanta.selected) throw new Error("VANTA P1 selection did not commit");
   await screenshot(sessionId, `${outputDir}/vanta-playable-loadout-iphone.png`);
-
   if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage VANTA P1 match");
   await delay(1500);
-  const p1Match = await inspectMatch(sessionId);
-  const p1Pass = p1Match.canvas
-    && p1Match.p1Name === "VANTA"
-    && p1Match.p2Name === "SERA"
-    && p1Match.actionCount === 2
-    && p1Match.actionLabels.includes("Attack")
-    && p1Match.actionLabels.includes("Step")
-    && p1Match.visual === "VANTA_V2"
-    && p1Match.fighterName === "VANTA"
-    && p1Match.orbiters === 3
-    && !p1Match.fallback
-    && !p1Match.horizontalOverflow
-    && !p1Match.verticalOverflow;
-  if (!p1Pass) throw new Error(`Playable VANTA P1 WebGL runtime failed: ${JSON.stringify(p1Match)}`);
+  const vantaP1 = await inspectMatch(sessionId);
+  if (!(commonMatchPass(vantaP1) && vantaP1.p1Name === "VANTA" && vantaP1.p2Name === "SERA" && vantaP1.vantaVisual === "VANTA_V2" && vantaP1.vantaName === "VANTA" && vantaP1.vantaOrbiters === 3)) {
+    throw new Error(`Playable VANTA P1 WebGL runtime failed: ${JSON.stringify(vantaP1)}`);
+  }
   await screenshot(sessionId, `${outputDir}/vanta-playable-p1-iphone.png`);
 
-  // CPU-side VANTA from the normal Versus selector, without the old audit query hook.
   await openLoadout(sessionId);
-  if (!await clickSelector(sessionId, '[data-fighter-slot="P2"][data-fighter-id="violet"]')) {
-    throw new Error("Could not select VANTA for P2");
-  }
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P2"][data-fighter-id="violet"]')) throw new Error("Could not select VANTA for P2");
   if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage VANTA P2 match");
   await delay(1500);
-  const p2Match = await inspectMatch(sessionId);
-  const p2Pass = p2Match.canvas
-    && p2Match.p1Name === "KAIRO"
-    && p2Match.p2Name === "VANTA"
-    && p2Match.actionCount === 2
-    && p2Match.actionLabels.includes("Attack")
-    && p2Match.actionLabels.includes("Step")
-    && p2Match.visual === "VANTA_V2"
-    && p2Match.fighterName === "VANTA"
-    && p2Match.orbiters === 3
-    && !p2Match.fallback
-    && !p2Match.horizontalOverflow
-    && !p2Match.verticalOverflow;
-  if (!p2Pass) throw new Error(`Selectable VANTA P2 WebGL runtime failed: ${JSON.stringify(p2Match)}`);
+  const vantaP2 = await inspectMatch(sessionId);
+  if (!(commonMatchPass(vantaP2) && vantaP2.p1Name === "KAIRO" && vantaP2.p2Name === "VANTA" && vantaP2.vantaVisual === "VANTA_V2" && vantaP2.vantaName === "VANTA" && vantaP2.vantaOrbiters === 3)) {
+    throw new Error(`Selectable VANTA P2 WebGL runtime failed: ${JSON.stringify(vantaP2)}`);
+  }
   await screenshot(sessionId, `${outputDir}/vanta-playable-p2-iphone.png`);
 
-  await writeFile(
-    `${outputDir}/vanta-playable.json`,
-    `${JSON.stringify({ loadout, selected, p1Match, p2Match }, null, 2)}\n`,
-  );
+  await openLoadout(sessionId);
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="amber"]')) throw new Error("Could not select BRONT for P1");
+  const selectedBront = await execute(sessionId, `
+    const card = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="amber"]');
+    return { selected: card?.classList.contains('selected-amber') ?? false };
+  `);
+  if (!selectedBront.selected) throw new Error("BRONT P1 selection did not commit");
+  await screenshot(sessionId, `${outputDir}/bront-playable-loadout-iphone.png`);
+  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage BRONT P1 match");
+  await delay(1500);
+  const brontP1 = await inspectMatch(sessionId);
+  if (!(commonMatchPass(brontP1) && brontP1.p1Name === "BRONT" && brontP1.p2Name === "SERA" && brontP1.brontVisual === "BRONT_V1" && brontP1.brontName === "BRONT" && brontP1.brontPlates >= 6 && brontP1.brontPalette === "AMBER_BLACK_STEEL")) {
+    throw new Error(`Playable BRONT P1 WebGL runtime failed: ${JSON.stringify(brontP1)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/bront-playable-p1-iphone.png`);
+
+  await openLoadout(sessionId);
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P2"][data-fighter-id="amber"]')) throw new Error("Could not select BRONT for P2");
+  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage BRONT P2 match");
+  await delay(1500);
+  const brontP2 = await inspectMatch(sessionId);
+  if (!(commonMatchPass(brontP2) && brontP2.p1Name === "KAIRO" && brontP2.p2Name === "BRONT" && brontP2.brontVisual === "BRONT_V1" && brontP2.brontName === "BRONT" && brontP2.brontPlates >= 6 && brontP2.brontPalette === "AMBER_BLACK_STEEL")) {
+    throw new Error(`Selectable BRONT P2 WebGL runtime failed: ${JSON.stringify(brontP2)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/bront-playable-p2-iphone.png`);
+
+  await writeFile(`${outputDir}/vanta-playable.json`, `${JSON.stringify({ loadout, selectedVanta, vantaP1, vantaP2, selectedBront, brontP1, brontP2 }, null, 2)}\n`);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");

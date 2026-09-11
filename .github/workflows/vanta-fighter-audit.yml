@@ -1,4 +1,4 @@
-name: POLY FIGHTER VANTA WebGL audit
+name: POLY FIGHTER Roster WebGL audit
 
 on:
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
           done
           cat /tmp/poly-fighter-vanta-server.log
           exit 1
-      - name: Capture VANTA Rival Circuit and playable fights
+      - name: Capture Rival Circuit and four-fighter playable roster
         run: |
           mkdir -p artifacts/vanta-webgl-audit
           DRIVER="$(command -v chromedriver || true)"
@@ -74,7 +74,10 @@ jobs:
             rival-circuit-vanta-iphone \
             vanta-playable-loadout-iphone \
             vanta-playable-p1-iphone \
-            vanta-playable-p2-iphone; do
+            vanta-playable-p2-iphone \
+            bront-playable-loadout-iphone \
+            bront-playable-p1-iphone \
+            bront-playable-p2-iphone; do
             test -s "artifacts/vanta-webgl-audit/${image}.png"
             file "artifacts/vanta-webgl-audit/${image}.png" | grep -q "PNG image data"
           done

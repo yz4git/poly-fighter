@@ -1,5 +1,5 @@
 .fighter-select-grid.v3-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .fighter-card.selected-violet {
@@ -13,33 +13,44 @@
   color: #e0bd61;
 }
 
+.fighter-card.selected-amber {
+  transform: translateY(-2px);
+  background: rgba(78, 45, 22, .92);
+  border-color: #ff9f43;
+  box-shadow: inset 5px 0 #d4772d, 0 0 20px rgba(255, 159, 67, .14);
+}
+
+.fighter-card.selected-amber em {
+  color: #f0ce7a;
+}
+
 @media (max-width: 760px) {
   .fighter-select-grid.v3-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
   }
   .fighter-select-grid.v3-grid .fighter-card {
-    min-height: 126px;
-    grid-template-columns: 42px 1fr;
-    column-gap: 8px;
-    padding: 12px 9px;
+    min-height: 112px;
+    grid-template-columns: 34px 1fr;
+    column-gap: 6px;
+    padding: 10px 7px;
   }
   .fighter-select-grid.v3-grid .fighter-orb {
-    width: 36px;
-    height: 58px;
+    width: 30px;
+    height: 52px;
   }
   .fighter-select-grid.v3-grid .fighter-card strong {
-    font-size: 17px;
+    font-size: 15px;
   }
   .fighter-select-grid.v3-grid .fighter-card small,
   .fighter-select-grid.v3-grid .fighter-card em {
-    font-size: 7px;
-    letter-spacing: .08em;
+    font-size: 6px;
+    letter-spacing: .06em;
   }
 }
 
 @media (max-width: 560px) {
   .fighter-select-grid.v3-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -486,15 +486,15 @@ export default function Home() {
           <div className="title-mark"><span /> <b>03</b> <span /></div>
           <p className="title-copy">A close-range 3D lock-on fighter built for direct movement, readable impact, and fast rematches.</p>
           <button type="button" className="primary-button circuit-primary" onClick={startCircuit}>
-            <span>RIVAL CIRCUIT</span><small>5 FIGHTS / STYLE GRADE / PROTOCOLS / VANTA</small>
+            <span>RIVAL CIRCUIT</span><small>5 FIGHTS / STYLE GRADE / PROTOCOLS / 4 FIGHTERS</small>
           </button>
           <button type="button" className="primary-button" onClick={() => { setMatchMode("VERSUS"); setScreen("SELECT"); requestLandscape(); }}>
-            <span>START FIGHT</span><small>TPS LOCK-ON / 3 FIGHTERS / LOADOUT SELECT</small>
+            <span>START FIGHT</span><small>TPS LOCK-ON / 4 FIGHTERS / LOADOUT SELECT</small>
           </button>
           <button type="button" className="ghost-button" onClick={startTraining}>TRAINING</button>
           <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
-          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.3 // VANTA ONLINE</span></div>
+          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.3 // FOUR-FIGHTER ROSTER</span></div>
         </section>
       )}
 

@@ -201,8 +201,6 @@ try {
 
   const circuitEnter = await clickButton(sessionId, "ENTER CIRCUIT");
   if (!circuitEnter.clicked) throw new Error(`ENTER CIRCUIT could not start stage one: ${JSON.stringify(circuitEnter)}`);
-  // Stage one has a 132-tick non-hostile read window. Wait through it so the
-  // audit proves the named PRESSURE layer actually schedules a fair signature.
   await delay(4300);
   const circuitMatch = await execute(sessionId, `
     const buttons = [...document.querySelectorAll('button')];
@@ -224,6 +222,9 @@ try {
       aiPhase: document.body.dataset.rivalCircuitAiPhase ?? '',
       aiTactic: document.body.dataset.rivalCircuitAiTactic ?? '',
       signatures: Number(document.body.dataset.rivalCircuitAiSignatures ?? '0'),
+      arenaStage: document.body.dataset.rivalCircuitArenaStage ?? '',
+      arenaId: document.body.dataset.rivalCircuitArenaId ?? '',
+      arenaLabel: document.body.dataset.rivalCircuitArenaLabel ?? '',
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
     };
   `);
@@ -235,14 +236,15 @@ try {
     && circuitMatch.aiPhase === 'PRESSURE'
     && circuitMatch.aiTactic === 'PRESSURE'
     && circuitMatch.signatures >= 1
+    && circuitMatch.arenaStage === '1'
+    && circuitMatch.arenaId === 'GLASSLINE'
+    && circuitMatch.arenaLabel.includes('GLASSLINE')
     && !circuitMatch.fallback
     && withinViewport(circuitMatch.attack, circuitMatch.width, circuitMatch.height)
     && withinViewport(circuitMatch.step, circuitMatch.width, circuitMatch.height);
   if (!circuitMatchPass) throw new Error(`Rival Circuit PRESSURE runtime audit failed: ${JSON.stringify(circuitMatch)}`);
   await screenshot(sessionId, `${outputDir}/rival-circuit-pressure-match-iphone.png`);
 
-  // Reload so the long-standing normal START FIGHT entry audit remains fully
-  // independent from the new Circuit path.
   await navigateHome(sessionId);
   const clicked = await clickButton(sessionId, "START FIGHT");
   if (!clicked.clicked) throw new Error(`START FIGHT could not open loadout: ${JSON.stringify(clicked)}`);

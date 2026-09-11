@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  effectiveApexStyleForHealth,
   effectiveRivalCircuitStyle,
   resolveRivalCircuitStyleFromLabel,
   rivalCircuitSignaturePlan,
   rivalCircuitTacticForStyle,
 } from "../src/game/rival-circuit-ai";
+import {
+  APEX_BOSS_PHASES,
+  apexBossPhaseForHealth,
+} from "../src/game/rival-circuit-apex-boss";
 import {
   RIVAL_CIRCUIT_ENCOUNTERS,
   rivalCircuitGradeForScore,
@@ -117,10 +122,38 @@ test("signature plans are readable and conditional instead of frame-perfect chea
   );
 });
 
-test("APEX rotates through the four learned rival disciplines deterministically", () => {
+test("APEX keeps its deterministic fallback discipline rotation for isolated policy tests", () => {
   assert.equal(effectiveRivalCircuitStyle("APEX", 0), "PRESSURE");
   assert.equal(effectiveRivalCircuitStyle("APEX", 300), "ANGLE");
   assert.equal(effectiveRivalCircuitStyle("APEX", 600), "COUNTER");
   assert.equal(effectiveRivalCircuitStyle("APEX", 900), "STEP_HUNTER");
   assert.equal(effectiveRivalCircuitStyle("APEX", 1200), "PRESSURE");
+});
+
+test("APEX-0 live boss phases are health-gated rather than timer-gated", () => {
+  assert.equal(APEX_BOSS_PHASES.length, 3);
+  assert.equal(apexBossPhaseForHealth(100).phase, "CALIBRATE");
+  assert.equal(apexBossPhaseForHealth(61).phase, "CALIBRATE");
+  assert.equal(apexBossPhaseForHealth(60).phase, "ADAPT");
+  assert.equal(apexBossPhaseForHealth(31).phase, "ADAPT");
+  assert.equal(apexBossPhaseForHealth(30).phase, "ZERO");
+  assert.equal(apexBossPhaseForHealth(0).phase, "ZERO");
+  assert.equal(effectiveApexStyleForHealth(100), "ANGLE");
+  assert.equal(effectiveApexStyleForHealth(60), "COUNTER");
+  assert.equal(effectiveApexStyleForHealth(30), "PRESSURE");
+});
+
+test("APEX signature routing follows live boss health", () => {
+  assert.equal(
+    rivalCircuitSignaturePlan({ style: "APEX", simulationTicks: 720, distance: 1.5, playerAttacking: false, playerSideStepping: false, apexHealth: 60 }),
+    null,
+  );
+  assert.deepEqual(
+    rivalCircuitSignaturePlan({ style: "APEX", simulationTicks: 720, distance: 1.5, playerAttacking: true, playerSideStepping: false, apexHealth: 60 }),
+    { moveId: "counter", intent: "COUNTER", label: "ANSWER" },
+  );
+  assert.equal(
+    rivalCircuitSignaturePlan({ style: "APEX", simulationTicks: 720, distance: 2.4, playerAttacking: false, playerSideStepping: false, apexHealth: 30 })?.moveId,
+    "dashKick",
+  );
 });

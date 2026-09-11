@@ -1,4 +1,4 @@
-export type FighterDnaId = "KAIRO" | "SERA";
+export type FighterDnaId = "KAIRO" | "SERA" | "VANTA";
 
 export interface FighterDna {
   id: FighterDnaId;
@@ -86,6 +86,22 @@ export const FIGHTER_DNA: Readonly<Record<FighterDnaId, FighterDna>> = Object.fr
       desperation: "PRISM BREAK",
     },
   }),
+  VANTA: Object.freeze({
+    id: "VANTA",
+    moveSpeedScale: 1.02,
+    stepSpeedScale: 1.04,
+    stepCooldownScale: 1,
+    perfectEvadeBonusTicks: 2,
+    interceptDamageScale: 1.16,
+    reversalDamageScale: 1.20,
+    comboPressureScale: 0.92,
+    signature: {
+      intercept: "NULL CHECK",
+      reversal: "MIRROR BREAK",
+      flank: "AXIS TRAP",
+      desperation: "VANTA COLLAPSE",
+    },
+  }),
 });
 
 export function fighterDnaForName(name: string): FighterDna {
@@ -96,6 +112,8 @@ export function fighterDnaForName(name: string): FighterDna {
 export function resolveContextAttack(situation: ContextAttackSituation): ContextAttackChoice {
   const dna = fighterDnaForName(situation.fighterName);
   const kairo = dna.id === "KAIRO";
+  const sera = dna.id === "SERA";
+  const vanta = dna.id === "VANTA";
   const stage = Math.max(0, Math.min(2, situation.comboStage));
 
   if (situation.reversalOpen) {
@@ -103,38 +121,45 @@ export function resolveContextAttack(situation: ContextAttackSituation): Context
   }
 
   if (situation.interceptOpen) {
-    return kairo
-      ? { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept }
-      : { moveId: "backfist", beat: dna.signature.intercept, signature: dna.signature.intercept };
+    if (kairo) return { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept };
+    if (vanta) return { moveId: "straight", beat: dna.signature.intercept, signature: dna.signature.intercept };
+    return { moveId: "backfist", beat: dna.signature.intercept, signature: dna.signature.intercept };
   }
 
   if (situation.selfHealth <= 24 && situation.defenderHealth <= 34 && situation.distance <= 1.82) {
-    return kairo
-      ? { moveId: "power", beat: dna.signature.desperation, signature: dna.signature.desperation }
-      : { moveId: "risingKick", beat: dna.signature.desperation, signature: dna.signature.desperation };
+    if (kairo || vanta) return { moveId: "power", beat: dna.signature.desperation, signature: dna.signature.desperation };
+    return { moveId: "risingKick", beat: dna.signature.desperation, signature: dna.signature.desperation };
   }
 
   if (situation.flankOpen) {
-    return kairo
-      ? { moveId: "backfist", beat: dna.signature.flank, signature: dna.signature.flank }
-      : { moveId: "bodyBlow", beat: dna.signature.flank, signature: dna.signature.flank };
+    if (kairo) return { moveId: "backfist", beat: dna.signature.flank, signature: dna.signature.flank };
+    if (vanta) return { moveId: "lowKick", beat: dna.signature.flank, signature: dna.signature.flank };
+    return { moveId: "bodyBlow", beat: dna.signature.flank, signature: dna.signature.flank };
   }
 
   if (situation.defenderNearWall && situation.distance <= 1.62) {
-    return kairo
-      ? { moveId: stage >= 1 ? "power" : "bodyBlow", beat: "WALL PRESSURE", signature: null }
-      : { moveId: stage >= 1 ? "lowKick" : "bodyBlow", beat: "ANGLE PRESSURE", signature: null };
+    if (kairo) return { moveId: stage >= 1 ? "power" : "bodyBlow", beat: "WALL PRESSURE", signature: null };
+    if (vanta) return { moveId: stage >= 1 ? "bodyBlow" : "straight", beat: "MIRROR PRESSURE", signature: null };
+    return { moveId: stage >= 1 ? "lowKick" : "bodyBlow", beat: "ANGLE PRESSURE", signature: null };
   }
 
   if (situation.defenderAttacking && situation.distance <= 1.48) {
-    return { moveId: "counter", beat: "COUNTER READ", signature: null };
+    return { moveId: "counter", beat: vanta ? "NULL COUNTER READ" : "COUNTER READ", signature: null };
   }
 
   if (situation.distance <= 1.58) {
-    const closeMoves = kairo ? ["jab", "straight", "power"] : ["jab", "bodyBlow", "straight"];
+    const closeMoves = kairo
+      ? ["jab", "straight", "power"]
+      : sera
+        ? ["jab", "bodyBlow", "straight"]
+        : ["jab", "counter", "bodyBlow"];
     return { moveId: closeMoves[stage], beat: null, signature: null };
   }
 
-  const farMoves = kairo ? ["kick", "straight", "risingKick"] : ["kick", "lowKick", "risingKick"];
+  const farMoves = kairo
+    ? ["kick", "straight", "risingKick"]
+    : sera
+      ? ["kick", "lowKick", "risingKick"]
+      : ["straight", "lowKick", "dashKick"];
   return { moveId: farMoves[stage], beat: null, signature: null };
 }

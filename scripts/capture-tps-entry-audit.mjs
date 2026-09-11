@@ -199,6 +199,48 @@ try {
   if (!circuitPass) throw new Error(`Rival Circuit iPhone loadout failed: ${JSON.stringify(circuitLoadout)}`);
   await screenshot(sessionId, `${outputDir}/rival-circuit-loadout-iphone.png`);
 
+  const circuitEnter = await clickButton(sessionId, "ENTER CIRCUIT");
+  if (!circuitEnter.clicked) throw new Error(`ENTER CIRCUIT could not start stage one: ${JSON.stringify(circuitEnter)}`);
+  // Stage one has a 132-tick non-hostile read window. Wait through it so the
+  // audit proves the named PRESSURE layer actually schedules a fair signature.
+  await delay(4300);
+  const circuitMatch = await execute(sessionId, `
+    const buttons = [...document.querySelectorAll('button')];
+    const actionRect = (text) => {
+      const button = buttons.find((entry) => entry.textContent?.includes(text));
+      const rect = button?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
+    };
+    const strip = document.querySelector('.circuit-run-strip');
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      canvas: Boolean(document.querySelector('.scene-host.visible canvas')),
+      strip: strip?.textContent ?? '',
+      attack: actionRect('ATTACK'),
+      step: actionRect('STEP'),
+      aiPolicy: document.body.dataset.rivalCircuitAiPolicy ?? '',
+      aiStyle: document.body.dataset.rivalCircuitAiStyle ?? '',
+      aiPhase: document.body.dataset.rivalCircuitAiPhase ?? '',
+      aiTactic: document.body.dataset.rivalCircuitAiTactic ?? '',
+      signatures: Number(document.body.dataset.rivalCircuitAiSignatures ?? '0'),
+      fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
+    };
+  `);
+  const circuitMatchPass = circuitMatch.canvas
+    && circuitMatch.strip.includes('GLASSLINE')
+    && circuitMatch.strip.includes('PRESSURE')
+    && circuitMatch.aiPolicy === 'RIVAL_CIRCUIT_V1'
+    && circuitMatch.aiStyle === 'PRESSURE'
+    && circuitMatch.aiPhase === 'PRESSURE'
+    && circuitMatch.aiTactic === 'PRESSURE'
+    && circuitMatch.signatures >= 1
+    && !circuitMatch.fallback
+    && withinViewport(circuitMatch.attack, circuitMatch.width, circuitMatch.height)
+    && withinViewport(circuitMatch.step, circuitMatch.width, circuitMatch.height);
+  if (!circuitMatchPass) throw new Error(`Rival Circuit PRESSURE runtime audit failed: ${JSON.stringify(circuitMatch)}`);
+  await screenshot(sessionId, `${outputDir}/rival-circuit-pressure-match-iphone.png`);
+
   // Reload so the long-standing normal START FIGHT entry audit remains fully
   // independent from the new Circuit path.
   await navigateHome(sessionId);
@@ -243,7 +285,7 @@ try {
     && loadout.cards.every((rect) => withinViewport(rect, loadout.width, loadout.height));
   if (!loadoutPass) throw new Error(`TPS iPhone loadout layout failed: ${JSON.stringify(loadout)}`);
   await screenshot(sessionId, `${outputDir}/tps-loadout-iphone.png`);
-  await writeFile(`${outputDir}/tps-entry-layout.json`, `${JSON.stringify({ title, circuitLoadout, loadout }, null, 2)}\n`);
+  await writeFile(`${outputDir}/tps-entry-layout.json`, `${JSON.stringify({ title, circuitLoadout, circuitMatch, loadout }, null, 2)}\n`);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");

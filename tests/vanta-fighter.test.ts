@@ -44,8 +44,8 @@ test("VANTA registers as a third fighter without replacing KAIRO or SERA", () =>
   assert.equal(vanta.colors.accent, 0xd7aa45);
 });
 
-test("playable roster exposes KAIRO, SERA, and VANTA without changing defaults", () => {
-  assert.deepEqual(PLAYABLE_FIGHTERS.map((fighter) => fighter.name), ["KAIRO", "SERA", "VANTA"]);
+test("playable roster keeps KAIRO, SERA, and VANTA stable after expansion", () => {
+  assert.deepEqual(PLAYABLE_FIGHTERS.map((fighter) => fighter.name), ["KAIRO", "SERA", "VANTA", "ROOK"]);
   assert.equal(playableFighterDefinition("red").name, "KAIRO");
   assert.equal(playableFighterDefinition("blue", "blue").name, "SERA");
   assert.equal(playableFighterDefinition(VANTA_FIGHTER_ID).name, "VANTA");

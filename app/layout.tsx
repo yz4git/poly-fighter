@@ -8,6 +8,7 @@ import "./tps-main-mode.css";
 import "./tps-pad-polish.css";
 import "./rival-circuit.css";
 import "./rival-circuit-finish.css";
+import "./vanta-playable.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

@@ -194,7 +194,7 @@ try {
     && withinViewport(circuitLoadout.enter, circuitLoadout.width, circuitLoadout.height)
     && withinViewport(circuitLoadout.back, circuitLoadout.width, circuitLoadout.height)
     && withinViewport(circuitLoadout.visualModel, circuitLoadout.width, circuitLoadout.height)
-    && circuitLoadout.cards.length === 2
+    && circuitLoadout.cards.length === 3
     && circuitLoadout.cards.every((rect) => withinViewport(rect, circuitLoadout.width, circuitLoadout.height));
   if (!circuitPass) throw new Error(`Rival Circuit iPhone loadout failed: ${JSON.stringify(circuitLoadout)}`);
   await screenshot(sessionId, `${outputDir}/rival-circuit-loadout-iphone.png`);
@@ -323,7 +323,7 @@ try {
     && withinViewport(loadout.back, loadout.width, loadout.height)
     && withinViewport(loadout.cpuDifficulty, loadout.width, loadout.height)
     && withinViewport(loadout.visualModel, loadout.width, loadout.height)
-    && loadout.cards.length === 4
+    && loadout.cards.length === 6
     && loadout.cards.every((rect) => withinViewport(rect, loadout.width, loadout.height));
   if (!loadoutPass) throw new Error(`TPS iPhone loadout layout failed: ${JSON.stringify(loadout)}`);
   await screenshot(sessionId, `${outputDir}/tps-loadout-iphone.png`);

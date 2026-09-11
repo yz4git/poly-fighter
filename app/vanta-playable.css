@@ -1,0 +1,45 @@
+.fighter-select-grid.v3-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fighter-card.selected-violet {
+  transform: translateY(-2px);
+  background: rgba(47, 35, 82, .9);
+  border-color: #b88cff;
+  box-shadow: inset 5px 0 #8a5cff, 0 0 20px rgba(184, 140, 255, .12);
+}
+
+.fighter-card.selected-violet em {
+  color: #e0bd61;
+}
+
+@media (max-width: 760px) {
+  .fighter-select-grid.v3-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .fighter-select-grid.v3-grid .fighter-card {
+    min-height: 126px;
+    grid-template-columns: 42px 1fr;
+    column-gap: 8px;
+    padding: 12px 9px;
+  }
+  .fighter-select-grid.v3-grid .fighter-orb {
+    width: 36px;
+    height: 58px;
+  }
+  .fighter-select-grid.v3-grid .fighter-card strong {
+    font-size: 17px;
+  }
+  .fighter-select-grid.v3-grid .fighter-card small,
+  .fighter-select-grid.v3-grid .fighter-card em {
+    font-size: 7px;
+    letter-spacing: .08em;
+  }
+}
+
+@media (max-width: 560px) {
+  .fighter-select-grid.v3-grid {
+    grid-template-columns: 1fr;
+  }
+}

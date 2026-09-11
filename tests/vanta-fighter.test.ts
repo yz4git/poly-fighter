@@ -8,6 +8,11 @@ import {
   VANTA_FIGHTER_DEFINITION,
   VANTA_FIGHTER_ID,
 } from "../src/game/fighter-vanta";
+import {
+  PLAYABLE_FIGHTERS,
+  playableFighterDefinition,
+  playableFighterSelectedClass,
+} from "../src/game/playable-fighters";
 import { RIVAL_CIRCUIT_ENCOUNTERS } from "../src/game/rival-circuit";
 
 const REQUIRED_MOVES = [
@@ -37,6 +42,23 @@ test("VANTA registers as a third fighter without replacing KAIRO or SERA", () =>
   assert.equal(vanta.callsign, "THE NULL MIRROR");
   assert.equal(vanta.colors.primary, 0x6f45d7);
   assert.equal(vanta.colors.accent, 0xd7aa45);
+});
+
+test("playable roster exposes KAIRO, SERA, and VANTA without changing defaults", () => {
+  assert.deepEqual(PLAYABLE_FIGHTERS.map((fighter) => fighter.name), ["KAIRO", "SERA", "VANTA"]);
+  assert.equal(playableFighterDefinition("red").name, "KAIRO");
+  assert.equal(playableFighterDefinition("blue", "blue").name, "SERA");
+  assert.equal(playableFighterDefinition(VANTA_FIGHTER_ID).name, "VANTA");
+  assert.equal(playableFighterDefinition("missing").name, "KAIRO");
+  assert.equal(playableFighterDefinition("missing", "blue").name, "SERA");
+});
+
+test("VANTA selection gets a dedicated violet state while legacy slot accents stay intact", () => {
+  assert.equal(playableFighterSelectedClass(VANTA_FIGHTER_ID, true, "P1"), "selected-violet");
+  assert.equal(playableFighterSelectedClass(VANTA_FIGHTER_ID, true, "P2"), "selected-violet");
+  assert.equal(playableFighterSelectedClass("red", true, "P1"), "selected-red");
+  assert.equal(playableFighterSelectedClass("blue", true, "P2"), "selected-blue");
+  assert.equal(playableFighterSelectedClass("red", false, "P1"), "");
 });
 
 test("VANTA keeps the complete audited move vocabulary with counter-control tuning", () => {

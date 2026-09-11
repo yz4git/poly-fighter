@@ -75,6 +75,31 @@ async function resizeToCssViewport(sessionId, width, height) {
   await delay(220);
 }
 
+async function readVantaState(sessionId) {
+  return execute(sessionId, `
+    const strip = document.querySelector('.circuit-run-strip');
+    const rightName = document.querySelector('.right-player .hud-name strong')?.textContent ?? '';
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      canvas: Boolean(document.querySelector('.scene-host.visible canvas')),
+      strip: strip?.textContent ?? '',
+      opponentName: rightName,
+      auditEntry: document.body.dataset.vantaAuditEntry ?? '',
+      visual: document.body.dataset.vantaFighterVisual ?? '',
+      fighterName: document.body.dataset.vantaFighterName ?? '',
+      orbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
+      palette: document.body.dataset.vantaFighterPalette ?? '',
+      modelPalette: document.body.dataset.vantaFighterModelPalette ?? '',
+      aiPolicy: document.body.dataset.rivalCircuitAiPolicy ?? '',
+      aiStyle: document.body.dataset.rivalCircuitAiStyle ?? '',
+      fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
+      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      verticalOverflow: document.documentElement.scrollHeight > window.innerHeight + 1,
+    };
+  `);
+}
+
 let sessionId = null;
 try {
   await waitForDriver();
@@ -111,30 +136,16 @@ try {
   if (!briefing.hasVanta) throw new Error(`VANTA audit loadout is not wired: ${JSON.stringify(briefing)}`);
 
   if (!await clickButton(sessionId, "ENTER CIRCUIT")) throw new Error("Could not enter VANTA audit match");
-  await delay(1400);
 
-  const state = await execute(sessionId, `
-    const strip = document.querySelector('.circuit-run-strip');
-    const rightName = document.querySelector('.right-player .hud-name strong')?.textContent ?? '';
-    return {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      canvas: Boolean(document.querySelector('.scene-host.visible canvas')),
-      strip: strip?.textContent ?? '',
-      opponentName: rightName,
-      auditEntry: document.body.dataset.vantaAuditEntry ?? '',
-      visual: document.body.dataset.vantaFighterVisual ?? '',
-      fighterName: document.body.dataset.vantaFighterName ?? '',
-      orbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
-      palette: document.body.dataset.vantaFighterPalette ?? '',
-      modelPalette: document.body.dataset.vantaFighterModelPalette ?? '',
-      aiPolicy: document.body.dataset.rivalCircuitAiPolicy ?? '',
-      aiStyle: document.body.dataset.rivalCircuitAiStyle ?? '',
-      fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
-      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      verticalOverflow: document.documentElement.scrollHeight > window.innerHeight + 1,
-    };
-  `);
+  // The Quaternius GLB is asynchronous. Wait for the real imported model to
+  // arrive and receive the VANTA palette instead of depending on a fixed load time.
+  let state = null;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    await delay(attempt === 0 ? 900 : 150);
+    state = await readVantaState(sessionId);
+    if (state.modelPalette === "APPLIED") break;
+  }
+  if (!state) throw new Error("VANTA runtime state was not available");
 
   const pass = state.width === 932
     && state.height === 430

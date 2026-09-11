@@ -11,6 +11,7 @@ on:
       - public/models/**
       - package-lock.json
       - scripts/capture-vanta-fighter-audit.mjs
+      - scripts/capture-vanta-playable-audit.mjs
       - .github/workflows/vanta-fighter-audit.yml
   pull_request:
     branches:
@@ -21,6 +22,7 @@ on:
       - public/models/**
       - package-lock.json
       - scripts/capture-vanta-fighter-audit.mjs
+      - scripts/capture-vanta-playable-audit.mjs
       - .github/workflows/vanta-fighter-audit.yml
 
 permissions:
@@ -33,7 +35,7 @@ concurrency:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,7 +57,7 @@ jobs:
           done
           cat /tmp/poly-fighter-vanta-server.log
           exit 1
-      - name: Capture VANTA Rival Circuit fight
+      - name: Capture VANTA Rival Circuit and playable fights
         run: |
           mkdir -p artifacts/vanta-webgl-audit
           DRIVER="$(command -v chromedriver || true)"
@@ -67,9 +69,17 @@ jobs:
             exit 1
           fi
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/vanta-webgl-audit" node scripts/capture-vanta-fighter-audit.mjs
-          test -s artifacts/vanta-webgl-audit/rival-circuit-vanta-iphone.png
-          file artifacts/vanta-webgl-audit/rival-circuit-vanta-iphone.png | grep -q "PNG image data"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/vanta-webgl-audit" node scripts/capture-vanta-playable-audit.mjs
+          for image in \
+            rival-circuit-vanta-iphone \
+            vanta-playable-loadout-iphone \
+            vanta-playable-p1-iphone \
+            vanta-playable-p2-iphone; do
+            test -s "artifacts/vanta-webgl-audit/${image}.png"
+            file "artifacts/vanta-webgl-audit/${image}.png" | grep -q "PNG image data"
+          done
           test -s artifacts/vanta-webgl-audit/rival-circuit-vanta.json
+          test -s artifacts/vanta-webgl-audit/vanta-playable.json
       - name: Preserve server log
         if: always()
         run: |

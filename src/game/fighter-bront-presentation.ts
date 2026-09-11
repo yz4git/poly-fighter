@@ -32,11 +32,11 @@ function material(color: number, emissive = 0x000000): THREE.MeshStandardMateria
 }
 
 function publishDiagnostics(fighter: FighterRuntime, plates: number): void {
-  fighter.visual.root.userData.tpsBrontVisual = "BRONT_V1";
+  fighter.visual.root.userData.tpsBrontVisual = "BRONT_V2";
   fighter.visual.root.userData.tpsBrontPlateCount = plates;
   fighter.visual.root.userData.tpsBrontFighterName = fighter.definition.name;
   if (typeof document === "undefined") return;
-  document.body.dataset.brontFighterVisual = "BRONT_V1";
+  document.body.dataset.brontFighterVisual = "BRONT_V2";
   document.body.dataset.brontFighterName = fighter.definition.name;
   document.body.dataset.brontFighterPlates = String(plates);
   document.body.dataset.brontFighterPalette = "AMBER_BLACK_STEEL";
@@ -82,7 +82,7 @@ function styleLoadedModel(fighter: FighterRuntime, layer: BrontLayer): void {
 
 function createLayer(fighter: FighterRuntime): BrontLayer {
   const group = new THREE.Group();
-  group.name = "bront-heavy-identity-v1";
+  group.name = "bront-heavy-identity-v2";
   const layout = fighter.visual.layout;
 
   const amber = material(0xd58b2d, 0x4b2607);
@@ -91,43 +91,48 @@ function createLayer(fighter: FighterRuntime): BrontLayer {
   const glow = new THREE.MeshBasicMaterial({
     color: 0xffb64d,
     transparent: true,
-    opacity: 0.62,
+    opacity: 0.58,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
   const materials: THREE.Material[] = [amber, steel, black, glow];
 
-  const chestGeometry = new THREE.BoxGeometry(0.34, 0.24, 0.11);
-  const shoulderGeometry = new THREE.BoxGeometry(0.22, 0.13, 0.20);
-  const forearmGeometry = new THREE.BoxGeometry(0.11, 0.25, 0.13);
-  const coreGeometry = new THREE.IcosahedronGeometry(0.050, 0);
-  const spineGeometry = new THREE.BoxGeometry(0.08, 0.34, 0.08);
+  // Keep the armor close to the authored body instead of replacing its silhouette.
+  // BRONT should read as heavy because of mass/proportions and compact armor caps,
+  // not because large boxes occlude his limbs during close-range combat.
+  const chestGeometry = new THREE.BoxGeometry(0.19, 0.15, 0.055);
+  const shoulderGeometry = new THREE.BoxGeometry(0.115, 0.072, 0.095);
+  const forearmGeometry = new THREE.BoxGeometry(0.060, 0.145, 0.068);
+  const coreGeometry = new THREE.IcosahedronGeometry(0.032, 0);
+  const spineGeometry = new THREE.BoxGeometry(0.040, 0.20, 0.035);
   const geometries = [chestGeometry, shoulderGeometry, forearmGeometry, coreGeometry, spineGeometry];
 
   const chest = new THREE.Mesh(chestGeometry, black);
-  chest.position.set(0, layout.ribY + 0.01, 0.09);
+  chest.position.set(0, layout.ribY, 0.052);
+  chest.rotation.x = -0.03;
   group.add(chest);
 
   const core = new THREE.Mesh(coreGeometry, glow);
-  core.position.set(0, layout.ribY + 0.015, 0.165);
+  core.position.set(0, layout.ribY + 0.012, 0.086);
   group.add(core);
 
   const spine = new THREE.Mesh(spineGeometry, steel);
-  spine.position.set(0, layout.waistY + 0.09, -0.09);
+  spine.position.set(0, layout.waistY + 0.07, -0.052);
   group.add(spine);
 
   const shoulderPlates: THREE.Mesh[] = [];
   const forearmGuards: THREE.Mesh[] = [];
   for (const side of [-1, 1] as const) {
     const shoulder = new THREE.Mesh(shoulderGeometry, side < 0 ? amber : steel);
-    shoulder.position.set(side * layout.shoulderWidth * 0.56, layout.shoulderY - 0.035, 0.015);
-    shoulder.rotation.z = side * -0.12;
+    shoulder.position.set(side * layout.shoulderWidth * 0.50, layout.shoulderY - 0.025, 0.010);
+    shoulder.rotation.z = side * -0.16;
+    shoulder.rotation.y = side * 0.06;
     group.add(shoulder);
     shoulderPlates.push(shoulder);
 
     const guard = new THREE.Mesh(forearmGeometry, amber);
-    guard.position.set(side * layout.shoulderWidth * 0.73, layout.elbowY - 0.10, 0.04);
-    guard.rotation.z = side * 0.08;
+    guard.position.set(side * layout.shoulderWidth * 0.64, layout.elbowY - 0.055, 0.025);
+    guard.rotation.z = side * 0.10;
     group.add(guard);
     forearmGuards.push(guard);
   }
@@ -150,13 +155,13 @@ function updateLayer(fighter: FighterRuntime, time: number): void {
   const layer = ensureLayer(fighter);
   if (!layer) return;
   styleLoadedModel(fighter, layer);
-  const pulse = 0.94 + Math.sin(time * 3.2) * 0.09;
+  const pulse = 0.95 + Math.sin(time * 3.2) * 0.07;
   layer.core.scale.setScalar(pulse);
   layer.shoulderPlates.forEach((plate, index) => {
-    plate.rotation.y = Math.sin(time * 1.25 + index) * 0.045;
+    plate.rotation.y = (index === 0 ? -0.06 : 0.06) + Math.sin(time * 1.25 + index) * 0.025;
   });
   layer.forearmGuards.forEach((guard, index) => {
-    guard.rotation.x = Math.sin(time * 1.6 + index * 0.7) * 0.035;
+    guard.rotation.x = Math.sin(time * 1.6 + index * 0.7) * 0.020;
   });
 }
 

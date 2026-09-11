@@ -12,6 +12,15 @@ import {
   apexBossPhaseForHealth,
 } from "../src/game/rival-circuit-apex-boss";
 import {
+  EMPTY_RIVAL_CIRCUIT_MEMORY,
+  classifyRivalCircuitMemory,
+  rivalMemorySignatureIntervalScale,
+} from "../src/game/rival-circuit-memory";
+import {
+  mergeRivalCircuitMemoryProgress,
+  rivalCircuitStageFromLabel,
+} from "../src/game/rival-circuit-memory-runtime";
+import {
   RIVAL_CIRCUIT_ENCOUNTERS,
   rivalCircuitGradeForScore,
   rivalCircuitProtocolOffers,
@@ -156,4 +165,48 @@ test("APEX signature routing follows live boss health", () => {
     rivalCircuitSignaturePlan({ style: "APEX", simulationTicks: 720, distance: 2.4, playerAttacking: false, playerSideStepping: false, apexHealth: 30 })?.moveId,
     "dashKick",
   );
+});
+
+test("Rival Memory classifies previous-fight habits instead of live inputs", () => {
+  const base = { ...EMPTY_RIVAL_CIRCUIT_MEMORY, fights: 1, activeSeconds: 24 };
+  assert.equal(classifyRivalCircuitMemory({ ...base, hits: 13 }).read, "RUSH");
+  assert.equal(classifyRivalCircuitMemory({ ...base, sideSteps: 8, perfectEvades: 3 }).read, "STEP");
+  assert.equal(classifyRivalCircuitMemory({ ...base, hits: 2, punishes: 4 }).read, "PUNISH");
+  assert.equal(classifyRivalCircuitMemory({ ...base, hits: 2, intercepts: 4 }).read, "INTERCEPT");
+  assert.equal(classifyRivalCircuitMemory({ ...base, hits: 1, sideSteps: 1 }).read, "BALANCED");
+});
+
+test("Rival Memory accumulates across fights and can change its read", () => {
+  const first = mergeRivalCircuitMemoryProgress(
+    { ...EMPTY_RIVAL_CIRCUIT_MEMORY },
+    { hits: 8, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 0 },
+    28,
+  );
+  assert.equal(first.fights, 1);
+  assert.equal(first.read, "RUSH");
+
+  const second = mergeRivalCircuitMemoryProgress(
+    first,
+    { hits: 1, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 5 },
+    30,
+  );
+  assert.equal(second.fights, 2);
+  assert.equal(second.hits, 9);
+  assert.equal(second.intercepts, 5);
+  assert.equal(second.read, "INTERCEPT");
+});
+
+test("Rival Memory modifies commitment frequency without reducing telegraph frames", () => {
+  assert.ok(rivalMemorySignatureIntervalScale("RUSH", "COUNTER") < 1);
+  assert.ok(rivalMemorySignatureIntervalScale("STEP", "STEP_HUNTER") < 1);
+  assert.ok(rivalMemorySignatureIntervalScale("PUNISH", "PRESSURE") > 1);
+  assert.ok(rivalMemorySignatureIntervalScale("INTERCEPT", "ANGLE") > 1);
+  assert.equal(rivalMemorySignatureIntervalScale("BALANCED", "ANGLE"), 1);
+});
+
+test("Rival Memory stage parser only accepts Circuit fight strips", () => {
+  assert.equal(rivalCircuitStageFromLabel("CIRCUIT 1/5 GLASSLINE PRESSURE"), 1);
+  assert.equal(rivalCircuitStageFromLabel("CIRCUIT 5 / 5 APEX-0 APEX"), 5);
+  assert.equal(rivalCircuitStageFromLabel("TPS LOCK-ON MATCH"), 0);
+  assert.equal(rivalCircuitStageFromLabel("CIRCUIT 8/5 INVALID"), 0);
 });

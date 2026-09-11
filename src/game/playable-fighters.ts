@@ -1,20 +1,27 @@
 import { FIGHTER_DEFINITIONS } from "./definitions";
 import {
+  registerAxionFighter,
+  AXION_FIGHTER_DEFINITION,
+  AXION_FIGHTER_ID,
+} from "./fighter-axion";
+import {
   registerVantaFighter,
   VANTA_FIGHTER_DEFINITION,
   VANTA_FIGHTER_ID,
 } from "./fighter-vanta";
 import type { FighterDefinition } from "./types";
 
-export type PlayableFighterId = "red" | "blue" | typeof VANTA_FIGHTER_ID;
+export type PlayableFighterId = "red" | "blue" | typeof VANTA_FIGHTER_ID | typeof AXION_FIGHTER_ID;
 
-// Register once at module load so every UI/runtime lookup sees the same object.
+// Register once at module load so every UI/runtime lookup sees the same objects.
 registerVantaFighter();
+registerAxionFighter();
 
 export const PLAYABLE_FIGHTERS: readonly FighterDefinition[] = Object.freeze([
   FIGHTER_DEFINITIONS.red,
   FIGHTER_DEFINITIONS.blue,
   VANTA_FIGHTER_DEFINITION,
+  AXION_FIGHTER_DEFINITION,
 ]);
 
 export function playableFighterDefinition(
@@ -22,6 +29,7 @@ export function playableFighterDefinition(
   fallback: "red" | "blue" = "red",
 ): FighterDefinition {
   if (id === VANTA_FIGHTER_ID) return VANTA_FIGHTER_DEFINITION;
+  if (id === AXION_FIGHTER_ID) return AXION_FIGHTER_DEFINITION;
   return FIGHTER_DEFINITIONS[id] ?? FIGHTER_DEFINITIONS[fallback];
 }
 
@@ -32,5 +40,6 @@ export function playableFighterSelectedClass(
 ): string {
   if (!selected) return "";
   if (fighterId === VANTA_FIGHTER_ID) return "selected-violet";
+  if (fighterId === AXION_FIGHTER_ID) return "selected-amber";
   return slot === "P1" ? "selected-red" : "selected-blue";
 }

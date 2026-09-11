@@ -4,10 +4,10 @@ import process from "node:process";
 
 const driver = process.env.WEBDRIVER_BIN;
 const url = process.env.AUDIT_URL ?? "http://127.0.0.1:3000/";
-const outputDir = process.env.TPS_AUDIT_DIR ?? "artifacts/vanta-webgl-audit";
+const outputDir = process.env.TPS_AUDIT_DIR ?? "artifacts/axion-webgl-audit";
 if (!driver) throw new Error("WEBDRIVER_BIN is required");
 
-const port = 9533;
+const port = 9535;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const driverProcess = spawn(driver, [`--port=${port}`, "--allowed-ips="], { stdio: ["ignore", "pipe", "pipe"] });
 let driverLog = "";
@@ -66,52 +66,79 @@ async function screenshot(sessionId, path) {
   const encoded = await command(`/session/${sessionId}/screenshot`);
   const bytes = Buffer.from(encoded, "base64");
   if (bytes.length < 128 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
-    throw new Error(`VANTA playable audit screenshot is not PNG: ${path}`);
+    throw new Error(`AXION playable audit screenshot is not PNG: ${path}`);
   }
   await writeFile(path, bytes);
 }
 
 async function resizeToCssViewport(sessionId, width, height) {
-  const metrics = await execute(sessionId, `return {
-    innerWidth: window.innerWidth,
-    innerHeight: window.innerHeight,
-    outerWidth: window.outerWidth,
-    outerHeight: window.outerHeight,
-  };`);
-  await command(`/session/${sessionId}/window/rect`, "POST", {
-    width: Math.round(width + Math.max(0, metrics.outerWidth - metrics.innerWidth)),
-    height: Math.round(height + Math.max(0, metrics.outerHeight - metrics.innerHeight)),
-  });
-  await execute(sessionId, `window.dispatchEvent(new Event('resize')); return true;`);
-  await delay(220);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const metrics = await execute(sessionId, `return {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      outerWidth: window.outerWidth,
+      outerHeight: window.outerHeight,
+    };`);
+    await command(`/session/${sessionId}/window/rect`, "POST", {
+      width: Math.round(width + Math.max(0, metrics.outerWidth - metrics.innerWidth)),
+      height: Math.round(height + Math.max(0, metrics.outerHeight - metrics.innerHeight)),
+    });
+    await execute(sessionId, `window.dispatchEvent(new Event('resize')); return true;`);
+    await delay(180);
+    const next = await execute(sessionId, `return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };`);
+    if (Math.abs(next.innerWidth - width) <= 2 && Math.abs(next.innerHeight - height) <= 2) return next;
+  }
+  return execute(sessionId, `return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };`);
 }
 
 async function openLoadout(sessionId) {
   await command(`/session/${sessionId}/url`, "POST", { url });
   await delay(600);
-  await resizeToCssViewport(sessionId, 932, 430);
+  const viewport = await resizeToCssViewport(sessionId, 932, 430);
+  if (Math.abs(viewport.innerWidth - 932) > 2 || Math.abs(viewport.innerHeight - 430) > 2) {
+    throw new Error(`Could not establish iPhone landscape viewport: ${JSON.stringify(viewport)}`);
+  }
   if (!await clickByText(sessionId, "START FIGHT")) throw new Error("Could not open TPS loadout");
-  await delay(300);
+  await delay(320);
 }
 
 async function inspectLoadout(sessionId) {
   return execute(sessionId, `
+    const rect = (element) => {
+      const box = element?.getBoundingClientRect();
+      return box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height } : null;
+    };
     const p1Cards = [...document.querySelectorAll('[data-fighter-slot="P1"]')];
     const p2Cards = [...document.querySelectorAll('[data-fighter-slot="P2"]')];
-    const p1Vanta = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="violet"]');
-    const p2Vanta = document.querySelector('[data-fighter-slot="P2"][data-fighter-id="violet"]');
+    const p1Axion = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="amber"]');
+    const p2Axion = document.querySelector('[data-fighter-slot="P2"][data-fighter-id="amber"]');
+    const engage = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes('ENGAGE'));
     return {
       width: window.innerWidth,
       height: window.innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
       p1Count: p1Cards.length,
       p2Count: p2Cards.length,
       p1Names: p1Cards.map((entry) => entry.querySelector('strong')?.textContent ?? ''),
       p2Names: p2Cards.map((entry) => entry.querySelector('strong')?.textContent ?? ''),
-      p1Vanta: Boolean(p1Vanta),
-      p2Vanta: Boolean(p2Vanta),
-      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      p1Axion: Boolean(p1Axion),
+      p2Axion: Boolean(p2Axion),
+      p1Rects: p1Cards.map(rect),
+      p2Rects: p2Cards.map(rect),
+      engage: rect(engage),
     };
   `);
+}
+
+function withinViewport(rect, width, height) {
+  return rect
+    && rect.left >= -1
+    && rect.top >= -1
+    && rect.right <= width + 1
+    && rect.bottom <= height + 1
+    && rect.width > 1
+    && rect.height > 1;
 }
 
 async function inspectMatch(sessionId) {
@@ -125,15 +152,25 @@ async function inspectMatch(sessionId) {
       p2Name: document.querySelector('.right-player .hud-name strong')?.textContent ?? '',
       actionCount: actions.length,
       actionLabels: actions.map((entry) => entry.getAttribute('aria-label')),
-      visual: document.body.dataset.vantaFighterVisual ?? '',
-      fighterName: document.body.dataset.vantaFighterName ?? '',
-      orbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
-      palette: document.body.dataset.vantaFighterPalette ?? '',
+      visual: document.body.dataset.axionFighterVisual ?? '',
+      fighterName: document.body.dataset.axionFighterName ?? '',
+      anchors: Number(document.body.dataset.axionFighterAnchors ?? '0'),
+      palette: document.body.dataset.axionFighterPalette ?? '',
+      modelPalette: document.body.dataset.axionFighterModelPalette ?? '',
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       verticalOverflow: document.documentElement.scrollHeight > window.innerHeight + 1,
     };
   `);
+}
+
+async function waitForAxionModelPalette(sessionId) {
+  for (let attempt = 0; attempt < 28; attempt += 1) {
+    const applied = await execute(sessionId, `return document.body.dataset.axionFighterModelPalette ?? '';`);
+    if (applied === "APPLIED") return true;
+    await delay(125);
+  }
+  return false;
 }
 
 let sessionId = null;
@@ -154,6 +191,7 @@ try {
 
   await openLoadout(sessionId);
   const loadout = await inspectLoadout(sessionId);
+  const allRects = [...loadout.p1Rects, ...loadout.p2Rects];
   if (
     loadout.width !== 932
     || loadout.height !== 430
@@ -161,70 +199,79 @@ try {
     || loadout.p2Count !== 4
     || loadout.p1Names.join('|') !== 'KAIRO|SERA|VANTA|AXION'
     || loadout.p2Names.join('|') !== 'KAIRO|SERA|VANTA|AXION'
-    || !loadout.p1Vanta
-    || !loadout.p2Vanta
-    || loadout.horizontalOverflow
+    || !loadout.p1Axion
+    || !loadout.p2Axion
+    || loadout.scrollWidth > loadout.width + 2
+    || loadout.scrollHeight > loadout.height + 2
+    || !withinViewport(loadout.engage, loadout.width, loadout.height)
+    || !allRects.every((rect) => withinViewport(rect, loadout.width, loadout.height))
   ) {
-    throw new Error(`Four-fighter TPS loadout failed: ${JSON.stringify(loadout)}`);
+    throw new Error(`Four-fighter AXION loadout failed: ${JSON.stringify(loadout)}`);
   }
 
-  if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="violet"]')) {
-    throw new Error("Could not select VANTA for P1");
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="amber"]')) {
+    throw new Error("Could not select AXION for P1");
   }
   const selected = await execute(sessionId, `
-    const card = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="violet"]');
+    const card = document.querySelector('[data-fighter-slot="P1"][data-fighter-id="amber"]');
     return {
-      selected: card?.classList.contains('selected-violet') ?? false,
+      selected: card?.classList.contains('selected-amber') ?? false,
       engageCopy: [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes('ENGAGE'))?.textContent ?? '',
     };
   `);
-  if (!selected.selected || !selected.engageCopy.includes('VANTA')) {
-    throw new Error(`VANTA P1 selection did not commit: ${JSON.stringify(selected)}`);
+  if (!selected.selected || !selected.engageCopy.includes('AXION')) {
+    throw new Error(`AXION P1 selection did not commit: ${JSON.stringify(selected)}`);
   }
-  await screenshot(sessionId, `${outputDir}/vanta-playable-loadout-iphone.png`);
+  await screenshot(sessionId, `${outputDir}/axion-playable-loadout-iphone.png`);
 
-  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage VANTA P1 match");
-  await delay(1500);
+  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage AXION P1 match");
+  await delay(800);
+  await waitForAxionModelPalette(sessionId);
   const p1Match = await inspectMatch(sessionId);
   const p1Pass = p1Match.canvas
-    && p1Match.p1Name === "VANTA"
+    && p1Match.p1Name === "AXION"
     && p1Match.p2Name === "SERA"
     && p1Match.actionCount === 2
     && p1Match.actionLabels.includes("Attack")
     && p1Match.actionLabels.includes("Step")
-    && p1Match.visual === "VANTA_V2"
-    && p1Match.fighterName === "VANTA"
-    && p1Match.orbiters === 3
+    && p1Match.visual === "AXION_V1"
+    && p1Match.fighterName === "AXION"
+    && p1Match.anchors === 4
+    && p1Match.palette === "AMBER_GRAPHITE_GOLD"
+    && p1Match.modelPalette === "APPLIED"
     && !p1Match.fallback
     && !p1Match.horizontalOverflow
     && !p1Match.verticalOverflow;
-  if (!p1Pass) throw new Error(`Playable VANTA P1 WebGL runtime failed: ${JSON.stringify(p1Match)}`);
-  await screenshot(sessionId, `${outputDir}/vanta-playable-p1-iphone.png`);
+  if (!p1Pass) throw new Error(`Playable AXION P1 WebGL runtime failed: ${JSON.stringify(p1Match)}`);
+  await screenshot(sessionId, `${outputDir}/axion-playable-p1-iphone.png`);
 
   await openLoadout(sessionId);
-  if (!await clickSelector(sessionId, '[data-fighter-slot="P2"][data-fighter-id="violet"]')) {
-    throw new Error("Could not select VANTA for P2");
+  if (!await clickSelector(sessionId, '[data-fighter-slot="P2"][data-fighter-id="amber"]')) {
+    throw new Error("Could not select AXION for P2");
   }
-  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage VANTA P2 match");
-  await delay(1500);
+  if (!await clickByText(sessionId, "ENGAGE")) throw new Error("Could not engage AXION P2 match");
+  await delay(800);
+  await waitForAxionModelPalette(sessionId);
   const p2Match = await inspectMatch(sessionId);
   const p2Pass = p2Match.canvas
     && p2Match.p1Name === "KAIRO"
-    && p2Match.p2Name === "VANTA"
+    && p2Match.p2Name === "AXION"
     && p2Match.actionCount === 2
     && p2Match.actionLabels.includes("Attack")
     && p2Match.actionLabels.includes("Step")
-    && p2Match.visual === "VANTA_V2"
-    && p2Match.fighterName === "VANTA"
-    && p2Match.orbiters === 3
+    && p2Match.visual === "AXION_V1"
+    && p2Match.fighterName === "AXION"
+    && p2Match.anchors === 4
+    && p2Match.palette === "AMBER_GRAPHITE_GOLD"
+    && p2Match.modelPalette === "APPLIED"
     && !p2Match.fallback
     && !p2Match.horizontalOverflow
     && !p2Match.verticalOverflow;
-  if (!p2Pass) throw new Error(`Selectable VANTA P2 WebGL runtime failed: ${JSON.stringify(p2Match)}`);
-  await screenshot(sessionId, `${outputDir}/vanta-playable-p2-iphone.png`);
+  if (!p2Pass) throw new Error(`Selectable AXION P2 WebGL runtime failed: ${JSON.stringify(p2Match)}`);
+  await screenshot(sessionId, `${outputDir}/axion-playable-p2-iphone.png`);
 
   await writeFile(
-    `${outputDir}/vanta-playable.json`,
+    `${outputDir}/axion-playable.json`,
     `${JSON.stringify({ loadout, selected, p1Match, p2Match }, null, 2)}\n`,
   );
 } finally {

@@ -9,6 +9,8 @@ on:
       - app/**
       - src/game/**
       - scripts/capture-tps-kick-sequence-audit.mjs
+      - scripts/capture-tps-kick-spam-audit.mjs
+      - scripts/capture-tps-kick-link-audit.mjs
       - .github/workflows/tps-kick-sequence-audit.yml
   push:
     branches:
@@ -17,6 +19,8 @@ on:
       - app/**
       - src/game/**
       - scripts/capture-tps-kick-sequence-audit.mjs
+      - scripts/capture-tps-kick-spam-audit.mjs
+      - scripts/capture-tps-kick-link-audit.mjs
       - .github/workflows/tps-kick-sequence-audit.yml
 
 permissions:
@@ -25,7 +29,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 13
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,6 +58,8 @@ jobs:
           fi
           test -n "$DRIVER"
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-sequence-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-spam-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-link-audit.mjs
           for move in kick lowkick risingkick dashkick; do
             for stage in startup contact recovery; do
               image="artifacts/tps-kick-sequence/tps-kick-${move}-${stage}.png"
@@ -61,7 +67,17 @@ jobs:
               file "$image" | grep -q "PNG image data"
             done
           done
+          for image in \
+            artifacts/tps-kick-sequence/tps-kick-spam-kick-to-kick.png \
+            artifacts/tps-kick-sequence/tps-kick-spam-kick-to-lowkick.png \
+            artifacts/tps-kick-sequence/tps-kick-link-kick-to-lowkick-t0.png \
+            artifacts/tps-kick-sequence/tps-kick-link-kick-to-lowkick-t3.png; do
+            test -s "$image"
+            file "$image" | grep -q "PNG image data"
+          done
           test -s artifacts/tps-kick-sequence/tps-kick-sequence.json
+          test -s artifacts/tps-kick-sequence/tps-kick-spam.json
+          test -s artifacts/tps-kick-sequence/tps-kick-link.json
           node <<'NODE'
           const fs = require('node:fs');
           const data = JSON.parse(fs.readFileSync('artifacts/tps-kick-sequence/tps-kick-sequence.json', 'utf8'));
@@ -80,6 +96,14 @@ jobs:
           }
           if (!(data.dashKick.contact.strikeHeight > 1.55)) {
             throw new Error(`Dash Kick lost its high strike line while grounding the support foot: ${JSON.stringify(data.dashKick.contact)}`);
+          }
+          const spam = JSON.parse(fs.readFileSync('artifacts/tps-kick-sequence/tps-kick-spam.json', 'utf8'));
+          if (spam.repeated.airborne.length || spam.mixed.airborne.length) {
+            throw new Error(`Rapid kick audit still found an airborne pair: ${JSON.stringify(spam)}`);
+          }
+          const linked = JSON.parse(fs.readFileSync('artifacts/tps-kick-sequence/tps-kick-link.json', 'utf8'));
+          if (linked.farCombo.airborne.length || linked.repeatKick.airborne.length) {
+            throw new Error(`Early linked kick audit still found an airborne pair: ${JSON.stringify(linked)}`);
           }
           NODE
       - uses: actions/upload-artifact@v4

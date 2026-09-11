@@ -1,5 +1,6 @@
 "use client";
 
+import { installRivalCircuitAiRuntime } from "@/src/game/rival-circuit-ai";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
 import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack-action-handoff";
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
@@ -28,6 +29,7 @@ import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-bo
 import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph-handoff";
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
+installRivalCircuitAiRuntime();
 installTpsArenaSpectaclePresentation();
 installTpsGroundingReadabilityPresentation();
 installTpsGuardClashPresentation();

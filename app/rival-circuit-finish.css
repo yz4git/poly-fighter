@@ -1,0 +1,89 @@
+body[data-rival-circuit-finish-policy="CIRCUIT_FINISH_V1"] .tps-two-button-actions {
+  position: relative;
+}
+
+body[data-rival-circuit-finish-ready="1"] .tps-two-button-actions::before {
+  content: "FINISH READY  //  ATTACK + STEP";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(58vw, 310px);
+  padding: 5px 9px 4px;
+  border: 1px solid rgba(255, 98, 132, .72);
+  background: rgba(17, 5, 18, .84);
+  box-shadow: 0 0 20px rgba(255, 55, 102, .24);
+  color: #ffe9ef;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-align: center;
+  pointer-events: none;
+  animation: circuit-finish-ready-pulse .72s steps(2, end) infinite;
+}
+
+body[data-rival-circuit-finish-ready="1"] .tps-step-action,
+body[data-rival-circuit-finish-ready="1"] .tps-attack-action {
+  border-color: rgba(255, 90, 126, .86) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 235, .16),
+    0 0 22px rgba(255, 52, 100, .24) !important;
+}
+
+body[data-rival-circuit-finish-phase="COMMIT"] .tps-step-action,
+body[data-rival-circuit-finish-phase="COMMIT"] .tps-attack-action {
+  transform: translateY(1px) scale(.985);
+  filter: brightness(1.18);
+}
+
+body[data-rival-circuit-finish-phase="COMMIT"]::after,
+body[data-rival-circuit-finish-phase="HIT"]::after {
+  content: "";
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+body[data-rival-circuit-finish-phase="COMMIT"]::after {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(255,255,255,.08), transparent 24%),
+    linear-gradient(90deg, rgba(255,40,82,.07), transparent 35%, rgba(83,204,255,.06));
+  opacity: .72;
+  animation: circuit-finish-commit .28s ease-out both;
+}
+
+body[data-rival-circuit-finish-phase="HIT"]::after {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.7), rgba(255,86,124,.22) 14%, transparent 38%),
+    linear-gradient(90deg, rgba(255,30,80,.1), transparent 40%, rgba(70,202,255,.08));
+  animation: circuit-finish-hit .58s ease-out both;
+}
+
+@keyframes circuit-finish-ready-pulse {
+  0%, 100% { opacity: .68; }
+  50% { opacity: 1; }
+}
+
+@keyframes circuit-finish-commit {
+  0% { opacity: 0; }
+  24% { opacity: .76; }
+  100% { opacity: .18; }
+}
+
+@keyframes circuit-finish-hit {
+  0% { opacity: .94; }
+  18% { opacity: .56; }
+  100% { opacity: 0; }
+}
+
+@media (max-height: 430px) {
+  body[data-rival-circuit-finish-ready="1"] .tps-two-button-actions::before {
+    bottom: calc(100% + 4px);
+    padding: 4px 7px 3px;
+    font-size: 7px;
+    letter-spacing: .1em;
+  }
+}

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  effectiveRivalCircuitStyle,
+  resolveRivalCircuitStyleFromLabel,
+  rivalCircuitSignaturePlan,
+  rivalCircuitTacticForStyle,
+} from "../src/game/rival-circuit-ai";
+import {
   RIVAL_CIRCUIT_ENCOUNTERS,
   rivalCircuitGradeForScore,
   rivalCircuitProtocolOffers,
@@ -69,4 +75,52 @@ test("grade thresholds are stable for match and run summaries", () => {
   assert.equal(rivalCircuitGradeForScore(58), "B");
   assert.equal(rivalCircuitGradeForScore(57), "C");
   assert.equal(rivalCircuitRunGrade(410, 5), "S");
+});
+
+test("Rival Circuit HUD labels resolve to five distinct AI identities", () => {
+  assert.equal(resolveRivalCircuitStyleFromLabel("STAGE 1/5 GLASSLINE · PRESSURE"), "PRESSURE");
+  assert.equal(resolveRivalCircuitStyleFromLabel("STAGE 2/5 VECTOR · ANGLE"), "ANGLE");
+  assert.equal(resolveRivalCircuitStyleFromLabel("STAGE 3/5 REFLEX · COUNTER"), "COUNTER");
+  assert.equal(resolveRivalCircuitStyleFromLabel("STAGE 4/5 LOCKSTEP · STEP HUNTER"), "STEP_HUNTER");
+  assert.equal(resolveRivalCircuitStyleFromLabel("STAGE 5/5 APEX-0 · APEX"), "APEX");
+  assert.equal(resolveRivalCircuitStyleFromLabel("NORMAL TPS MATCH"), null);
+});
+
+test("named rivals own distinct neutral spacing tactics", () => {
+  assert.equal(rivalCircuitTacticForStyle("PRESSURE", 0), "PRESSURE");
+  assert.equal(rivalCircuitTacticForStyle("ANGLE", 0), "ORBIT");
+  assert.equal(rivalCircuitTacticForStyle("COUNTER", 0), "BAIT");
+  assert.equal(rivalCircuitTacticForStyle("STEP_HUNTER", 0), "ORBIT");
+});
+
+test("signature plans are readable and conditional instead of frame-perfect cheats", () => {
+  assert.deepEqual(
+    rivalCircuitSignaturePlan({ style: "PRESSURE", simulationTicks: 180, distance: 2.4, playerAttacking: false, playerSideStepping: false }),
+    { moveId: "dashKick", intent: "DASH_KICK", label: "BREACH" },
+  );
+  assert.equal(
+    rivalCircuitSignaturePlan({ style: "COUNTER", simulationTicks: 180, distance: 1.5, playerAttacking: false, playerSideStepping: false }),
+    null,
+  );
+  assert.deepEqual(
+    rivalCircuitSignaturePlan({ style: "COUNTER", simulationTicks: 180, distance: 1.5, playerAttacking: true, playerSideStepping: false }),
+    { moveId: "counter", intent: "COUNTER", label: "ANSWER" },
+  );
+  assert.equal(
+    rivalCircuitSignaturePlan({ style: "STEP_HUNTER", simulationTicks: 180, distance: 1.6, playerAttacking: false, playerSideStepping: false }),
+    null,
+  );
+  assert.ok(
+    ["lowKick", "backfist"].includes(
+      rivalCircuitSignaturePlan({ style: "STEP_HUNTER", simulationTicks: 180, distance: 1.6, playerAttacking: false, playerSideStepping: true })?.moveId ?? "",
+    ),
+  );
+});
+
+test("APEX rotates through the four learned rival disciplines deterministically", () => {
+  assert.equal(effectiveRivalCircuitStyle("APEX", 0), "PRESSURE");
+  assert.equal(effectiveRivalCircuitStyle("APEX", 300), "ANGLE");
+  assert.equal(effectiveRivalCircuitStyle("APEX", 600), "COUNTER");
+  assert.equal(effectiveRivalCircuitStyle("APEX", 900), "STEP_HUNTER");
+  assert.equal(effectiveRivalCircuitStyle("APEX", 1200), "PRESSURE");
 });

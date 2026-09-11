@@ -1,6 +1,7 @@
 "use client";
 
 import { installRivalCircuitAiRuntime } from "@/src/game/rival-circuit-ai";
+import { installRivalCircuitApexBossRuntime } from "@/src/game/rival-circuit-apex-boss";
 import { installRivalCircuitArenaPresentation } from "@/src/game/rival-circuit-arena";
 import { installRivalCircuitProtocolRuntime } from "@/src/game/rival-circuit-protocol-runtime";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
@@ -33,6 +34,7 @@ import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging
 
 installRivalCircuitAiRuntime();
 installRivalCircuitProtocolRuntime();
+installRivalCircuitApexBossRuntime();
 installTpsArenaSpectaclePresentation();
 installRivalCircuitArenaPresentation();
 installTpsGroundingReadabilityPresentation();

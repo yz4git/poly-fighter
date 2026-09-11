@@ -32,11 +32,11 @@ function material(color: number, emissive = 0x000000): THREE.MeshStandardMateria
 }
 
 function publishDiagnostics(fighter: FighterRuntime, plates: number): void {
-  fighter.visual.root.userData.tpsBrontVisual = "BRONT_V2";
+  fighter.visual.root.userData.tpsBrontVisual = "BRONT_V1";
   fighter.visual.root.userData.tpsBrontPlateCount = plates;
   fighter.visual.root.userData.tpsBrontFighterName = fighter.definition.name;
   if (typeof document === "undefined") return;
-  document.body.dataset.brontFighterVisual = "BRONT_V2";
+  document.body.dataset.brontFighterVisual = "BRONT_V1";
   document.body.dataset.brontFighterName = fighter.definition.name;
   document.body.dataset.brontFighterPlates = String(plates);
   document.body.dataset.brontFighterPalette = "AMBER_BLACK_STEEL";

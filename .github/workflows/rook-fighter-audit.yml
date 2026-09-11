@@ -1,0 +1,91 @@
+name: POLY FIGHTER ROOK WebGL audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/game/**
+      - public/models/**
+      - package-lock.json
+      - scripts/capture-rook-playable-audit.mjs
+      - .github/workflows/rook-fighter-audit.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/game/**
+      - public/models/**
+      - package-lock.json
+      - scripts/capture-rook-playable-audit.mjs
+      - .github/workflows/rook-fighter-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rook-webgl-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build production preview
+        run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-rook-server.log 2>&1 &
+          echo $! > /tmp/poly-fighter-rook-server.pid
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-rook-server.log
+          exit 1
+      - name: Capture ROOK playable fights
+        run: |
+          mkdir -p artifacts/rook-webgl-audit
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          if [ -z "$DRIVER" ]; then
+            echo "ChromeDriver is not available"
+            exit 1
+          fi
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/rook-webgl-audit" node scripts/capture-rook-playable-audit.mjs
+          for image in \
+            rook-playable-loadout-iphone \
+            rook-playable-p1-iphone \
+            rook-playable-p2-iphone; do
+            test -s "artifacts/rook-webgl-audit/${image}.png"
+            file "artifacts/rook-webgl-audit/${image}.png" | grep -q "PNG image data"
+          done
+          test -s artifacts/rook-webgl-audit/rook-playable.json
+      - name: Preserve server log
+        if: always()
+        run: |
+          mkdir -p artifacts/rook-webgl-audit
+          if [ -f /tmp/poly-fighter-rook-server.log ]; then
+            cp /tmp/poly-fighter-rook-server.log artifacts/rook-webgl-audit/server.log
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-rook-webgl-audit
+          path: artifacts/rook-webgl-audit
+          if-no-files-found: error
+          retention-days: 7

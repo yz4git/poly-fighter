@@ -111,7 +111,7 @@ try {
   if (!briefing.hasVanta) throw new Error(`VANTA audit loadout is not wired: ${JSON.stringify(briefing)}`);
 
   if (!await clickButton(sessionId, "ENTER CIRCUIT")) throw new Error("Could not enter VANTA audit match");
-  await delay(1200);
+  await delay(1400);
 
   const state = await execute(sessionId, `
     const strip = document.querySelector('.circuit-run-strip');
@@ -126,6 +126,8 @@ try {
       visual: document.body.dataset.vantaFighterVisual ?? '',
       fighterName: document.body.dataset.vantaFighterName ?? '',
       orbiters: Number(document.body.dataset.vantaFighterOrbiters ?? '0'),
+      palette: document.body.dataset.vantaFighterPalette ?? '',
+      modelPalette: document.body.dataset.vantaFighterModelPalette ?? '',
       aiPolicy: document.body.dataset.rivalCircuitAiPolicy ?? '',
       aiStyle: document.body.dataset.rivalCircuitAiStyle ?? '',
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
@@ -140,9 +142,11 @@ try {
     && state.strip.includes("GLASSLINE")
     && state.opponentName === "VANTA"
     && state.auditEntry === "STAGE_1_VISUAL_ONLY"
-    && state.visual === "VANTA_V1"
+    && state.visual === "VANTA_V2"
     && state.fighterName === "VANTA"
     && state.orbiters === 3
+    && state.palette === "VIOLET_BLACK_GOLD"
+    && state.modelPalette === "APPLIED"
     && state.aiPolicy === "RIVAL_CIRCUIT_V1"
     && state.aiStyle === "PRESSURE"
     && !state.fallback

@@ -62,6 +62,26 @@ jobs:
             done
           done
           test -s artifacts/tps-kick-sequence/tps-kick-sequence.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const data = JSON.parse(fs.readFileSync('artifacts/tps-kick-sequence/tps-kick-sequence.json', 'utf8'));
+          for (const stage of ['startup', 'contact', 'recovery']) {
+            const frame = data.dashKick?.[stage];
+            if (!frame) throw new Error(`Missing Dash Kick ${stage} audit frame`);
+            if (!(frame.supportHeight < 0.48)) {
+              throw new Error(`Dash Kick support foot is airborne at ${stage}: ${JSON.stringify(frame)}`);
+            }
+            if (!(Math.min(frame.supportHeight, frame.strikeHeight) < 0.48)) {
+              throw new Error(`Dash Kick has both feet airborne at ${stage}: ${JSON.stringify(frame)}`);
+            }
+            if (Math.abs(frame.simulationPosition.x) > 1e-6 || Math.abs(frame.simulationPosition.y) > 1e-6 || Math.abs(frame.simulationPosition.z - 0.82) > 1e-6) {
+              throw new Error(`Dash Kick ground-contact presentation changed simulation position: ${JSON.stringify(frame)}`);
+            }
+          }
+          if (!(data.dashKick.contact.strikeHeight > 1.55)) {
+            throw new Error(`Dash Kick lost its high strike line while grounding the support foot: ${JSON.stringify(data.dashKick.contact)}`);
+          }
+          NODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:

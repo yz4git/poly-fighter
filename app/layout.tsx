@@ -6,6 +6,7 @@ import "./playtest-polish.css";
 import "./hud-face-safe.css";
 import "./tps-main-mode.css";
 import "./tps-pad-polish.css";
+import "./rival-circuit.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

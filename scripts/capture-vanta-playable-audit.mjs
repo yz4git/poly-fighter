@@ -152,21 +152,21 @@ try {
   sessionId = session.sessionId;
   await mkdir(outputDir, { recursive: true });
 
-  // Player-side VANTA: select the real third card, then boot the normal TPS match.
+  // Player-side VANTA: select the real roster card, then boot the normal TPS match.
   await openLoadout(sessionId);
   const loadout = await inspectLoadout(sessionId);
   if (
     loadout.width !== 932
     || loadout.height !== 430
-    || loadout.p1Count !== 3
-    || loadout.p2Count !== 3
-    || loadout.p1Names.join('|') !== 'KAIRO|SERA|VANTA'
-    || loadout.p2Names.join('|') !== 'KAIRO|SERA|VANTA'
+    || loadout.p1Count !== 4
+    || loadout.p2Count !== 4
+    || loadout.p1Names.join('|') !== 'KAIRO|SERA|VANTA|ROOK'
+    || loadout.p2Names.join('|') !== 'KAIRO|SERA|VANTA|ROOK'
     || !loadout.p1Vanta
     || !loadout.p2Vanta
     || loadout.horizontalOverflow
   ) {
-    throw new Error(`Three-fighter TPS loadout failed: ${JSON.stringify(loadout)}`);
+    throw new Error(`Four-fighter TPS loadout failed: ${JSON.stringify(loadout)}`);
   }
 
   if (!await clickSelector(sessionId, '[data-fighter-slot="P1"][data-fighter-id="violet"]')) {

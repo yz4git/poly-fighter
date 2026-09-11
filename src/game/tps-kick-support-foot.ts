@@ -15,6 +15,7 @@ type SupportProfile = {
   maxPlanarDrift: number;
   maxPivotDegrees: number;
   verticalLock: number;
+  maxBodyCompensation: number;
 };
 
 type SupportFootState = {
@@ -26,12 +27,14 @@ type SupportFootState = {
   thighQ: THREE.Quaternion;
   calfQ: THREE.Quaternion;
   footQ: THREE.Quaternion;
+  host: THREE.Object3D | null;
+  hostDelta: THREE.Vector3;
 };
 
 const PROFILES: Readonly<Record<string, SupportProfile>> = {
-  kick: { maxPlanarDrift: 0.055, maxPivotDegrees: 18, verticalLock: 0.82 },
-  lowKick: { maxPlanarDrift: 0.065, maxPivotDegrees: 24, verticalLock: 0.76 },
-  risingKick: { maxPlanarDrift: 0.045, maxPivotDegrees: 16, verticalLock: 0.86 },
+  kick: { maxPlanarDrift: 0.035, maxPivotDegrees: 18, verticalLock: 0.84, maxBodyCompensation: 0.040 },
+  lowKick: { maxPlanarDrift: 0.040, maxPivotDegrees: 24, verticalLock: 0.78, maxBodyCompensation: 0.045 },
+  risingKick: { maxPlanarDrift: 0.030, maxPivotDegrees: 16, verticalLock: 0.88, maxBodyCompensation: 0.035 },
 };
 
 const states = new WeakMap<FighterRuntime, SupportFootState>();
@@ -49,6 +52,8 @@ function ensureState(fighter: FighterRuntime): SupportFootState {
     thighQ: new THREE.Quaternion(),
     calfQ: new THREE.Quaternion(),
     footQ: new THREE.Quaternion(),
+    host: null,
+    hostDelta: new THREE.Vector3(),
   };
   states.set(fighter, state);
   return state;
@@ -83,17 +88,25 @@ function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaterni
 }
 
 function restorePreviousSupport(state: SupportFootState): void {
-  if (!state.leg) return;
-  state.leg.thigh.quaternion.copy(state.thighQ);
-  state.leg.calf.quaternion.copy(state.calfQ);
-  state.leg.foot.quaternion.copy(state.footQ);
-  state.leg = null;
+  if (state.host) {
+    state.host.position.sub(state.hostDelta);
+    state.host = null;
+    state.hostDelta.set(0, 0, 0);
+  }
+  if (state.leg) {
+    state.leg.thigh.quaternion.copy(state.thighQ);
+    state.leg.calf.quaternion.copy(state.calfQ);
+    state.leg.foot.quaternion.copy(state.footQ);
+    state.leg = null;
+  }
 }
 
 function clearSupportState(fighter: FighterRuntime, state: SupportFootState): void {
   state.moveId = "";
   state.suffix = null;
   state.leg = null;
+  state.host = null;
+  state.hostDelta.set(0, 0, 0);
   const data = fighter.visual.root.userData;
   data.tpsKickSupportFoot = 0;
   data.tpsKickSupportFootMove = "NONE";
@@ -101,6 +114,8 @@ function clearSupportState(fighter: FighterRuntime, state: SupportFootState): vo
   data.tpsKickSupportFootDrift = 0;
   data.tpsKickSupportFootRawAngle = 0;
   data.tpsKickSupportFootAngle = 0;
+  data.tpsKickSupportFootBodyCompensation = 0;
+  data.tpsKickSupportFootStrikeError = 0;
 }
 
 function supportEnvelope(fighter: FighterRuntime): number {
@@ -123,6 +138,13 @@ function supportSuffixFor(fighter: FighterRuntime): SupportSuffix | null {
   return null;
 }
 
+function strikeSuffixFor(fighter: FighterRuntime): SupportSuffix | null {
+  const contact = fighter.currentMove?.visualContact;
+  if (contact === "LEFT_FOOT") return "l";
+  if (contact === "RIGHT_FOOT") return "r";
+  return null;
+}
+
 function clampPlanarOffset(offset: THREE.Vector3, maximum: number): THREE.Vector3 {
   const planar = new THREE.Vector3(offset.x, 0, offset.z);
   const length = planar.length();
@@ -139,6 +161,35 @@ function limitedFootRotation(
   const maximum = THREE.MathUtils.degToRad(maxDegrees);
   if (angle <= maximum || angle <= 1e-6) return current.clone();
   return anchor.clone().slerp(current, maximum / angle).normalize();
+}
+
+function solveLegToWorldTarget(
+  leg: ImportedLeg,
+  suffix: SupportSuffix,
+  target: THREE.Vector3,
+  scale: number,
+): void {
+  const hip = leg.thigh.getWorldPosition(new THREE.Vector3());
+  const knee = leg.calf.getWorldPosition(new THREE.Vector3());
+  const bend = knee.clone().sub(hip);
+  bend.y = 0;
+  if (bend.lengthSq() < 1e-8) bend.set(suffix === "l" ? -1 : 1, 0, 0);
+  bend.normalize();
+  const pole = knee.clone()
+    .add(new THREE.Vector3(0, 0.055 * scale, 0))
+    .addScaledVector(bend, 0.025 * scale);
+  solveCombatLimb(leg.thigh, leg.calf, leg.foot, target, pole);
+}
+
+function hostLocalDeltaForWorldDelta(host: THREE.Object3D, worldDelta: THREE.Vector3): THREE.Vector3 {
+  const parent = host.parent;
+  if (!parent) return worldDelta.clone();
+  parent.updateMatrixWorld(true);
+  const originWorld = host.getWorldPosition(new THREE.Vector3());
+  const destinationWorld = originWorld.clone().add(worldDelta);
+  const originLocal = parent.worldToLocal(originWorld.clone());
+  const destinationLocal = parent.worldToLocal(destinationWorld.clone());
+  return destinationLocal.sub(originLocal);
 }
 
 function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState): void {
@@ -159,23 +210,25 @@ function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState)
 
   const host = runtimeHost(fighter);
   const model = host ? runtimeModel(host) : null;
-  const suffix = supportSuffixFor(fighter);
-  const leg = model && suffix ? importedLeg(model, suffix) : null;
-  if (!model || !suffix || !leg) {
+  const supportSuffix = supportSuffixFor(fighter);
+  const strikeSuffix = strikeSuffixFor(fighter);
+  const supportLeg = model && supportSuffix ? importedLeg(model, supportSuffix) : null;
+  const strikeLeg = model && strikeSuffix ? importedLeg(model, strikeSuffix) : null;
+  if (!host || !model || !supportSuffix || !strikeSuffix || !supportLeg || !strikeLeg) {
     clearSupportState(fighter, state);
     return;
   }
 
   model.updateMatrixWorld(true);
-  const currentPosition = leg.foot.getWorldPosition(new THREE.Vector3());
-  const currentRotation = leg.foot.getWorldQuaternion(new THREE.Quaternion());
+  const currentPosition = supportLeg.foot.getWorldPosition(new THREE.Vector3());
+  const currentRotation = supportLeg.foot.getWorldQuaternion(new THREE.Quaternion());
 
   // The first rendered tick of a grounded kick becomes the plant reference.
   // This happens after the authored clip has been sampled, so the anchor is the
-  // real in-game stance foot rather than a guessed floor coordinate.
-  if (state.moveId !== moveId || state.suffix !== suffix) {
+  // actual in-game stance foot rather than a guessed floor coordinate.
+  if (state.moveId !== moveId || state.suffix !== supportSuffix) {
     state.moveId = moveId;
-    state.suffix = suffix;
+    state.suffix = supportSuffix;
     state.anchorPosition.copy(currentPosition);
     state.anchorRotation.copy(currentRotation);
   }
@@ -189,13 +242,15 @@ function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState)
     data.tpsKickSupportFootDrift = data.tpsKickSupportFootRawDrift;
     data.tpsKickSupportFootRawAngle = THREE.MathUtils.radToDeg(state.anchorRotation.angleTo(currentRotation));
     data.tpsKickSupportFootAngle = data.tpsKickSupportFootRawAngle;
+    data.tpsKickSupportFootBodyCompensation = 0;
+    data.tpsKickSupportFootStrikeError = 0;
     return;
   }
 
-  state.leg = leg;
-  state.thighQ.copy(leg.thigh.quaternion);
-  state.calfQ.copy(leg.calf.quaternion);
-  state.footQ.copy(leg.foot.quaternion);
+  state.leg = supportLeg;
+  state.thighQ.copy(supportLeg.thigh.quaternion);
+  state.calfQ.copy(supportLeg.calf.quaternion);
+  state.footQ.copy(supportLeg.foot.quaternion);
 
   const scale = Math.max(0.5, root.scale.x);
   const rawOffset = currentPosition.clone().sub(state.anchorPosition);
@@ -207,21 +262,8 @@ function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState)
     profile.verticalLock * factor,
   );
 
-  // Preserve the authored knee bend plane while solving only enough leg motion
-  // to keep the foot under the body. This avoids the skating support leg without
-  // turning the move into a rigid one-legged statue.
-  const hip = leg.thigh.getWorldPosition(new THREE.Vector3());
-  const knee = leg.calf.getWorldPosition(new THREE.Vector3());
-  const bend = knee.clone().sub(hip);
-  bend.y = 0;
-  if (bend.lengthSq() < 1e-8) bend.set(suffix === "l" ? -1 : 1, 0, 0);
-  bend.normalize();
-  const pole = knee.clone()
-    .add(new THREE.Vector3(0, 0.055 * scale, 0))
-    .addScaledVector(bend, 0.025 * scale);
-
   const solvedTarget = currentPosition.clone().lerp(target, factor);
-  solveCombatLimb(leg.thigh, leg.calf, leg.foot, solvedTarget, pole);
+  solveLegToWorldTarget(supportLeg, supportSuffix, solvedTarget, scale);
 
   // Permit a controlled pivot around the planted foot, but cap the combined
   // ankle yaw/roll excursion so the sole cannot corkscrew onto its edge.
@@ -231,15 +273,40 @@ function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState)
     profile.maxPivotDegrees,
   );
   const finalRotation = currentRotation.clone().slerp(limitedRotation, factor).normalize();
-  setWorldQuaternion(leg.foot, finalRotation);
+  setWorldQuaternion(supportLeg.foot, finalRotation);
   model.updateMatrixWorld(true);
 
-  const finalPosition = leg.foot.getWorldPosition(new THREE.Vector3());
-  const finalWorldRotation = leg.foot.getWorldQuaternion(new THREE.Quaternion());
+  // Some authored kicks move the pelvis far enough that the support leg alone
+  // cannot reach the plant anchor without over-straightening. Move the visible
+  // body a few centimetres back over the planted foot, then re-solve the strike
+  // leg to the exact pre-compensation boot position. This is presentation-only:
+  // FighterRuntime.position, hitboxes and combat reach remain untouched.
+  const strikePositionBeforeBodyShift = strikeLeg.foot.getWorldPosition(new THREE.Vector3());
+  const strikeRotationBeforeBodyShift = strikeLeg.foot.getWorldQuaternion(new THREE.Quaternion());
+  const supportAfterLegSolve = supportLeg.foot.getWorldPosition(new THREE.Vector3());
+  const residual = target.clone().sub(supportAfterLegSolve);
+  residual.y = 0;
+  const maximumCompensation = profile.maxBodyCompensation * scale * factor;
+  if (residual.length() > maximumCompensation && residual.length() > 1e-8) {
+    residual.multiplyScalar(maximumCompensation / residual.length());
+  }
+
+  state.host = host;
+  state.hostDelta.copy(hostLocalDeltaForWorldDelta(host, residual));
+  host.position.add(state.hostDelta);
+  root.updateMatrixWorld(true);
+
+  solveLegToWorldTarget(strikeLeg, strikeSuffix, strikePositionBeforeBodyShift, scale);
+  setWorldQuaternion(strikeLeg.foot, strikeRotationBeforeBodyShift);
+  model.updateMatrixWorld(true);
+
+  const finalPosition = supportLeg.foot.getWorldPosition(new THREE.Vector3());
+  const finalWorldRotation = supportLeg.foot.getWorldQuaternion(new THREE.Quaternion());
+  const finalStrikePosition = strikeLeg.foot.getWorldPosition(new THREE.Vector3());
   const data = root.userData;
   data.tpsKickSupportFoot = factor;
   data.tpsKickSupportFootMove = moveId;
-  data.tpsKickSupportFootSide = suffix.toUpperCase();
+  data.tpsKickSupportFootSide = supportSuffix.toUpperCase();
   data.tpsKickSupportFootRawDrift = currentPosition.distanceTo(state.anchorPosition);
   data.tpsKickSupportFootDrift = finalPosition.distanceTo(state.anchorPosition);
   data.tpsKickSupportFootRawPlanarDrift = Math.hypot(rawOffset.x, rawOffset.z);
@@ -250,6 +317,8 @@ function applySupportFootPlant(fighter: FighterRuntime, state: SupportFootState)
   data.tpsKickSupportFootRawAngle = THREE.MathUtils.radToDeg(state.anchorRotation.angleTo(currentRotation));
   data.tpsKickSupportFootAngle = THREE.MathUtils.radToDeg(state.anchorRotation.angleTo(finalWorldRotation));
   data.tpsKickSupportFootAnchor = state.anchorPosition.toArray();
+  data.tpsKickSupportFootBodyCompensation = residual.length();
+  data.tpsKickSupportFootStrikeError = finalStrikePosition.distanceTo(strikePositionBeforeBodyShift);
 }
 
 export function installTpsKickSupportFootPresentation(): void {
@@ -263,8 +332,9 @@ export function installTpsKickSupportFootPresentation(): void {
     timeSeconds: number,
   ): void {
     const state = ensureState(fighter);
-    // Restore the exact authored local pose before the next mixer sample so the
-    // presentation-only plant can never leak into transitionPose or simulation.
+    // Restore the exact authored local pose and body offset before the next mixer
+    // sample so this late presentation correction can never leak into simulation
+    // or become part of the imported transition pose.
     restorePreviousSupport(state);
     baseUpdate.call(this, fighter, opponent, timeSeconds);
     applySupportFootPlant(fighter, state);

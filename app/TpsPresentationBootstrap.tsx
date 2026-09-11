@@ -2,6 +2,7 @@
 
 import { installRivalCircuitAiRuntime } from "@/src/game/rival-circuit-ai";
 import { installRivalCircuitArenaPresentation } from "@/src/game/rival-circuit-arena";
+import { installRivalCircuitProtocolRuntime } from "@/src/game/rival-circuit-protocol-runtime";
 import { installTpsArenaSpectaclePresentation } from "@/src/game/tps-arena-spectacle";
 import { installTpsAttackActionHandoffPresentation } from "@/src/game/tps-attack-action-handoff";
 import { installTpsBackfistSweepBoostPresentation } from "@/src/game/tps-backfist-sweep-boost";
@@ -31,6 +32,7 @@ import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
 installRivalCircuitAiRuntime();
+installRivalCircuitProtocolRuntime();
 installTpsArenaSpectaclePresentation();
 installRivalCircuitArenaPresentation();
 installTpsGroundingReadabilityPresentation();

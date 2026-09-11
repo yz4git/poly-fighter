@@ -199,9 +199,35 @@ try {
   if (!circuitPass) throw new Error(`Rival Circuit iPhone loadout failed: ${JSON.stringify(circuitLoadout)}`);
   await screenshot(sessionId, `${outputDir}/rival-circuit-loadout-iphone.png`);
 
+  // Seed a later-run CLEAN LINE reward through the exact protocol-card click
+  // contract. The live match below then proves the gameplay runtime carries the
+  // installed protocol into a new TpsFightGame instance and actually fires it.
+  const protocolSeeded = await execute(sessionId, `
+    const fake = document.createElement('button');
+    fake.type = 'button';
+    fake.className = 'protocol-card';
+    fake.textContent = 'TEMPO ROUTE CLEAN LINE';
+    document.body.appendChild(fake);
+    fake.click();
+    fake.remove();
+    return true;
+  `);
+  if (!protocolSeeded) throw new Error('Could not seed CLEAN LINE protocol for runtime audit');
+
   const circuitEnter = await clickButton(sessionId, "ENTER CIRCUIT");
   if (!circuitEnter.clicked) throw new Error(`ENTER CIRCUIT could not start stage one: ${JSON.stringify(circuitEnter)}`);
-  await delay(4300);
+  await delay(650);
+  await execute(sessionId, `
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    return true;
+  `);
+  await delay(360);
+  await execute(sessionId, `
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    return true;
+  `);
+  await delay(3300);
+
   const circuitMatch = await execute(sessionId, `
     const buttons = [...document.querySelectorAll('button')];
     const actionRect = (text) => {
@@ -225,6 +251,9 @@ try {
       arenaStage: document.body.dataset.rivalCircuitArenaStage ?? '',
       arenaId: document.body.dataset.rivalCircuitArenaId ?? '',
       arenaLabel: document.body.dataset.rivalCircuitArenaLabel ?? '',
+      protocols: document.body.dataset.rivalCircuitProtocols ?? '',
+      protocolCount: Number(document.body.dataset.rivalCircuitProtocolCount ?? '0'),
+      cleanActivations: Number(document.body.dataset.rivalCircuitProtocolCleanActivations ?? '0'),
       fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
     };
   `);
@@ -239,10 +268,13 @@ try {
     && circuitMatch.arenaStage === '1'
     && circuitMatch.arenaId === 'GLASSLINE'
     && circuitMatch.arenaLabel.includes('GLASSLINE')
+    && circuitMatch.protocols.includes('CLEAN_LINE')
+    && circuitMatch.protocolCount === 1
+    && circuitMatch.cleanActivations >= 1
     && !circuitMatch.fallback
     && withinViewport(circuitMatch.attack, circuitMatch.width, circuitMatch.height)
     && withinViewport(circuitMatch.step, circuitMatch.width, circuitMatch.height);
-  if (!circuitMatchPass) throw new Error(`Rival Circuit PRESSURE runtime audit failed: ${JSON.stringify(circuitMatch)}`);
+  if (!circuitMatchPass) throw new Error(`Rival Circuit runtime audit failed: ${JSON.stringify(circuitMatch)}`);
   await screenshot(sessionId, `${outputDir}/rival-circuit-pressure-match-iphone.png`);
 
   await navigateHome(sessionId);

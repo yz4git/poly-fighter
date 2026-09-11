@@ -175,6 +175,11 @@ function ensureArenaTheme(game: TpsFightGame): void {
     game.scene.fog.color.set(profile.backdrop);
   }
   game.scene.add(created.group);
+  if (typeof document !== "undefined") {
+    document.body.dataset.rivalCircuitArenaStage = String(profile.stage);
+    document.body.dataset.rivalCircuitArenaId = profile.id;
+    document.body.dataset.rivalCircuitArenaLabel = profile.label;
+  }
   states.set(game, { ...created, previousBackground, previousFogColor });
 }
 
@@ -188,6 +193,11 @@ function disposeArenaTheme(game: TpsFightGame): void {
   game.scene.background = state.previousBackground;
   if (state.previousFogColor && (game.scene.fog instanceof THREE.FogExp2 || game.scene.fog instanceof THREE.Fog)) {
     game.scene.fog.color.copy(state.previousFogColor);
+  }
+  if (typeof document !== "undefined") {
+    delete document.body.dataset.rivalCircuitArenaStage;
+    delete document.body.dataset.rivalCircuitArenaId;
+    delete document.body.dataset.rivalCircuitArenaLabel;
   }
   states.delete(game);
 }

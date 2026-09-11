@@ -79,6 +79,23 @@ async function resizeToCssViewport(sessionId, width, height) {
   return execute(sessionId, `return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };`);
 }
 
+async function navigateHome(sessionId) {
+  await command(`/session/${sessionId}/url`, "POST", { url });
+  await delay(500);
+  const viewport = await resizeToCssViewport(sessionId, 932, 430);
+  if (Math.abs(viewport.innerWidth - 932) > 2 || Math.abs(viewport.innerHeight - 430) > 2) {
+    throw new Error(`Could not establish iPhone landscape viewport: ${JSON.stringify(viewport)}`);
+  }
+}
+
+const withinViewport = (rect, width, height) => rect
+  && rect.left >= -1
+  && rect.top >= -1
+  && rect.right <= width + 1
+  && rect.bottom <= height + 1
+  && rect.width > 1
+  && rect.height > 1;
+
 let sessionId = null;
 try {
   await waitForDriver();
@@ -99,34 +116,92 @@ try {
     },
   });
   sessionId = session.sessionId;
-  await command(`/session/${sessionId}/url`, "POST", { url });
-  await delay(500);
-  const viewport = await resizeToCssViewport(sessionId, 932, 430);
-  if (Math.abs(viewport.innerWidth - 932) > 2 || Math.abs(viewport.innerHeight - 430) > 2) {
-    throw new Error(`Could not establish iPhone landscape viewport: ${JSON.stringify(viewport)}`);
-  }
-
+  await navigateHome(sessionId);
   await mkdir(outputDir, { recursive: true });
+
   const title = await execute(sessionId, `
     const labels = [...document.querySelectorAll('button')].map((entry) => entry.textContent ?? '');
-    const start = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes('START FIGHT'));
-    const rect = start?.getBoundingClientRect();
+    const rectFor = (text) => {
+      const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent?.includes(text));
+      const rect = button?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
+    };
     return {
       width: window.innerWidth,
       height: window.innerHeight,
       scrollWidth: document.documentElement.scrollWidth,
       scrollHeight: document.documentElement.scrollHeight,
-      startFight: Boolean(start),
+      rivalCircuit: labels.some((label) => label.includes('RIVAL CIRCUIT')),
+      startFight: labels.some((label) => label.includes('START FIGHT')),
+      settings: labels.some((label) => label.includes('SETTINGS')),
       legacyStartMatch: labels.some((label) => label.includes('START MATCH')),
       legacyTpsMode: labels.some((label) => label.includes('TPS LOCK-ON BATTLE')),
-      startRect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      rivalRect: rectFor('RIVAL CIRCUIT'),
+      startRect: rectFor('START FIGHT'),
+      settingsRect: rectFor('SETTINGS'),
     };
   `);
-  if (!title.startFight || title.legacyStartMatch || title.legacyTpsMode || title.scrollWidth > title.width + 2 || title.scrollHeight > title.height + 2 || !title.startRect || title.startRect.bottom > title.height || title.startRect.top < 0) {
+  if (
+    !title.rivalCircuit
+    || !title.startFight
+    || !title.settings
+    || title.legacyStartMatch
+    || title.legacyTpsMode
+    || title.scrollWidth > title.width + 2
+    || title.scrollHeight > title.height + 2
+    || !withinViewport(title.rivalRect, title.width, title.height)
+    || !withinViewport(title.startRect, title.width, title.height)
+    || !withinViewport(title.settingsRect, title.width, title.height)
+  ) {
     throw new Error(`TPS iPhone title layout failed: ${JSON.stringify(title)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-title-iphone.png`);
 
+  const circuitClicked = await clickButton(sessionId, "RIVAL CIRCUIT");
+  if (!circuitClicked.clicked) throw new Error(`RIVAL CIRCUIT could not open loadout: ${JSON.stringify(circuitClicked)}`);
+  await delay(220);
+  const circuitLoadout = await execute(sessionId, `
+    const visibleRect = (element) => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    const buttons = [...document.querySelectorAll('button')];
+    const enter = buttons.find((entry) => entry.textContent?.includes('ENTER CIRCUIT'));
+    const back = buttons.find((entry) => entry.textContent?.includes('TITLE'));
+    const cards = [...document.querySelectorAll('.fighter-card')].map(visibleRect);
+    const visualModel = [...document.querySelectorAll('.difficulty span')].find((entry) => entry.textContent?.includes('VISUAL MODEL'));
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      heading: document.body.innerText.includes('RIVAL CIRCUIT LOADOUT'),
+      stageOne: document.body.innerText.includes('STAGE 1/5'),
+      glassline: document.body.innerText.includes('GLASSLINE'),
+      pressure: document.body.innerText.includes('PRESSURE'),
+      enter: visibleRect(enter),
+      back: visibleRect(back),
+      visualModel: visibleRect(visualModel),
+      cards,
+    };
+  `);
+  const circuitPass = circuitLoadout.heading
+    && circuitLoadout.stageOne
+    && circuitLoadout.glassline
+    && circuitLoadout.pressure
+    && circuitLoadout.scrollWidth <= circuitLoadout.width + 2
+    && withinViewport(circuitLoadout.enter, circuitLoadout.width, circuitLoadout.height)
+    && withinViewport(circuitLoadout.back, circuitLoadout.width, circuitLoadout.height)
+    && withinViewport(circuitLoadout.visualModel, circuitLoadout.width, circuitLoadout.height)
+    && circuitLoadout.cards.length === 2
+    && circuitLoadout.cards.every((rect) => withinViewport(rect, circuitLoadout.width, circuitLoadout.height));
+  if (!circuitPass) throw new Error(`Rival Circuit iPhone loadout failed: ${JSON.stringify(circuitLoadout)}`);
+  await screenshot(sessionId, `${outputDir}/rival-circuit-loadout-iphone.png`);
+
+  // Reload so the long-standing normal START FIGHT entry audit remains fully
+  // independent from the new Circuit path.
+  await navigateHome(sessionId);
   const clicked = await clickButton(sessionId, "START FIGHT");
   if (!clicked.clicked) throw new Error(`START FIGHT could not open loadout: ${JSON.stringify(clicked)}`);
   await delay(180);
@@ -157,19 +232,18 @@ try {
       cards,
     };
   `);
-  const within = (rect) => rect && rect.left >= -1 && rect.top >= -1 && rect.right <= loadout.width + 1 && rect.bottom <= loadout.height + 1 && rect.width > 1 && rect.height > 1;
   const loadoutPass = loadout.tpsLoadout
     && loadout.scrollWidth <= loadout.width + 2
     && loadout.scrollHeight <= loadout.height + 2
-    && within(loadout.engage)
-    && within(loadout.back)
-    && within(loadout.cpuDifficulty)
-    && within(loadout.visualModel)
+    && withinViewport(loadout.engage, loadout.width, loadout.height)
+    && withinViewport(loadout.back, loadout.width, loadout.height)
+    && withinViewport(loadout.cpuDifficulty, loadout.width, loadout.height)
+    && withinViewport(loadout.visualModel, loadout.width, loadout.height)
     && loadout.cards.length === 4
-    && loadout.cards.every(within);
+    && loadout.cards.every((rect) => withinViewport(rect, loadout.width, loadout.height));
   if (!loadoutPass) throw new Error(`TPS iPhone loadout layout failed: ${JSON.stringify(loadout)}`);
   await screenshot(sessionId, `${outputDir}/tps-loadout-iphone.png`);
-  await writeFile(`${outputDir}/tps-entry-layout.json`, `${JSON.stringify({ title, loadout }, null, 2)}\n`);
+  await writeFile(`${outputDir}/tps-entry-layout.json`, `${JSON.stringify({ title, circuitLoadout, loadout }, null, 2)}\n`);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   driverProcess.kill("SIGTERM");

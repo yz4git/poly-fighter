@@ -3,7 +3,7 @@ export type RivalCircuitFinishMoveId = "power" | "risingKick";
 
 export const RIVAL_CIRCUIT_FINISH_HEALTH = 14;
 export const RIVAL_CIRCUIT_FINISH_MAX_DISTANCE = 2.18;
-export const RIVAL_CIRCUIT_FINISH_CHORD_TICKS = 5;
+export const RIVAL_CIRCUIT_FINISH_CHORD_TICKS = 3;
 export const RIVAL_CIRCUIT_FINISH_TARGET_DISTANCE = 1.26;
 
 export interface RivalCircuitFinishWindowInput {

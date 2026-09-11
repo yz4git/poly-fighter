@@ -20,7 +20,10 @@ type RuntimeState = {
   committed: boolean;
 };
 
+type MemoryListener = (memory: RivalCircuitMemory) => void;
+
 const runtimeStates = new WeakMap<object, RuntimeState>();
+const memoryListeners = new Set<MemoryListener>();
 let installed = false;
 let runMemory: RivalCircuitMemory = { ...EMPTY_RIVAL_CIRCUIT_MEMORY };
 let lastCommittedStage = 0;
@@ -48,15 +51,36 @@ export function mergeRivalCircuitMemoryProgress(
   return { ...nextBase, ...classifyRivalCircuitMemory(nextBase) };
 }
 
+function cloneRunMemory(): RivalCircuitMemory {
+  return { ...runMemory };
+}
+
+function notifyMemoryListeners(): void {
+  const snapshot = cloneRunMemory();
+  for (const listener of memoryListeners) listener({ ...snapshot });
+}
+
+export function getRivalCircuitRunMemorySnapshot(): RivalCircuitMemory {
+  return cloneRunMemory();
+}
+
+export function subscribeRivalCircuitRunMemory(listener: MemoryListener): () => void {
+  memoryListeners.add(listener);
+  listener(cloneRunMemory());
+  return () => memoryListeners.delete(listener);
+}
+
+export function resetRivalCircuitRunMemory(): void {
+  runMemory = { ...EMPTY_RIVAL_CIRCUIT_MEMORY };
+  lastCommittedStage = 0;
+  publishRivalCircuitMemoryToDom(runMemory);
+  notifyMemoryListeners();
+}
+
 function circuitStageFromDom(): number {
   if (typeof document === "undefined") return 0;
   const strip = document.querySelector<HTMLElement>(".circuit-run-strip");
   return rivalCircuitStageFromLabel(strip?.textContent ?? "");
-}
-
-function resetRunMemory(): void {
-  runMemory = { ...EMPTY_RIVAL_CIRCUIT_MEMORY };
-  lastCommittedStage = 0;
 }
 
 function runtimeState(game: object): RuntimeState {
@@ -73,7 +97,7 @@ function publishForStage(game: CircuitMemoryRuntime, state: RuntimeState, stage:
     // Any new Stage 1 after a completed Circuit fight marks a new run. This is
     // deliberately run-local: Rival Memory does not leak between separate runs
     // or into normal START FIGHT.
-    if (stage === 1 && lastCommittedStage > 0) resetRunMemory();
+    if (stage === 1 && lastCommittedStage > 0) resetRivalCircuitRunMemory();
   }
   publishRivalCircuitMemoryToDom(runMemory);
   const data = game.p2.visual.root.userData;
@@ -90,6 +114,7 @@ function commitFight(game: CircuitMemoryRuntime, state: RuntimeState): void {
   runMemory = mergeRivalCircuitMemoryProgress(runMemory, game.trainingProgress, elapsedSeconds);
   lastCommittedStage = state.stage;
   publishRivalCircuitMemoryToDom(runMemory);
+  notifyMemoryListeners();
 }
 
 export function installRivalCircuitMemoryRuntime(): void {

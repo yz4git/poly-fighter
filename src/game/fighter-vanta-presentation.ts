@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import { registerVantaCircuitRival } from "./fighter-vanta-circuit";
 import { TpsFightGame } from "./tps-game";
 
 type VantaLayer = {
@@ -130,6 +131,7 @@ function disposeLayer(fighter: FighterRuntime): void {
 export function installVantaFighterPresentation(): void {
   if (installed) return;
   installed = true;
+  registerVantaCircuitRival();
 
   const prototype = TpsFightGame.prototype as unknown as {
     updateVisual(fighter: FighterRuntime, opponent: FighterRuntime, time: number): void;

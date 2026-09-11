@@ -18,6 +18,7 @@ import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact
 import { installTpsImpactLensPulsePresentation } from "@/src/game/tps-impact-lens-pulse";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
 import { installTpsKickContactShapingPresentation } from "@/src/game/tps-kick-contact-shaping";
+import { installTpsKickPairSpacingPresentation } from "@/src/game/tps-kick-pair-spacing";
 import { installTpsKickSupportFootPresentation } from "@/src/game/tps-kick-support-foot";
 import { installTpsLatestImpactWavePresentation } from "@/src/game/tps-latest-impact-wave";
 import { installTpsLowKickOpenLinePresentation } from "@/src/game/tps-lowkick-open-line";
@@ -53,6 +54,7 @@ installTpsAttackActionHandoffPresentation();
 installTpsKickContactShapingPresentation();
 installTpsKickSupportFootPresentation();
 installTpsDashKickGroundContactPresentation();
+installTpsKickPairSpacingPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

@@ -8,6 +8,7 @@ import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neu
 import { installTpsClosePunchLanePresentation } from "@/src/game/tps-close-punch-lane";
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsCounterattackHandoffPresentation } from "@/src/game/tps-counterattack-handoff";
+import { installTpsDashKickGroundContactPresentation } from "@/src/game/tps-dashkick-ground-contact";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
 import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
 import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
@@ -51,6 +52,7 @@ installTpsCounterattackHandoffPresentation();
 installTpsAttackActionHandoffPresentation();
 installTpsKickContactShapingPresentation();
 installTpsKickSupportFootPresentation();
+installTpsDashKickGroundContactPresentation();
 
 export default function TpsPresentationBootstrap() {
   return null;

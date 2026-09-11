@@ -116,7 +116,7 @@ function updateLayer(fighter: FighterRuntime, time: number): void {
   layer.core.scale.setScalar(pulse);
   layer.chest.rotation.z = Math.sin(time * 1.7) * 0.012;
   layer.shoulderPlates.forEach((plate, index) => {
-    plate.position.y += Math.sin(time * 2.1 + index * Math.PI) * 0.0007;
+    plate.rotation.x = Math.sin(time * 2.1 + index * Math.PI) * 0.025;
   });
 }
 

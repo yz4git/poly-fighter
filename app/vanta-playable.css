@@ -1,5 +1,19 @@
 .fighter-select-grid.v3-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fighter-select-grid.v3-grid .fighter-card {
+  min-width: 0;
+  padding-left: 9px;
+  padding-right: 8px;
+}
+
+.fighter-select-grid.v3-grid .fighter-card strong {
+  min-width: 0;
+  font-size: 14px;
+  letter-spacing: .035em;
+  white-space: nowrap;
 }
 
 .fighter-card.selected-violet {
@@ -41,6 +55,7 @@
   }
   .fighter-select-grid.v3-grid .fighter-card strong {
     font-size: 16px;
+    letter-spacing: .04em;
   }
   .fighter-select-grid.v3-grid .fighter-card small,
   .fighter-select-grid.v3-grid .fighter-card em {

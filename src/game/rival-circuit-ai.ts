@@ -39,6 +39,7 @@ export interface RivalCircuitSignatureInput {
   distance: number;
   playerAttacking: boolean;
   playerSideStepping: boolean;
+  apexHealth?: number;
 }
 
 export interface RivalCircuitSignaturePlan {
@@ -96,18 +97,30 @@ export function effectiveRivalCircuitStyle(
   return APEX_PHASES[slot] ?? "PRESSURE";
 }
 
-export function rivalCircuitTacticForStyle(
-  style: RivalCircuitStyle,
-  simulationTicks: number,
-): EnemyTactic {
-  const effective = effectiveRivalCircuitStyle(style, simulationTicks);
+export function effectiveApexStyleForHealth(health: number): RivalCircuitStyle {
+  const value = Math.max(0, Math.min(100, health));
+  if (value >= 61) return "ANGLE";
+  if (value >= 31) return "COUNTER";
+  return "PRESSURE";
+}
+
+function tacticForEffectiveStyle(effective: RivalCircuitStyle): EnemyTactic {
   if (effective === "PRESSURE") return "PRESSURE";
   if (effective === "COUNTER") return "BAIT";
   return "ORBIT";
 }
 
+export function rivalCircuitTacticForStyle(
+  style: RivalCircuitStyle,
+  simulationTicks: number,
+): EnemyTactic {
+  return tacticForEffectiveStyle(effectiveRivalCircuitStyle(style, simulationTicks));
+}
+
 export function rivalCircuitSignaturePlan(input: RivalCircuitSignatureInput): RivalCircuitSignaturePlan | null {
-  const effective = effectiveRivalCircuitStyle(input.style, input.simulationTicks);
+  const effective = input.style === "APEX" && input.apexHealth !== undefined
+    ? effectiveApexStyleForHealth(input.apexHealth)
+    : effectiveRivalCircuitStyle(input.style, input.simulationTicks);
   const slot = Math.floor(Math.max(0, input.simulationTicks) / 90);
 
   if (effective === "PRESSURE") {
@@ -179,14 +192,13 @@ function signatureInterval(style: RivalCircuitStyle): number {
 }
 
 function applyStyleIdentity(game: RivalRuntime, style: RivalCircuitStyle, state: RivalAiState): RivalCircuitStyle {
-  const effective = effectiveRivalCircuitStyle(style, game.simulationTicks);
-  const tactic = rivalCircuitTacticForStyle(style, game.simulationTicks);
+  const effective = style === "APEX"
+    ? effectiveApexStyleForHealth(game.p2.health)
+    : effectiveRivalCircuitStyle(style, game.simulationTicks);
+  const tactic = tacticForEffectiveStyle(effective);
   const data = game.p2.visual.root.userData;
 
   game.enemyTactic = tactic;
-  // Keep the normal adaptive CPU director alive while making Circuit spacing
-  // authoritative. The core decrements this each tick, so a small refresh here
-  // prevents the generic tactic roulette from replacing the named rival style.
   game.enemyTacticTicks = Math.max(game.enemyTacticTicks, 12);
   game.enemyPersona = effective === "PRESSURE" ? "BRAWLER" : "SKIRMISHER";
 
@@ -202,9 +214,12 @@ function applyStyleIdentity(game: RivalRuntime, style: RivalCircuitStyle, state:
   data.tpsRivalCircuitTactic = tactic;
   data.tpsRivalCircuitScheduledSignatures = state.scheduledSignatures;
 
-  if (style === "APEX" && state.lastPhase !== effective) {
-    state.lastPhase = effective;
-    game.setCombatBeat(`APEX: ${effective.replace("_", " ")}`, 24);
+  if (style === "APEX") {
+    data.tpsApexAiHealthPhase = effective;
+    if (state.lastPhase !== effective) {
+      state.lastPhase = effective;
+      game.setCombatBeat(`APEX: ${effective.replace("_", " ")}`, 32);
+    }
   }
   return effective;
 }
@@ -219,7 +234,7 @@ function tryScheduleSignature(
   if (game.enemyCooldown > 0 || game.enemyDirectorPendingMove || game.enemyDirectorTelegraphTicks > 0) return;
   if (!game.p2.canAct()) return;
 
-  const interval = style === "APEX" ? 126 : signatureInterval(effective);
+  const interval = style === "APEX" ? (effective === "PRESSURE" ? 108 : 126) : signatureInterval(effective);
   if (game.simulationTicks - state.lastSignatureTick < interval) return;
 
   const distance = Math.hypot(
@@ -233,6 +248,7 @@ function tryScheduleSignature(
     distance,
     playerAttacking: game.p1.state === "ATTACK",
     playerSideStepping,
+    apexHealth: style === "APEX" ? game.p2.health : undefined,
   });
   if (!plan || !game.p2.definition.moves[plan.moveId]) return;
 
@@ -243,7 +259,7 @@ function tryScheduleSignature(
     telegraphTicks,
     reason: `rival-circuit-${effective.toLowerCase()}-${plan.label.toLowerCase().replaceAll(" ", "-")}`,
     comebackMercy: 0,
-    pressure: effective === "PRESSURE" ? 0.9 : effective === "ANGLE" ? 0.58 : 0.72,
+    pressure: effective === "PRESSURE" ? 0.94 : effective === "ANGLE" ? 0.58 : 0.72,
   };
 
   game.enemyDirectorDecision = decision;
@@ -258,7 +274,7 @@ function tryScheduleSignature(
   data.tpsRivalCircuitSignatureMove = plan.moveId;
   data.tpsRivalCircuitSignatureTelegraphTicks = telegraphTicks;
   data.tpsRivalCircuitScheduledSignatures = state.scheduledSignatures;
-  game.setCombatBeat(`RIVAL: ${plan.label}`, 24);
+  game.setCombatBeat(style === "APEX" ? `APEX-0: ${plan.label}` : `RIVAL: ${plan.label}`, 24);
 }
 
 export function installRivalCircuitAiRuntime(): void {
@@ -281,9 +297,6 @@ export function installRivalCircuitAiRuntime(): void {
     tryScheduleSignature(game, style, effective, state);
     baseUpdateEnemy.call(this);
 
-    // Re-publish after the shared director writes its diagnostics so audit tools
-    // can always see both layers without changing damage, hitboxes, move timing,
-    // or the existing reactable telegraph contract.
     const data = game.p2.visual.root.userData;
     data.tpsRivalCircuitAiPolicy = "RIVAL_CIRCUIT_V1";
     data.tpsRivalCircuitStyle = style;

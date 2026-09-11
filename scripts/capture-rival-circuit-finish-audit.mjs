@@ -101,6 +101,49 @@ async function finishState(sessionId) {
   `);
 }
 
+async function installHitLatch(sessionId) {
+  return execute(sessionId, `
+    window.__polyFighterFinishAuditHit = null;
+    window.__polyFighterFinishAuditObserver?.disconnect?.();
+    const capture = () => {
+      const phase = document.body.dataset.rivalCircuitFinishPhase ?? '';
+      const health = Number(document.body.dataset.rivalCircuitFinishHealth ?? '-1');
+      const activations = Number(document.body.dataset.rivalCircuitFinishActivations ?? '0');
+      if (phase !== 'HIT' && !(health === 0 && activations >= 1)) return false;
+      window.__polyFighterFinishAuditHit = {
+        policy: document.body.dataset.rivalCircuitFinishPolicy ?? '',
+        ready: document.body.dataset.rivalCircuitFinishReady ?? '',
+        phase: phase || 'HIT',
+        move: document.body.dataset.rivalCircuitFinishMove ?? '',
+        stage: document.body.dataset.rivalCircuitFinishStage ?? '',
+        health,
+        activations,
+        strip: document.querySelector('.circuit-run-strip')?.textContent ?? '',
+        fallback: document.body.innerText.includes('3D描画を開始できませんでした') || document.body.innerText.includes('描画中にエラーが発生しました'),
+      };
+      return true;
+    };
+    const observer = new MutationObserver(() => {
+      if (capture()) observer.disconnect();
+    });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: [
+        'data-rival-circuit-finish-phase',
+        'data-rival-circuit-finish-health',
+        'data-rival-circuit-finish-activations',
+      ],
+    });
+    window.__polyFighterFinishAuditObserver = observer;
+    capture();
+    return true;
+  `);
+}
+
+async function latchedHitState(sessionId) {
+  return execute(sessionId, `return window.__polyFighterFinishAuditHit ?? null;`);
+}
+
 let sessionId = null;
 try {
   await waitForDriver();
@@ -161,6 +204,10 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/rival-circuit-finish-ready-iphone.png`);
 
+  // Latch the synchronous runtime evidence before React can replace the match
+  // surface with the reward route. This observes diagnostics only; it does not
+  // pause, mutate, or otherwise change gameplay timing.
+  await installHitLatch(sessionId);
   await execute(sessionId, `
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
@@ -175,19 +222,18 @@ try {
 
   // KAIRO's authored power FINISH becomes active around 17 simulation ticks.
   // Capture at that real timing rather than waiting for the React result route.
-  // This makes the artifact a combat-frame audit instead of a reward-screen race.
   await delay(195);
   await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
 
-  let hit = null;
-  for (let attempt = 0; attempt < 70; attempt += 1) {
+  let hit = await latchedHitState(sessionId);
+  for (let attempt = 0; attempt < 90 && !hit; attempt += 1) {
     await delay(10);
-    hit = await finishState(sessionId);
-    if (hit.phase === 'HIT') break;
+    hit = await latchedHitState(sessionId);
   }
-  if (!hit || hit.phase !== 'HIT') throw new Error(`FINISH chord did not connect: ${JSON.stringify(hit)}`);
+  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify(await finishState(sessionId))}`);
   if (
     hit.policy !== 'CIRCUIT_FINISH_V1'
+    || hit.phase !== 'HIT'
     || hit.move !== 'power'
     || hit.activations < 1
     || hit.health !== 0

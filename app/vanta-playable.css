@@ -1,5 +1,5 @@
 .fighter-select-grid.v3-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .fighter-card.selected-violet {
@@ -13,23 +13,34 @@
   color: #e0bd61;
 }
 
+.fighter-card.selected-amber {
+  transform: translateY(-2px);
+  background: rgba(68, 45, 18, .92);
+  border-color: #ffb64d;
+  box-shadow: inset 5px 0 #d58b2d, 0 0 20px rgba(255, 182, 77, .14);
+}
+
+.fighter-card.selected-amber em {
+  color: #d9e0e8;
+}
+
 @media (max-width: 760px) {
   .fighter-select-grid.v3-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
   .fighter-select-grid.v3-grid .fighter-card {
-    min-height: 126px;
+    min-height: 98px;
     grid-template-columns: 42px 1fr;
     column-gap: 8px;
-    padding: 12px 9px;
+    padding: 9px;
   }
   .fighter-select-grid.v3-grid .fighter-orb {
     width: 36px;
-    height: 58px;
+    height: 52px;
   }
   .fighter-select-grid.v3-grid .fighter-card strong {
-    font-size: 17px;
+    font-size: 16px;
   }
   .fighter-select-grid.v3-grid .fighter-card small,
   .fighter-select-grid.v3-grid .fighter-card em {
@@ -38,7 +49,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 500px) {
   .fighter-select-grid.v3-grid {
     grid-template-columns: 1fr;
   }

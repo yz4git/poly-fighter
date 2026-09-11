@@ -11,6 +11,11 @@ import type { HudSnapshot, InputAction } from "@/src/game/types";
 import { advanceTpsTrainingStage, EMPTY_TPS_TRAINING, TPS_TRAINING_STEPS, type TpsTrainingStage } from "@/src/game/tps-training";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
 import {
+  PLAYABLE_FIGHTERS,
+  playableFighterDefinition,
+  playableFighterSelectedClass,
+} from "@/src/game/playable-fighters";
+import {
   RIVAL_CIRCUIT_ENCOUNTERS,
   rivalCircuitProtocolOffers,
   rivalCircuitRunGrade,
@@ -290,8 +295,8 @@ export default function Home() {
     const activeDifficulty = screen === "TRAINING" ? "EASY" : circuitMatch ? circuitEncounter.difficulty : difficulty;
     try {
       game = new TpsFightGame(mountRef.current, {
-        p1Definition: FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red,
-        p2Definition: FIGHTER_DEFINITIONS[opponentChoice] ?? FIGHTER_DEFINITIONS.blue,
+        p1Definition: playableFighterDefinition(p1Choice, "red"),
+        p2Definition: playableFighterDefinition(opponentChoice, "blue"),
         p1Model: modelChoice,
         p2Model: modelChoice,
         difficulty: activeDifficulty,
@@ -444,9 +449,9 @@ export default function Home() {
     persistSettings({ quality: values[(index + 1) % values.length] });
   };
 
-  const p1 = FIGHTER_DEFINITIONS[p1Choice] ?? FIGHTER_DEFINITIONS.red;
-  const normalP2 = FIGHTER_DEFINITIONS[p2Choice] ?? FIGHTER_DEFINITIONS.blue;
-  const circuitP2 = FIGHTER_DEFINITIONS[circuitOpponentChoice] ?? FIGHTER_DEFINITIONS.blue;
+  const p1 = playableFighterDefinition(p1Choice, "red");
+  const normalP2 = playableFighterDefinition(p2Choice, "blue");
+  const circuitP2 = playableFighterDefinition(circuitOpponentChoice, "blue");
   const p2 = matchMode === "CIRCUIT" ? circuitP2 : normalP2;
   // Keep the original live-surface contract explicit for regression coverage.
   const isGameSurface = screen === "TPS_MATCH" || screen === "TRAINING";
@@ -478,18 +483,18 @@ export default function Home() {
           <div className="title-kicker">RETRO 3D DNA / MODERN POLYGON DENSITY</div>
           <h1>POLY<span>FIGHTER</span></h1>
           <p className="title-subtitle">HIGH-POLY FLAT SHADING // RING 01</p>
-          <div className="title-mark"><span /> <b>02</b> <span /></div>
+          <div className="title-mark"><span /> <b>03</b> <span /></div>
           <p className="title-copy">A close-range 3D lock-on fighter built for direct movement, readable impact, and fast rematches.</p>
           <button type="button" className="primary-button circuit-primary" onClick={startCircuit}>
-            <span>RIVAL CIRCUIT</span><small>NEW // 5 FIGHTS / STYLE GRADE / PROTOCOLS</small>
+            <span>RIVAL CIRCUIT</span><small>5 FIGHTS / STYLE GRADE / PROTOCOLS / VANTA</small>
           </button>
           <button type="button" className="primary-button" onClick={() => { setMatchMode("VERSUS"); setScreen("SELECT"); requestLandscape(); }}>
-            <span>START FIGHT</span><small>TPS LOCK-ON / LOADOUT SELECT</small>
+            <span>START FIGHT</span><small>TPS LOCK-ON / 3 FIGHTERS / LOADOUT SELECT</small>
           </button>
           <button type="button" className="ghost-button" onClick={startTraining}>TRAINING</button>
           <button type="button" className="ghost-button" onClick={() => { requestLandscape(); setScreen("MODEL_VIEW"); }}>MODEL VIEW</button>
           <button type="button" className="ghost-button" onClick={() => setShowSettings(true)}>SETTINGS</button>
-          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.2 // RIVAL CIRCUIT</span></div>
+          <div className="title-footer"><span>iPHONE SAFARI / LANDSCAPE</span><span>BUILD 0.3 // VANTA ONLINE</span></div>
         </section>
       )}
 
@@ -498,14 +503,16 @@ export default function Home() {
       {screen === "SELECT" && (
         <section className="select-screen screen-panel">
           <div className="screen-heading"><span>{matchMode === "CIRCUIT" ? "RIVAL CIRCUIT LOADOUT" : "TPS LOADOUT"}</span><i>{matchMode === "CIRCUIT" ? "CHOOSE YOUR FIGHTER / MODEL" : "LOCK-ON FIGHTER / CPU / DIFFICULTY"}</i></div>
-          <div className="fighter-select-grid">
-            {[FIGHTER_DEFINITIONS.red, FIGHTER_DEFINITIONS.blue].map((fighter) => {
+          <div className="fighter-select-grid v3-grid">
+            {PLAYABLE_FIGHTERS.map((fighter) => {
               const selected = fighter.id === p1Choice;
               return (
                 <button
                   key={`p1-${fighter.id}`}
                   type="button"
-                  className={`fighter-card ${selected ? "selected-red" : ""}`}
+                  className={`fighter-card ${playableFighterSelectedClass(fighter.id, selected, "P1")}`}
+                  data-fighter-id={fighter.id}
+                  data-fighter-slot="P1"
                   onClick={() => setP1Choice(fighter.id)}
                 >
                   <div className="fighter-orb" style={{ "--fighter-color": `#${fighter.colors.primary.toString(16).padStart(6, "0")}` } as CSSProperties} />
@@ -536,14 +543,16 @@ export default function Home() {
           ) : (
             <>
               <div className="versus-line"><span>PLAYER 1</span><b>VS</b><span>CPU // PLAYER 2</span></div>
-              <div className="fighter-select-grid opponent-grid">
-                {[FIGHTER_DEFINITIONS.red, FIGHTER_DEFINITIONS.blue].map((fighter) => {
+              <div className="fighter-select-grid opponent-grid v3-grid">
+                {PLAYABLE_FIGHTERS.map((fighter) => {
                   const selected = fighter.id === p2Choice;
                   return (
                     <button
                       key={`p2-${fighter.id}`}
                       type="button"
-                      className={`fighter-card ${selected ? "selected-blue" : ""}`}
+                      className={`fighter-card ${playableFighterSelectedClass(fighter.id, selected, "P2")}`}
+                      data-fighter-id={fighter.id}
+                      data-fighter-slot="P2"
                       onClick={() => setP2Choice(fighter.id)}
                     >
                       <div className="fighter-orb" style={{ "--fighter-color": `#${fighter.colors.primary.toString(16).padStart(6, "0")}` } as CSSProperties} />

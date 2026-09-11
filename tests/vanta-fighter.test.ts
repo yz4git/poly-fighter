@@ -16,24 +16,14 @@ import {
 import { RIVAL_CIRCUIT_ENCOUNTERS } from "../src/game/rival-circuit";
 
 const REQUIRED_MOVES = [
-  "jab",
-  "straight",
-  "backfist",
-  "bodyBlow",
-  "power",
-  "kick",
-  "lowKick",
-  "risingKick",
-  "dashKick",
-  "throw",
-  "counter",
+  "jab", "straight", "backfist", "bodyBlow", "power", "kick",
+  "lowKick", "risingKick", "dashKick", "throw", "counter",
 ] as const;
 
-test("VANTA registers as a third fighter without replacing KAIRO or SERA", () => {
+test("VANTA registers without replacing KAIRO or SERA", () => {
   const kairo = FIGHTER_DEFINITIONS.red;
   const sera = FIGHTER_DEFINITIONS.blue;
   const vanta = registerVantaFighter();
-
   assert.equal(FIGHTER_DEFINITIONS.red, kairo);
   assert.equal(FIGHTER_DEFINITIONS.blue, sera);
   assert.equal(FIGHTER_DEFINITIONS[VANTA_FIGHTER_ID], vanta);
@@ -44,11 +34,12 @@ test("VANTA registers as a third fighter without replacing KAIRO or SERA", () =>
   assert.equal(vanta.colors.accent, 0xd7aa45);
 });
 
-test("playable roster exposes KAIRO, SERA, and VANTA without changing defaults", () => {
-  assert.deepEqual(PLAYABLE_FIGHTERS.map((fighter) => fighter.name), ["KAIRO", "SERA", "VANTA"]);
+test("playable roster keeps VANTA alongside the expanded four-fighter lineup", () => {
+  assert.deepEqual(PLAYABLE_FIGHTERS.map((fighter) => fighter.name), ["KAIRO", "SERA", "VANTA", "BRONT"]);
   assert.equal(playableFighterDefinition("red").name, "KAIRO");
   assert.equal(playableFighterDefinition("blue", "blue").name, "SERA");
   assert.equal(playableFighterDefinition(VANTA_FIGHTER_ID).name, "VANTA");
+  assert.equal(playableFighterDefinition("amber").name, "BRONT");
   assert.equal(playableFighterDefinition("missing").name, "KAIRO");
   assert.equal(playableFighterDefinition("missing", "blue").name, "SERA");
 });
@@ -90,18 +81,9 @@ test("VANTA DNA rewards earned reads instead of raw pressure", () => {
     selfHealth: 70,
     defenderHealth: 70,
   };
-  assert.deepEqual(
-    resolveContextAttack({ ...base, interceptOpen: true }),
-    { moveId: "straight", beat: "NULL CHECK", signature: "NULL CHECK" },
-  );
-  assert.deepEqual(
-    resolveContextAttack({ ...base, reversalOpen: true }),
-    { moveId: "counter", beat: "MIRROR BREAK", signature: "MIRROR BREAK" },
-  );
-  assert.equal(
-    resolveContextAttack({ ...base, distance: 2.1, comboStage: 2 }).moveId,
-    "dashKick",
-  );
+  assert.deepEqual(resolveContextAttack({ ...base, interceptOpen: true }), { moveId: "straight", beat: "NULL CHECK", signature: "NULL CHECK" });
+  assert.deepEqual(resolveContextAttack({ ...base, reversalOpen: true }), { moveId: "counter", beat: "MIRROR BREAK", signature: "MIRROR BREAK" });
+  assert.equal(resolveContextAttack({ ...base, distance: 2.1, comboStage: 2 }).moveId, "dashKick");
 });
 
 test("Rival Circuit Stage 3 becomes VANTA while preserving the COUNTER identity contract", () => {

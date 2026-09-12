@@ -23,8 +23,8 @@ A change is not considered committed unless a GitHub connector write returns a c
 
 ## CI and visual validation
 
-- For Blender/SERA work, use the existing GitHub Actions headless Blender + WebGL audit pipeline.
-- A visual change is not considered validated until the workflow completes successfully and the actual artifact PNGs have been downloaded and inspected.
+- For final visual validation, releases, or when explicitly requested, use the existing GitHub Actions headless Blender + WebGL audit pipeline and inspect the actual artifact PNGs.
+- During iterative visual work, run checks relevant to the change; a full visual audit is not required for every adjustment.
 - Never use generated/mock images as evidence of the game or Blender result.
 - Do not claim a workflow, artifact, render, or screenshot exists unless the relevant GitHub connector result confirms it.
 

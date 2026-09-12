@@ -1,6 +1,15 @@
 .fighter-select-grid.v3-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+/* The shared TPS compact-landscape layout owns the iPhone grid. AXION's
+   four-fighter roster must not force all four cards into one horizontal row:
+   that squeezed fighter names/callsigns and weakened touch targets at 932x430.
+   Keep the four-column presentation for taller desktop/tablet layouts only. */
+@media (orientation: landscape) and (min-height: 761px) {
+  .fighter-select-grid.v3-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .fighter-card.selected-amber {
@@ -21,25 +30,6 @@
 @media (orientation: landscape) and (max-height: 560px) {
   .fighter-select-grid.v3-grid {
     gap: 7px;
-    margin-top: 12px;
-  }
-  .fighter-select-grid.v3-grid .fighter-card {
-    min-height: 88px;
-    grid-template-columns: 35px minmax(0, 1fr);
-    column-gap: 7px;
-    padding: 8px 8px;
-  }
-  .fighter-select-grid.v3-grid .fighter-orb {
-    width: 31px;
-    height: 46px;
-  }
-  .fighter-select-grid.v3-grid .fighter-card strong {
-    font-size: 15px;
-  }
-  .fighter-select-grid.v3-grid .fighter-card small,
-  .fighter-select-grid.v3-grid .fighter-card em {
-    font-size: 6px;
-    letter-spacing: .06em;
   }
 }
 

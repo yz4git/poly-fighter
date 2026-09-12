@@ -2,13 +2,22 @@
   gap: 10px;
 }
 
-/* The shared TPS compact-landscape layout owns the iPhone grid. AXION's
-   four-fighter roster must not force all four cards into one horizontal row:
-   that squeezed fighter names/callsigns and weakened touch targets at 932x430.
-   Keep the four-column presentation for taller desktop/tablet layouts only. */
+/* Taller desktop/tablet layouts can show the complete four-fighter roster in
+   one row. Compact landscape is handled separately below so iPhone cards keep
+   useful touch width and readable fighter identity. */
 @media (orientation: landscape) and (min-height: 761px) {
   .fighter-select-grid.v3-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* VANTA's three-fighter stylesheet still carries a global 3-column grid. With
+   AXION online that would leave three narrow cards plus AXION stranded on a
+   second row at 932x430. Make the shipped compact-landscape contract explicit:
+   each side is always a balanced 2x2 roster. */
+@media (orientation: landscape) and (max-height: 760px) {
+  .select-screen > .fighter-select-grid.v3-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

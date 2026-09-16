@@ -181,6 +181,7 @@ export interface TpsTrainingProgress {
 export interface HudSnapshot {
   tpsTraining?: TpsTrainingProgress;
   tpsCue?: "INCOMING" | "WINDUP" | "PUNISH" | "RANGE" | "NONE";
+  tpsTimingCue?: "READ" | "WATCH" | "SLIP" | "JUST_STEP" | "BREAK_COUNTER" | "NONE";
   phase: "TITLE" | "SELECT" | "MATCH" | "RESULT";
   round: number;
   timer: number;

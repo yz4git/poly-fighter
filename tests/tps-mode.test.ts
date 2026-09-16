@@ -90,7 +90,7 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /playerStepThreatTicks/);
   assert.match(source, /playerStepThreatMoveId/);
   assert.match(source, /this\.playerStepThreatMoveId === move\.id/);
-  assert.match(source, /const reactiveSideStep = Boolean/);
+  assert.match(source, /const justStepSideStep = Boolean/);
   assert.match(source, /const incomingThreatReach = incomingMove/);
   assert.match(source, /incomingDistance <= incomingThreatReach/);
   assert.doesNotMatch(source, /this\.playerFlankWindowTicks = TPS_STEP_TICKS \+ TPS_FLANK_WINDOW_TICKS/);
@@ -141,19 +141,19 @@ test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", as
   assert.match(page, /TPS_MATCH/);
   assert.doesNotMatch(page, /TPS LOCK-ON BATTLE/);
   assert.match(page, /tps-two-button-actions/);
-  assert.match(page, /"guard", "Step", tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
-  assert.match(page, /"punch", "Attack", tpsPunish \? "PUNISH" : tpsIntercept \? "INTERCEPT" : "ATTACK"/);
-  assert.match(page, /AUTO PUNCH \/ KICK/);
-  assert.match(page, /STEP OR INTERCEPT/);
-  assert.match(page, /PERFECT STEP/);
-  assert.match(page, /→ REVERSAL/);
+  assert.match(page, /tpsSlip \? "SLIP NOW"/);
+  assert.match(page, /tpsBreakCounter \? "BREAK COUNTER"/);
+  assert.match(page, /READ \+ ATTACK = INTERCEPT/);
+  assert.match(page, /READ \+ ATTACK = INTERCEPT/);
+  assert.match(page, /JUST STEP/);
+  assert.match(page, /BREAK COUNTER/);
   assert.match(page, /tpsWindup/);
   assert.match(page, /tpsPunish/);
   assert.match(page, /tps-threat-action/);
-  assert.match(page, /tps-windup-action/);
+  assert.match(page, /tps-read-action/);
   assert.match(page, /tps-punish-action/);
   assert.match(page, /WINDUP/);
-  assert.match(page, /FORWARD STEP → ATTACK = DASH/);
+  assert.match(page, /EARLY STEP = EVADE/);
   assert.doesNotMatch(page, /G\+K/);
   assert.doesNotMatch(page, /G\+P/);
   assert.doesNotMatch(page, /P\+K/);
@@ -212,8 +212,9 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
   assert.match(source, /"WINDUP"/);
   assert.match(page, /hud\?\.tpsCue === "WINDUP"/);
   assert.match(page, /hud\?\.tpsCue === "PUNISH"/);
-  assert.match(page, /tpsIncoming \? "STEP NOW" : tpsWindup \? "READY" : "STEP"/);
-  assert.match(page, /tpsPunish \? "PUNISH" : tpsIntercept \? "INTERCEPT" : "ATTACK"/);
+  assert.match(page, /tpsWatch \? "WATCH"/);
+  assert.match(page, /tpsRead \? "READ"/);
+  assert.match(page, /tpsBreakCounter \? "BREAK COUNTER"/);
   assert.match(css, /tps-step-action\.tps-threat-action/);
   assert.match(css, /tps-attack-action\.tps-punish-action/);
 });
@@ -231,7 +232,7 @@ test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grad
   assert.match(source, /playerReversalTicks/);
   assert.match(source, /setCombatBeat\("INTERCEPT"\)/);
   assert.match(source, /setCombatBeat\("REVERSAL"\)/);
-  assert.match(source, /reversalOpen: reversalStrike/);
+  assert.match(source, /reversalOpen: breakCounterStrike \|\| reversalStrike/);
   assert.match(source, /defenderWasAttacking/);
   assert.match(source, /counter: defenderWasAttacking \|\| interceptStrike/);
   assert.match(source, /tpsReactionType/);
@@ -249,3 +250,31 @@ test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grad
   assert.match(css, /tps-intercept-action/);
 });
 
+
+
+test("TPS timing mastery separates WATCH from JUST STEP and upgrades the precise punish to BREAK COUNTER", async () => {
+  const [source, page, css, types] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/types.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /TPS_JUST_STEP_WINDOW_TICKS/);
+  assert.match(source, /NORMAL: 6/);
+  assert.match(source, /playerStepThreatWasJust/);
+  assert.match(source, /playerBreakCounterTicks/);
+  assert.match(source, /playerBreakCounterAttackTicks/);
+  assert.match(source, /pendingJustStep/);
+  assert.match(source, /this\.enemyDirectorTelegraphTicks <= this\.justStepWindowTicks\(\)/);
+  assert.match(source, /setCombatBeat\("JUST STEP"\)/);
+  assert.match(source, /setCombatBeat\("BREAK COUNTER"\)/);
+  assert.match(source, /1\.36 \* this\.p1Dna\.reversalDamageScale/);
+  assert.match(source, /"BREAK_COUNTER"/);
+  assert.match(source, /timing: TpsThreatTiming/);
+  assert.match(types, /tpsTimingCue\?: "READ" \| "WATCH" \| "SLIP" \| "JUST_STEP" \| "BREAK_COUNTER" \| "NONE"/);
+  assert.match(page, /tpsSlip \? "SLIP NOW"/);
+  assert.match(page, /tpsBreakCounter \? "BREAK COUNTER"/);
+  assert.match(page, /EARLY STEP = EVADE/);
+  assert.match(css, /tps-slip-action/);
+  assert.match(css, /tps-break-counter-action/);
+});

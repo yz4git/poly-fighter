@@ -38,6 +38,14 @@ const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const TPS_INTERCEPT_TICKS = 26;
 const TPS_REVERSAL_TICKS = 24;
+const TPS_JUST_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
+  EASY: 8,
+  NORMAL: 6,
+  HARD: 5,
+});
+const TPS_JUST_STEP_REWARD_TICKS = 24;
+const TPS_BREAK_COUNTER_TICKS = 30;
+const TPS_BREAK_COUNTER_ATTACK_TICKS = 32;
 // Human-readable CPU commitment windows for iPhone touch play. Even the fastest
 // jab gets a short authored load before its normal startup frames begin.
 const TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
@@ -91,6 +99,7 @@ type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 type EnemyPersona = "BRAWLER" | "SKIRMISHER";
 type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH" | "CUT_RETREAT" | "MIRROR_LEFT" | "MIRROR_RIGHT" | "HUNT_INTERCEPT";
 type MatchDramaPhase = "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
+type TpsThreatTiming = "NONE" | "READ" | "WATCH" | "SLIP";
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
@@ -298,6 +307,10 @@ export class TpsFightGame {
   private playerStepThreatMoveId: string | null = null;
   private playerInterceptTicks = 0;
   private playerReversalTicks = 0;
+  private playerStepThreatWasJust = false;
+  private playerJustStepTicks = 0;
+  private playerBreakCounterTicks = 0;
+  private playerBreakCounterAttackTicks = 0;
   private combatBeatLabel: string | null = null;
   private combatBeatTicks = 0;
   private playerAttackSamples = 0;
@@ -614,6 +627,9 @@ export class TpsFightGame {
     if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
     if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
     if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+    if (this.playerJustStepTicks > 0) this.playerJustStepTicks -= 1;
+    if (this.playerBreakCounterTicks > 0) this.playerBreakCounterTicks -= 1;
+    if (this.playerBreakCounterAttackTicks > 0) this.playerBreakCounterAttackTicks -= 1;
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
@@ -706,6 +722,14 @@ export class TpsFightGame {
         && this.enemyDirectorTelegraphTicks > 0
         && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
       );
+      const pendingJustStep = Boolean(
+        pendingReaction
+        && this.enemyDirectorTelegraphTicks <= this.justStepWindowTicks()
+      );
+      const activeJustStep = Boolean(
+        activeIncomingMove
+        && this.p2.moveTick <= activeIncomingMove.startup
+      );
       const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);
       const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
       const incomingThreatReach = incomingMove
@@ -716,15 +740,17 @@ export class TpsFightGame {
         : pendingReaction && incomingMove
           ? this.enemyDirectorTelegraphTicks + incomingMove.startup + incomingMove.active
           : 0;
-      const reactiveSideStep = Boolean(
+      const justStepSideStep = Boolean(
         this.playerStepSideWeight > 0.45
         && incomingMove
         && incomingMove.hitLevel !== "THROW"
         && incomingFrames > 0
         && incomingDistance <= incomingThreatReach
+        && (pendingJustStep || activeJustStep)
       );
-      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;
-      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;
+      this.playerStepThreatTicks = justStepSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;
+      this.playerStepThreatMoveId = justStepSideStep ? incomingMove?.id ?? null : null;
+      this.playerStepThreatWasJust = justStepSideStep;
     }
 
     if (this.playerEvadeTicks > 0) {
@@ -785,7 +811,8 @@ export class TpsFightGame {
     if (!this.p1.canAct()) return false;
     const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
     const stage = Math.min(2, this.playerComboStage);
-    const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
+    const breakCounterStrike = this.playerBreakCounterTicks > 0 && this.playerStepSideWeight > 0.45;
+    const reversalStrike = !breakCounterStrike && this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
     const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
     const interceptStrike = this.playerInterceptTicks > 0;
     const defenderNearWall = Math.hypot(this.p2.position.x, this.p2.position.z) >= ARENA_RADIUS - 1.35;
@@ -794,7 +821,7 @@ export class TpsFightGame {
       distance,
       comboStage: stage,
       flankOpen: flankStrike,
-      reversalOpen: reversalStrike,
+      reversalOpen: breakCounterStrike || reversalStrike,
       interceptOpen: interceptStrike,
       defenderAttacking: this.p2.state === "ATTACK",
       defenderNearWall,
@@ -802,14 +829,20 @@ export class TpsFightGame {
       defenderHealth: this.p2.health,
     });
     if (!this.p1.beginMove(choice.moveId)) return false;
-    this.playerComboStage = reversalStrike ? 1 : stage + 1;
+    this.playerComboStage = breakCounterStrike || reversalStrike ? 1 : stage + 1;
     this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
     this.p1.visual.root.userData.tpsFighterDna = this.p1Dna.id;
     this.p1.visual.root.userData.tpsContextMove = choice.moveId;
     this.p1.visual.root.userData.tpsSignatureAction = choice.signature;
     this.p1.visual.root.userData.tpsContextBeat = choice.beat;
     if (choice.beat) this.setCombatBeat(choice.beat);
-    if (reversalStrike) {
+    if (breakCounterStrike) {
+      this.playerBreakCounterAttackTicks = TPS_BREAK_COUNTER_ATTACK_TICKS;
+      this.playerBreakCounterTicks = 0;
+      this.playerJustStepTicks = 0;
+      this.playerReversalSamples += 1;
+      this.setCombatBeat("BREAK COUNTER");
+    } else if (reversalStrike) {
       this.playerReversalSamples += 1;
       this.playerReversalTicks = 0;
     }
@@ -839,6 +872,10 @@ export class TpsFightGame {
 
   private enemyReactionWindowTicks(): number {
     return TPS_REACTIVE_STEP_WINDOW_TICKS[this.difficulty];
+  }
+
+  private justStepWindowTicks(): number {
+    return TPS_JUST_STEP_WINDOW_TICKS[this.difficulty];
   }
 
   private updateEnemy(): void {
@@ -1108,40 +1145,51 @@ export class TpsFightGame {
       && this.playerStepSideWeight > 0.45
       && move.hitLevel !== "THROW";
     if (trackedSideEvade) {
-      attacker.hitTargets.add(defender.id);
-      this.playerStepThreatTicks = 0;
-      this.playerStepThreatMoveId = null;
-      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
-      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
+    const justStepEvade = this.playerStepThreatWasJust;
+    attacker.hitTargets.add(defender.id);
+    this.playerStepThreatTicks = 0;
+    this.playerStepThreatMoveId = null;
+    this.playerStepThreatWasJust = false;
+    this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
+    this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
+    if (justStepEvade) {
+      this.playerJustStepTicks = Math.max(this.playerJustStepTicks, TPS_JUST_STEP_REWARD_TICKS);
+      this.playerBreakCounterTicks = Math.max(this.playerBreakCounterTicks, TPS_BREAK_COUNTER_TICKS);
+      this.setCombatBeat("JUST STEP");
+    } else {
       this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
-      this.trainingProgress.perfectEvades += 1;
       this.setCombatBeat("REVERSAL");
-      return;
     }
+    this.trainingProgress.perfectEvades += 1;
+    return;
+  }
     const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
     if (distance > move.reach + 0.72) return;
 
     attacker.hitTargets.add(defender.id);
     const defenderWasAttacking = defender.state === "ATTACK";
     const interceptStrike = attacker === this.p1 && defender === this.p2 && this.playerInterceptTicks > 0;
-    const reversalStrike = attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";
-    const blocked = defenderGuarding && move.hitLevel !== "THROW" && !reversalStrike && !interceptStrike;
+    const breakCounterStrike = attacker === this.p1 && defender === this.p2 && this.playerBreakCounterAttackTicks > 0 && move.hitLevel !== "THROW";
+    const reversalStrike = !breakCounterStrike && attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";
+    const blocked = defenderGuarding && move.hitLevel !== "THROW" && !breakCounterStrike && !reversalStrike && !interceptStrike;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
     impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
-    const damageScale = interceptStrike
-      ? 1.22 * this.p1Dna.interceptDamageScale
-      : reversalStrike
-        ? 1.18 * this.p1Dna.reversalDamageScale
-        : defenderWasAttacking ? 1.12 : 1;
+    const damageScale = breakCounterStrike
+      ? 1.36 * this.p1Dna.reversalDamageScale
+      : interceptStrike
+        ? 1.22 * this.p1Dna.interceptDamageScale
+        : reversalStrike
+          ? 1.18 * this.p1Dna.reversalDamageScale
+          : defenderWasAttacking ? 1.12 : 1;
     const resolvedDamage = blocked ? 0 : Math.max(1, Math.round(move.damage * damageScale));
     const lethalImpact = !blocked && defender.health <= resolvedDamage;
     if (attacker === this.p1 && !blocked) {
       this.trainingProgress.hits += 1;
       if (interceptStrike) this.trainingProgress.intercepts += 1;
-      if (reversalStrike) this.trainingProgress.punishes += 1;
+      if (breakCounterStrike || reversalStrike) this.trainingProgress.punishes += 1;
     }
-    const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);
+    const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (breakCounterStrike ? 0.34 : interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);
 
     if (blocked) {
       defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);
@@ -1154,8 +1202,11 @@ export class TpsFightGame {
       defender.velocity.z = direction.z * knockback;
     }
 
-    if (interceptStrike) {
-      this.playerInterceptTicks = 0;
+    if (breakCounterStrike) {
+    this.playerBreakCounterAttackTicks = 0;
+    this.setCombatBeat("BREAK COUNTER");
+  } else if (interceptStrike) {
+    this.playerInterceptTicks = 0;
       this.enemyDirectorPendingMove = null;
       this.enemyDirectorTelegraphTicks = 0;
       this.enemyDirectorTelegraphTotalTicks = 0;
@@ -1171,7 +1222,7 @@ export class TpsFightGame {
       this.setCombatBeat("COUNTER HIT");
     }
 
-    const reactionType = lethalImpact ? "FINISHER" : interceptStrike ? "INTERCEPT" : reversalStrike ? "REVERSAL" : defenderWasAttacking ? "COUNTER" : blocked ? "BLOCK" : move.power >= 1.45 ? "HEAVY" : "NORMAL";
+    const reactionType = lethalImpact ? "FINISHER" : breakCounterStrike ? "BREAK_COUNTER" : interceptStrike ? "INTERCEPT" : reversalStrike ? "REVERSAL" : defenderWasAttacking ? "COUNTER" : blocked ? "BLOCK" : move.power >= 1.45 ? "HEAVY" : "NORMAL";
     const reactionRegion = move.reactionTarget ?? (move.hitLevel === "LOW" ? "LEGS" : "BODY");
     const reactionVariant = (this.simulationTicks + move.id.length * 3 + (attacker === this.p1 ? 0 : 1)) % 3;
     const impactPairStrength = THREE.MathUtils.clamp(reactionStrength * (lethalImpact ? 1.18 : 1), 0.7, 1.9);
@@ -1204,7 +1255,7 @@ export class TpsFightGame {
       defender: defender.id,
       move,
       blocked,
-      counter: defenderWasAttacking || interceptStrike,
+      counter: defenderWasAttacking || interceptStrike || reversalStrike || breakCounterStrike,
       throwEscape: false,
       damage: resolvedDamage,
       position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },
@@ -1216,11 +1267,13 @@ export class TpsFightGame {
       const attackerDna = attacker === this.p1 ? this.p1Dna : this.p2Dna;
       if (lethalImpact) this.audio.combatSignature("FINAL_IMPACT", attackerDna.id);
       else if (interceptStrike) this.audio.combatSignature("INTERCEPT", attackerDna.id);
-      else if (reversalStrike) this.audio.combatSignature("REVERSAL", attackerDna.id);
+      else if (breakCounterStrike || reversalStrike) this.audio.combatSignature("REVERSAL", attackerDna.id);
     }
     if (!blocked && this.settings.get().vibration && attacker.id === "p1") {
       const hapticPattern: number | number[] = lethalImpact
-        ? [28, 18, 42]
+      ? [28, 18, 42]
+      : breakCounterStrike
+        ? [14, 10, 28]
         : interceptStrike
           ? [8, 14, 16]
           : reversalStrike
@@ -1388,7 +1441,7 @@ export class TpsFightGame {
     }
   }
 
-  private enemyThreatStatus(): { windup: boolean; incoming: boolean } {
+  private enemyThreatStatus(): { windup: boolean; incoming: boolean; timing: TpsThreatTiming } {
     const pending = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
     const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
     const pendingDistance = Math.hypot(
@@ -1398,22 +1451,38 @@ export class TpsFightGame {
     const pendingThreatReach = pendingMove
       ? pendingMove.reach + (pendingMove.id === "dashKick" ? 1.8 : 0.9)
       : 0;
-    const lateWindup = Boolean(
+    const pendingInReach = Boolean(pendingMove && pendingDistance <= pendingThreatReach);
+    const inReactionWindow = Boolean(
       pending
       && pendingMove
+      && pendingInReach
       && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
-      && pendingDistance <= pendingThreatReach
     );
-    const windup = pending && !lateWindup;
+    const inJustStepWindow = Boolean(
+      inReactionWindow
+      && this.enemyDirectorTelegraphTicks <= this.justStepWindowTicks()
+    );
+    const pendingTiming: TpsThreatTiming = !pending
+      ? "NONE"
+      : inJustStepWindow
+        ? "SLIP"
+        : inReactionWindow
+          ? "WATCH"
+          : "READ";
+    const windup = pending && !inReactionWindow;
     const move = this.p2.currentMove;
-    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: lateWindup };
+    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: inReactionWindow, timing: pendingTiming };
     const distance = Math.hypot(
       this.p2.position.x - this.p1.position.x,
       this.p2.position.z - this.p1.position.z,
     );
     const canStillHit = this.p2.moveTick < move.startup + Math.max(1, move.active);
     const inThreatReach = distance <= move.reach + 0.9;
-    return { windup, incoming: canStillHit && inThreatReach };
+    const activeIncoming = canStillHit && inThreatReach;
+    const activeTiming: TpsThreatTiming = activeIncoming
+      ? this.p2.moveTick <= move.startup ? "SLIP" : "WATCH"
+      : pendingTiming;
+    return { windup, incoming: activeIncoming || inReactionWindow, timing: activeTiming };
   }
 
   private updateLockOn(): void {
@@ -1488,8 +1557,12 @@ export class TpsFightGame {
     this.playerPerfectEvadeTicks = 0;
     this.playerStepThreatTicks = 0;
     this.playerStepThreatMoveId = null;
+    this.playerStepThreatWasJust = false;
     this.playerInterceptTicks = 0;
     this.playerReversalTicks = 0;
+    this.playerJustStepTicks = 0;
+    this.playerBreakCounterTicks = 0;
+    this.playerBreakCounterAttackTicks = 0;
     this.combatBeatLabel = null;
     this.combatBeatTicks = 0;
     this.playerAttackSamples = 0;
@@ -1536,11 +1609,15 @@ export class TpsFightGame {
       // Action cues describe the current opportunity, independently of a
       // signature/combo/drama headline that can remain on screen for 30+ ticks.
       tpsCue: this.finishPending || this.finished ? "NONE"
+      : this.playerBreakCounterTicks > 0 || this.playerBreakCounterAttackTicks > 0 || this.playerJustStepTicks > 0 || this.playerReversalTicks > 0 || this.playerPerfectEvadeTicks > 0 ? "PUNISH"
         : enemyThreat.incoming ? "INCOMING"
-          : this.playerReversalTicks > 0 || this.playerPerfectEvadeTicks > 0 ? "PUNISH"
-            : enemyThreat.windup ? "WINDUP"
-              : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE ? "RANGE" : "NONE",
-      round: 1,
+          : enemyThreat.windup ? "WINDUP"
+            : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE ? "RANGE" : "NONE",
+    tpsTimingCue: this.finishPending || this.finished ? "NONE"
+      : this.playerBreakCounterTicks > 0 || this.playerBreakCounterAttackTicks > 0 ? "BREAK_COUNTER"
+        : this.playerJustStepTicks > 0 ? "JUST_STEP"
+          : enemyThreat.timing,
+    round: 1,
       timer: Math.ceil(this.timerTicks / 60),
       p1Health: this.p1.health,
       p2Health: this.p2.health,

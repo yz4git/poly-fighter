@@ -211,9 +211,9 @@ try {
       };
     `);
     const ok = kind === "WINDUP"
-      ? gameState.threat.windup && !gameState.threat.incoming && ui.stepText === "READY" && ui.stepClass.includes("tps-windup-action")
+      ? gameState.threat.windup && !gameState.threat.incoming && gameState.threat.timing === "READ" && ui.stepText === "READ" && ui.stepClass.includes("tps-read-action")
       : kind === "INCOMING"
-        ? gameState.threat.incoming && ui.stepText === "STEP NOW" && ui.stepClass.includes("tps-threat-action")
+        ? gameState.threat.incoming && gameState.threat.timing === "SLIP" && ui.stepText === "SLIP NOW" && ui.stepClass.includes("tps-slip-action")
         : ui.attackText === "PUNISH" && ui.attackClass.includes("tps-punish-action");
     if (!ok) throw new Error(`TPS ${kind} cue mismatch: ${JSON.stringify({ gameState, ui })}`);
     results[kind] = { gameState, ui };

@@ -25,6 +25,8 @@ import bpy
 from mathutils import Quaternion, Vector
 
 
+# Foundry validation note: this module is included in artifact hashes so any
+# change here forces a fresh Blender build before GLBs are treated as current.
 UNIMATE_INBETWEEN_VERSION = "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1"
 
 

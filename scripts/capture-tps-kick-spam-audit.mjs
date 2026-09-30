@@ -246,6 +246,11 @@ try {
     capabilities: {
       alwaysMatch: {
         browserName: 'chrome',
+        timeouts: {
+          script: 180000,
+          pageLoad: 120000,
+          implicit: 0,
+        },
         'goog:chromeOptions': {
           args: [
             '--headless=new',

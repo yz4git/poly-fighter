@@ -165,7 +165,7 @@ export function applyKimodoMotionConditioning(
   // that idea conservatively: calm states receive only a tiny high-frequency
   // root cleanup; attacks never have their authored forward drive low-pass
   // filtered.
-  let rootCorrection = new THREE.Vector3();
+  const rootCorrection = new THREE.Vector3();
   const calm = CALM_STATES.has(fighter.state);
   if (!state.smoothedPelvis) state.smoothedPelvis = pelvisWorld.clone();
   const rootAlpha = 1 - Math.exp(-deltaSeconds * (fighter.state === "WALK" ? 26 : 18));

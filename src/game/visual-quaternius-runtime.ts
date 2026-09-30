@@ -8,6 +8,7 @@ import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
+import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { retargetMotionClips } from "./motion-retarget";
 export { retargetMotionClips } from "./motion-retarget";
 
@@ -811,6 +812,10 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
   advance(runtime, timeSeconds, fighter.hitStop > 0);
   synchronizeMotion(runtime, fighter);
+  // Kimodo-inspired post conditioning is presentation-only: it smooths the
+  // root/body channel and uses inferred foot contacts to suppress skating while
+  // leaving authored strike end-effectors and deterministic gameplay untouched.
+  applyKimodoMotionConditioning({ model: runtime.model, bones: runtime.bones }, fighter, delta);
   const correctionsEnabled = motionCorrectionsEnabled();
   // New clips already contain an anatomical guard. The legacy assistance toggle
   // remains meaningful only for an independently missing optional clip pack.

@@ -9,6 +9,14 @@ import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-auth
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, smoothMotion } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
+import {
+  applyInertialTransition,
+  beginInertialTransition,
+  KIMODO_MOTION_INERTIALIZATION_VERSION,
+  recordInertialPose,
+  type InertialPoseSample,
+  type InertialTransitionSample,
+} from "./kimodo-motion-inertialization";
 import { retargetMotionClips } from "./motion-retarget";
 export { retargetMotionClips } from "./motion-retarget";
 
@@ -77,7 +85,8 @@ type QuaterniusRuntime = {
   landingEnd: number;
   transitionAge: number;
   transitionDuration: number;
-  transitionPose: Map<string, { position: THREE.Vector3; rotation: THREE.Quaternion }>;
+  transitionPose: Map<string, InertialTransitionSample>;
+  poseHistory: Map<string, InertialPoseSample>;
   plantedFeet: { l: THREE.Vector3 | null; r: THREE.Vector3 | null };
   finalTime: number;
 };
@@ -556,13 +565,16 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   }
   runtime.transitionPose.clear();
   if (runtime.currentAction) {
-    for (const [boneName, bone] of runtime.bones) {
-      if (!(bone as THREE.Bone).isBone) continue;
-      runtime.transitionPose.set(boneName, { position: bone.position.clone(), rotation: bone.quaternion.clone() });
-    }
+    // Preserve both the rendered outgoing pose and its measured local velocity.
+    // The destination clip will be sampled immediately after this switch, then
+    // velocity-aware inertialization carries momentum across the discontinuity.
+    beginInertialTransition(runtime.bones, runtime.poseHistory, runtime.transitionPose);
   }
   runtime.transitionDuration = transitionFadeSeconds(runtime.currentClip, clip.name);
   runtime.transitionAge = 0;
+  runtime.host.userData.kimodoInertializationVersion = KIMODO_MOTION_INERTIALIZATION_VERSION;
+  runtime.host.userData.kimodoInertialTransitionFrom = runtime.currentClip;
+  runtime.host.userData.kimodoInertialTransitionTo = clip.name;
   // Snapshot the rendered pose before stopping. Same-clip repeats and combo
   // interruptions cannot reset a live outgoing action or accumulate old weights.
   runtime.mixer.stopAllAction();
@@ -621,15 +633,17 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
     action.time = clip.duration * phase;
     runtime.mixer.update(0);
   }
-  if (runtime.transitionPose.size) {
-    const weight = 1 - smoothMotion(runtime.transitionAge / runtime.transitionDuration);
-    if (weight <= 0) runtime.transitionPose.clear();
-    else for (const [name, from] of runtime.transitionPose) {
-      const bone = runtime.bones.get(name)!;
-      bone.quaternion.slerp(from.rotation, weight);
-      bone.position.lerp(from.position, weight);
-    }
-  }
+  const inertial = applyInertialTransition(
+    runtime.bones,
+    runtime.transitionPose,
+    runtime.transitionAge,
+    runtime.transitionDuration,
+  );
+  runtime.host.userData.kimodoInertialTransitionActive = inertial.weight > 0;
+  runtime.host.userData.kimodoInertialTransitionWeight = inertial.weight;
+  runtime.host.userData.kimodoInertialActiveBones = inertial.activeBones;
+  runtime.host.userData.kimodoInertialMaxLinearVelocity = inertial.maxLinearVelocity;
+  runtime.host.userData.kimodoInertialMaxAngularVelocity = inertial.maxAngularVelocity;
   runtime.model.updateMatrixWorld(true);
 }
 
@@ -740,7 +754,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       lastPosition: null, motionX: 0, motionZ: 1, gaitPhase: 0,
       lastYaw: null, turnRate: 0, lastState: "", lastStateTicks: 0,
       stateDuration: 1, clock: 0, landingEnd: 0,
-      transitionAge: 1, transitionDuration: .05, transitionPose: new Map(),
+      transitionAge: 1, transitionDuration: .05, transitionPose: new Map(), poseHistory: new Map(),
       plantedFeet: { l: null, r: null }, finalTime: -1,
       bodyType: resources.bodyType,
       modelUrl: resources.modelUrl,
@@ -821,7 +835,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.lastReactionSerial = fighter.reactionSerial;
   const desired = desiredClip(fighter, runtime);
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
-  advance(runtime, timeSeconds, fighter.hitStop > 0);
+  const motionDelta = advance(runtime, timeSeconds, fighter.hitStop > 0);
   synchronizeMotion(runtime, fighter);
   // Kimodo-inspired post conditioning is presentation-only: it smooths the
   // root/body channel and uses inferred foot contacts to suppress skating while
@@ -842,6 +856,10 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.combatMotionSingleMixer = true;
   fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
   runtime.model.updateMatrixWorld(true);
+  // Capture the final rendered pose after conditioning/corrections. The next
+  // clip switch can therefore inherit actual on-screen velocity rather than
+  // only the previous authored keyframe.
+  recordInertialPose(runtime.bones, runtime.poseHistory, motionDelta);
 }
 
 /** Run after the final TPS yaw, never in the side-camera coordinate basis. */

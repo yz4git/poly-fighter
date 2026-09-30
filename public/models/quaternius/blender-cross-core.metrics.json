@@ -22,6 +22,67 @@
   "boneCount": 65,
   "meshCount": 2,
   "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+  "motionPriorProvider": "UAL_AUTHORED_STRIKE_V2",
+  "naturalnessPass": "AUTHORED_SOURCE_V2",
+  "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+  "unimateInbetweenAnchors": [
+    1,
+    6,
+    16,
+    21,
+    24,
+    33,
+    42
+  ],
+  "unimateInbetweenSmoothedBones": 16,
+  "unimateInbetweenPreservedBones": [
+    "pelvis",
+    "thigh_l",
+    "calf_l",
+    "foot_l"
+  ],
+  "unimateRotationAccelerationRmsBefore": 0.18402951713198326,
+  "unimateRotationAccelerationRmsAfter": 0.16844692555505267,
+  "unimateMaxRotationStepBefore": 2.2506339095000554,
+  "unimateMaxRotationStepAfter": 2.1210758237739955,
+  "unimateMaximumAnchorRotationError": 0.0,
+  "unimateMaximumAnchorLocationError": 0.0,
+  "unimateInbetweenAccepted": true,
+  "referenceImpactNormalizedTime": null,
+  "referenceTimeWarpKnots": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.13,
+      0.06
+    ],
+    [
+      0.27,
+      0.17
+    ],
+    [
+      0.4,
+      0.36
+    ],
+    [
+      0.5,
+      0.66
+    ],
+    [
+      0.57,
+      0.78
+    ],
+    [
+      0.76,
+      0.91
+    ],
+    [
+      1.0,
+      1.0
+    ]
+  ],
   "pipeline": [
     "Punch_Cross source body motion",
     "move-specific nonlinear whole-body retiming",
@@ -31,6 +92,7 @@
     "world-space L support-foot position IK lock",
     "world-space L support-foot orientation lock",
     "Blender native NLA visual-keying bake",
+    "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
     "glTF Action export"
   ],
   "rightHandTravel": 0.4906242518662258,

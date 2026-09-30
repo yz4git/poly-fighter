@@ -7,6 +7,7 @@
     "BF_BodyBlow_L",
     "BF_Backfist_R"
   ],
+  "motionPriorProvider": "UAL_AUTHORED_STRIKE_V2",
   "moves": [
     {
       "version": "BLENDER_MOTION_FOUNDRY_V2_JAB",
@@ -32,6 +33,67 @@
       "boneCount": 65,
       "meshCount": 2,
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+      "motionPriorProvider": "UAL_AUTHORED_STRIKE_V2",
+      "naturalnessPass": "AUTHORED_SOURCE_V2",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        4,
+        12,
+        17,
+        19,
+        26,
+        33
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_r",
+        "calf_r",
+        "foot_r"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.12844006686434026,
+      "unimateRotationAccelerationRmsAfter": 0.12374894686532664,
+      "unimateMaxRotationStepBefore": 2.2130022332403487,
+      "unimateMaxRotationStepAfter": 2.169927870911275,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
+      "referenceImpactNormalizedTime": null,
+      "referenceTimeWarpKnots": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.12,
+          0.06
+        ],
+        [
+          0.28,
+          0.17
+        ],
+        [
+          0.4,
+          0.35
+        ],
+        [
+          0.5,
+          0.64
+        ],
+        [
+          0.6,
+          0.78
+        ],
+        [
+          0.79,
+          0.92
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ],
       "pipeline": [
         "Punch_Jab source body motion",
         "move-specific nonlinear whole-body retiming",
@@ -41,6 +103,7 @@
         "world-space R support-foot position IK lock",
         "world-space R support-foot orientation lock",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
       "leftHandTravel": 0.35778286428034883,
@@ -72,6 +135,67 @@
       "boneCount": 65,
       "meshCount": 2,
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+      "motionPriorProvider": "UAL_AUTHORED_STRIKE_V2",
+      "naturalnessPass": "AUTHORED_SOURCE_V2",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        7,
+        17,
+        23,
+        27,
+        36,
+        44
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_r",
+        "calf_r",
+        "foot_r"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.14561244029592757,
+      "unimateRotationAccelerationRmsAfter": 0.13305374036717968,
+      "unimateMaxRotationStepBefore": 2.7085666123380436,
+      "unimateMaxRotationStepAfter": 2.514208912425967,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
+      "referenceImpactNormalizedTime": null,
+      "referenceTimeWarpKnots": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.16,
+          0.08
+        ],
+        [
+          0.31,
+          0.19
+        ],
+        [
+          0.43,
+          0.4
+        ],
+        [
+          0.53,
+          0.67
+        ],
+        [
+          0.62,
+          0.8
+        ],
+        [
+          0.81,
+          0.92
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ],
       "pipeline": [
         "Punch_Jab source body motion",
         "move-specific nonlinear whole-body retiming",
@@ -81,6 +205,7 @@
         "world-space R support-foot position IK lock",
         "world-space R support-foot orientation lock",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
       "leftHandTravel": 0.4451729990980557,
@@ -112,6 +237,67 @@
       "boneCount": 65,
       "meshCount": 2,
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+      "motionPriorProvider": "UAL_AUTHORED_STRIKE_V2",
+      "naturalnessPass": "AUTHORED_SOURCE_V2",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        6,
+        15,
+        21,
+        25,
+        33,
+        41
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_l",
+        "calf_l",
+        "foot_l"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.13205421621675714,
+      "unimateRotationAccelerationRmsAfter": 0.12724443267332597,
+      "unimateMaxRotationStepBefore": 1.9793565536761109,
+      "unimateMaxRotationStepAfter": 1.9530003625087484,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
+      "referenceImpactNormalizedTime": null,
+      "referenceTimeWarpKnots": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.15,
+          0.07
+        ],
+        [
+          0.31,
+          0.18
+        ],
+        [
+          0.43,
+          0.38
+        ],
+        [
+          0.52,
+          0.64
+        ],
+        [
+          0.62,
+          0.79
+        ],
+        [
+          0.82,
+          0.92
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ],
       "pipeline": [
         "Punch_Cross source body motion",
         "move-specific nonlinear whole-body retiming",
@@ -121,6 +307,7 @@
         "world-space L support-foot position IK lock",
         "world-space L support-foot orientation lock",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
       "rightHandTravel": 0.5122012668972561,

@@ -9,7 +9,9 @@ test("TPS contact camera opens the authored strike silhouette without moving gam
   assert.match(source, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
   assert.match(source, /TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0\.20/);
   assert.match(source, /TPS_CAMERA_LOW_KICK_TARGET_DROP = 0\.16/);
-  assert.match(source, /combatMotionContactWeight/);
+  assert.match(source, /sampleCombatMotionAtEvent/);
+  assert.match(source, /motionEventsAtContact/);
+  assert.match(source, /this\.p1\.moveTick/);
   assert.match(source, /authoredContactReadabilityFactor/);
   assert.match(source, /kickContactReadabilityFactor/);
   assert.match(source, /lowKickReadabilityFactor/);

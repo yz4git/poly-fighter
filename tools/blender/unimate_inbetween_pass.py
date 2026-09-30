@@ -74,7 +74,13 @@ def _quaternion_angle(a: Quaternion, b: Quaternion) -> float:
     qa = a.copy().normalized()
     qb = b.copy().normalized()
     dot = abs(qa.w * qb.w + qa.x * qb.x + qa.y * qb.y + qa.z * qb.z)
-    return 2.0 * math.acos(max(-1.0, min(1.0, dot)))
+    dot = max(-1.0, min(1.0, dot))
+    # Blender pose keys are stored/evaluated at float32 precision. A sign-only
+    # rewrite of the same normalized quaternion can leave ~1e-7 dot error,
+    # which acos magnifies into a misleading ~0.05 degree "pose change".
+    if 1.0 - dot <= 2.0e-7:
+        return 0.0
+    return 2.0 * math.acos(dot)
 
 
 def _rotation_metrics(

@@ -20,7 +20,8 @@ test("UniMate-inspired Blender inbetween pass keeps combat anchors immutable", a
 test("inbetween pass regularises quaternion motion instead of component-filtering rotations", async () => {
   const source = await readFile(new URL("../tools/blender/unimate_inbetween_pass.py", import.meta.url), "utf8");
 
-  assert.match(source, /rotation_difference/);
+  assert.match(source, /dot = abs\(/);
+  assert.match(source, /2\.0 \* math\.acos/);
   assert.match(source, /previous_q\.slerp\(following_q, 0\.5\)/);
   assert.match(source, /source_q\.slerp\(rotation_target, weight\)/);
   assert.match(source, /_canonicalize_quaternion_signs/);

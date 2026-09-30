@@ -1,5 +1,5 @@
 {
-  "version": "POLY_FIGHTER_KIMODO_STRIKE_PRESETS_V1",
+  "version": "POLY_FIGHTER_KIMODO_STRIKE_PRESETS_V2_CONSTRAINED",
   "model": "Kimodo-SOMA-RP-v1.1",
   "samplesPerMove": 4,
   "moves": {
@@ -10,7 +10,23 @@
       "duration": 0.8,
       "strikeSide": "L",
       "supportSide": "R",
-      "seeds": [4101, 4102, 4103, 4104]
+      "seeds": [
+        4101,
+        4102,
+        4103,
+        4104
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5,
+        "maxRootTravelM": 0.065,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 3,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14101,
+        14102
+      ]
     },
     "cross": {
       "action": "BF_Cross_R",
@@ -19,16 +35,48 @@
       "duration": 0.95,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [4201, 4202, 4203, 4204]
+      "seeds": [
+        4201,
+        4202,
+        4203,
+        4204
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.4878048780487805,
+        "maxRootTravelM": 0.085,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 4,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14201,
+        14202
+      ]
     },
     "bodyBlow": {
       "action": "BF_BodyBlow_L",
       "builder": "shared",
       "prompt": "A trained boxer starts in a compact fighting guard, lowers the center of mass without folding at the waist, and throws one powerful left body straight into an opponent's ribs. The hips and torso drive forward, the right hand protects the face, both feet stay grounded, then the left hand retracts and the fighter rises back to guard. No extra punch.",
-      "duration": 1.0,
+      "duration": 1,
       "strikeSide": "L",
       "supportSide": "R",
-      "seeds": [4301, 4302, 4303, 4304]
+      "seeds": [
+        4301,
+        4302,
+        4303,
+        4304
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5116279069767442,
+        "maxRootTravelM": 0.09,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 4,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14301,
+        14302
+      ]
     },
     "backfist": {
       "action": "BF_Backfist_R",
@@ -37,7 +85,23 @@
       "duration": 0.95,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [4401, 4402, 4403, 4404]
+      "seeds": [
+        4401,
+        4402,
+        4403,
+        4404
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5,
+        "maxRootTravelM": 0.075,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 4,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14401,
+        14402
+      ]
     },
     "power": {
       "action": "BF_Power_R",
@@ -46,7 +110,23 @@
       "duration": 1.15,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [4501, 4502, 4503, 4504]
+      "seeds": [
+        4501,
+        4502,
+        4503,
+        4504
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5686274509803921,
+        "maxRootTravelM": 0.11,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 5,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14501,
+        14502
+      ]
     },
     "counter": {
       "action": "BF_Counter_R",
@@ -55,7 +135,28 @@
       "duration": 0.9,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [4601, 4602, 4603, 4604]
+      "seeds": [
+        4601,
+        4602,
+        4603,
+        4604
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5,
+        "maxRootTravelM": 0.08,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 3,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        14601,
+        14602
+      ]
     }
+  },
+  "refinement": {
+    "textWeight": 1.8,
+    "constraintWeight": 2.8,
+    "diffusionSteps": 140
   }
 }

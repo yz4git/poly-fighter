@@ -248,6 +248,48 @@ def _kick_event(scene: bpy.types.Scene, source: bpy.types.Object, action: bpy.ty
     return side, peak, min(1.0, score / 2.55)
 
 
+def _strike_event(scene: bpy.types.Scene, source: bpy.types.Object, action: bpy.types.Action, source_fps: float):
+    """Find the dominant single-hand strike event in a CMU/SOMA full-body clip."""
+    source.animation_data.action = action
+    start, end = action.frame_range
+    scan_start = max(start + 2.0, start + (end - start) * 0.035)
+    scan_end = min(end - 2.0, end - (end - start) * 0.035)
+    stride = max(1.0, source_fps / 60.0)
+    frames: List[float] = []
+    raw = {"L": {"speed": [], "reach": []}, "R": {"speed": [], "reach": []}}
+    previous = {"L": None, "R": None}
+    frame = scan_start
+    while frame <= scan_end + 1e-6:
+        _set_frame(scene, frame)
+        pelvis = _pose_head(source, "Hips")
+        positions = {"L": _pose_head(source, "LeftHand"), "R": _pose_head(source, "RightHand")}
+        frames.append(frame)
+        for side in ("L", "R"):
+            hand = positions[side]
+            speed = 0.0 if previous[side] is None else (hand - previous[side]).length
+            raw[side]["speed"].append(speed)
+            raw[side]["reach"].append((hand - pelvis).length)
+            previous[side] = hand.copy()
+        frame += stride
+
+    best = None
+    for side in ("L", "R"):
+        ns = _normalize(raw[side]["speed"])
+        nr = _normalize(raw[side]["reach"])
+        scores = [1.55 * ns[i] + 0.95 * nr[i] for i in range(len(frames))]
+        margin = max(2, int(len(scores) * 0.05))
+        usable = range(margin, max(margin + 1, len(scores) - margin))
+        index = max(usable, key=lambda idx: scores[idx])
+        candidate = (scores[index], side, index)
+        if best is None or candidate[0] > best[0]:
+            best = candidate
+    if best is None:
+        raise RuntimeError(f"Unable to detect hand-strike event in {action.name}")
+    score, side, index = best
+    peak = frames[index]
+    return side, peak, min(1.0, score / 2.50)
+
+
 def _horizontal_basis(armature: bpy.types.Object) -> Tuple[Vector, Vector, Vector]:
     left_name = "LeftArm" if "LeftArm" in armature.pose.bones else "upperarm_l"
     right_name = "RightArm" if "RightArm" in armature.pose.bones else "upperarm_r"
@@ -465,6 +507,7 @@ def build_mocap_prior(
     spec,
     bvh_path: str,
     target_axes: Tuple[Vector, Vector, Vector],
+    event_kind: str = "kick",
 ) -> Tuple[bpy.types.Action, MocapPriorMeta]:
     """Create a UAL-skeleton action from a CMU or Kimodo-SOMA BVH prior."""
     original_fps = scene.render.fps
@@ -473,15 +516,22 @@ def build_mocap_prior(
     mapping = _source_mapping(source)
     provider = "KIMODO_SOMA_BVH_WORLD_DELTA_V1" if profile == "KIMODO_SOMA" else "CMU_MOCAP_WORLD_DELTA_V6"
     source_fps = 1.0 / _frame_time_from_bvh(bvh_path)
-    detected_side, peak, activity = _kick_event(scene, source, source_action, source_fps)
+    if event_kind == "strike":
+        detected_side, peak, activity = _strike_event(scene, source, source_action, source_fps)
+        anticipation_seconds, followthrough_seconds = 0.34, 0.44
+    elif event_kind == "kick":
+        detected_side, peak, activity = _kick_event(scene, source, source_action, source_fps)
+        anticipation_seconds, followthrough_seconds = 0.46, 0.56
+    else:
+        raise ValueError(f"Unsupported motion prior event kind: {event_kind}")
     target_side = spec.strike_side.upper()
     mirrored = detected_side != target_side
 
-    # Keep enough real anticipation and follow-through for weight transfer to read.
-    crop_start = max(source_action.frame_range[0] + 2.0, peak - source_fps * 0.46)
-    crop_end = min(source_action.frame_range[1], peak + source_fps * 0.56)
+    # Keep enough full-body anticipation and follow-through for weight transfer.
+    crop_start = max(source_action.frame_range[0] + 2.0, peak - source_fps * anticipation_seconds)
+    crop_end = min(source_action.frame_range[1], peak + source_fps * followthrough_seconds)
     if crop_end - crop_start < source_fps * 0.30:
-        raise RuntimeError(f"CMU crop too short for {spec.action_name}: {crop_start}..{crop_end}")
+        raise RuntimeError(f"Motion prior crop too short for {spec.action_name}: {crop_start}..{crop_end}")
     seconds = (crop_end - crop_start) / source_fps
     sample_count = max(20, int(round(seconds * FPS)) + 1)
     impact_u = (peak - crop_start) / max(1e-6, crop_end - crop_start)
@@ -521,7 +571,8 @@ def build_mocap_prior(
     source_scale = _target_leg_length(target, target_side) / _source_leg_length(source, detected_side)
     source_root0 = source_root_positions[0]
 
-    action = bpy.data.actions.new(name=f"CMU135_{spec.action_name}_PRIOR")
+    prior_prefix = "KIMODO" if profile == "KIMODO_SOMA" else "CMU135"
+    action = bpy.data.actions.new(name=f"{prior_prefix}_{spec.action_name}_PRIOR")
     target.animation_data.action = action
     for pb in target.pose.bones:
         pb.rotation_mode = "QUATERNION"
@@ -626,7 +677,19 @@ def build_mocap_prior(
     )
 
     action.use_fake_user = True
-    action["motion_prior_provider"] = "CMU_MOCAP_WORLD_DELTA_V6"
+    action["motion_prior_provider"] = provider
+    action["motion_prior_source_profile"] = profile
+    action["motion_prior_event_kind"] = event_kind
+    action["motion_prior_leg_orientation_solver"] = LEG_ANATOMY_SOLVER
+    action["motion_prior_source_file"] = Path(bvh_path).name
+    action["motion_prior_detected_strike_side"] = detected_side
+    action["motion_prior_target_strike_side"] = target_side
+    action["motion_prior_mirrored"] = mirrored
+    action["motion_prior_impact_u"] = impact_u
+    action["motion_prior_activity_score"] = activity
+    action["motion_prior_support_anchor_before"] = anchor_before
+    action["motion_prior_support_anchor_after"] = anchor_after
+    # Backward-compatible diagnostic keys retained for existing V6 kick audits.
     action["cmu_leg_orientation_solver"] = LEG_ANATOMY_SOLVER
     action["cmu_source_file"] = Path(bvh_path).name
     action["cmu_detected_strike_side"] = detected_side

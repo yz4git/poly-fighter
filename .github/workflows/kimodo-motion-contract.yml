@@ -8,6 +8,7 @@ on:
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
       - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/unimate_inbetween_pass.py
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
@@ -15,6 +16,7 @@ on:
       - src/game/kimodo-motion-inertialization.ts
       - src/game/unimate-motion-replacement.ts
       - tests/unimate-motion-replacement.test.mjs
+      - tests/unimate-motion-inbetween.test.mjs
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -28,6 +30,7 @@ on:
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
       - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/unimate_inbetween_pass.py
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
@@ -35,6 +38,7 @@ on:
       - src/game/kimodo-motion-inertialization.ts
       - src/game/unimate-motion-replacement.ts
       - tests/unimate-motion-replacement.test.mjs
+      - tests/unimate-motion-inbetween.test.mjs
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -67,6 +71,7 @@ jobs:
             tools/blender/motion_foundry_v6_mocap.py \
             tools/blender/build-fight-motion-foundry-v2-kicks-base.py \
             tools/blender/motion_foundry_v2_rig.py \
+            tools/blender/unimate_inbetween_pass.py \
             tools/blender/build-fight-motion-foundry-v1.py \
             tools/blender/build-fight-motion-foundry-v2-cross.py \
             tools/blender/build-fight-motion-foundry-v2-strikes.py \
@@ -83,3 +88,4 @@ jobs:
           node --test tests/kimodo-motion-pipeline.test.mjs
           node --test tests/kimodo-motion-inertialization.test.mjs
           node --test tests/unimate-motion-replacement.test.mjs
+          node --test tests/unimate-motion-inbetween.test.mjs

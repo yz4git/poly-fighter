@@ -7,6 +7,12 @@ on:
       - tools/kimodo/**
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
+      - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/build-fight-motion-foundry-v1.py
+      - tools/blender/build-fight-motion-foundry-v2-cross.py
+      - tools/blender/build-fight-motion-foundry-v2-strikes.py
+      - src/game/visual-quaternius-runtime.ts
+      - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
       - .github/workflows/kimodo-motion-contract.yml
@@ -16,6 +22,12 @@ on:
       - tools/kimodo/**
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
+      - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/build-fight-motion-foundry-v1.py
+      - tools/blender/build-fight-motion-foundry-v2-cross.py
+      - tools/blender/build-fight-motion-foundry-v2-strikes.py
+      - src/game/visual-quaternius-runtime.ts
+      - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
       - .github/workflows/kimodo-motion-contract.yml
@@ -44,8 +56,16 @@ jobs:
           python -m py_compile \
             tools/blender/motion_foundry_v6_mocap.py \
             tools/blender/build-fight-motion-foundry-v2-kicks-base.py \
-            tools/kimodo/select-poly-fighter-kick.py
+            tools/blender/motion_foundry_v2_rig.py \
+            tools/blender/build-fight-motion-foundry-v1.py \
+            tools/blender/build-fight-motion-foundry-v2-cross.py \
+            tools/blender/build-fight-motion-foundry-v2-strikes.py \
+            tools/kimodo/select-poly-fighter-kick.py \
+            tools/kimodo/select-poly-fighter-strike.py
       - name: Validate Kimodo runner shell
-        run: bash -n tools/kimodo/generate-poly-fighter-kicks.sh
+        run: |
+          bash -n tools/kimodo/generate-poly-fighter-kicks.sh
+          bash -n tools/kimodo/generate-poly-fighter-strikes.sh
+          bash -n tools/kimodo/build-selected-strikes.sh
       - name: Validate provider contract
         run: node --test tests/kimodo-motion-pipeline.test.mjs

@@ -198,6 +198,7 @@ async function poseMove(sessionId, moveId, stage) {
       supportFootAnchor: Array.isArray(data.tpsKickSupportFootAnchor) ? [...data.tpsKickSupportFootAnchor] : null,
       cameraContactReadability: Number(game.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0),
       cameraKickReadability: Number(game.camera.userData.tpsKickContactReadabilityFactor ?? 0),
+      cameraFrontKickReadability: Number(game.camera.userData.tpsFrontKickReadabilityFactor ?? 0),
       cameraLowKickReadability: Number(game.camera.userData.tpsLowKickReadabilityFactor ?? 0),
       cameraShoulderOffset: Number(game.camera.userData.tpsShoulderOffset ?? 0),
       cameraBackDistance: Number(game.camera.userData.tpsBackDistance ?? 0),
@@ -308,6 +309,12 @@ try {
   }
   if (!(results.lowKick.contact.cameraTargetHeight < results.kick.contact.cameraTargetHeight - 0.08)) {
     throw new Error(`Low-kick camera did not retain enough lower-body framing: ${JSON.stringify(results)}`);
+  }
+  if (!(results.kick.contact.cameraFrontKickReadability > 0.65)) {
+    throw new Error(`Front-kick-specific camera opening did not activate: ${JSON.stringify(results.kick.contact)}`);
+  }
+  if (!(results.kick.contact.cameraShoulderOffset > results.lowKick.contact.cameraShoulderOffset + 0.35)) {
+    throw new Error(`Front kick still lacks a distinct side-view lane: ${JSON.stringify({ kick: results.kick.contact, lowKick: results.lowKick.contact })}`);
   }
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, 'DELETE').catch(() => {});

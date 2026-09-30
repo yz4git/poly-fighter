@@ -30,3 +30,12 @@ The visual quality gate is silhouette-aware as well as height/reach-aware. In pa
 The shipping V6 bootstrap uses measured motions from the Carnegie Mellon Graphics Lab Motion Capture Database, subject 135: trial 04 `Front Kick`, trial 07 `Mawashigeri`, and trial 11 `Yokogeri`. The CMU site permits copying, modification, redistribution and commercial use; the Bruce Hahne BVH conversion adds no further restrictions. The build pins the public `una-dinosauria/cmu-mocap` mirror by commit.
 
 The source BVH is build-time input only. Motion Foundry crops the strongest kick event, transfers full-body world-space rotation deltas into the universal game rig, mirrors anatomically when the measured strike side differs from the gameplay side, then bakes ordinary 60 Hz glTF clips.
+
+
+## Kimodo provider
+
+Motion Foundry V6 now accepts Kimodo SOMA BVH directly in addition to the stable CMU measured-motion fallback. The grounded-kick builder exposes `--kimodo-front`, `--kimodo-low`, and `--kimodo-rising`; these inputs take precedence over the corresponding `--mocap-*` path.
+
+Kimodo SOMA is detected from its public skeleton vocabulary and mapped onto the same universal Poly Fighter rig before the existing alignment, support-foot, knee-plane and contact-quality gates run. This keeps provider choice separate from shipping runtime behavior.
+
+See `docs/KIMODO_MOTION_PIPELINE.md` for generation and candidate-selection commands.

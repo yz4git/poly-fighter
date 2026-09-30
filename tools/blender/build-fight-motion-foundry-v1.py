@@ -56,6 +56,7 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--kimodo-prior")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -425,6 +426,7 @@ def motion_metrics(
     armature: bpy.types.Object,
     source_action_name: str,
     constrained: Dict[str, float],
+    prior_meta=None,
 ) -> dict:
     armature.animation_data.action = bpy.data.actions[ACTION_NAME]
     baked_foot_drift = foot_lock_drift(scene, armature)
@@ -444,8 +446,14 @@ def motion_metrics(
         "constrainedFootLockMaxDrift": constrained["constrainedFootLockMaxDrift"],
         "boneCount": len(armature.pose.bones),
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),
+        "motionPriorProvider": prior_meta.provider if prior_meta is not None else "UAL_AUTHORED_POWER_V1",
+        **(prior_meta.as_dict() if prior_meta is not None else {}),
         "pipeline": [
-            "Punch_Cross source body motion",
+            (
+                f"{prior_meta.source_profile} generated full-body power-strike prior: {prior_meta.source_file}"
+                if prior_meta is not None
+                else "Punch_Cross source body motion"
+            ),
             "nonlinear whole-body retiming",
             "right-hand two-bone IK contact control",
             "world-space left support-foot IK lock",
@@ -499,11 +507,36 @@ def main() -> None:
     reset_scene()
     armature = import_source(source)
     ensure_required_bones(armature)
-    source_action = find_source_action()
-    source_action_name = source_action.name
     scene = bpy.context.scene
     scene.render.fps = FPS
 
+    prior_meta = None
+    if args.kimodo_prior:
+        import motion_foundry_v6_mocap as motion_prior
+        from types import SimpleNamespace
+
+        prior_action, prior_meta = motion_prior.build_mocap_prior(
+            scene,
+            armature,
+            SimpleNamespace(action_name=ACTION_NAME, strike_side="r"),
+            args.kimodo_prior,
+            motion_prior._horizontal_basis(armature),
+            event_kind="strike",
+        )
+        global SOURCE_ACTION_HINT, source_u_for_destination_u
+        SOURCE_ACTION_HINT = prior_action.name
+        source_impact = max(0.18, min(0.82, prior_meta.impact_normalized_time))
+        destination_impact = (IMPACT_FRAME - START_FRAME) / max(1, END_FRAME - START_FRAME)
+
+        def source_u_for_destination_u(u: float) -> float:
+            if u <= destination_impact:
+                local = 0.0 if destination_impact <= 1e-6 else u / destination_impact
+                return source_impact * smoothstep(local)
+            local = (u - destination_impact) / max(1e-6, 1.0 - destination_impact)
+            return source_impact + (1.0 - source_impact) * smoothstep(local)
+
+    source_action = find_source_action()
+    source_action_name = source_action.name
     source_samples = sample_source_basis(scene, armature, source_action)
     base_action = key_pose_basis(scene, armature, "BF_BASE_Power_R", source_samples)
     armature.animation_data.action = base_action
@@ -512,7 +545,7 @@ def main() -> None:
     final_action = bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
     remove_controls(controls)
-    metrics = motion_metrics(scene, armature, source_action_name, constrained)
+    metrics = motion_metrics(scene, armature, source_action_name, constrained, prior_meta)
     export_outputs(scene, armature, output_dir, metrics)
     print(json.dumps(metrics, indent=2))
 

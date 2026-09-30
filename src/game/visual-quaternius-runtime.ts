@@ -551,9 +551,31 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   }
 }
 
+const AUTHORED_ATTACK_CLIP_PREFIXES = [
+  "BF_Jab",
+  "BF_Cross",
+  "BF_BodyBlow",
+  "BF_Backfist",
+  "BF_Power",
+  "BF_FrontKick",
+  "BF_LowKick",
+  "BF_RisingKick",
+  "BF_DashKick",
+  "BF_Counter_R",
+] as const;
+
+function isAuthoredAttackClip(name: string): boolean {
+  return AUTHORED_ATTACK_CLIP_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+
 function transitionFadeSeconds(previous: string, next: string): number {
-  if (next === "CM_Block" || next.startsWith("BF_Hit") || next.startsWith("BF_Counter")) return .032;
+  if (next === "CM_Block" || next.startsWith("BF_Hit") || next.startsWith("BF_CounterHit")) return .032;
   if (next === "CM_Wakeup") return .05;
+  // UniMate motion expansion pins an overlap between adjacent generated
+  // segments. Runtime cannot regenerate frames, so attack->attack transitions
+  // emulate that seam with a slightly wider inertial overlap while the
+  // topology replacement mask makes the incoming strike chain authoritative.
+  if (isAuthoredAttackClip(previous) && isAuthoredAttackClip(next)) return .075;
   if (next.startsWith("CM_Move") && previous.startsWith("CM_Move")) return .085;
   if (next.startsWith("CM_Step")) return .035;
   if (next === "CM_Ready" || next === "CM_Guard") return .11;
@@ -579,6 +601,9 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   runtime.host.userData.kimodoInertializationVersion = KIMODO_MOTION_INERTIALIZATION_VERSION;
   runtime.host.userData.kimodoInertialTransitionFrom = runtime.currentClip;
   runtime.host.userData.kimodoInertialTransitionTo = clip.name;
+  runtime.host.userData.unimateMotionExpansionOverlap = (
+    isAuthoredAttackClip(runtime.currentClip) && isAuthoredAttackClip(clip.name)
+  ) ? runtime.transitionDuration : 0;
   // Snapshot the rendered pose before stopping. Same-clip repeats and combo
   // interruptions cannot reset a live outgoing action or accumulate old weights.
   runtime.mixer.stopAllAction();

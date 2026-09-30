@@ -61,7 +61,8 @@ jobs:
             tools/blender/build-fight-motion-foundry-v2-cross.py \
             tools/blender/build-fight-motion-foundry-v2-strikes.py \
             tools/kimodo/select-poly-fighter-kick.py \
-            tools/kimodo/select-poly-fighter-strike.py
+            tools/kimodo/select-poly-fighter-strike.py \
+            tools/kimodo/build-poly-fighter-constraints.py
       - name: Validate Kimodo runner shell
         run: |
           bash -n tools/kimodo/generate-poly-fighter-kicks.sh

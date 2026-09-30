@@ -37,6 +37,7 @@ export const AUTHORED_MOTION_EVENTS: Readonly<Record<string, AuthoredMotionEvent
   BF_LowKick_L: events(24 / 45),
   BF_RisingKick_R: events(27 / 48),
   BF_DashKick_R: events(22 / 44),
+  BF_Counter_R: events(17 / 34),
   CM_Counter_L: events(0.5),
   CM_Counter_R: events(0.5),
   CM_Throw: events(0.5),

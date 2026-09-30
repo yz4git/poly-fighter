@@ -15,6 +15,7 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 import motion_foundry_v2_rig as rig
+import unimate_inbetween_pass as unimate_inbetween
 import motion_foundry_v6_mocap as mocap_v6
 
 
@@ -1353,6 +1354,18 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
     )
     reference_poses = reference_pose_snapshots(scene, armature, spec, axes[0], axes[2])
     rig.v1.remove_controls([*controls, *guards, *masters])
+    armature.animation_data.action = final_action
+    unimate_metrics = unimate_inbetween.apply_replacement_inbetween(
+        scene,
+        armature,
+        final_action,
+        anchor_frames=spec.phases,
+        impact_frame=spec.impact_frame,
+        precontact_frame=spec.precontact_frame,
+        overtravel_frame=spec.overtravel_frame,
+        strike_suffix=spec.strike_suffix,
+        support_suffix=spec.support_suffix,
+    )
     metrics = {
         "version": spec.version,
         "action": spec.action_name,
@@ -1398,6 +1411,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "naturalnessPass": "REFERENCE_DRIVEN_V6",
         "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+        **unimate_metrics.as_dict(),
         "referencePoses": reference_poses,
         "pipeline": [
             (f"{mocap_meta.source_profile} full-body prior: {mocap_meta.source_file}" if mocap_meta is not None else f"full-body authored reference base: {source_name}"),
@@ -1417,6 +1431,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
             f"world-space {spec.support_side.upper()} support-foot position lock",
             f"controlled {spec.support_side.upper()} support-foot pivot",
             "Blender native NLA visual-keying bake",
+            "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
             "glTF Action export",
         ],
     }

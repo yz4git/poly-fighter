@@ -13,6 +13,9 @@ on:
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - src/game/visual-quaternius-runtime.ts
       - src/game/kimodo-motion-inertialization.ts
+      - src/game/unimate-motion-replacement.ts
+      - tests/unimate-motion-replacement.test.mjs
+      - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
@@ -30,6 +33,9 @@ on:
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - src/game/visual-quaternius-runtime.ts
       - src/game/kimodo-motion-inertialization.ts
+      - src/game/unimate-motion-replacement.ts
+      - tests/unimate-motion-replacement.test.mjs
+      - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
@@ -76,3 +82,4 @@ jobs:
         run: |
           node --test tests/kimodo-motion-pipeline.test.mjs
           node --test tests/kimodo-motion-inertialization.test.mjs
+          node --test tests/unimate-motion-replacement.test.mjs

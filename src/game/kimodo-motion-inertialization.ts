@@ -16,6 +16,8 @@ export type InertializationTelemetry = {
   maxLinearVelocity: number;
   maxAngularVelocity: number;
   activeBones: number;
+  replacementPinnedBones: number;
+  minimumBoneScale: number;
 };
 
 const MAX_LOCAL_LINEAR_SPEED = 3.0;
@@ -133,17 +135,27 @@ export function applyInertialTransition(
   age: number,
   duration: number,
   weightScale = 1,
+  boneWeightScales?: ReadonlyMap<string, number>,
 ): InertializationTelemetry {
   const weight = transitionWeight(age, duration) * THREE.MathUtils.clamp(weightScale, 0, 1);
   if (!(weight > 0) || transition.size === 0) {
     transition.clear();
-    return { weight: 0, maxLinearVelocity: 0, maxAngularVelocity: 0, activeBones: 0 };
+    return {
+      weight: 0,
+      maxLinearVelocity: 0,
+      maxAngularVelocity: 0,
+      activeBones: 0,
+      replacementPinnedBones: 0,
+      minimumBoneScale: 1,
+    };
   }
 
   const predict = predictionSeconds(age, duration);
   let maxLinearVelocity = 0;
   let maxAngularVelocity = 0;
   let activeBones = 0;
+  let replacementPinnedBones = 0;
+  let minimumBoneScale = 1;
 
   for (const [name, from] of transition) {
     const bone = bones.get(name);
@@ -159,13 +171,27 @@ export function applyInertialTransition(
       .multiply(rotationFromAngularVelocity(from.angularVelocity, predict))
       .normalize();
 
-    bone.position.copy(destinationPosition).lerp(predictedPosition, weight);
-    bone.quaternion.copy(destinationRotation).slerp(predictedRotation, weight).normalize();
+    // UniMate-style replacement mask: scale 0 means the destination authored
+    // joint is exact, scale 1 means full inertial carry. Intermediate values
+    // create a graph-distance falloff rather than a hard skeletal seam.
+    const boneScale = THREE.MathUtils.clamp(boneWeightScales?.get(name) ?? 1, 0, 1);
+    const localWeight = weight * boneScale;
+    bone.position.copy(destinationPosition).lerp(predictedPosition, localWeight);
+    bone.quaternion.copy(destinationRotation).slerp(predictedRotation, localWeight).normalize();
 
+    minimumBoneScale = Math.min(minimumBoneScale, boneScale);
+    if (boneScale < 0.99) replacementPinnedBones += 1;
     maxLinearVelocity = Math.max(maxLinearVelocity, from.linearVelocity.length());
     maxAngularVelocity = Math.max(maxAngularVelocity, from.angularVelocity.length());
     activeBones += 1;
   }
 
-  return { weight, maxLinearVelocity, maxAngularVelocity, activeBones };
+  return {
+    weight,
+    maxLinearVelocity,
+    maxAngularVelocity,
+    activeBones,
+    replacementPinnedBones,
+    minimumBoneScale,
+  };
 }

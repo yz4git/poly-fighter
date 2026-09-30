@@ -346,6 +346,7 @@ const BLENDER_AUTHORED_CONTACT_SAFE_MOVES = new Set([
   "lowKick",
   "risingKick",
   "dashKick",
+  "counter",
 ]);
 
 function attackContactCorrection(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
@@ -493,7 +494,14 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
-    if (move.id === "counter") return { name: `CM_Counter_${move.visualContact === "LEFT_FIST" ? "L" : "R"}`, loop: false, speed: 1 / seconds };
+    if (move.id === "counter") {
+      const generatedCounter = move.visualContact !== "LEFT_FIST" && runtime.clips.has("BF_Counter_R");
+      return {
+        name: generatedCounter ? "BF_Counter_R" : `CM_Counter_${move.visualContact === "LEFT_FIST" ? "L" : "R"}`,
+        loop: false,
+        speed: 1 / seconds,
+      };
+    }
     if (move.id === "throw") return { name: "CM_Throw", loop: false, speed: 1 / seconds };
     if (move.id === "backfist" && move.visualContact === "LEFT_FIST") return { name: "BF_Backfist_L", loop: false, speed: 1 / seconds };
     if (move.id === "bodyBlow" && move.visualContact === "RIGHT_FIST") return { name: "BF_BodyBlow_R", loop: false, speed: 1 / seconds };
@@ -764,6 +772,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusJabMotionSource = sharedStrikeSource("BF_Jab_L");
     visual.root.userData.quaterniusBodyBlowMotionSource = sharedStrikeSource("BF_BodyBlow_L");
     visual.root.userData.quaterniusBackfistMotionSource = sharedStrikeSource("BF_Backfist_R");
+    visual.root.userData.quaterniusCounterMotionSource = blenderStrikeClips.has("BF_Counter_R")
+      ? "KIMODO_OR_BLENDER_MOTION_FOUNDRY_STRIKE"
+      : "PROCEDURAL_FALLBACK";
     const kickSource = (name: string) => blenderKickClips.has(name)
       ? "BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS"
       : "PROCEDURAL_FALLBACK";

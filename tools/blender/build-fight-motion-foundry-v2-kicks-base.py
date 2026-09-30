@@ -1368,7 +1368,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         **pole_calibration,
         "strikeKneePlaneMinDot": strike_knee_plane_min_dot,
         "supportKneePlaneMinDot": support_knee_plane_min_dot,
-        "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6" if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
+        "motionPriorProvider": mocap_meta.provider if mocap_meta is not None else "UAL2_AUTHORED_REFERENCE_V6",
         "mocapSupportAnchorBefore": mocap_support_anchor_before,
         "mocapSupportAnchorAfter": mocap_support_anchor_after,
         **(mocap_meta.as_dict() if mocap_meta is not None else {}),
@@ -1400,7 +1400,7 @@ def build_kick_action(scene: bpy.types.Scene, armature: bpy.types.Object, spec: 
         "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
         "referencePoses": reference_poses,
         "pipeline": [
-            (f"measured CMU mocap full-body prior: {mocap_meta.source_file}" if mocap_meta is not None else f"full-body authored reference base: {source_name}"),
+            (f"{mocap_meta.source_profile} full-body prior: {mocap_meta.source_file}" if mocap_meta is not None else f"full-body authored reference base: {source_name}"),
             "automatic kinetic-peak alignment to gameplay impact",
             "reference motion retained outside the contact window",
             "shoulder-orthogonal anatomical forward axis",
@@ -1437,6 +1437,9 @@ def main() -> None:
     parser.add_argument("--mocap-front")
     parser.add_argument("--mocap-low")
     parser.add_argument("--mocap-rising")
+    parser.add_argument("--kimodo-front")
+    parser.add_argument("--kimodo-low")
+    parser.add_argument("--kimodo-rising")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args(_argv_after_double_dash())
     rig.v1.reset_scene()
@@ -1447,21 +1450,26 @@ def main() -> None:
         imported_reference_actions = import_reference_actions(args.reference_source)
         print("MOTION_FOUNDRY_V6_REFERENCE_ACTIONS", imported_reference_actions)
     axes = body_axes(scene, armature)
+    # Kimodo SOMA BVHs use the same prior slot as legacy CMU data. Explicit
+    # Kimodo inputs take precedence so generated candidates can be reviewed
+    # without changing the stable measured-mocap fallback workflow.
     mocap_paths = {
-        "BF_FrontKick_R": args.mocap_front,
-        "BF_LowKick_L": args.mocap_low,
-        "BF_RisingKick_R": args.mocap_rising,
+        "BF_FrontKick_R": args.kimodo_front or args.mocap_front,
+        "BF_LowKick_L": args.kimodo_low or args.mocap_low,
+        "BF_RisingKick_R": args.kimodo_rising or args.mocap_rising,
     }
     actions, moves = [], []
     for spec in KICK_SPECS:
         action, metrics = build_kick_action(scene, armature, spec, axes, mocap_paths)
         actions.append(action); moves.append(metrics)
+    providers = {move.get("motionPriorProvider") for move in moves}
+    summary_provider = next(iter(providers)) if len(providers) == 1 else "HYBRID_REFERENCE_V6"
     summary = {
         "version": "BLENDER_MOTION_FOUNDRY_V6_KICKS",
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "naturalnessPass": "REFERENCE_DRIVEN_V6",
         "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
-        "motionPriorProvider": ("CMU_MOCAP_WORLD_DELTA_V6" if all(mocap_paths.values()) else "HYBRID_REFERENCE_V6"),
+        "motionPriorProvider": summary_provider,
         "fps": rig.FPS,
         "actions": [s.action_name for s in KICK_SPECS],
         "moves": moves,

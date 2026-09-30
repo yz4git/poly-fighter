@@ -1,0 +1,31 @@
+{
+  "version": "POLY_FIGHTER_KIMODO_PRESETS_V1",
+  "model": "Kimodo-SOMA-RP-v1.1",
+  "samplesPerMove": 4,
+  "moves": {
+    "frontKick": {
+      "action": "BF_FrontKick_R",
+      "prompt": "A trained kickboxer starts in a compact fighting guard, performs one fast right front push kick straight forward with a clear knee chamber, drives the hips through the target, keeps the left support foot planted, re-chambers the right leg, and returns to the same fighting guard. No extra steps, no second kick.",
+      "duration": 1.1,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [1401, 1402, 1403, 1404]
+    },
+    "lowKick": {
+      "action": "BF_LowKick_L",
+      "prompt": "A trained kickboxer starts in a compact fighting guard, performs one sharp left low roundhouse kick toward an opponent's outer thigh, rotates the hips while staying upright, pivots on the right support foot without traveling, keeps both hands protecting the head, re-chambers the left leg, and returns to guard. No extra steps, no high kick.",
+      "duration": 1.15,
+      "strikeSide": "L",
+      "supportSide": "R",
+      "seeds": [2401, 2402, 2403, 2404]
+    },
+    "risingKick": {
+      "action": "BF_RisingKick_R",
+      "prompt": "A trained martial artist starts in a compact fighting guard and performs one explosive right rising kick toward upper-chest to head height. The right knee chambers first, the pelvis lifts and drives forward, the left support leg stays stable, the torso counterbalances without folding, the right leg retracts, and the fighter returns to guard. No spin, no extra kick.",
+      "duration": 1.2,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [3401, 3402, 3403, 3404]
+    }
+  }
+}

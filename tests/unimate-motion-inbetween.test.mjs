@@ -21,6 +21,7 @@ test("inbetween pass regularises quaternion motion instead of component-filterin
   const source = await readFile(new URL("../tools/blender/unimate_inbetween_pass.py", import.meta.url), "utf8");
 
   assert.match(source, /dot = abs\(/);
+  assert.match(source, /1\.0 - dot <= 2\.0e-7/);
   assert.match(source, /2\.0 \* math\.acos/);
   assert.match(source, /previous_q\.slerp\(following_q, 0\.5\)/);
   assert.match(source, /source_q\.slerp\(rotation_target, weight\)/);

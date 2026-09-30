@@ -12,6 +12,8 @@ on:
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - src/game/visual-quaternius-runtime.ts
+      - src/game/kimodo-motion-inertialization.ts
+      - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
@@ -27,6 +29,8 @@ on:
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - src/game/visual-quaternius-runtime.ts
+      - src/game/kimodo-motion-inertialization.ts
+      - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
       - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
@@ -69,4 +73,6 @@ jobs:
           bash -n tools/kimodo/generate-poly-fighter-strikes.sh
           bash -n tools/kimodo/build-selected-strikes.sh
       - name: Validate provider contract
-        run: node --test tests/kimodo-motion-pipeline.test.mjs
+        run: |
+          node --test tests/kimodo-motion-pipeline.test.mjs
+          node --test tests/kimodo-motion-inertialization.test.mjs

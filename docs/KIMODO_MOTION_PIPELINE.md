@@ -81,3 +81,34 @@ The offline Kimodo provider and `kimodo-motion-conditioning.ts` solve different 
 - **runtime Kimodo-inspired conditioning** suppresses small root jitter and foot skating after retarget/playback.
 
 Neither changes deterministic gameplay timing, hitboxes or fighter positions.
+
+
+## Hand-strike pipeline
+
+Kimodo authoring is also available for Jab, Cross, Body Blow, Backfist, Power and Counter.
+
+Generate and rank 24 deterministic candidates (four seeds per move):
+
+```bash
+bash tools/kimodo/generate-poly-fighter-strikes.sh
+```
+
+The hand-strike selector rewards a dominant intended-hand kinetic peak, useful reach gain, a quiet guard hand, support-foot contact and bounded root travel.
+
+After reviewing `artifacts/kimodo-poly-fighter-strikes/selection.json`, route all six selected BVHs through the existing production Foundry stacks:
+
+```bash
+bash tools/kimodo/build-selected-strikes.sh \
+  artifacts/kimodo-poly-fighter-strikes/selection.json \
+  .tmp-quaternius/ual1-full.glb
+```
+
+Outputs are separated by the established runtime packs:
+
+- `shared/blender-strikes-core.glb`: Jab, Body Blow, Backfist and optional generated Counter.
+- `cross/blender-cross-core.glb`: Cross.
+- `power/blender-fight-core.glb`: Power.
+
+The generated Counter is optional. Runtime playback checks for `BF_Counter_R`; when an older shipping strike pack does not contain it, the established `CM_Counter_R` motion remains the fallback.
+
+Kimodo strike priors are retimed so their detected hand-velocity peak lands on the deterministic gameplay impact frame. Existing Foundry contact IK is reduced rather than removed, while old COG/torso authoring offsets are strongly demoted so generated full-body weight transfer remains primary.

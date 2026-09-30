@@ -1,0 +1,51 @@
+name: POLY FIGHTER Kimodo motion contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/kimodo/**
+      - tools/blender/motion_foundry_v6_mocap.py
+      - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
+      - tests/kimodo-motion-pipeline.test.mjs
+      - docs/KIMODO_MOTION_PIPELINE.md
+      - .github/workflows/kimodo-motion-contract.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - tools/kimodo/**
+      - tools/blender/motion_foundry_v6_mocap.py
+      - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
+      - tests/kimodo-motion-pipeline.test.mjs
+      - docs/KIMODO_MOTION_PIPELINE.md
+      - .github/workflows/kimodo-motion-contract.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kimodo-motion-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate Python adapters
+        run: |
+          python -m py_compile \
+            tools/blender/motion_foundry_v6_mocap.py \
+            tools/blender/build-fight-motion-foundry-v2-kicks-base.py \
+            tools/kimodo/select-poly-fighter-kick.py
+      - name: Validate Kimodo runner shell
+        run: bash -n tools/kimodo/generate-poly-fighter-kicks.sh
+      - name: Validate provider contract
+        run: node --test tests/kimodo-motion-pipeline.test.mjs

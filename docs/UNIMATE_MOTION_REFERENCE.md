@@ -68,3 +68,16 @@ A fighting game has competing requirements:
 - gameplay timing and hitboxes cannot be changed by presentation smoothing.
 
 Whole-body crossfades trade one requirement against another. Per-joint replacement masks let the runtime preserve the parts that define the move while smoothing the rest.
+
+
+## Candidate smoothness ranking
+
+UniMate's training objective combines a geodesic rotation term with a motion-velocity smoothness term. POLY FIGHTER now borrows this evaluation principle for Kimodo candidate selection.
+
+Both kick and hand-strike selectors read `local_rot_mats` from the generated NPZ and measure, on the combat-relevant joint chains:
+
+- RMS geodesic joint-rotation step,
+- RMS change in that angular step (rotation acceleration / jitter),
+- maximum one-frame geodesic rotation.
+
+Candidates with strong end-effector reach but visibly abrupt joint rotation are therefore penalized before they reach Motion Foundry. This supplements rather than replaces the existing strike velocity, support-foot contact, root travel and gameplay contact-timing metrics.

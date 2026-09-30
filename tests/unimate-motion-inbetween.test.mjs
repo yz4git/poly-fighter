@@ -9,6 +9,7 @@ test("UniMate-inspired Blender inbetween pass keeps combat anchors immutable", a
   assert.match(source, /anchor_frames/);
   assert.match(source, /if frame in anchor_set:\n\s+continue/);
   assert.match(source, /support_preserved/);
+  assert.match(source, /"pelvis"/);
   assert.match(source, /thigh_\{support_suffix\}/);
   assert.match(source, /calf_\{support_suffix\}/);
   assert.match(source, /foot_\{support_suffix\}/);

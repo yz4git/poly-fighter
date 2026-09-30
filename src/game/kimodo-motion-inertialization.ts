@@ -94,10 +94,10 @@ export function recordInertialPose(
     // Low-pass measured velocity rather than pose. This retains authored arcs
     // while preventing one noisy retarget sample from contaminating a transition.
     const linearVelocity = previous
-      ? previous.linearVelocity.clone().lerp(measuredLinear, validDelta ? 0.62 : 1)
+      ? (validDelta ? previous.linearVelocity.clone().lerp(measuredLinear, 0.62) : previous.linearVelocity.clone())
       : measuredLinear;
     const angular = previous
-      ? previous.angularVelocity.clone().lerp(measuredAngular, validDelta ? 0.62 : 1)
+      ? (validDelta ? previous.angularVelocity.clone().lerp(measuredAngular, 0.62) : previous.angularVelocity.clone())
       : measuredAngular;
 
     history.set(name, {

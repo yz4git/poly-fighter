@@ -49,6 +49,32 @@ CMU_TO_UAL: Tuple[Tuple[str, str], ...] = (
     ("RightFoot", "foot_r"),
 )
 
+# Kimodo SOMA BVH exports use the public SOMA joint vocabulary. Keeping this
+# map beside the legacy CMU map lets the exact same Motion Foundry contact,
+# support-foot and quality gates consume either provider.
+KIMODO_SOMA_TO_UAL: Tuple[Tuple[str, str], ...] = (
+    ("Hips", "pelvis"),
+    ("Spine1", "spine_01"),
+    ("Spine2", "spine_02"),
+    ("Chest", "spine_03"),
+    ("Neck1", "neck_01"),
+    ("Head", "Head"),
+    ("LeftShoulder", "clavicle_l"),
+    ("LeftArm", "upperarm_l"),
+    ("LeftForeArm", "lowerarm_l"),
+    ("LeftHand", "hand_l"),
+    ("RightShoulder", "clavicle_r"),
+    ("RightArm", "upperarm_r"),
+    ("RightForeArm", "lowerarm_r"),
+    ("RightHand", "hand_r"),
+    ("LeftLeg", "thigh_l"),
+    ("LeftShin", "calf_l"),
+    ("LeftFoot", "foot_l"),
+    ("RightLeg", "thigh_r"),
+    ("RightShin", "calf_r"),
+    ("RightFoot", "foot_r"),
+)
+
 SIDE_SWAP: Mapping[str, str] = {
     "LeftShoulder": "RightShoulder", "RightShoulder": "LeftShoulder",
     "LeftArm": "RightArm", "RightArm": "LeftArm",
@@ -56,6 +82,7 @@ SIDE_SWAP: Mapping[str, str] = {
     "LeftHand": "RightHand", "RightHand": "LeftHand",
     "LeftUpLeg": "RightUpLeg", "RightUpLeg": "LeftUpLeg",
     "LeftLeg": "RightLeg", "RightLeg": "LeftLeg",
+    "LeftShin": "RightShin", "RightShin": "LeftShin",
     "LeftFoot": "RightFoot", "RightFoot": "LeftFoot",
 }
 
@@ -74,6 +101,8 @@ class MocapPriorMeta:
     impact_normalized_time: float
     activity_score: float
     sample_count: int
+    provider: str = "CMU_MOCAP_WORLD_DELTA_V6"
+    source_profile: str = "CMU"
 
     def as_dict(self) -> dict:
         return {
@@ -89,7 +118,8 @@ class MocapPriorMeta:
             "mocapImpactNormalizedTime": self.impact_normalized_time,
             "mocapActivityScore": self.activity_score,
             "mocapSampleCount": self.sample_count,
-            "motionPriorProvider": "CMU_MOCAP_WORLD_DELTA_V6",
+            "motionPriorProvider": self.provider,
+            "motionPriorSourceProfile": self.source_profile,
         }
 
 
@@ -123,6 +153,23 @@ def _frame_time_from_bvh(path: str) -> float:
     return 1.0 / 120.0
 
 
+def _source_profile(source: bpy.types.Object) -> str:
+    names = set(source.pose.bones.keys())
+    if {"LeftShin", "RightShin", "Spine2", "Chest"}.issubset(names):
+        return "KIMODO_SOMA"
+    return "CMU"
+
+
+def _source_mapping(source: bpy.types.Object) -> Tuple[Tuple[str, str], ...]:
+    return KIMODO_SOMA_TO_UAL if _source_profile(source) == "KIMODO_SOMA" else CMU_TO_UAL
+
+
+def _source_required_joints(source: bpy.types.Object) -> set[str]:
+    if _source_profile(source) == "KIMODO_SOMA":
+        return {"Hips", "LeftLeg", "LeftShin", "LeftFoot", "RightLeg", "RightShin", "RightFoot", "LeftArm", "RightArm"}
+    return {"Hips", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "LeftArm", "RightArm"}
+
+
 def _new_bvh_armature(scene: bpy.types.Scene, path: str) -> Tuple[bpy.types.Object, bpy.types.Action]:
     before_objects = {obj.name for obj in scene.objects}
     before_actions = {action.name for action in bpy.data.actions}
@@ -149,10 +196,10 @@ def _new_bvh_armature(scene: bpy.types.Scene, path: str) -> Tuple[bpy.types.Obje
     if action is None:
         raise RuntimeError(f"BVH import did not create an action: {path}")
     source.animation_data.action = action
-    required = {"Hips", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "LeftArm", "RightArm"}
+    required = _source_required_joints(source)
     missing = sorted(required - set(source.pose.bones.keys()))
     if missing:
-        raise RuntimeError(f"CMU BVH required joints missing: {missing}")
+        raise RuntimeError(f"{_source_profile(source)} BVH required joints missing: {missing}")
     return source, action
 
 
@@ -312,6 +359,8 @@ def _target_leg_length(armature: bpy.types.Object, side: str) -> float:
 
 def _source_leg_length(source: bpy.types.Object, side: str) -> float:
     prefix = "Left" if side == "L" else "Right"
+    if _source_profile(source) == "KIMODO_SOMA":
+        return max(1e-4, source.data.bones[f"{prefix}Leg"].length + source.data.bones[f"{prefix}Shin"].length)
     return max(1e-4, source.data.bones[f"{prefix}UpLeg"].length + source.data.bones[f"{prefix}Leg"].length)
 
 
@@ -417,9 +466,12 @@ def build_mocap_prior(
     bvh_path: str,
     target_axes: Tuple[Vector, Vector, Vector],
 ) -> Tuple[bpy.types.Action, MocapPriorMeta]:
-    """Create a UAL-skeleton action from a measured CMU martial-arts clip."""
+    """Create a UAL-skeleton action from a CMU or Kimodo-SOMA BVH prior."""
     original_fps = scene.render.fps
     source, source_action = _new_bvh_armature(scene, bvh_path)
+    profile = _source_profile(source)
+    mapping = _source_mapping(source)
+    provider = "KIMODO_SOMA_BVH_WORLD_DELTA_V1" if profile == "KIMODO_SOMA" else "CMU_MOCAP_WORLD_DELTA_V6"
     source_fps = 1.0 / _frame_time_from_bvh(bvh_path)
     detected_side, peak, activity = _kick_event(scene, source, source_action, source_fps)
     target_side = spec.strike_side.upper()
@@ -438,7 +490,7 @@ def build_mocap_prior(
     # clock but have independent actions.
     source.animation_data.action = source_action
     source_frames = [crop_start + (crop_end - crop_start) * i / (sample_count - 1) for i in range(sample_count)]
-    sample_names = {source_name for source_name, _ in CMU_TO_UAL}
+    sample_names = {source_name for source_name, _ in mapping}
     samples: List[Dict[str, Matrix]] = []
     source_root_positions: List[Vector] = []
     for frame in source_frames:
@@ -476,7 +528,7 @@ def build_mocap_prior(
 
     # Parents first, then limbs, so assigning object-space rotations resolves into
     # stable local matrix_basis values on the target hierarchy.
-    ordered_pairs = list(CMU_TO_UAL)
+    ordered_pairs = list(mapping)
     leg_direction_targets = LEG_DIRECTION_TARGETS
     for index, sample in enumerate(samples):
         dest_frame = index + 1
@@ -605,5 +657,7 @@ def build_mocap_prior(
         impact_normalized_time=impact_u,
         activity_score=activity,
         sample_count=sample_count,
+        provider=provider,
+        source_profile=profile,
     )
     return action, meta

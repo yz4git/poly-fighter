@@ -97,7 +97,11 @@ The seven combat phase frames remain immutable:
 
 `START -> LOAD -> PRECONTACT -> IMPACT -> OVERTRAVEL -> RECOVERY -> END`
 
-Only frames between those anchors are regularised. Quaternion rotations are pulled toward a shortest-arc temporal path with SLERP rather than filtering quaternion components independently. The effect is deliberately weakest around PRECONTACT -> IMPACT -> OVERTRAVEL and stronger in anticipation/recovery gaps.
+Only frames between those anchors are regularised. Each unknown frame is pulled toward the shortest-arc SLERP midpoint of its immediate temporal neighbours (a small geodesic Laplacian step), rather than toward one global start-to-end arc or by filtering quaternion components independently. The effect is deliberately weakest around PRECONTACT -> IMPACT -> OVERTRAVEL and stronger in anticipation/recovery gaps.
+
+Dense quaternion keys are also hemisphere-canonicalized: q and -q encode the same pose, but leaving opposite signs in adjacent LINEAR keys can create an apparent near-2π spin during interpolation. Sign canonicalization changes no authored pose.
+
+After the pass, rotation-acceleration RMS and maximum one-frame rotation are measured again. If either gets worse, Motion Foundry automatically restores the original baked poses, so this cleanup cannot ship a numerically worse transition.
 
 The entire support-leg chain is excluded from the pass so Motion Foundry's planted-foot solve remains authoritative. Pelvis translation receives only a reduced correction; other bones keep their baked translation and only receive quaternion cleanup.
 

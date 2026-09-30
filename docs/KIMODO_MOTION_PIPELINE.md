@@ -112,3 +112,46 @@ Outputs are separated by the established runtime packs:
 The generated Counter is optional. Runtime playback checks for `BF_Counter_R`; when an older shipping strike pack does not contain it, the established `CM_Counter_R` motion remains the fallback.
 
 Kimodo strike priors are retimed so their detected hand-velocity peak lands on the deterministic gameplay impact frame. Existing Foundry contact IK is reduced rather than removed, while old COG/torso authoring offsets are strongly demoted so generated full-body weight transfer remains primary.
+
+
+## Constrained refinement pass
+
+The authoring runners now use two passes rather than accepting the best text-only sample directly.
+
+### Pass A — exploration
+
+Four deterministic text-only samples are generated for every move. The existing selector finds the strongest candidate using strike-limb velocity/reach, support-foot contact and bounded root motion.
+
+### Constraint synthesis
+
+`tools/kimodo/build-poly-fighter-constraints.py` converts the best exploratory NPZ into an official Kimodo constraints JSON. It deliberately uses the same fields Kimodo saves from the interactive demo:
+
+- **Full-Body** keyframes at guard start, gameplay contact and guard end.
+- **End-effector** keyframe for the striking hand or foot at gameplay contact.
+- **Support-foot end-effector interval** around contact to keep the planted leg stable.
+- **2D Root** waypoints at start/contact/end. Gross fighter translation remains owned by gameplay; the authored clip receives only a small bounded weight shift.
+- **Heading** stays at the canonical +Z fighting direction so prompt interpretation cannot introduce an accidental spin.
+
+The contact pose is not blindly taken from the same source frame number. The builder searches a small window around the gameplay-authored contact phase, chooses the strongest local kinetic/reach frame from the exploratory motion, and writes that pose back at the exact gameplay contact frame. This gives Kimodo a readable pose target without creating a second animation clock.
+
+### Pass B — constrained regeneration
+
+Two deterministic refinement seeds are generated per move with:
+
+```text
+cfg_type = separated
+text_weight = 1.8
+constraint_weight = 2.8
+diffusion_steps = 140
+```
+
+Kimodo post-processing remains enabled, so its own foot-skate and constraint cleanup still runs after diffusion.
+
+The final selector compares both exploratory and constrained candidates. In addition to the original naturalness heuristics it penalizes the absolute frame error between the generated kinetic peak and the deterministic gameplay contact frame.
+
+This produces 6 candidates per move:
+
+- 4 text-exploration candidates
+- 2 constrained-refinement candidates
+
+The selected result still passes through Blender Motion Foundry before shipping.

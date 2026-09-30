@@ -81,3 +81,31 @@ Both kick and hand-strike selectors read `local_rot_mats` from the generated NPZ
 - maximum one-frame geodesic rotation.
 
 Candidates with strong end-effector reach but visibly abrupt joint rotation are therefore penalized before they reach Motion Foundry. This supplements rather than replaces the existing strike velocity, support-foot contact, root travel and gameplay contact-timing metrics.
+
+
+## Offline replacement in-between cleanup
+
+The Blender Motion Foundry now applies `tools/blender/unimate_inbetween_pass.py` after visual-keying bake for:
+
+- shared strikes (Jab, Cross, Body Blow, Backfist and generated Counter),
+- Power,
+- Front Kick, Low Kick and Rising Kick.
+
+This is not the UniMate neural checkpoint. It transfers the exact-replacement invariant from UniMate's motion in-betweening into the deterministic shipping pipeline.
+
+The seven combat phase frames remain immutable:
+
+`START -> LOAD -> PRECONTACT -> IMPACT -> OVERTRAVEL -> RECOVERY -> END`
+
+Only frames between those anchors are regularised. Quaternion rotations are pulled toward a shortest-arc temporal path with SLERP rather than filtering quaternion components independently. The effect is deliberately weakest around PRECONTACT -> IMPACT -> OVERTRAVEL and stronger in anticipation/recovery gaps.
+
+The entire support-leg chain is excluded from the pass so Motion Foundry's planted-foot solve remains authoritative. Pelvis translation receives only a reduced correction; other bones keep their baked translation and only receive quaternion cleanup.
+
+Each built move now records:
+
+- rotation-acceleration RMS before/after,
+- maximum one-frame rotation before/after,
+- maximum anchor rotation/location error,
+- the exact preserved support-chain bone names.
+
+Anchor error is expected to remain zero within Blender floating-point evaluation tolerance.

@@ -68,6 +68,17 @@ const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
 const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
 const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
 const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
+// Playtest pass: authored contact frames were technically correct but the
+// shoulder view still stacked both torsos in screen space. These are camera-only
+// offsets driven by the existing authored contact weight, so gameplay position,
+// hitboxes, reach and animation poses remain untouched.
+const TPS_CAMERA_CONTACT_BACK_BONUS = 0.18;
+const TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0.32;
+const TPS_CAMERA_KICK_CONTACT_BACK_BONUS = 0.10;
+const TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0.20;
+const TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS = 0.10;
+const TPS_CAMERA_KICK_TARGET_SIDE_BONUS = 0.08;
+const TPS_CAMERA_LOW_KICK_TARGET_DROP = 0.16;
 const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;
 const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
@@ -1319,19 +1330,34 @@ export class TpsFightGame {
     // foreground fighter instead of zooming toward the pair or hiding them inline.
     // Compact iPhone landscape still receives a small additional shoulder offset.
     const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
+    const attackMoveId = this.p1.state === "ATTACK" ? this.p1.currentMove?.id ?? null : null;
+    const authoredContactWeight = attackMoveId
+      ? Number(this.p1.visual.root.userData.combatMotionContactWeight ?? 0)
+      : 0;
+    const authoredContactReadabilityFactor = THREE.MathUtils.clamp(authoredContactWeight * closeFactor, 0, 1);
+    const kickContactReadabilityFactor = authoredContactReadabilityFactor * (
+      attackMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(attackMoveId) ? 1 : 0
+    );
+    const lowKickReadabilityFactor = attackMoveId === "lowKick" ? authoredContactReadabilityFactor : 0;
     const dramaCinematicFactor = ["COMEBACK", "CLUTCH", "FINISH"].includes(this.dramaPhase) ? this.dramaIntensity : 0;
     const backDistance = 4.70
       + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
       + compactLandscapeFactor * 0.18
       + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA
+      + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_BACK_BONUS
+      + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_BACK_BONUS
       - dramaCinematicFactor * 0.16;
     const shoulderOffset = 2.50
       + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
       + compactLandscapeFactor * (0.52 + closeFactor * 0.48)
       + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER
+      + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_SHOULDER_BONUS
+      + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS
       + dramaCinematicFactor * 0.08;
     const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035 + dramaCinematicFactor * 0.025;
-    const targetHeight = 1.22 + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT;
+    const targetHeight = 1.22
+      + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT
+      - lowKickReadabilityFactor * TPS_CAMERA_LOW_KICK_TARGET_DROP;
     // At melee range, orbit around the pair instead of keeping the camera rooted
     // directly behind the foreground player. This reduces foreground occlusion
     // without changing simulation positions, hitboxes, reach, or authored clips.
@@ -1341,9 +1367,20 @@ export class TpsFightGame {
     this.cameraAnchor.copy(this.p1.position).lerp(this.cameraPairMidpoint, closeAnchorBlend);
     this.cameraFocus.copy(this.p2.position).lerp(this.cameraPairMidpoint, closeTargetBlend);
     this.cameraTarget.copy(this.cameraFocus)
-      .addScaledVector(right, TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor - flankLaneShift + impactReadabilityFactor * 0.080)
+      .addScaledVector(
+        right,
+        TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor
+          - flankLaneShift
+          + impactReadabilityFactor * 0.080
+          + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS
+          + kickContactReadabilityFactor * TPS_CAMERA_KICK_TARGET_SIDE_BONUS,
+      )
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
+    this.camera.userData.tpsAuthoredContactReadabilityFactor = authoredContactReadabilityFactor;
+    this.camera.userData.tpsKickContactReadabilityFactor = kickContactReadabilityFactor;
+    this.camera.userData.tpsLowKickReadabilityFactor = lowKickReadabilityFactor;
+    this.camera.userData.tpsContactReadabilityMove = attackMoveId;
     this.camera.userData.tpsCloseAnchorBlend = closeAnchorBlend;
     this.camera.userData.tpsCloseTargetBlend = closeTargetBlend;
     this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;
@@ -1357,7 +1394,8 @@ export class TpsFightGame {
       .add(new THREE.Vector3(0, cameraHeight, 0));
     // Keep distant navigation responsive, but add inertia as the fight closes.
     // This prevents a one-frame shoulder-camera surge when approach becomes orbit.
-    const cameraPositionRate = THREE.MathUtils.lerp(10.2, 8.0, closeFactor);
+    const cameraPositionRate = THREE.MathUtils.lerp(10.2, 8.0, closeFactor)
+      + authoredContactReadabilityFactor * 1.6;
     ease(this.camera.position, this.cameraDesired, cameraPositionRate, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
@@ -1440,7 +1478,12 @@ export class TpsFightGame {
     this.targetGroundRing.position.set(this.p2.position.x, 0.035, this.p2.position.z);
     const groundPulse = (threat ? 1.08 : windup ? 1.02 : 0.95) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.10 : 0.06);
     this.targetGroundRing.scale.setScalar(groundPulse);
-    this.targetGroundRing.material.opacity = threat ? 0.68 : windup ? 0.46 : inStrikeRange ? 0.34 : 0.22;
+    const contactReadability = Number(this.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0);
+    const baseGroundOpacity = threat ? 0.68 : windup ? 0.46 : inStrikeRange ? 0.34 : 0.22;
+    // Fade the floor cue under an authored hit so feet/shins remain readable.
+    // The torso lock ring and colour state stay visible, so target awareness is
+    // not lost while the strike silhouette gets a cleaner lower-body line.
+    this.targetGroundRing.material.opacity = baseGroundOpacity * (1 - THREE.MathUtils.clamp(contactReadability, 0, 1) * 0.46);
   }
 
   private checkFinish(): void {

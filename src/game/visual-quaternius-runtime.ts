@@ -633,12 +633,18 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
     action.time = clip.duration * phase;
     runtime.mixer.update(0);
   }
+  const authoredContactWeight = fighter.state === "ATTACK"
+    ? Number(runtime.host.userData.combatMotionContactWeight ?? 0)
+    : 0;
+  const inertialContactScale = 1 - THREE.MathUtils.clamp(authoredContactWeight, 0, 1);
   const inertial = applyInertialTransition(
     runtime.bones,
     runtime.transitionPose,
     runtime.transitionAge,
     runtime.transitionDuration,
+    inertialContactScale,
   );
+  runtime.host.userData.kimodoInertialAuthoredContactSuppression = 1 - inertialContactScale;
   runtime.host.userData.kimodoInertialTransitionActive = inertial.weight > 0;
   runtime.host.userData.kimodoInertialTransitionWeight = inertial.weight;
   runtime.host.userData.kimodoInertialActiveBones = inertial.activeBones;

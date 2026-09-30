@@ -79,6 +79,9 @@ const TPS_CAMERA_KICK_CONTACT_BACK_BONUS = 0.10;
 const TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0.20;
 const TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS = 0.10;
 const TPS_CAMERA_KICK_TARGET_SIDE_BONUS = 0.08;
+const TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0.72;
+const TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0.14;
+const TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0.06;
 const TPS_CAMERA_LOW_KICK_TARGET_DROP = 0.16;
 const TPS_CAMERA_MAX_TRAVEL_SPEED = 15.0;
 const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
@@ -1348,6 +1351,7 @@ export class TpsFightGame {
     const kickContactReadabilityFactor = authoredContactReadabilityFactor * (
       attackMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(attackMoveId) ? 1 : 0
     );
+    const frontKickReadabilityFactor = attackMoveId === "kick" ? authoredContactReadabilityFactor : 0;
     const lowKickReadabilityFactor = attackMoveId === "lowKick" ? authoredContactReadabilityFactor : 0;
     const dramaCinematicFactor = ["COMEBACK", "CLUTCH", "FINISH"].includes(this.dramaPhase) ? this.dramaIntensity : 0;
     const backDistance = 4.70
@@ -1356,6 +1360,7 @@ export class TpsFightGame {
       + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA
       + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_BACK_BONUS
       + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_BACK_BONUS
+      + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_BACK_BONUS
       - dramaCinematicFactor * 0.16;
     const shoulderOffset = 2.50
       + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
@@ -1363,6 +1368,7 @@ export class TpsFightGame {
       + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER
       + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_SHOULDER_BONUS
       + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS
+      + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS
       + dramaCinematicFactor * 0.08;
     const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035 + dramaCinematicFactor * 0.025;
     const targetHeight = 1.22
@@ -1383,12 +1389,14 @@ export class TpsFightGame {
           - flankLaneShift
           + impactReadabilityFactor * 0.080
           + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS
-          + kickContactReadabilityFactor * TPS_CAMERA_KICK_TARGET_SIDE_BONUS,
+          + kickContactReadabilityFactor * TPS_CAMERA_KICK_TARGET_SIDE_BONUS
+          + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS,
       )
       .add(new THREE.Vector3(0, targetHeight, 0));
     this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
     this.camera.userData.tpsAuthoredContactReadabilityFactor = authoredContactReadabilityFactor;
     this.camera.userData.tpsKickContactReadabilityFactor = kickContactReadabilityFactor;
+    this.camera.userData.tpsFrontKickReadabilityFactor = frontKickReadabilityFactor;
     this.camera.userData.tpsLowKickReadabilityFactor = lowKickReadabilityFactor;
     this.camera.userData.tpsContactReadabilityMove = attackMoveId;
     this.camera.userData.tpsCloseAnchorBlend = closeAnchorBlend;

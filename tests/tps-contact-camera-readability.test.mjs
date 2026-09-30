@@ -8,6 +8,8 @@ test("TPS contact camera opens the authored strike silhouette without moving gam
   assert.match(source, /TPS_CAMERA_CONTACT_BACK_BONUS = 0\.18/);
   assert.match(source, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
   assert.match(source, /TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0\.20/);
+  assert.match(source, /TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0\.72/);
+  assert.match(source, /TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0\.14/);
   assert.match(source, /TPS_CAMERA_LOW_KICK_TARGET_DROP = 0\.16/);
   assert.match(source, /sampleCombatMotionAtEvent/);
   assert.match(source, /motionEventsAtContact/);
@@ -32,9 +34,11 @@ test("kick WebGL audit verifies contact opening and low-kick lower-body framing"
   const audit = await readFile(new URL("../scripts/capture-tps-kick-sequence-audit.mjs", import.meta.url), "utf8");
 
   assert.match(audit, /cameraContactReadability/);
+  assert.match(audit, /cameraFrontKickReadability/);
   assert.match(audit, /cameraShoulderOffset/);
   assert.match(audit, /cameraTargetHeight/);
   assert.match(audit, /targetGroundOpacity/);
   assert.match(audit, /contact\.cameraShoulderOffset > startup\.cameraShoulderOffset \+ 0\.22/);
   assert.match(audit, /results\.lowKick\.contact\.cameraTargetHeight < results\.kick\.contact\.cameraTargetHeight - 0\.08/);
+  assert.match(audit, /results\.kick\.contact\.cameraShoulderOffset > results\.lowKick\.contact\.cameraShoulderOffset \+ 0\.35/);
 });

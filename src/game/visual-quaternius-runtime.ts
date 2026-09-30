@@ -18,6 +18,10 @@ import {
   type InertialTransitionSample,
 } from "./kimodo-motion-inertialization";
 import { retargetMotionClips } from "./motion-retarget";
+import {
+  buildUniMateReplacementProfile,
+  UNIMATE_MOTION_REPLACEMENT_VERSION,
+} from "./unimate-motion-replacement";
 export { retargetMotionClips } from "./motion-retarget";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -637,13 +641,28 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
     ? Number(runtime.host.userData.combatMotionContactWeight ?? 0)
     : 0;
   const inertialContactScale = 1 - THREE.MathUtils.clamp(authoredContactWeight, 0, 1);
+  const uniMateProfile = buildUniMateReplacementProfile({
+    bones: runtime.bones,
+    state: fighter.state,
+    currentClip: runtime.currentClip,
+    visualContact: fighter.currentMove?.visualContact,
+    contactWeight: authoredContactWeight,
+  });
   const inertial = applyInertialTransition(
     runtime.bones,
     runtime.transitionPose,
     runtime.transitionAge,
     runtime.transitionDuration,
     inertialContactScale,
+    uniMateProfile.scales,
   );
+  runtime.host.userData.unimateReplacementVersion = UNIMATE_MOTION_REPLACEMENT_VERSION;
+  runtime.host.userData.unimateReplacementMode = uniMateProfile.mode;
+  runtime.host.userData.unimateReplacementSeeds = uniMateProfile.seedBones.join(",");
+  runtime.host.userData.unimateReplacementProtectedBones = uniMateProfile.protectedBoneCount;
+  runtime.host.userData.unimateReplacementStrongestPin = uniMateProfile.strongestPin;
+  runtime.host.userData.kimodoInertialReplacementPinnedBones = inertial.replacementPinnedBones;
+  runtime.host.userData.kimodoInertialMinimumBoneScale = inertial.minimumBoneScale;
   runtime.host.userData.kimodoInertialAuthoredContactSuppression = 1 - inertialContactScale;
   runtime.host.userData.kimodoInertialTransitionActive = inertial.weight > 0;
   runtime.host.userData.kimodoInertialTransitionWeight = inertial.weight;

@@ -302,7 +302,11 @@ def apply_replacement_inbetween(
         raise ValueError("UniMate in-between pass requires at least two anchor frames")
     frames = tuple(range(anchors[0], anchors[-1] + 1))
 
+    # The support leg is only world-locked if its parent pelvis also remains
+    # untouched. Smoothing pelvis local rotation/translation moves the entire
+    # planted chain even when thigh/calf/foot local keys are exact.
     support_preserved = (
+        "pelvis",
         f"thigh_{support_suffix}",
         f"calf_{support_suffix}",
         f"foot_{support_suffix}",

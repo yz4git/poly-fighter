@@ -18,7 +18,7 @@ Move-specific scripts only provide timing, hand-path and master-control curves.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import importlib.util
 import json
 import math
@@ -121,6 +121,32 @@ def remap_u(knots: Sequence[Tuple[float, float]], u: float) -> float:
             local = 0.0 if du1 == du0 else (u - du0) / (du1 - du0)
             return su0 + (su1 - su0) * smoothstep(local)
     return 1.0
+
+def prior_knots_for_impact(spec: StrikeSpec, source_impact_u: float) -> Tuple[Tuple[float, float], ...]:
+    """Align an externally generated strike peak to the gameplay impact frame."""
+    span = max(1, spec.end_frame - spec.start_frame)
+    du = lambda frame: (frame - spec.start_frame) / span
+    impact = max(0.18, min(0.82, source_impact_u))
+    tail = 1.0 - impact
+    return (
+        (0.0, 0.0),
+        (du(spec.load_frame), impact * 0.18),
+        (du(spec.precontact_frame), impact * 0.68),
+        (du(spec.impact_frame), impact),
+        (du(spec.overtravel_frame), min(1.0, impact + tail * 0.18)),
+        (du(spec.recovery_frame), min(1.0, impact + tail * 0.60)),
+        (1.0, 1.0),
+    )
+
+
+def _scale_phase_values(values: PhaseValues, factor: float) -> PhaseValues:
+    return tuple(value * factor for value in values)  # type: ignore[return-value]
+
+
+def _scale_hand_offsets(values: HandOffsets, factor: float) -> HandOffsets:
+    return tuple(
+        tuple(component * factor for component in value) for value in values
+    )  # type: ignore[return-value]
 
 
 def phase_curve(spec: StrikeSpec, values: PhaseValues) -> Tuple[Tuple[int, float], ...]:
@@ -485,7 +511,41 @@ def build_strike_action(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
     spec: StrikeSpec,
+    prior_path: Optional[str] = None,
 ) -> Tuple[bpy.types.Action, dict]:
+    prior_meta = None
+    if prior_path:
+        import motion_foundry_v6_mocap as motion_prior
+
+        target_axes = motion_prior._horizontal_basis(armature)
+        prior_action, prior_meta = motion_prior.build_mocap_prior(
+            scene,
+            armature,
+            spec,
+            prior_path,
+            target_axes,
+            event_kind="strike",
+        )
+        # Generated motion owns anticipation, weight transfer and recovery.
+        # Keep Foundry's deterministic contact/support constraints, but demote
+        # its older whole-body offsets so they do not double-drive the Kimodo pose.
+        spec = replace(
+            spec,
+            source_action_hint=prior_action.name,
+            source_knots=prior_knots_for_impact(spec, prior_meta.impact_normalized_time),
+            hand_scales=(0.00, -0.04, 0.72, 1.00, 1.04, None, None),
+            hand_offsets=_scale_hand_offsets(spec.hand_offsets, 0.35),
+            ik_influences=(0.00, 0.04, 0.36, 0.82, 0.56, 0.08, 0.00),
+            pelvis_forward=_scale_phase_values(spec.pelvis_forward, 0.20),
+            pelvis_drop=_scale_phase_values(spec.pelvis_drop, 0.20),
+            pelvis_yaw=_scale_phase_values(spec.pelvis_yaw, 0.18),
+            lower_yaw=_scale_phase_values(spec.lower_yaw, 0.18),
+            upper_yaw=_scale_phase_values(spec.upper_yaw, 0.18),
+            pelvis_pitch=_scale_phase_values(spec.pelvis_pitch, 0.18),
+            lower_pitch=_scale_phase_values(spec.lower_pitch, 0.18),
+            upper_pitch=_scale_phase_values(spec.upper_pitch, 0.18),
+        )
+
     configure_v1_for_spec(spec)
     ensure_required_bones(armature, spec)
     source_action = v1.find_source_action()
@@ -541,8 +601,17 @@ def build_strike_action(
         "boneCount": len(armature.pose.bones),
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
+        "motionPriorProvider": prior_meta.provider if prior_meta is not None else "UAL_AUTHORED_STRIKE_V2",
+        "naturalnessPass": "KIMODO_PRIOR_V1" if prior_meta is not None else "AUTHORED_SOURCE_V2",
+        **(prior_meta.as_dict() if prior_meta is not None else {}),
+        "referenceImpactNormalizedTime": prior_meta.impact_normalized_time if prior_meta is not None else None,
+        "referenceTimeWarpKnots": [list(knot) for knot in spec.source_knots],
         "pipeline": [
-            f"{spec.source_action_hint} source body motion",
+            (
+                f"{prior_meta.source_profile} generated full-body strike prior: {prior_meta.source_file}"
+                if prior_meta is not None
+                else f"{spec.source_action_hint} source body motion"
+            ),
             "move-specific nonlinear whole-body retiming",
             "shared COG/pelvis world-space master control",
             "shared staged lower/upper torso master controls",

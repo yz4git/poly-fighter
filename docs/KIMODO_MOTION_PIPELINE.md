@@ -6,7 +6,7 @@ The shipping game still plays ordinary 60 Hz glTF animation clips. Kimodo genera
 
 ## Pipeline
 
-1. Generate four SOMA candidates for each grounded kick with `tools/kimodo/generate-poly-fighter-kicks.sh`.
+1. Generate four SOMA candidates for each grounded kick with `bash tools/kimodo/generate-poly-fighter-kicks.sh`.
 2. Kimodo's normal post-process remains enabled. Do not pass `--no-postprocess`; its foot-skate / constraint cleanup is useful before retargeting.
 3. Convert each generated Kimodo NPZ to SOMA BVH with `kimodo_convert`.
 4. Rank candidates using native Kimodo channels:
@@ -25,13 +25,13 @@ The shipping game still plays ordinary 60 Hz glTF animation clips. Kimodo genera
 Run this inside a Kimodo environment:
 
 ```bash
-tools/kimodo/generate-poly-fighter-kicks.sh
+bash tools/kimodo/generate-poly-fighter-kicks.sh
 ```
 
 The default model is `Kimodo-SOMA-RP-v1.1`. Override it with:
 
 ```bash
-KIMODO_MODEL=Kimodo-SOMA-SEED-v1.1 tools/kimodo/generate-poly-fighter-kicks.sh
+KIMODO_MODEL=Kimodo-SOMA-SEED-v1.1 bash tools/kimodo/generate-poly-fighter-kicks.sh
 ```
 
 The runner creates four deterministic seeds per move, converts every candidate to BVH, then writes `selection.json`.

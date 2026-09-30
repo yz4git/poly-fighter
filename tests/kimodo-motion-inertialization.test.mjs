@@ -12,6 +12,8 @@ test("Kimodo-inspired inertialization preserves outgoing local velocity while de
   assert.match(source, /tau \* \(1 - Math\.exp\(-age \/ tau\)\)/);
   assert.match(source, /1 - u \* u \* \(3 - 2 \* u\)/);
   assert.match(source, /MAX_ROTATION_PREDICTION/);
+  assert.match(source, /weightScale = 1/);
+  assert.match(source, /THREE\.MathUtils\.clamp\(weightScale, 0, 1\)/);
   assert.match(source, /validDelta \? previous\.linearVelocity\.clone\(\)\.lerp\(measuredLinear, 0\.62\) : previous\.linearVelocity\.clone\(\)/);
 });
 
@@ -33,6 +35,8 @@ test("runtime samples gameplay-authored motion before inertialization and condit
   assert.match(source, /kimodoInertialTransitionActive/);
   assert.match(source, /kimodoInertialMaxLinearVelocity/);
   assert.match(source, /kimodoInertialMaxAngularVelocity/);
+  assert.match(source, /combatMotionContactWeight/);
+  assert.match(source, /kimodoInertialAuthoredContactSuppression/);
 });
 
 test("hitstop freezes transition age but keeps the last measured velocity available", async () => {

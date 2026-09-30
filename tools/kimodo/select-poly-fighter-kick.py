@@ -28,8 +28,11 @@ def _names_for(joint_count: int) -> list[str]:
     return list(skeleton.bone_order_names)
 
 
-def _contact_channel(side: str) -> slice:
-    # Kimodo output order: left heel, left toe, right heel, right toe.
+def _contact_channel(side: str, channels: int) -> slice:
+    # somaskel30: [L heel, L toe, R heel, R toe]
+    # somaskel77: [L heel, L toe, L toe-end, R heel, R toe, R toe-end]
+    if channels >= 6:
+        return slice(0, 3) if side == "L" else slice(3, 6)
     return slice(0, 2) if side == "L" else slice(2, 4)
 
 
@@ -66,8 +69,8 @@ def score_candidate(path: Path, strike_side: str, support_side: str) -> dict:
         support_contact = 0.0
         strike_contact = 0.0
         if contacts is not None and contacts.ndim == 2 and contacts.shape[1] >= 4:
-            support_contact = float(np.mean(contacts[lo:hi, _contact_channel(support_side)]))
-            strike_contact = float(np.mean(contacts[lo:hi, _contact_channel(strike_side)]))
+            support_contact = float(np.mean(contacts[lo:hi, _contact_channel(support_side, contacts.shape[1])]))
+            strike_contact = float(np.mean(contacts[lo:hi, _contact_channel(strike_side, contacts.shape[1])]))
 
         smooth_root = np.asarray(data["smooth_root_pos"]) if "smooth_root_pos" in data else hips
         if smooth_root.ndim == 3 and smooth_root.shape[0] == 1:

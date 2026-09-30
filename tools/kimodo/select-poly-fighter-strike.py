@@ -21,7 +21,9 @@ def _joint_names(joint_count: int) -> list[str]:
     return list(build_skeleton(joint_count).bone_order_names)
 
 
-def _foot_contact_slice(side: str) -> slice:
+def _foot_contact_slice(side: str, channels: int) -> slice:
+    if channels >= 6:
+        return slice(0, 3) if side == "L" else slice(3, 6)
     return slice(0, 2) if side == "L" else slice(2, 4)
 
 
@@ -59,8 +61,8 @@ def score_candidate(path: Path, strike_side: str, support_side: str) -> dict:
         support_contact = 0.0
         both_contact = 0.0
         if contacts is not None and contacts.ndim == 2 and contacts.shape[1] >= 4:
-            support_contact = float(np.mean(contacts[lo:hi, _foot_contact_slice(support_side)]))
-            both_contact = float(np.mean(contacts[lo:hi, :4]))
+            support_contact = float(np.mean(contacts[lo:hi, _foot_contact_slice(support_side, contacts.shape[1])]))
+            both_contact = float(np.mean(contacts[lo:hi, : min(6, contacts.shape[1])]))
 
         smooth_root = np.asarray(data["smooth_root_pos"]) if "smooth_root_pos" in data else hips
         if smooth_root.ndim == 3 and smooth_root.shape[0] == 1:

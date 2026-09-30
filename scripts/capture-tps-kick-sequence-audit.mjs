@@ -209,6 +209,11 @@ try {
     capabilities: {
       alwaysMatch: {
         browserName: 'chrome',
+        timeouts: {
+          script: 180000,
+          pageLoad: 120000,
+          implicit: 0,
+        },
         'goog:chromeOptions': {
           args: ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--ignore-gpu-blocklist', '--enable-webgl', '--use-angle=swiftshader', '--window-size=1536,706', '--hide-scrollbars'],
         },

@@ -137,6 +137,38 @@ BACKFIST_SPEC = rig.StrikeSpec(
     upper_yaw=(0.0, -9.0, 10.0, 21.0, 26.0, 6.0, 0.0),
 )
 
+COUNTER_SPEC = rig.StrikeSpec(
+    action_name="BF_Counter_R",
+    version="BLENDER_MOTION_FOUNDRY_V2_COUNTER",
+    source_action_hint="Punch_Cross",
+    end_frame=35,
+    load_frame=3,
+    precontact_frame=11,
+    impact_frame=18,
+    overtravel_frame=21,
+    recovery_frame=28,
+    strike_side="r",
+    support_side="l",
+    source_knots=(
+        (0.00, 0.00),
+        (0.09, 0.05),
+        (0.31, 0.25),
+        (0.51, 0.60),
+        (0.60, 0.75),
+        (0.80, 0.91),
+        (1.00, 1.00),
+    ),
+    hand_scales=(0.00, -0.03, 0.76, 1.02, 1.06, None, None),
+    hand_offsets=ZERO_OFFSETS,
+    ik_influences=(0.00, 0.04, 0.72, 1.00, 0.72, 0.08, 0.00),
+    pelvis_forward=(0.000, -0.010, 0.012, 0.034, 0.036, 0.006, 0.000),
+    pelvis_drop=(0.000, -0.008, -0.003, 0.002, 0.000, -0.002, 0.000),
+    pelvis_yaw=(0.0, -3.0, 4.0, 10.0, 11.0, 2.0, 0.0),
+    lower_yaw=(0.0, -4.0, 6.0, 14.0, 15.0, 3.0, 0.0),
+    upper_yaw=(0.0, -5.0, 8.0, 18.0, 19.0, 4.0, 0.0),
+)
+
+
 STRIKE_SPECS = (JAB_SPEC, BODY_BLOW_SPEC, BACKFIST_SPEC)
 
 
@@ -151,6 +183,10 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--kimodo-jab")
+    parser.add_argument("--kimodo-body-blow")
+    parser.add_argument("--kimodo-backfist")
+    parser.add_argument("--kimodo-counter")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -164,10 +200,27 @@ def main() -> None:
     armature = rig.v1.import_source(source)
     scene = bpy.context.scene
 
+    prior_paths = {
+        "BF_Jab_L": args.kimodo_jab,
+        "BF_BodyBlow_L": args.kimodo_body_blow,
+        "BF_Backfist_R": args.kimodo_backfist,
+        "BF_Counter_R": args.kimodo_counter,
+    }
+    specs = list(STRIKE_SPECS)
+    # Counter stays on the proven procedural fallback unless a generated
+    # candidate is explicitly supplied. This keeps today's shipping GLB stable.
+    if args.kimodo_counter:
+        specs.append(COUNTER_SPEC)
+
     actions = []
     move_metrics = []
-    for spec in STRIKE_SPECS:
-        action, metrics = rig.build_strike_action(scene, armature, spec)
+    for spec in specs:
+        action, metrics = rig.build_strike_action(
+            scene,
+            armature,
+            spec,
+            prior_path=prior_paths.get(spec.action_name),
+        )
         actions.append(action)
         move_metrics.append(metrics)
 
@@ -175,7 +228,12 @@ def main() -> None:
         "version": "BLENDER_MOTION_FOUNDRY_V2_SHARED_STRIKES",
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "fps": rig.FPS,
-        "actions": [spec.action_name for spec in STRIKE_SPECS],
+        "actions": [spec.action_name for spec in specs],
+        "motionPriorProvider": (
+            "KIMODO_SOMA_BVH_WORLD_DELTA_V1"
+            if any(prior_paths.get(spec.action_name) for spec in specs)
+            else "UAL_AUTHORED_STRIKE_V2"
+        ),
         "moves": move_metrics,
         "boneCount": len(armature.pose.bones),
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),

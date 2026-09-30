@@ -63,6 +63,7 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--kimodo-prior")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -76,7 +77,12 @@ def main() -> None:
     armature = rig.v1.import_source(source)
     scene = bpy.context.scene
 
-    action, metrics = rig.build_strike_action(scene, armature, CROSS_SPEC)
+    action, metrics = rig.build_strike_action(
+        scene,
+        armature,
+        CROSS_SPEC,
+        prior_path=args.kimodo_prior,
+    )
     rig.export_single_action(
         scene,
         armature,

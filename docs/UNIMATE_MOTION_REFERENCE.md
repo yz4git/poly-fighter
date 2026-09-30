@@ -103,7 +103,7 @@ Dense quaternion keys are also hemisphere-canonicalized: q and -q encode the sam
 
 After the pass, rotation-acceleration RMS and maximum one-frame rotation are measured again. If either gets worse, Motion Foundry automatically restores the original baked poses, so this cleanup cannot ship a numerically worse transition.
 
-The entire support-leg chain is excluded from the pass so Motion Foundry's planted-foot solve remains authoritative. Pelvis translation receives only a reduced correction; other bones keep their baked translation and only receive quaternion cleanup.
+The pelvis and the entire support-leg chain are excluded from the pass so Motion Foundry's world-space planted-foot solve remains authoritative. Smoothing a pelvis local transform would move the whole planted leg even when thigh/calf/foot keys were unchanged. Other bones keep their baked translation and only receive quaternion cleanup.
 
 Each built move now records:
 

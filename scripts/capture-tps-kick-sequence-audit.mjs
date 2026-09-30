@@ -196,6 +196,13 @@ async function poseMove(sessionId, moveId, stage) {
       supportFootRawAngle: Number(data.tpsKickSupportFootRawAngle ?? 0),
       supportFootAngle: Number(data.tpsKickSupportFootAngle ?? 0),
       supportFootAnchor: Array.isArray(data.tpsKickSupportFootAnchor) ? [...data.tpsKickSupportFootAnchor] : null,
+      cameraContactReadability: Number(game.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0),
+      cameraKickReadability: Number(game.camera.userData.tpsKickContactReadabilityFactor ?? 0),
+      cameraLowKickReadability: Number(game.camera.userData.tpsLowKickReadabilityFactor ?? 0),
+      cameraShoulderOffset: Number(game.camera.userData.tpsShoulderOffset ?? 0),
+      cameraBackDistance: Number(game.camera.userData.tpsBackDistance ?? 0),
+      cameraTargetHeight: Number(game.camera.userData.tpsTargetHeight ?? 0),
+      targetGroundOpacity: Number(game.targetGroundRing?.material?.opacity ?? 0),
       state: game.p1.state,
       simulationPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
     };
@@ -282,6 +289,25 @@ try {
   }
   if (!(results.risingKick.contact.strikeHeight > results.kick.contact.strikeHeight + 0.15)) {
     throw new Error(`Rising kick no longer reads above normal kick: ${JSON.stringify(results)}`);
+  }
+
+  // Camera-only readability pass: contact should open the shoulder lane more
+  // than startup without changing simulation positions or authored pose timing.
+  for (const moveId of ['kick', 'lowKick', 'risingKick', 'dashKick']) {
+    const startup = results[moveId].startup;
+    const contact = results[moveId].contact;
+    if (!(contact.cameraContactReadability > startup.cameraContactReadability + 0.45)) {
+      throw new Error(`${moveId} contact camera did not open enough: ${JSON.stringify({ startup, contact })}`);
+    }
+    if (!(contact.cameraShoulderOffset > startup.cameraShoulderOffset + 0.22)) {
+      throw new Error(`${moveId} shoulder camera did not move laterally enough: ${JSON.stringify({ startup, contact })}`);
+    }
+    if (!(contact.targetGroundOpacity < startup.targetGroundOpacity)) {
+      throw new Error(`${moveId} ground lock cue did not fade at contact: ${JSON.stringify({ startup, contact })}`);
+    }
+  }
+  if (!(results.lowKick.contact.cameraTargetHeight < results.kick.contact.cameraTargetHeight - 0.08)) {
+    throw new Error(`Low-kick camera did not retain enough lower-body framing: ${JSON.stringify(results)}`);
   }
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, 'DELETE').catch(() => {});

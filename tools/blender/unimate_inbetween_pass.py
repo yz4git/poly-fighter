@@ -70,7 +70,11 @@ def _smoothstep(value: float) -> float:
 
 
 def _quaternion_angle(a: Quaternion, b: Quaternion) -> float:
-    return float(a.rotation_difference(b).angle)
+    """Shortest pose-space angle; q and -q are the same rotation."""
+    qa = a.copy().normalized()
+    qb = b.copy().normalized()
+    dot = abs(qa.w * qb.w + qa.x * qb.x + qa.y * qb.y + qa.z * qb.z)
+    return 2.0 * math.acos(max(-1.0, min(1.0, dot)))
 
 
 def _rotation_metrics(

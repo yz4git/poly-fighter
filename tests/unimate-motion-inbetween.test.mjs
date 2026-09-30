@@ -20,12 +20,17 @@ test("inbetween pass regularises quaternion motion instead of component-filterin
   const source = await readFile(new URL("../tools/blender/unimate_inbetween_pass.py", import.meta.url), "utf8");
 
   assert.match(source, /rotation_difference/);
-  assert.match(source, /\.slerp\(right\.rotation, temporal\)/);
-  assert.match(source, /\.slerp\(rotation_target, weight\)/);
+  assert.match(source, /previous_q\.slerp\(following_q, 0\.5\)/);
+  assert.match(source, /source_q\.slerp\(rotation_target, weight\)/);
+  assert.match(source, /_canonicalize_quaternion_signs/);
+  assert.match(source, /dot < 0\.0/);
   assert.match(source, /rotation_accel_rms_before/);
   assert.match(source, /rotation_accel_rms_after/);
   assert.match(source, /max_rotation_step_before/);
   assert.match(source, /max_rotation_step_after/);
+  assert.match(source, /after_accel <= before_accel/);
+  assert.match(source, /after_max_step <= before_max_step/);
+  assert.match(source, /unimateInbetweenAccepted/);
 });
 
 test("contact-adjacent gaps are smoothed much less than anticipation and recovery gaps", async () => {

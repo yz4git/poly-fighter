@@ -132,8 +132,9 @@ export function applyInertialTransition(
   transition: Map<string, InertialTransitionSample>,
   age: number,
   duration: number,
+  weightScale = 1,
 ): InertializationTelemetry {
-  const weight = transitionWeight(age, duration);
+  const weight = transitionWeight(age, duration) * THREE.MathUtils.clamp(weightScale, 0, 1);
   if (!(weight > 0) || transition.size === 0) {
     transition.clear();
     return { weight: 0, maxLinearVelocity: 0, maxAngularVelocity: 0, activeBones: 0 };

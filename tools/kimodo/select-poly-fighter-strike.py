@@ -27,7 +27,7 @@ def _foot_contact_slice(side: str, channels: int) -> slice:
     return slice(0, 2) if side == "L" else slice(2, 4)
 
 
-def score_candidate(path: Path, strike_side: str, support_side: str) -> dict:
+def score_candidate(path: Path, strike_side: str, support_side: str, contact_phase: float) -> dict:
     with np.load(path) as data:
         joints = _motion_array(data, "posed_joints")
         if joints.ndim != 3 or joints.shape[-1] != 3:
@@ -47,6 +47,8 @@ def score_candidate(path: Path, strike_side: str, support_side: str) -> dict:
         strike_speed = np.linalg.norm(np.diff(strike, axis=0), axis=1)
         guard_speed = np.linalg.norm(np.diff(guard, axis=0), axis=1)
         impact = int(np.argmax(strike_speed)) + 1
+        expected_impact = int(round(max(0.0, min(1.0, contact_phase)) * (len(strike) - 1)))
+        timing_error = abs(impact - expected_impact)
         lo, hi = max(0, impact - 2), min(len(strike), impact + 3)
 
         strike_reach = np.linalg.norm(strike - hips, axis=1)
@@ -82,12 +84,16 @@ def score_candidate(path: Path, strike_side: str, support_side: str) -> dict:
             - guard_excursion * 0.55
             - root_end * 0.60
             - max(0.0, root_peak - 0.38) * 1.10
+            - timing_error * 0.08
         )
         return {
             "npz": str(path),
             "bvh": str(path.with_suffix(".bvh")),
             "score": score,
             "impactFrame30Hz": impact,
+            "expectedGameplayImpactFrame": expected_impact,
+            "impactTimingErrorFrames": timing_error,
+            "candidateKind": "constrained-refinement" if "_refine_" in path.stem else "text-exploration",
             "peakStrikeSpeed": float(strike_speed.max()),
             "sideDominance": side_dominance,
             "strikeReachGain": reach_gain,
@@ -116,8 +122,13 @@ def main() -> None:
 
     for move_id, spec in presets["moves"].items():
         candidates = [
-            score_candidate(path, spec["strikeSide"], spec["supportSide"])
-            for path in sorted((root / move_id).glob(f"{move_id}_seed_*.npz"))
+            score_candidate(
+                path,
+                spec["strikeSide"],
+                spec["supportSide"],
+                float(spec.get("constraintProfile", {}).get("contactPhase", 0.5)),
+            )
+            for path in sorted((root / move_id).glob(f"{move_id}_*.npz"))
         ]
         if not candidates:
             raise FileNotFoundError(f"No Kimodo candidates found for {move_id}")

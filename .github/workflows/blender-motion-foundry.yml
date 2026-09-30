@@ -7,6 +7,7 @@ on:
     paths:
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/unimate_inbetween_pass.py
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - scripts/apply-blender-motion-foundry-v1.mjs
@@ -49,9 +50,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          power_hash="$(sha256sum tools/blender/build-fight-motion-foundry-v1.py | awk '{print $1}')"
-          cross_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
-          strikes_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-strikes.py | sha256sum | awk '{print $1}')"
+          power_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/unimate_inbetween_pass.py | sha256sum | awk '{print $1}')"
+          cross_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/unimate_inbetween_pass.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
+          strikes_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/unimate_inbetween_pass.py tools/blender/build-fight-motion-foundry-v2-strikes.py | sha256sum | awk '{print $1}')"
           echo "power_hash=$power_hash" >> "$GITHUB_OUTPUT"
           echo "cross_hash=$cross_hash" >> "$GITHUB_OUTPUT"
           echo "strikes_hash=$strikes_hash" >> "$GITHUB_OUTPUT"
@@ -126,6 +127,9 @@ jobs:
           assert m['rightHandTravel'] > 0.03, m
           assert m['leftFootLockMaxDrift'] < 0.03, m
           assert m['boneCount'] >= 40, m
+          assert m['unimateInbetweenVersion'] == 'UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1', m
+          assert m['unimateMaximumAnchorRotationError'] < 1e-5, m
+          assert m['unimateMaximumAnchorLocationError'] < 1e-5, m
           print('BLENDER_MOTION_FOUNDRY_POWER_METRICS_OK', m)
           PY
 
@@ -173,6 +177,9 @@ jobs:
           assert m['pelvisTravel'] > 0.005, m
           assert m['torsoTwistDegrees'] > 2.0, m
           assert m['boneCount'] >= 40, m
+          assert m['unimateInbetweenVersion'] == 'UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1', m
+          assert m['unimateMaximumAnchorRotationError'] < 1e-5, m
+          assert m['unimateMaximumAnchorLocationError'] < 1e-5, m
           print('BLENDER_MOTION_FOUNDRY_V2_CROSS_METRICS_OK', m)
           PY
 
@@ -225,6 +232,9 @@ jobs:
               assert move['pelvisTravel'] > 0.002, move
               assert move['torsoTwistDegrees'] > 2.0, move
               assert move['boneCount'] >= 40, move
+              assert move['unimateInbetweenVersion'] == 'UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1', move
+              assert move['unimateMaximumAnchorRotationError'] < 1e-5, move
+              assert move['unimateMaximumAnchorLocationError'] < 1e-5, move
           raw = Path('artifacts/blender-motion-foundry-v2-strikes/blender-strikes-core.glb').read_bytes()
           assert raw[:4] == b'glTF' and len(raw) > 20
           json_len, json_type = struct.unpack_from('<II', raw, 12)

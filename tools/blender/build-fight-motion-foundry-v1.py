@@ -22,6 +22,8 @@ from typing import Dict, Iterable, List, Tuple
 import bpy
 from mathutils import Matrix, Vector
 
+import unimate_inbetween_pass as unimate_inbetween
+
 FPS = 60
 START_FRAME = 1
 END_FRAME = 52
@@ -427,6 +429,7 @@ def motion_metrics(
     source_action_name: str,
     constrained: Dict[str, float],
     prior_meta=None,
+    unimate_metrics=None,
 ) -> dict:
     armature.animation_data.action = bpy.data.actions[ACTION_NAME]
     baked_foot_drift = foot_lock_drift(scene, armature)
@@ -447,6 +450,7 @@ def motion_metrics(
         "boneCount": len(armature.pose.bones),
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),
         "motionPriorProvider": prior_meta.provider if prior_meta is not None else "UAL_AUTHORED_POWER_V1",
+        **(unimate_metrics.as_dict() if unimate_metrics is not None else {}),
         **(prior_meta.as_dict() if prior_meta is not None else {}),
         "pipeline": [
             (
@@ -458,6 +462,7 @@ def motion_metrics(
             "right-hand two-bone IK contact control",
             "world-space left support-foot IK lock",
             "Blender native NLA visual-keying bake",
+            "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
             "glTF Action export",
         ],
     }
@@ -545,7 +550,34 @@ def main() -> None:
     final_action = bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
     remove_controls(controls)
-    metrics = motion_metrics(scene, armature, source_action_name, constrained, prior_meta)
+    armature.animation_data.action = final_action
+    unimate_metrics = unimate_inbetween.apply_replacement_inbetween(
+        scene,
+        armature,
+        final_action,
+        anchor_frames=(
+            START_FRAME,
+            LOAD_FRAME,
+            PRECONTACT_FRAME,
+            IMPACT_FRAME,
+            OVERTRAVEL_FRAME,
+            RECOVERY_FRAME,
+            END_FRAME,
+        ),
+        impact_frame=IMPACT_FRAME,
+        precontact_frame=PRECONTACT_FRAME,
+        overtravel_frame=OVERTRAVEL_FRAME,
+        strike_suffix="r",
+        support_suffix="l",
+    )
+    metrics = motion_metrics(
+        scene,
+        armature,
+        source_action_name,
+        constrained,
+        prior_meta,
+        unimate_metrics,
+    )
     export_outputs(scene, armature, output_dir, metrics)
     print(json.dumps(metrics, indent=2))
 

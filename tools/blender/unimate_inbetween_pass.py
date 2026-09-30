@@ -46,6 +46,7 @@ class InbetweenMetrics:
     max_rotation_step_after: float
     maximum_anchor_rotation_error: float
     maximum_anchor_location_error: float
+    accepted: bool
 
     def as_dict(self) -> dict:
         return {
@@ -59,6 +60,7 @@ class InbetweenMetrics:
             "unimateMaxRotationStepAfter": self.max_rotation_step_after,
             "unimateMaximumAnchorRotationError": self.maximum_anchor_rotation_error,
             "unimateMaximumAnchorLocationError": self.maximum_anchor_location_error,
+            "unimateInbetweenAccepted": self.accepted,
         }
 
 
@@ -184,28 +186,103 @@ def _capture(
     return result
 
 
-def _blend_pose(
+def _same_hemisphere(reference: Quaternion, value: Quaternion) -> Quaternion:
+    """Return an equivalent quaternion whose component sign follows reference."""
+    out = value.copy().normalized()
+    dot = (
+        reference.w * out.w
+        + reference.x * out.x
+        + reference.y * out.y
+        + reference.z * out.z
+    )
+    if dot < 0.0:
+        return Quaternion((-out.w, -out.x, -out.y, -out.z))
+    return out
+
+
+def _local_smooth_pose(
     source: PoseSample,
-    left: PoseSample,
-    right: PoseSample,
+    previous: PoseSample,
+    following: PoseSample,
     u: float,
     strength: float,
     allow_location: bool,
 ) -> PoseSample:
-    temporal = _smoothstep(u)
+    """One geodesic Laplacian step on an unknown frame.
+
+    UniMate regenerates unknown frames while repeatedly replacing known signal.
+    Our deterministic analogue keeps the known anchors and reduces local second
+    derivative only inside the unknown region. This avoids the velocity kink
+    produced by pulling an entire segment toward one start-to-end SLERP arc.
+    """
     envelope = math.sin(math.pi * u) ** 2
     weight = max(0.0, min(1.0, strength * envelope))
 
-    rotation_target = left.rotation.copy().slerp(right.rotation, temporal).normalized()
-    rotation = source.rotation.copy().slerp(rotation_target, weight).normalized()
+    previous_q = previous.rotation.copy().normalized()
+    following_q = _same_hemisphere(previous_q, following.rotation)
+    source_q = _same_hemisphere(previous_q, source.rotation)
+    rotation_target = previous_q.slerp(following_q, 0.5).normalized()
+    rotation = source_q.slerp(rotation_target, weight).normalized()
 
     location = source.location.copy()
     if allow_location:
-        location_target = left.location.copy().lerp(right.location, temporal)
-        location.lerp(location_target, weight * 0.72)
+        location_target = previous.location.copy().lerp(following.location, 0.5)
+        location.lerp(location_target, weight * 0.55)
 
     return PoseSample(location=location, rotation=rotation)
 
+
+def _canonicalize_quaternion_signs(
+    samples: Dict[str, Dict[int, PoseSample]],
+    frames: Sequence[int],
+) -> None:
+    """Keep dense quaternion keys in one hemisphere across time.
+
+    q and -q encode the same pose, but linear glTF/FCurve interpolation between
+    opposite signs can pass through the zero quaternion and appear as a near-2π
+    one-frame spin. Sign canonicalization changes no authored pose.
+    """
+    for per_frame in samples.values():
+        if not frames:
+            continue
+        previous = per_frame[frames[0]].rotation.copy().normalized()
+        per_frame[frames[0]] = PoseSample(
+            location=per_frame[frames[0]].location.copy(),
+            rotation=previous,
+        )
+        for frame in frames[1:]:
+            current = per_frame[frame]
+            rotation = _same_hemisphere(previous, current.rotation)
+            per_frame[frame] = PoseSample(
+                location=current.location.copy(),
+                rotation=rotation,
+            )
+            previous = rotation
+
+
+def _write_samples(
+    scene: bpy.types.Scene,
+    armature: bpy.types.Object,
+    action: bpy.types.Action,
+    samples: Mapping[str, Mapping[int, PoseSample]],
+    frames: Sequence[int],
+    *,
+    write_pelvis_location: bool,
+) -> None:
+    armature.animation_data.action = action
+    for frame in frames:
+        scene.frame_set(frame)
+        for name, per_frame in samples.items():
+            bone = armature.pose.bones.get(name)
+            sample = per_frame.get(frame)
+            if bone is None or sample is None:
+                continue
+            bone.rotation_mode = "QUATERNION"
+            bone.rotation_quaternion = sample.rotation
+            bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=name)
+            if write_pelvis_location and name == "pelvis":
+                bone.location = sample.location
+                bone.keyframe_insert(data_path="location", frame=frame, group=name)
 
 def apply_replacement_inbetween(
     scene: bpy.types.Scene,
@@ -245,52 +322,55 @@ def apply_replacement_inbetween(
     }
     anchor_set = set(anchors)
 
-    for name, per_frame in original.items():
-        bone_factor = _bone_strength(name, strike_suffix)
-        for frame in frames:
-            if frame in anchor_set:
-                continue
-            left_frame, right_frame = _find_segment(anchors, frame)
-            if right_frame <= left_frame:
-                continue
-            source = per_frame[frame]
-            left = per_frame[left_frame]
-            right = per_frame[right_frame]
-            u = (frame - left_frame) / (right_frame - left_frame)
-            segment = _segment_strength(
-                left_frame,
-                right_frame,
-                impact_frame,
-                precontact_frame,
-                overtravel_frame,
-            )
-            rewritten[name][frame] = _blend_pose(
-                source,
-                left,
-                right,
-                u,
-                segment * bone_factor,
-                allow_location=(name == "pelvis"),
-            )
+    # Two conservative local passes reduce angular second derivative while
+    # preserving every combat phase anchor exactly.
+    for _iteration in range(2):
+        prior_pass: Dict[str, Dict[int, PoseSample]] = {
+            name: dict(per_frame) for name, per_frame in rewritten.items()
+        }
+        for name, per_frame in prior_pass.items():
+            bone_factor = _bone_strength(name, strike_suffix)
+            for frame in frames[1:-1]:
+                if frame in anchor_set:
+                    continue
+                left_frame, right_frame = _find_segment(anchors, frame)
+                if right_frame <= left_frame:
+                    continue
+                u = (frame - left_frame) / (right_frame - left_frame)
+                segment = _segment_strength(
+                    left_frame,
+                    right_frame,
+                    impact_frame,
+                    precontact_frame,
+                    overtravel_frame,
+                )
+                rewritten[name][frame] = _local_smooth_pose(
+                    per_frame[frame],
+                    per_frame[frame - 1],
+                    per_frame[frame + 1],
+                    u,
+                    segment * bone_factor,
+                    allow_location=(name == "pelvis"),
+                )
 
-    # Replacement invariant: never write anchor frames. Their original baked
-    # values remain byte-for-byte represented by the existing dense FCurves.
-    armature.animation_data.action = action
-    for frame in frames:
-        if frame in anchor_set:
-            continue
-        scene.frame_set(frame)
+        # Exact replacement: reset all known phase anchors after every smoothing
+        # iteration so they can never drift numerically.
         for name in bone_names:
-            bone = armature.pose.bones.get(name)
-            sample = rewritten[name].get(frame)
-            if bone is None or sample is None:
-                continue
-            bone.rotation_mode = "QUATERNION"
-            bone.rotation_quaternion = sample.rotation
-            bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=name)
-            if name == "pelvis":
-                bone.location = sample.location
-                bone.keyframe_insert(data_path="location", frame=frame, group=name)
+            for frame in anchors:
+                rewritten[name][frame] = original[name][frame]
+
+    # Quaternion sign is representation-only, not pose. Canonicalize every dense
+    # key (including anchors) so LINEAR glTF interpolation cannot take the long
+    # component-space path through q -> -q.
+    _canonicalize_quaternion_signs(rewritten, frames)
+    _write_samples(
+        scene,
+        armature,
+        action,
+        rewritten,
+        frames,
+        write_pelvis_location=True,
+    )
 
     # Dense bake curves should stay linear after the surgical replacement.
     for curve in action.fcurves:
@@ -300,6 +380,33 @@ def apply_replacement_inbetween(
     bpy.context.view_layer.update()
     after = _capture(scene, armature, action, bone_names, frames)
     after_accel, after_max_step = _rotation_metrics(after, frames)
+
+    # Never ship a cleanup pass that makes the measured temporal motion worse.
+    # Revert to the original dense poses (with harmless quaternion hemisphere
+    # canonicalization) when either jitter or the largest one-frame turn grows.
+    accepted = (
+        after_accel <= before_accel + 1e-7
+        and after_max_step <= before_max_step + 1e-7
+    )
+    if not accepted:
+        rewritten = {
+            name: dict(per_frame) for name, per_frame in original.items()
+        }
+        _canonicalize_quaternion_signs(rewritten, frames)
+        _write_samples(
+            scene,
+            armature,
+            action,
+            rewritten,
+            frames,
+            write_pelvis_location=True,
+        )
+        for curve in action.fcurves:
+            for point in curve.keyframe_points:
+                point.interpolation = "LINEAR"
+        bpy.context.view_layer.update()
+        after = _capture(scene, armature, action, bone_names, frames)
+        after_accel, after_max_step = _rotation_metrics(after, frames)
 
     max_anchor_rotation_error = 0.0
     max_anchor_location_error = 0.0
@@ -332,4 +439,5 @@ def apply_replacement_inbetween(
         max_rotation_step_after=after_max_step,
         maximum_anchor_rotation_error=max_anchor_rotation_error,
         maximum_anchor_location_error=max_anchor_location_error,
+        accepted=accepted,
     )

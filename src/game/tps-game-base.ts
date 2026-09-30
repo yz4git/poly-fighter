@@ -7,6 +7,7 @@ import { CpuFunDirector, isAttackIntent, type CpuActorSnapshot, type CpuDecision
 import { FixedStepClock } from "./fixed";
 import { InputSystem } from "./input";
 import { PresentationAnimationController } from "./presentation-animation";
+import { motionEventsAtContact, sampleCombatMotionAtEvent } from "./combat-motion-timeline";
 import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
@@ -1330,9 +1331,18 @@ export class TpsFightGame {
     // foreground fighter instead of zooming toward the pair or hiding them inline.
     // Compact iPhone landscape still receives a small additional shoulder offset.
     const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
-    const attackMoveId = this.p1.state === "ATTACK" ? this.p1.currentMove?.id ?? null : null;
-    const authoredContactWeight = attackMoveId
-      ? Number(this.p1.visual.root.userData.combatMotionContactWeight ?? 0)
+    const attackMove = this.p1.state === "ATTACK" ? this.p1.currentMove : null;
+    const attackMoveId = attackMove?.id ?? null;
+    // Read the same deterministic 60 Hz contact envelope that drives authored
+    // clip sampling. The imported-model runtime stores its debug value on an
+    // internal host, not fighter.visual.root, so reading root.userData here
+    // made the camera factor stay at zero during real play.
+    const authoredContactWeight = attackMove
+      ? sampleCombatMotionAtEvent(
+        attackMove,
+        this.p1.moveTick,
+        motionEventsAtContact(0.5),
+      ).contactWeight
       : 0;
     const authoredContactReadabilityFactor = THREE.MathUtils.clamp(authoredContactWeight * closeFactor, 0, 1);
     const kickContactReadabilityFactor = authoredContactReadabilityFactor * (

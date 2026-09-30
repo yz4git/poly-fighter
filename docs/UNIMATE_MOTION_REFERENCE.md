@@ -113,3 +113,8 @@ Each built move now records:
 - the exact preserved support-chain bone names.
 
 Anchor error is expected to remain zero within Blender floating-point evaluation tolerance.
+
+
+## Generated asset validation
+
+The committed Motion Foundry GLBs and metrics are hash-coupled to the UniMate in-between module. After regeneration, the PR head is revalidated by the normal Core and WebGL audit suites so the shipping browser assets and source pipeline stay in sync.

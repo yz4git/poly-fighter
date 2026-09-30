@@ -85,6 +85,7 @@
       "mocapImpactNormalizedTime": 0.45098039215686275,
       "mocapActivityScore": 0.9351821253418497,
       "mocapSampleCount": 62,
+      "motionPriorSourceProfile": "CMU",
       "fps": 60,
       "startFrame": 1,
       "endFrame": 43,
@@ -92,14 +93,14 @@
       "impactFrame": 24,
       "strikeSide": "R",
       "supportSide": "L",
-      "strikeFootTravel": 1.807528616275472,
-      "strikeFootForwardReach": 1.4141541610006243,
-      "strikeFootOutwardReach": 0.4797008619643748,
-      "strikeFootVerticalRise": 1.018437385559082,
-      "strikeKneeExtensionDegrees": 144.72424994599655,
-      "strikeLegReachRatio": 0.9530525699637764,
-      "guardHandMaxChestDistance": 0.36182972333959224,
-      "guardHandMinChestHeight": 0.20573019981384277,
+      "strikeFootTravel": 1.8075283525810106,
+      "strikeFootForwardReach": 1.414154032478109,
+      "strikeFootOutwardReach": 0.4797008605673909,
+      "strikeFootVerticalRise": 1.018437147140503,
+      "strikeKneeExtensionDegrees": 144.7242362856182,
+      "strikeLegReachRatio": 0.9530523854662775,
+      "guardHandMaxChestDistance": 0.3618295444517598,
+      "guardHandMinChestHeight": 0.20573008060455322,
       "supportFootLockMaxDrift": 2.2073846086431986e-06,
       "supportFootLockMaxAngularDriftDegrees": 14.000009496504386,
       "supportFootPivotMaxDegrees": 14.000009496504386,
@@ -123,6 +124,30 @@
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
       "naturalnessPass": "REFERENCE_DRIVEN_V6",
       "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        7,
+        18,
+        24,
+        27,
+        35,
+        43
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_l",
+        "calf_l",
+        "foot_l"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.14233376960965108,
+      "unimateRotationAccelerationRmsAfter": 0.12742179140683826,
+      "unimateMaxRotationStepBefore": 2.01313361213743,
+      "unimateMaxRotationStepAfter": 1.8131706952184132,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
       "referencePoses": [
         {
           "label": "START",
@@ -181,7 +206,7 @@
         }
       ],
       "pipeline": [
-        "measured CMU mocap full-body prior: 135_04.bvh",
+        "CMU full-body prior: 135_04.bvh",
         "automatic kinetic-peak alignment to gameplay impact",
         "reference motion retained outside the contact window",
         "shoulder-orthogonal anatomical forward axis",
@@ -198,9 +223,10 @@
         "world-space L support-foot position lock",
         "controlled L support-foot pivot",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
-      "allFrameStrikeFootVerticalRiseMax": 1.174396276473999,
+      "allFrameStrikeFootVerticalRiseMax": 1.1688988208770752,
       "allFrameStrikeFootVerticalRiseMaxFrame": 28,
       "allFrameStrikeFootForwardReachMax": 1.4746131747961044,
       "allFrameStrikeFootForwardReachMaxFrame": 35
@@ -279,6 +305,7 @@
       "mocapImpactNormalizedTime": 0.45098039215686275,
       "mocapActivityScore": 0.943462228469075,
       "mocapSampleCount": 62,
+      "motionPriorSourceProfile": "CMU",
       "fps": 60,
       "startFrame": 1,
       "endFrame": 46,
@@ -317,6 +344,30 @@
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
       "naturalnessPass": "REFERENCE_DRIVEN_V6",
       "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        8,
+        19,
+        25,
+        29,
+        38,
+        46
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_r",
+        "calf_r",
+        "foot_r"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.19826788628694628,
+      "unimateRotationAccelerationRmsAfter": 0.18633329727264705,
+      "unimateMaxRotationStepBefore": 2.5432722733074145,
+      "unimateMaxRotationStepAfter": 2.4908031449396186,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
       "referencePoses": [
         {
           "label": "START",
@@ -375,7 +426,7 @@
         }
       ],
       "pipeline": [
-        "measured CMU mocap full-body prior: 135_07.bvh",
+        "CMU full-body prior: 135_07.bvh",
         "automatic kinetic-peak alignment to gameplay impact",
         "reference motion retained outside the contact window",
         "shoulder-orthogonal anatomical forward axis",
@@ -392,11 +443,12 @@
         "world-space R support-foot position lock",
         "controlled R support-foot pivot",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
       "allFrameStrikeFootVerticalRiseMax": 0.5696912407875061,
       "allFrameStrikeFootVerticalRiseMaxFrame": 19,
-      "allFrameStrikeFootForwardReachMax": 0.8317670524120331,
+      "allFrameStrikeFootForwardReachMax": 0.8310861960053444,
       "allFrameStrikeFootForwardReachMaxFrame": 22
     },
     {
@@ -468,6 +520,7 @@
       "mocapImpactNormalizedTime": 0.45098039215686275,
       "mocapActivityScore": 0.9474289867967928,
       "mocapSampleCount": 62,
+      "motionPriorSourceProfile": "CMU",
       "fps": 60,
       "startFrame": 1,
       "endFrame": 49,
@@ -475,12 +528,12 @@
       "impactFrame": 28,
       "strikeSide": "R",
       "supportSide": "L",
-      "strikeFootTravel": 1.4221232297126365,
-      "strikeFootForwardReach": 0.6475791558623314,
-      "strikeFootOutwardReach": 0.5309739857912064,
+      "strikeFootTravel": 1.4221232244735824,
+      "strikeFootForwardReach": 0.647579163312912,
+      "strikeFootOutwardReach": 0.530973955988884,
       "strikeFootVerticalRise": 1.149409532546997,
       "strikeKneeExtensionDegrees": 132.38015834205922,
-      "strikeLegReachRatio": 0.9150004454303096,
+      "strikeLegReachRatio": 0.915000463169096,
       "guardHandMaxChestDistance": 0.3330271664921503,
       "guardHandMinChestHeight": 0.24044060707092285,
       "supportFootLockMaxDrift": 0.004912735971203413,
@@ -506,6 +559,30 @@
       "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
       "naturalnessPass": "REFERENCE_DRIVEN_V6",
       "referencePoseMethod": "FULL_BODY_REFERENCE_V6",
+      "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+      "unimateInbetweenAnchors": [
+        1,
+        9,
+        21,
+        28,
+        32,
+        41,
+        49
+      ],
+      "unimateInbetweenSmoothedBones": 16,
+      "unimateInbetweenPreservedBones": [
+        "pelvis",
+        "thigh_l",
+        "calf_l",
+        "foot_l"
+      ],
+      "unimateRotationAccelerationRmsBefore": 0.27509249821816767,
+      "unimateRotationAccelerationRmsAfter": 0.2274479395502288,
+      "unimateMaxRotationStepBefore": 3.061690929958293,
+      "unimateMaxRotationStepAfter": 2.898705007091825,
+      "unimateMaximumAnchorRotationError": 0.0,
+      "unimateMaximumAnchorLocationError": 0.0,
+      "unimateInbetweenAccepted": true,
       "referencePoses": [
         {
           "label": "START",
@@ -564,7 +641,7 @@
         }
       ],
       "pipeline": [
-        "measured CMU mocap full-body prior: 135_11.bvh",
+        "CMU full-body prior: 135_11.bvh",
         "automatic kinetic-peak alignment to gameplay impact",
         "reference motion retained outside the contact window",
         "shoulder-orthogonal anatomical forward axis",
@@ -581,9 +658,10 @@
         "world-space L support-foot position lock",
         "controlled L support-foot pivot",
         "Blender native NLA visual-keying bake",
+        "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
         "glTF Action export"
       ],
-      "allFrameStrikeFootVerticalRiseMax": 1.309603214263916,
+      "allFrameStrikeFootVerticalRiseMax": 1.3536829948425293,
       "allFrameStrikeFootVerticalRiseMaxFrame": 17,
       "allFrameStrikeFootForwardReachMax": 0.682259313762188,
       "allFrameStrikeFootForwardReachMaxFrame": 32

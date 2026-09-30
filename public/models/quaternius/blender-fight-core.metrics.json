@@ -13,12 +13,38 @@
   "constrainedFootLockMaxDrift": 4.702727150338739e-07,
   "boneCount": 65,
   "meshCount": 2,
+  "motionPriorProvider": "UAL_AUTHORED_POWER_V1",
+  "unimateInbetweenVersion": "UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1",
+  "unimateInbetweenAnchors": [
+    1,
+    9,
+    24,
+    30,
+    34,
+    43,
+    52
+  ],
+  "unimateInbetweenSmoothedBones": 16,
+  "unimateInbetweenPreservedBones": [
+    "pelvis",
+    "thigh_l",
+    "calf_l",
+    "foot_l"
+  ],
+  "unimateRotationAccelerationRmsBefore": 0.1234864492702557,
+  "unimateRotationAccelerationRmsAfter": 0.11096091799728582,
+  "unimateMaxRotationStepBefore": 1.7447990095183712,
+  "unimateMaxRotationStepAfter": 1.6646196038180803,
+  "unimateMaximumAnchorRotationError": 0.0,
+  "unimateMaximumAnchorLocationError": 0.0,
+  "unimateInbetweenAccepted": true,
   "pipeline": [
     "Punch_Cross source body motion",
     "nonlinear whole-body retiming",
     "right-hand two-bone IK contact control",
     "world-space left support-foot IK lock",
     "Blender native NLA visual-keying bake",
+    "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
     "glTF Action export"
   ]
 }

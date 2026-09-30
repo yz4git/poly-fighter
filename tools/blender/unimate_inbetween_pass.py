@@ -196,12 +196,12 @@ def _blend_pose(
     envelope = math.sin(math.pi * u) ** 2
     weight = max(0.0, min(1.0, strength * envelope))
 
-    rotation_target = left.rotation.slerp(right.rotation, temporal).normalized()
-    rotation = source.rotation.slerp(rotation_target, weight).normalized()
+    rotation_target = left.rotation.copy().slerp(right.rotation, temporal).normalized()
+    rotation = source.rotation.copy().slerp(rotation_target, weight).normalized()
 
     location = source.location.copy()
     if allow_location:
-        location_target = left.location.lerp(right.location, temporal)
+        location_target = left.location.copy().lerp(right.location, temporal)
         location.lerp(location_target, weight * 0.72)
 
     return PoseSample(location=location, rotation=rotation)

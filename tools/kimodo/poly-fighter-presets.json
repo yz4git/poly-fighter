@@ -1,5 +1,5 @@
 {
-  "version": "POLY_FIGHTER_KIMODO_PRESETS_V1",
+  "version": "POLY_FIGHTER_KIMODO_PRESETS_V2_CONSTRAINED",
   "model": "Kimodo-SOMA-RP-v1.1",
   "samplesPerMove": 4,
   "moves": {
@@ -9,7 +9,23 @@
       "duration": 1.1,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [1401, 1402, 1403, 1404]
+      "seeds": [
+        1401,
+        1402,
+        1403,
+        1404
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5476190476190477,
+        "maxRootTravelM": 0.12,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 4,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        11401,
+        11402
+      ]
     },
     "lowKick": {
       "action": "BF_LowKick_L",
@@ -17,7 +33,23 @@
       "duration": 1.15,
       "strikeSide": "L",
       "supportSide": "R",
-      "seeds": [2401, 2402, 2403, 2404]
+      "seeds": [
+        2401,
+        2402,
+        2403,
+        2404
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5333333333333333,
+        "maxRootTravelM": 0.1,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 4,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        12401,
+        12402
+      ]
     },
     "risingKick": {
       "action": "BF_RisingKick_R",
@@ -25,7 +57,28 @@
       "duration": 1.2,
       "strikeSide": "R",
       "supportSide": "L",
-      "seeds": [3401, 3402, 3403, 3404]
+      "seeds": [
+        3401,
+        3402,
+        3403,
+        3404
+      ],
+      "constraintProfile": {
+        "contactPhase": 0.5625,
+        "maxRootTravelM": 0.11,
+        "supportWindowFrames": 2,
+        "impactSearchFrames": 5,
+        "lockHeading": true
+      },
+      "refineSeeds": [
+        13401,
+        13402
+      ]
     }
+  },
+  "refinement": {
+    "textWeight": 1.8,
+    "constraintWeight": 2.8,
+    "diffusionSteps": 140
   }
 }

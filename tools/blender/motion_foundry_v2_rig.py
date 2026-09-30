@@ -28,6 +28,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
+import unimate_inbetween_pass as unimate_inbetween
+
 FPS = 60
 PHASE_COUNT = 7
 PhaseValues = Tuple[float, float, float, float, float, float, float]
@@ -577,6 +579,19 @@ def build_strike_action(
     final_action = v1.bake_visual_action(scene, armature, constrained)
     final_action.use_fake_user = True
     v1.remove_controls([*limb_controls, *master_controls])
+    armature.animation_data.action = final_action
+
+    unimate_metrics = unimate_inbetween.apply_replacement_inbetween(
+        scene,
+        armature,
+        final_action,
+        anchor_frames=spec.phases,
+        impact_frame=spec.impact_frame,
+        precontact_frame=spec.precontact_frame,
+        overtravel_frame=spec.overtravel_frame,
+        strike_suffix=spec.strike_suffix,
+        support_suffix=spec.support_suffix,
+    )
 
     baked_hand = strike_hand_travel(scene, armature, spec)
     baked_foot = support_foot_drift(scene, armature, spec)
@@ -603,6 +618,7 @@ def build_strike_action(
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "motionPriorProvider": prior_meta.provider if prior_meta is not None else "UAL_AUTHORED_STRIKE_V2",
         "naturalnessPass": "KIMODO_PRIOR_V1" if prior_meta is not None else "AUTHORED_SOURCE_V2",
+        **unimate_metrics.as_dict(),
         **(prior_meta.as_dict() if prior_meta is not None else {}),
         "referenceImpactNormalizedTime": prior_meta.impact_normalized_time if prior_meta is not None else None,
         "referenceTimeWarpKnots": [list(knot) for knot in spec.source_knots],
@@ -619,6 +635,7 @@ def build_strike_action(
             f"world-space {spec.support_side.upper()} support-foot position IK lock",
             f"world-space {spec.support_side.upper()} support-foot orientation lock",
             "Blender native NLA visual-keying bake",
+            "UniMate-inspired replacement in-between cleanup with immutable combat anchors",
             "glTF Action export",
         ],
     }

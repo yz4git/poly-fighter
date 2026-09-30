@@ -28,6 +28,44 @@ def _names_for(joint_count: int) -> list[str]:
     return list(skeleton.bone_order_names)
 
 
+def _rotation_smoothness(local_rot_mats: np.ndarray, names: list[str], preferred: tuple[str, ...]) -> dict:
+    """UniMate-inspired geodesic rotation / velocity smoothness metrics."""
+    if local_rot_mats.ndim == 5 and local_rot_mats.shape[0] == 1:
+        local_rot_mats = local_rot_mats[0]
+    if local_rot_mats.ndim != 4 or local_rot_mats.shape[-2:] != (3, 3):
+        return {
+            "rotationVelocityRms": 0.0,
+            "rotationAccelerationRms": 0.0,
+            "maxRotationStepRad": 0.0,
+        }
+
+    name_to_index = {name: i for i, name in enumerate(names)}
+    indices = [name_to_index[name] for name in preferred if name in name_to_index]
+    if not indices:
+        indices = list(range(min(local_rot_mats.shape[1], len(names))))
+
+    rotations = local_rot_mats[:, indices]
+    if len(rotations) < 2:
+        return {
+            "rotationVelocityRms": 0.0,
+            "rotationAccelerationRms": 0.0,
+            "maxRotationStepRad": 0.0,
+        }
+
+    rel = np.swapaxes(rotations[:-1], -1, -2) @ rotations[1:]
+    trace = np.trace(rel, axis1=-2, axis2=-1)
+    cos_angle = np.clip((trace - 1.0) * 0.5, -1.0, 1.0)
+    angular_step = np.arccos(cos_angle)
+    velocity_rms = float(np.sqrt(np.mean(np.square(angular_step))))
+    acceleration = np.diff(angular_step, axis=0)
+    acceleration_rms = float(np.sqrt(np.mean(np.square(acceleration)))) if acceleration.size else 0.0
+    return {
+        "rotationVelocityRms": velocity_rms,
+        "rotationAccelerationRms": acceleration_rms,
+        "maxRotationStepRad": float(np.max(angular_step)),
+    }
+
+
 def _contact_channel(side: str, channels: int) -> slice:
     # somaskel30: [L heel, L toe, R heel, R toe]
     # somaskel77: [L heel, L toe, L toe-end, R heel, R toe, R toe-end]
@@ -43,6 +81,16 @@ def score_candidate(path: Path, strike_side: str, support_side: str, contact_pha
             raise ValueError(f"{path}: expected posed_joints [T,J,3], got {joints.shape}")
         names = _names_for(joints.shape[1])
         index = {name: i for i, name in enumerate(names)}
+        rotation_metrics = _rotation_smoothness(
+            np.asarray(data["local_rot_mats"]) if "local_rot_mats" in data else np.empty((0,)),
+            names,
+            (
+                "Hips", "Spine1", "Spine2", "Chest",
+                "LeftLeg", "LeftShin", "LeftFoot",
+                "RightLeg", "RightShin", "RightFoot",
+                "LeftUpLeg", "RightUpLeg",
+            ),
+        )
         for required in ("Hips", "LeftFoot", "RightFoot"):
             if required not in index:
                 raise ValueError(f"{path}: missing SOMA joint {required}")
@@ -93,6 +141,8 @@ def score_candidate(path: Path, strike_side: str, support_side: str, contact_pha
             - root_travel * 0.7
             - max(0.0, root_peak - 0.45) * 1.2
             - timing_error * 0.08
+            - rotation_metrics["rotationAccelerationRms"] * 1.35
+            - max(0.0, rotation_metrics["maxRotationStepRad"] - 0.42) * 0.55
         )
         return {
             "npz": str(path),
@@ -109,6 +159,7 @@ def score_candidate(path: Path, strike_side: str, support_side: str, contact_pha
             "strikeContactNearPeak": strike_contact,
             "rootEndTravel": root_travel,
             "rootPeakTravel": root_peak,
+            **rotation_metrics,
         }
 
 

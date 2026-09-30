@@ -1,0 +1,61 @@
+{
+  "version": "POLY_FIGHTER_KIMODO_STRIKE_PRESETS_V1",
+  "model": "Kimodo-SOMA-RP-v1.1",
+  "samplesPerMove": 4,
+  "moves": {
+    "jab": {
+      "action": "BF_Jab_L",
+      "builder": "shared",
+      "prompt": "A trained kickboxer starts in a compact fighting guard and throws one very fast left jab straight toward an opponent's face. The left shoulder and hip contribute slightly, the right hand stays protecting the jaw, both feet remain planted, the fist snaps back immediately, and the fighter returns to the same guard. No step, no second punch.",
+      "duration": 0.8,
+      "strikeSide": "L",
+      "supportSide": "R",
+      "seeds": [4101, 4102, 4103, 4104]
+    },
+    "cross": {
+      "action": "BF_Cross_R",
+      "builder": "cross",
+      "prompt": "A trained kickboxer starts in a compact fighting guard and throws one crisp right straight cross toward an opponent's face. The rear hip and shoulder rotate through the strike, the left hand stays at the cheek, the left foot remains stable while the rear side drives, the right fist follows through briefly then returns to guard. No step, no combination.",
+      "duration": 0.95,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [4201, 4202, 4203, 4204]
+    },
+    "bodyBlow": {
+      "action": "BF_BodyBlow_L",
+      "builder": "shared",
+      "prompt": "A trained boxer starts in a compact fighting guard, lowers the center of mass without folding at the waist, and throws one powerful left body straight into an opponent's ribs. The hips and torso drive forward, the right hand protects the face, both feet stay grounded, then the left hand retracts and the fighter rises back to guard. No extra punch.",
+      "duration": 1.0,
+      "strikeSide": "L",
+      "supportSide": "R",
+      "seeds": [4301, 4302, 4303, 4304]
+    },
+    "backfist": {
+      "action": "BF_Backfist_R",
+      "builder": "shared",
+      "prompt": "A trained martial artist starts in a compact fighting guard and performs one sharp right backfist across the opponent's face. The torso rotates laterally, the elbow leads a clean sweeping arc, the left hand remains defensive, the feet stay grounded, and the right arm recoils directly back to guard. No spin, no second strike.",
+      "duration": 0.95,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [4401, 4402, 4403, 4404]
+    },
+    "power": {
+      "action": "BF_Power_R",
+      "builder": "power",
+      "prompt": "A powerful fighter starts in guard, loads the hips and rear shoulder, then throws one heavy right overdrive straight punch through the opponent. The whole kinetic chain drives from the legs through the pelvis and torso into the right fist, the left hand stays defensive, the support foot remains grounded, there is a brief follow-through, then recovery to guard. No step, no second punch.",
+      "duration": 1.15,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [4501, 4502, 4503, 4504]
+    },
+    "counter": {
+      "action": "BF_Counter_R",
+      "builder": "shared",
+      "prompt": "A trained fighter starts in guard, makes one compact defensive slip to evade an incoming straight punch, and immediately fires one fast right counter straight down the center. The slip is small, the feet remain underneath the body, the left hand protects the face, and the fighter returns to guard after the counter. No extra attack.",
+      "duration": 0.9,
+      "strikeSide": "R",
+      "supportSide": "L",
+      "seeds": [4601, 4602, 4603, 4604]
+    }
+  }
+}

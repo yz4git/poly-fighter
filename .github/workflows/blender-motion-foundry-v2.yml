@@ -7,6 +7,7 @@ on:
     paths:
       - tools/blender/build-fight-motion-foundry-v1.py
       - tools/blender/motion_foundry_v2_rig.py
+      - tools/blender/unimate_inbetween_pass.py
       - tools/blender/build-fight-motion-foundry-v2-cross.py
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - scripts/apply-blender-motion-foundry-v2.mjs
@@ -44,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          script_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
+          script_hash="$(cat tools/blender/build-fight-motion-foundry-v1.py tools/blender/motion_foundry_v2_rig.py tools/blender/unimate_inbetween_pass.py tools/blender/build-fight-motion-foundry-v2-cross.py | sha256sum | awk '{print $1}')"
           echo "script_hash=$script_hash" >> "$GITHUB_OUTPUT"
           if [ -s public/models/quaternius/blender-cross-core.glb ] \
             && [ -s public/models/quaternius/blender-cross-core.generator.sha256 ] \
@@ -108,6 +109,9 @@ jobs:
           assert m['pelvisTravel'] > 0.005, m
           assert m['torsoTwistDegrees'] > 2.0, m
           assert m['boneCount'] >= 40, m
+          assert m['unimateInbetweenVersion'] == 'UNIMATE_INSPIRED_REPLACEMENT_INBETWEEN_V1', m
+          assert m['unimateMaximumAnchorRotationError'] < 1e-5, m
+          assert m['unimateMaximumAnchorLocationError'] < 1e-5, m
           print('BLENDER_MOTION_FOUNDRY_V2_CROSS_METRICS_OK', m)
           PY
 

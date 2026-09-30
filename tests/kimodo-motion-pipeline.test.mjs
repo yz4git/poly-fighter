@@ -36,6 +36,9 @@ test("Poly Fighter Kimodo authoring uses generated SOMA channels for candidate s
   assert.match(selector, /foot_contacts/);
   assert.match(selector, /smooth_root_pos/);
   assert.match(selector, /supportContactNearPeak/);
+  assert.match(selector, /rotationVelocityRms/);
+  assert.match(selector, /rotationAccelerationRms/);
+  assert.match(selector, /maxRotationStepRad/);
 });
 
 
@@ -58,6 +61,9 @@ test("Kimodo hand-strike generation feeds all six combat strikes into existing F
   assert.match(selector, /RightHand/);
   assert.match(selector, /supportContactNearPeak/);
   assert.match(selector, /guardHandExcursion/);
+  assert.match(selector, /rotationVelocityRms/);
+  assert.match(selector, /rotationAccelerationRms/);
+  assert.match(selector, /maxRotationStepRad/);
   assert.match(buildSelected, /--kimodo-jab/);
   assert.match(buildSelected, /--kimodo-counter/);
   assert.match(buildSelected, /--kimodo-prior "\$CROSS"/);

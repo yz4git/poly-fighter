@@ -63,7 +63,7 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--kimodo-prior")
+    parser.add_argument("--motion-prior", "--kimodo-prior", dest="motion_prior")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -81,7 +81,7 @@ def main() -> None:
         scene,
         armature,
         CROSS_SPEC,
-        prior_path=args.kimodo_prior,
+        prior_path=args.motion_prior,
     )
     rig.export_single_action(
         scene,

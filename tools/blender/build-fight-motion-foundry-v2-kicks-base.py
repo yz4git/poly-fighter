@@ -1449,6 +1449,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
     parser.add_argument("--reference-source")
+    parser.add_argument("--motion-prior-front")
+    parser.add_argument("--motion-prior-low")
+    parser.add_argument("--motion-prior-rising")
     parser.add_argument("--mocap-front")
     parser.add_argument("--mocap-low")
     parser.add_argument("--mocap-rising")
@@ -1465,13 +1468,13 @@ def main() -> None:
         imported_reference_actions = import_reference_actions(args.reference_source)
         print("MOTION_FOUNDRY_V6_REFERENCE_ACTIONS", imported_reference_actions)
     axes = body_axes(scene, armature)
-    # Kimodo SOMA BVHs use the same prior slot as legacy CMU data. Explicit
-    # Kimodo inputs take precedence so generated candidates can be reviewed
-    # without changing the stable measured-mocap fallback workflow.
+    # One prior slot accepts UniMate UAL, Kimodo SOMA or legacy CMU BVH.
+    # Generic motion-prior flags take precedence; legacy flags remain aliases
+    # for existing authoring workflows.
     mocap_paths = {
-        "BF_FrontKick_R": args.kimodo_front or args.mocap_front,
-        "BF_LowKick_L": args.kimodo_low or args.mocap_low,
-        "BF_RisingKick_R": args.kimodo_rising or args.mocap_rising,
+        "BF_FrontKick_R": args.motion_prior_front or args.kimodo_front or args.mocap_front,
+        "BF_LowKick_L": args.motion_prior_low or args.kimodo_low or args.mocap_low,
+        "BF_RisingKick_R": args.motion_prior_rising or args.kimodo_rising or args.mocap_rising,
     }
     actions, moves = [], []
     for spec in KICK_SPECS:

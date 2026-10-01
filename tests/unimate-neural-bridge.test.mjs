@@ -105,7 +105,8 @@ test("neural promotion requires both motion smoothness improvement and combat-se
   assert.match(compare, /meaningful_improvement/);
   assert.match(compare, /no_regression/);
 
-  assert.match(evaluate, /impactFrame_unchanged/);
+  assert.match(evaluate, /"fps", "startFrame", "endFrame", "impactFrame"/);
+  assert.match(evaluate, /f"\{key\}_unchanged"/);
   assert.match(evaluate, /strike_reach_retained/);
   assert.match(evaluate, /support_foot_drift_bounded/);
   assert.match(evaluate, /strike_knee_anatomical/);

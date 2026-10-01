@@ -113,3 +113,81 @@ Each built move now records:
 - the exact preserved support-chain bone names.
 
 Anchor error is expected to remain zero within Blender floating-point evaluation tolerance.
+
+
+## Optional neural in-between authoring bridge
+
+POLY FIGHTER can now use the actual UniMate inference code as an **offline authoring accelerator** when a compatible GPU environment and released UniMate checkpoint are available. The browser/iPhone build still has no PyTorch, UniMate, T5, CUDA or checkpoint dependency.
+
+The bridge is intentionally two-tiered:
+
+1. **Neural path available** — run official UniMate custom-asset preprocessing and replacement-style in-betweening, recover the generated feature motion onto the canonical UAL character, export it to UAL BVH, then feed that BVH back through Motion Foundry.
+2. **Neural path unavailable** — record `deterministic-fallback` and keep the current `unimate_inbetween_pass.py` shipping path. Existing public GLB packs remain unchanged.
+
+### Single move
+
+Set `UNIMATE_ROOT` to the official `Friedrich-M/UniMate` checkout and `UNIMATE_EXP_DIR` to a released/trained experiment directory containing `config.json`, `dataset_stats.npy` and `checkpoints/`.
+
+Example:
+
+```bash
+UNIMATE_ROOT=/path/to/UniMate \
+UNIMATE_EXP_DIR=/path/to/unimate-exp \
+SOURCE_GLB=public/models/quaternius/blender-cross-core.glb \
+ACTION_NAME=BF_Cross_R \
+KEEP_FRAMES_60=1,6,16,21,24,33,42 \
+PROMPT="A trained kickboxer throws one crisp right cross and returns to guard." \
+bash tools/unimate/run-poly-fighter-neural-inbetween.sh
+```
+
+The runner:
+
+- copies the source to a hyphen-free `polyfighter.glb` name because UniMate's multi-topology loader derives `object_type` from the filename prefix,
+- uses the official `data_process/scripts/run_preprocess_char.sh` custom-asset path with UAL `thigh_r/thigh_l` facing references,
+- preserves the checkpoint's architecture and training normalization statistics while redirecting only the Objaverse-style feature path to the preprocessed fighter,
+- converts Motion Foundry's 60 Hz / one-based combat anchors into UniMate's 30 Hz / zero-based feature slots,
+- runs `unimate.inference.sample --inbetween --keep_frames ...`,
+- uses the official `run_animate_motion.sh` to recover the generated `.npy` features onto the canonical fighter,
+- exports the resulting animated UAL GLB as BVH through `tools/unimate/export-animated-ual-bvh.py`.
+
+The BVH keeps UAL names and is identified by Motion Foundry as provider `UNIMATE_UAL_BVH_REPLACEMENT_V1`.
+
+### Nine-move batch
+
+`tools/unimate/poly-fighter-neural-inbetween-presets.json` contains the seven immutable combat phase anchors and prompts for:
+
+- Jab
+- Cross
+- Body Blow
+- Backfist
+- Power
+- Counter
+- Front Kick
+- Low Kick
+- Rising Kick
+
+Generate all optional priors with:
+
+```bash
+UNIMATE_ROOT=/path/to/UniMate \
+UNIMATE_EXP_DIR=/path/to/unimate-exp \
+bash tools/unimate/generate-poly-fighter-neural-priors.sh
+```
+
+Each move receives its own `result.json`. A combined manifest records `neuralCount` and `fallbackCount`.
+
+When a full UAL Foundry source is also available, route the generated BVHs back through the same production builders:
+
+```bash
+bash tools/unimate/build-neural-priors-through-foundry.sh \
+  artifacts/unimate-neural-priors/manifest.json \
+  .tmp-quaternius/ual1-full.glb
+```
+
+Provider-neutral `--motion-prior-*` flags accept UniMate UAL, Kimodo SOMA or legacy CMU BVH. The older `--kimodo-*` and `--mocap-*` flags remain supported for existing workflows.
+
+Safety against quality regression is group-aware. Shared strikes are rebuilt only when Jab, Body Blow and Backfist neural priors are all present; Counter is optional. The kick pack is rebuilt only when all three kick priors are available. Otherwise the corresponding shipping pack is explicitly left unchanged.
+
+### Why this remains deterministic in game
+
+UniMate is used only to propose better frames **before shipping**. The result is baked into ordinary GLB animation clips. During gameplay the same 60 Hz gameplay tick, authored contact timeline, support-foot rules, UniMate-inspired runtime replacement masks and Kimodo-inspired inertialization remain authoritative. Neural inference never decides hit timing, movement, hurtboxes or hitboxes at runtime.

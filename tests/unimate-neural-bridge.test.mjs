@@ -35,7 +35,7 @@ test("UniMate animated GLB exporter preserves the UAL vocabulary for the Foundry
   assert.match(adapter, /UNIMATE_UAL_TO_UAL/);
   assert.match(adapter, /return "UNIMATE_UAL"/);
   assert.match(adapter, /UNIMATE_UAL_BVH_REPLACEMENT_V1/);
-  assert.match(adapter, /"pelvis":/);
+  assert.match(adapter, /\("pelvis", "pelvis"\)/);
   assert.match(adapter, /"left_hand": "hand_l"/);
   assert.match(adapter, /"right_foot": "foot_r"/);
 });

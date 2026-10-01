@@ -617,7 +617,15 @@ def build_strike_action(
         "meshCount": len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]),
         "sharedRig": "MOTION_FOUNDRY_V2_SHARED_STRIKE_RIG",
         "motionPriorProvider": prior_meta.provider if prior_meta is not None else "UAL_AUTHORED_STRIKE_V2",
-        "naturalnessPass": "KIMODO_PRIOR_V1" if prior_meta is not None else "AUTHORED_SOURCE_V2",
+        "naturalnessPass": (
+            "UNIMATE_NEURAL_REPLACEMENT_PRIOR_V1"
+            if prior_meta is not None and prior_meta.source_profile == "UNIMATE_UAL"
+            else "KIMODO_PRIOR_V1"
+            if prior_meta is not None and prior_meta.source_profile == "KIMODO_SOMA"
+            else "MOCAP_PRIOR_V6"
+            if prior_meta is not None
+            else "AUTHORED_SOURCE_V2"
+        ),
         **unimate_metrics.as_dict(),
         **(prior_meta.as_dict() if prior_meta is not None else {}),
         "referenceImpactNormalizedTime": prior_meta.impact_normalized_time if prior_meta is not None else None,

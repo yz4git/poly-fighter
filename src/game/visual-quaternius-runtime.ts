@@ -887,6 +887,26 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
   const motionDelta = advance(runtime, timeSeconds, fighter.hitStop > 0);
   synchronizeMotion(runtime, fighter);
+  // Mirror transition telemetry onto the public fighter root so WebGL playtest
+  // audits can verify the exact on-screen handoff instead of reading a stale
+  // compatibility layer. The authoritative values still live on runtime.host.
+  fighter.visual.root.userData.unimateMotionExpansionOverlap = Number(
+    runtime.host.userData.unimateMotionExpansionOverlap ?? 0,
+  );
+  fighter.visual.root.userData.kimodoInertialTransitionActive = Boolean(
+    runtime.host.userData.kimodoInertialTransitionActive,
+  );
+  fighter.visual.root.userData.kimodoInertialTransitionWeight = Number(
+    runtime.host.userData.kimodoInertialTransitionWeight ?? 0,
+  );
+  fighter.visual.root.userData.kimodoInertialReplacementPinnedBones = Number(
+    runtime.host.userData.kimodoInertialReplacementPinnedBones ?? 0,
+  );
+  fighter.visual.root.userData.kimodoInertialMinimumBoneScale = Number(
+    runtime.host.userData.kimodoInertialMinimumBoneScale ?? 1,
+  );
+  fighter.visual.root.userData.unimateReplacementMode =
+    runtime.host.userData.unimateReplacementMode ?? "NONE";
   // Kimodo-inspired post conditioning is presentation-only: it smooths the
   // root/body channel and uses inferred foot contacts to suppress skating while
   // leaving authored strike end-effectors and deterministic gameplay untouched.

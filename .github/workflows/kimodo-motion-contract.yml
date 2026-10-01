@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - tools/kimodo/**
+      - tools/unimate/**
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
       - tools/blender/motion_foundry_v2_rig.py
@@ -17,6 +18,7 @@ on:
       - src/game/unimate-motion-replacement.ts
       - tests/unimate-motion-replacement.test.mjs
       - tests/unimate-motion-inbetween.test.mjs
+      - tests/unimate-neural-bridge.test.mjs
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -27,6 +29,7 @@ on:
     branches: [main]
     paths:
       - tools/kimodo/**
+      - tools/unimate/**
       - tools/blender/motion_foundry_v6_mocap.py
       - tools/blender/build-fight-motion-foundry-v2-kicks-base.py
       - tools/blender/motion_foundry_v2_rig.py
@@ -39,6 +42,7 @@ on:
       - src/game/unimate-motion-replacement.ts
       - tests/unimate-motion-replacement.test.mjs
       - tests/unimate-motion-inbetween.test.mjs
+      - tests/unimate-neural-bridge.test.mjs
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -77,15 +81,20 @@ jobs:
             tools/blender/build-fight-motion-foundry-v2-strikes.py \
             tools/kimodo/select-poly-fighter-kick.py \
             tools/kimodo/select-poly-fighter-strike.py \
-            tools/kimodo/build-poly-fighter-constraints.py
+            tools/kimodo/build-poly-fighter-constraints.py \
+            tools/unimate/export-animated-ual-bvh.py
       - name: Validate Kimodo runner shell
         run: |
           bash -n tools/kimodo/generate-poly-fighter-kicks.sh
           bash -n tools/kimodo/generate-poly-fighter-strikes.sh
           bash -n tools/kimodo/build-selected-strikes.sh
+          bash -n tools/unimate/run-poly-fighter-neural-inbetween.sh
+          bash -n tools/unimate/generate-poly-fighter-neural-priors.sh
+          bash -n tools/unimate/build-neural-priors-through-foundry.sh
       - name: Validate provider contract
         run: |
           node --test tests/kimodo-motion-pipeline.test.mjs
           node --test tests/kimodo-motion-inertialization.test.mjs
           node --test tests/unimate-motion-replacement.test.mjs
           node --test tests/unimate-motion-inbetween.test.mjs
+          node --test tests/unimate-neural-bridge.test.mjs

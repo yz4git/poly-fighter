@@ -65,6 +65,13 @@ test("batch authoring keeps shipping packs unchanged when a complete neural set 
   assert.match(generate, /neuralCount/);
   assert.match(generate, /fallbackCount/);
   assert.match(generate, /run-poly-fighter-neural-inbetween\.sh/);
+  assert.match(generate, /while IFS=\$'\\t' read -r move action source_action source keep prompt; do/);
+  assert.match(generate, /SOURCE_ACTION_NAME="\$source_action"/);
+  assert.match(generate, /POLY_FIGHTER_UNIMATE_NEURAL_PRIOR_MANIFEST_V2_SOURCE_TARGET/);
+  assert.equal(
+    (generate.match(/python3 - "\$PRESETS" "\$OUT" "\$OUT\/manifest\.json"/g) ?? []).length,
+    1,
+  );
   assert.match(build, /Shared strikes: neural set incomplete; leave shipping pack unchanged/);
   assert.match(build, /Kicks: neural set incomplete; leave measured V6 shipping pack unchanged/);
   assert.match(build, /--motion-prior-jab/);

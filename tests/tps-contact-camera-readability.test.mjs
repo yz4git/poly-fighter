@@ -8,8 +8,9 @@ test("TPS contact camera opens the authored strike silhouette without moving gam
   assert.match(source, /TPS_CAMERA_CONTACT_BACK_BONUS = 0\.18/);
   assert.match(source, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
   assert.match(source, /TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0\.20/);
-  assert.match(source, /TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0\.72/);
-  assert.match(source, /TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0\.14/);
+  assert.match(source, /TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0\.98/);
+  assert.match(source, /TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0\.24/);
+  assert.match(source, /TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0\.10/);
   assert.match(source, /TPS_CAMERA_LOW_KICK_TARGET_DROP = 0\.16/);
   assert.match(source, /sampleCombatMotionAtEvent/);
   assert.match(source, /motionEventsAtContact/);

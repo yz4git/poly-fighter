@@ -82,7 +82,9 @@ jobs:
             tools/kimodo/select-poly-fighter-kick.py \
             tools/kimodo/select-poly-fighter-strike.py \
             tools/kimodo/build-poly-fighter-constraints.py \
-            tools/unimate/export-animated-ual-bvh.py
+            tools/unimate/export-animated-ual-bvh.py \
+            tools/unimate/compare-motion-quality.py \
+            tools/unimate/evaluate-neural-foundry.py
       - name: Validate Kimodo runner shell
         run: |
           bash -n tools/kimodo/generate-poly-fighter-kicks.sh
@@ -91,6 +93,8 @@ jobs:
           bash -n tools/unimate/run-poly-fighter-neural-inbetween.sh
           bash -n tools/unimate/generate-poly-fighter-neural-priors.sh
           bash -n tools/unimate/build-neural-priors-through-foundry.sh
+          bash -n tools/unimate/gate-neural-foundry.sh
+          bash -n tools/unimate/promote-neural-foundry.sh
       - name: Validate provider contract
         run: |
           node --test tests/kimodo-motion-pipeline.test.mjs

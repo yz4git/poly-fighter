@@ -26,7 +26,7 @@ type KickPairSpacingState = {
 };
 
 const RETREAT_BY_MOVE: Readonly<Record<string, number>> = {
-  kick: 0.060,
+  kick: 0.115,
   risingKick: 0.050,
   dashKick: 0.045,
 };
@@ -216,7 +216,7 @@ function applyKickPairSpacing(
 
   // At close TPS range the authored kick hips can visually arrive before the
   // boot, making the two fighters read as one merged silhouette. Move only the
-  // imported rendered body a few centimetres away from the opponent, then solve
+  // imported rendered body away from the opponent by a move-specific amount, then solve
   // both legs back to their exact incoming world-space boot targets. Grounding,
   // strike reach and contact lanes therefore remain intact while the torso/hip
   // gap becomes readable. FighterRuntime and hitboxes are never moved.

@@ -58,7 +58,7 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--kimodo-prior")
+    parser.add_argument("--motion-prior", "--kimodo-prior", dest="motion_prior")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -516,7 +516,7 @@ def main() -> None:
     scene.render.fps = FPS
 
     prior_meta = None
-    if args.kimodo_prior:
+    if args.motion_prior:
         import motion_foundry_v6_mocap as motion_prior
         from types import SimpleNamespace
 
@@ -524,7 +524,7 @@ def main() -> None:
             scene,
             armature,
             SimpleNamespace(action_name=ACTION_NAME, strike_side="r"),
-            args.kimodo_prior,
+            args.motion_prior,
             motion_prior._horizontal_basis(armature),
             event_kind="strike",
         )

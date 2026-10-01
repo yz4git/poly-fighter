@@ -40,14 +40,25 @@ def common_checks(base: dict[str, Any], cand: dict[str, Any], quality: dict[str,
         cand.get("motionPriorProvider"),
         "UNIMATE_UAL_BVH_REPLACEMENT_V1",
     )
-    if "unimateInbetweenAccepted" in cand:
-        add(checks, "deterministic_cleanup_accepted", bool(cand["unimateInbetweenAccepted"]), cand["unimateInbetweenAccepted"], True)
-    if "unimateMaximumAnchorRotationError" in cand:
-        value = number(cand, "unimateMaximumAnchorRotationError", float("inf"))
-        add(checks, "anchor_rotation_exact", value is not None and value <= 1e-4, value, "<=0.0001 rad")
-    if "unimateMaximumAnchorLocationError" in cand:
-        value = number(cand, "unimateMaximumAnchorLocationError", float("inf"))
-        add(checks, "anchor_location_exact", value is not None and value <= 1e-4, value, "<=0.0001")
+    cleanup = cand.get("unimateInbetweenAccepted")
+    add(checks, "deterministic_cleanup_accepted", cleanup is True, cleanup, True)
+
+    rotation_error = number(cand, "unimateMaximumAnchorRotationError", float("inf"))
+    add(
+        checks,
+        "anchor_rotation_exact",
+        rotation_error is not None and rotation_error <= 1e-4,
+        rotation_error,
+        "<=0.0001 rad",
+    )
+    location_error = number(cand, "unimateMaximumAnchorLocationError", float("inf"))
+    add(
+        checks,
+        "anchor_location_exact",
+        location_error is not None and location_error <= 1e-4,
+        location_error,
+        "<=0.0001",
+    )
     add(checks, "glb_rotation_quality_gate", bool(quality.get("accepted")), quality.get("ratios"), "accepted=true")
     return checks
 
@@ -85,7 +96,7 @@ def kick_checks(base: dict[str, Any], cand: dict[str, Any]) -> list[dict[str, An
 
     drift = number(cand, "supportFootLockMaxDrift", float("inf"))
     base_drift = number(base, "supportFootLockMaxDrift", 0.0) or 0.0
-    drift_limit = max(0.012, base_drift * 2.0)
+    drift_limit = max(0.0002, base_drift * 2.0)
     add(checks, "support_foot_drift_bounded", drift is not None and drift <= drift_limit, drift, f"<={drift_limit:.6f}")
 
     knee = number(cand, "strikeKneeExtensionDegrees", -1.0)
@@ -103,7 +114,9 @@ def kick_checks(base: dict[str, Any], cand: dict[str, Any]) -> list[dict[str, An
     add(checks, "support_knee_plane_stable", support_plane is not None and support_plane >= 0.05, support_plane, ">=0.05")
 
     pivot = abs(number(cand, "supportFootPivotMaxDegrees", 0.0) or 0.0)
-    add(checks, "support_pivot_bounded", pivot <= 55.0, pivot, "<=55 deg")
+    base_pivot = abs(number(base, "supportFootPivotMaxDegrees", 0.0) or 0.0)
+    pivot_limit = max(8.0, base_pivot + 8.0)
+    add(checks, "support_pivot_bounded", pivot <= pivot_limit, pivot, f"<={pivot_limit:.3f} deg")
     return checks
 
 

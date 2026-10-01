@@ -135,23 +135,75 @@ CLIP_ID="${CLIP_STEM#*-}"
 
 # Keep model architecture/checkpoint settings identical to training; redirect
 # only the objaverse-style feature source to the one preprocessed fighter.
-python3 - "$UNIMATE_EXP_DIR/config.json" "$EXP/config.json" "$PREP" "$UNIMATE_DEVICE" <<'PY'
+python3 - "$UNIMATE_EXP_DIR/config.json" "$EXP/config.json" "$PREP" "$UNIMATE_DEVICE" "$COND" "$WORK/unimate-compatibility.json" <<'PY' || write_fallback "UAL skeleton exceeds the checkpoint's safe topology capacity"
 import json, sys
 from pathlib import Path
-src, out, feature_dir, device = map(Path, sys.argv[1:4])
+import numpy as np
+
+src = Path(sys.argv[1])
+out = Path(sys.argv[2])
+feature_dir = Path(sys.argv[3])
 device_text = sys.argv[4]
+cond_path = Path(sys.argv[5])
+compat_path = Path(sys.argv[6])
+
 cfg = json.loads(src.read_text())
+cond_dict = np.load(cond_path, allow_pickle=True).item()
+if not cond_dict:
+    raise SystemExit("empty cond.npy")
+entry = next(iter(cond_dict.values()))
+parents = [int(value) for value in entry["parents"]]
+actual_joints = len(parents)
+
+depths = [-1] * actual_joints
+for index, parent in enumerate(parents):
+    if parent < 0 or parent == index:
+        depths[index] = 0
+for _ in range(actual_joints + 1):
+    changed = False
+    for index, parent in enumerate(parents):
+        if depths[index] >= 0:
+            continue
+        if 0 <= parent < actual_joints and depths[parent] >= 0:
+            depths[index] = depths[parent] + 1
+            changed = True
+    if not changed:
+        break
+if any(depth < 0 for depth in depths):
+    raise SystemExit("UAL skeleton has an unresolved/cyclic parent graph")
+actual_depth = max(depths, default=0)
+
+trained_max_joints = int(cfg["dataset"].get("max_joints", 0))
+trained_max_depth = int(cfg["dataset"].get("max_depth", 0))
+if trained_max_depth <= 0 or actual_depth > trained_max_depth:
+    raise SystemExit(
+        f"UAL depth {actual_depth} exceeds checkpoint max_depth {trained_max_depth}"
+    )
+
+# UniMate's InputLayer/FinalLayer share weights across non-root joints; max_joints
+# controls padding/masks and the output reshape rather than a learned per-joint
+# table. Increase only that inference width so a 60-joint checkpoint does not
+# discard POLY FIGHTER's slightly larger UAL rig. Preserve trained max_depth
+# because depth_embedding IS a learned table.
+cfg["dataset"]["max_joints"] = max(trained_max_joints, actual_joints)
 cfg["objaverse"]["path"] = str(feature_dir.resolve())
 cfg["objaverse"]["objects_num"] = -1
 cfg["objaverse"]["filter_object"] = False
 cfg["dataset"]["dataset_list"] = ["objaverse"]
-# Inference does not apply topology augmentation, but disabling these makes the
-# bridge's intent explicit if UniMate changes its inference defaults later.
 for key in ("use_addition_aug", "use_removal_aug", "use_pooling_aug", "use_perturbation_aug"):
     cfg["dataset"][key] = False
 cfg["sampling"]["device"] = device_text
 cfg["experiment"]["output_dir"] = str(out.parent.resolve())
 out.write_text(json.dumps(cfg, indent=2) + "\n")
+compat_path.write_text(json.dumps({
+    "version": "POLY_FIGHTER_UNIMATE_TOPOLOGY_COMPAT_V1",
+    "actualJoints": actual_joints,
+    "actualDepth": actual_depth,
+    "checkpointMaxJoints": trained_max_joints,
+    "inferenceMaxJoints": cfg["dataset"]["max_joints"],
+    "checkpointMaxDepth": trained_max_depth,
+    "jointPaddingExpanded": actual_joints > trained_max_joints,
+}, indent=2) + "\n")
 PY
 cp "$BASE_STATS" "$EXP/dataset_stats.npy"
 
@@ -233,9 +285,10 @@ BVH="$OUTPUT_DIR/${ACTION_NAME}.unimate.bvh"
   --fps 30
 [[ -s "$BVH" ]] || write_fallback "UAL BVH export failed"
 
-python3 - "$RESULT" "$ACTION_NAME" "$BVH" "$GENERATED_NPY" "$GENERATED_GLB" "$KEEP_30" "$CHECKPOINT" <<'PY'
+python3 - "$RESULT" "$ACTION_NAME" "$BVH" "$GENERATED_NPY" "$GENERATED_GLB" "$KEEP_30" "$CHECKPOINT" "$WORK/unimate-compatibility.json" <<'PY'
 import json, sys
 from pathlib import Path
+compatibility = json.loads(Path(sys.argv[8]).read_text())
 Path(sys.argv[1]).write_text(json.dumps({
     "version": "POLY_FIGHTER_UNIMATE_NEURAL_BRIDGE_V1",
     "mode": "neural-inbetween",
@@ -246,6 +299,7 @@ Path(sys.argv[1]).write_text(json.dumps({
     "animatedGlb": str(Path(sys.argv[5]).resolve()),
     "keepFrames30Hz": [int(v) for v in sys.argv[6].split(",")],
     "checkpoint": str(Path(sys.argv[7]).resolve()),
+    "topologyCompatibility": compatibility,
     "fallback": "tools/blender/unimate_inbetween_pass.py",
 }, indent=2) + "\n")
 PY

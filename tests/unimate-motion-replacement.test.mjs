@@ -12,6 +12,8 @@ test("UniMate-inspired replacement profile uses skeleton graph distance rather t
   assert.match(source, /SUPPORT_GRAPH_FALLOFF/);
   assert.match(source, /contactBone\(input\.visualContact\)/);
   assert.match(source, /supportFoot\(input\.visualContact\)/);
+  assert.match(source, /secondaryGroundFoot\(input\.visualContact\)/);
+  assert.match(source, /0\.26 \+ contact \* 0\.30/);
   assert.match(source, /LOCOMOTION_LOWER_BODY/);
   assert.match(source, /GUARD_UPPER_BODY/);
   assert.match(source, /LANDING_LOWER_BODY/);

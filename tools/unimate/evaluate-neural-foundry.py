@@ -138,9 +138,12 @@ def evaluate_group(
         group_ok = group_ok and accepted
         reports.append({"action": action, "accepted": accepted, "checks": checks, "rotationQuality": quality.get("ratios")})
 
-    # A candidate pack must not silently drop shipping actions.
-    extra_missing = sorted(set(bases) - set(cands))
-    if extra_missing:
+    # A normal promotion pack must have exactly the shipping action vocabulary.
+    # An experimental BF_Counter_R build therefore cannot silently become the
+    # production shared-strike pack without a dedicated baseline/review policy.
+    missing_actions = sorted(set(bases) - set(cands))
+    unexpected_actions = sorted(set(cands) - set(bases))
+    if missing_actions or unexpected_actions:
         group_ok = False
 
     return {
@@ -148,7 +151,8 @@ def evaluate_group(
         "candidate": str(candidate_path),
         "kind": kind,
         "accepted": group_ok,
-        "missingActions": extra_missing,
+        "missingActions": missing_actions,
+        "unexpectedActions": unexpected_actions,
         "moves": reports,
     }
 

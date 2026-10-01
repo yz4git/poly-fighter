@@ -25,6 +25,11 @@ test("optional UniMate bridge uses the official custom-asset and replacement in-
   assert.match(runner, /export-animated-ual-bvh\.py/);
   assert.match(runner, /mode": "deterministic-fallback"/);
   assert.match(runner, /UNIMATE_UAL_BVH_REPLACEMENT_V1/);
+  assert.match(runner, /PyTorch CUDA is unavailable/);
+  assert.match(runner, /UniMate custom-asset preprocessing failed/);
+  assert.match(runner, /UniMate neural in-between inference failed/);
+  assert.match(runner, /UniMate re-animation failed/);
+  assert.match(runner, /UAL BVH export produced no file/);
 });
 
 test("UniMate animated GLB exporter preserves the UAL vocabulary for the Foundry prior adapter", async () => {

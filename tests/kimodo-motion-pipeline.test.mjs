@@ -13,7 +13,7 @@ test("Motion Foundry accepts Kimodo SOMA BVH as a first-class prior", async () =
   assert.match(kicks, /--kimodo-front/);
   assert.match(kicks, /--kimodo-low/);
   assert.match(kicks, /--kimodo-rising/);
-  assert.match(kicks, /args\.kimodo_front or args\.mocap_front/);
+  assert.match(kicks, /args\.motion_prior_front or args\.kimodo_front or args\.mocap_front/);
   assert.match(kicks, /mocap_meta\.provider/);
 });
 

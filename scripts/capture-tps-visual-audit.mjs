@@ -559,6 +559,11 @@ try {
       worldSeparation: Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
       cameraShoulder: game.camera.userData.tpsShoulderOffset ?? 0,
       cameraBack: game.camera.userData.tpsBackDistance ?? 0,
+      kickPairSpacing: game.p1.visual.root.userData.tpsKickPairSpacing ?? 0,
+      kickPairBodyRetreat: game.p1.visual.root.userData.tpsKickPairBodyRetreat ?? 0,
+      kickPairChestDistance: game.p1.visual.root.userData.tpsKickPairChestDistance ?? 0,
+      kickPairLeftFootError: game.p1.visual.root.userData.tpsKickPairLeftFootError ?? 0,
+      kickPairRightFootError: game.p1.visual.root.userData.tpsKickPairRightFootError ?? 0,
     };
   `);
   if (kickContactProbe.moveId !== 'kick' || !(kickContactProbe.p2Health < 100) || kickContactProbe.spacingMode !== 'IMPACT_PAIR' || !(kickContactProbe.spacingMinimum >= 1.62) || !(kickContactProbe.worldSeparation >= 1.61)) {

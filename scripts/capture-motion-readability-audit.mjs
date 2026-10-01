@@ -591,6 +591,22 @@ try {
     }
   }
 
+  // Punch contact should retain a grounded two-foot base. This is deliberately
+  // measured from the rendered WebGL skeleton rather than gameplay position so
+  // retarget/inertial changes cannot silently make a standing punch look airborne.
+  for (const moveId of ["jab", "straight", "bodyBlow", "backfist", "power", "counter"]) {
+    const leftY = results[moveId]?.points?.footL?.y;
+    const rightY = results[moveId]?.points?.footR?.y;
+    if (![leftY, rightY].every(Number.isFinite)) {
+      throw new Error(`Punch foot samples missing for ${moveId}: ${JSON.stringify({ leftY, rightY })}`);
+    }
+    const highestFoot = Math.max(leftY, rightY);
+    const lowestFoot = Math.min(leftY, rightY);
+    if (!(highestFoot < 0.55) || !(lowestFoot > -0.25)) {
+      throw new Error(`Punch lost its grounded base for ${moveId}: ${JSON.stringify({ leftY, rightY })}`);
+    }
+  }
+
   const kickY = results.kick?.strikePoint?.y;
   const lowY = results.lowKick?.strikePoint?.y;
   const risingY = results.risingKick?.peakStrikeY ?? results.risingKick?.strikePoint?.y;

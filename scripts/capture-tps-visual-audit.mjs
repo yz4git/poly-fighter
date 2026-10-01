@@ -858,6 +858,12 @@ try {
       branch: data.tpsComboLinkBranch ?? null,
       requestedBlend: data.tpsComboLinkBlendSeconds ?? 0,
       appliedBlend: data.motionExpansionComboBlendSeconds ?? 0,
+      inertialRequestedOverlap: data.unimateMotionExpansionOverlap ?? 0,
+      inertialActive: Boolean(data.kimodoInertialTransitionActive),
+      inertialWeight: Number(data.kimodoInertialTransitionWeight ?? 0),
+      inertialPinnedBones: Number(data.kimodoInertialReplacementPinnedBones ?? 0),
+      inertialMinBoneScale: Number(data.kimodoInertialMinimumBoneScale ?? 1),
+      replacementMode: data.unimateReplacementMode ?? null,
       motionMove: data.motionExpansionCurrentMove ?? null,
       motionPhase: data.motionExpansionPhase ?? null,
       correctionPolicy: data.motionCorrectionPolicy ?? null,
@@ -874,6 +880,12 @@ try {
     || comboLinkProbe.linkTick < comboLinkProbe.linkStart
     || comboLinkProbe.linkTick > comboLinkProbe.linkEnd
     || Math.abs(comboLinkProbe.requestedBlend - 0.075) > 0.0001
+    || Math.abs(comboLinkProbe.inertialRequestedOverlap - 0.075) > 0.0001
+    || !comboLinkProbe.inertialActive
+    || !(comboLinkProbe.inertialWeight > 0)
+    || !(comboLinkProbe.inertialPinnedBones > 0)
+    || !(comboLinkProbe.inertialMinBoneScale < 1)
+    || comboLinkProbe.replacementMode !== "ATTACK_GRAPH_PIN"
     || !(["RAW_CLIP_PLAYBACK", "AUTHORED_ATTACK_PRESERVE"].includes(comboLinkProbe.correctionPolicy)
       ? Math.abs(comboLinkProbe.appliedBlend) <= 0.0001 && comboLinkProbe.motionMove === null
       : Math.abs(comboLinkProbe.appliedBlend - 0.075) <= 0.0001 && comboLinkProbe.motionMove === 'backfist')) {

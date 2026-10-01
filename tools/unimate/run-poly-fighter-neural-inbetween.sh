@@ -19,6 +19,7 @@ UNIMATE_ROOT="${UNIMATE_ROOT:-}"
 UNIMATE_EXP_DIR="${UNIMATE_EXP_DIR:-}"
 SOURCE_GLB="${SOURCE_GLB:-${1:-}}"
 ACTION_NAME="${ACTION_NAME:-${2:-}}"
+SOURCE_ACTION_NAME="${SOURCE_ACTION_NAME:-$ACTION_NAME}"
 KEEP_FRAMES_60="${KEEP_FRAMES_60:-${3:-}}"
 PROMPT="${PROMPT:-A trained fighter performs one clean combat technique and returns to a stable guard.}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/artifacts/unimate-neural-inbetween}"
@@ -32,14 +33,15 @@ RESULT="$OUTPUT_DIR/result.json"
 
 write_fallback() {
   local reason="$1"
-  python3 - "$RESULT" "$reason" "$ACTION_NAME" <<'PY'
+  python3 - "$RESULT" "$reason" "$ACTION_NAME" "$SOURCE_ACTION_NAME" <<'PY'
 import json, sys
 from pathlib import Path
 Path(sys.argv[1]).write_text(json.dumps({
-    "version": "POLY_FIGHTER_UNIMATE_NEURAL_BRIDGE_V1",
+    "version": "POLY_FIGHTER_UNIMATE_NEURAL_BRIDGE_V2_SOURCE_TARGET",
     "mode": "deterministic-fallback",
     "reason": sys.argv[2],
     "action": sys.argv[3],
+    "sourceAction": sys.argv[4],
     "fallback": "tools/blender/unimate_inbetween_pass.py",
 }, indent=2) + "\n")
 PY
@@ -111,7 +113,7 @@ COND="$PREP/cond.npy"
 
 # Pick the exact exported action without assuming Blender's punctuation rules.
 SELECTED_MOTION="$(
-python3 - "$PREP/motions" "$ACTION_NAME" <<'PY'
+python3 - "$PREP/motions" "$SOURCE_ACTION_NAME" <<'PY'
 import re, sys
 from pathlib import Path
 motion_dir, wanted = Path(sys.argv[1]), sys.argv[2]
@@ -285,15 +287,16 @@ BVH="$OUTPUT_DIR/${ACTION_NAME}.unimate.bvh"
   --fps 30
 [[ -s "$BVH" ]] || write_fallback "UAL BVH export failed"
 
-python3 - "$RESULT" "$ACTION_NAME" "$BVH" "$GENERATED_NPY" "$GENERATED_GLB" "$KEEP_30" "$CHECKPOINT" "$WORK/unimate-compatibility.json" <<'PY'
+python3 - "$RESULT" "$ACTION_NAME" "$BVH" "$GENERATED_NPY" "$GENERATED_GLB" "$KEEP_30" "$CHECKPOINT" "$WORK/unimate-compatibility.json" "$SOURCE_ACTION_NAME" <<'PY'
 import json, sys
 from pathlib import Path
 compatibility = json.loads(Path(sys.argv[8]).read_text())
 Path(sys.argv[1]).write_text(json.dumps({
-    "version": "POLY_FIGHTER_UNIMATE_NEURAL_BRIDGE_V1",
+    "version": "POLY_FIGHTER_UNIMATE_NEURAL_BRIDGE_V2_SOURCE_TARGET",
     "mode": "neural-inbetween",
     "provider": "UNIMATE_UAL_BVH_REPLACEMENT_V1",
     "action": sys.argv[2],
+    "sourceAction": sys.argv[9],
     "bvh": str(Path(sys.argv[3]).resolve()),
     "generatedMotion": str(Path(sys.argv[4]).resolve()),
     "animatedGlb": str(Path(sys.argv[5]).resolve()),

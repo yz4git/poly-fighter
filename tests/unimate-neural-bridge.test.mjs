@@ -10,6 +10,10 @@ test("optional UniMate bridge uses the official custom-asset and replacement in-
   assert.match(runner, /FACE_L="thigh_l"/);
   assert.match(runner, /dataset_stats\.npy/);
   assert.match(runner, /"objaverse" not in stats/);
+  assert.match(runner, /actual_joints = len\(parents\)/);
+  assert.match(runner, /actual_depth > trained_max_depth/);
+  assert.match(runner, /cfg\["dataset"\]\["max_joints"\] = max\(trained_max_joints, actual_joints\)/);
+  assert.match(runner, /jointPaddingExpanded/);
   assert.match(runner, /dataset_list.*objaverse/);
   assert.match(runner, /python3 -m unimate\.inference\.sample/);
   assert.match(runner, /--inbetween/);
@@ -67,6 +71,7 @@ test("batch authoring keeps shipping packs unchanged when a complete neural set 
   assert.match(build, /--motion-prior-front/);
   assert.match(build, /--motion-prior "\$CROSS"/);
   assert.match(build, /--motion-prior "\$POWER"/);
+  assert.match(build, /INCLUDE_EXPERIMENTAL_COUNTER/);
 });
 
 test("Foundry exposes provider-neutral prior flags while preserving Kimodo legacy aliases", async () => {
@@ -85,4 +90,32 @@ test("Foundry exposes provider-neutral prior flags while preserving Kimodo legac
   assert.match(rig, /UNIMATE_NEURAL_REPLACEMENT_PRIOR_V1/);
   assert.match(rig, /KIMODO_PRIOR_V1/);
   assert.match(rig, /MOCAP_PRIOR_V6/);
+});
+
+
+test("neural promotion requires both motion smoothness improvement and combat-semantic preservation", async () => {
+  const compare = await readFile(new URL("../tools/unimate/compare-motion-quality.py", import.meta.url), "utf8");
+  const evaluate = await readFile(new URL("../tools/unimate/evaluate-neural-foundry.py", import.meta.url), "utf8");
+  const gate = await readFile(new URL("../tools/unimate/gate-neural-foundry.sh", import.meta.url), "utf8");
+  const promote = await readFile(new URL("../tools/unimate/promote-neural-foundry.sh", import.meta.url), "utf8");
+
+  assert.match(compare, /POLY_FIGHTER_UNIMATE_GLTF_QUALITY_GATE_V1/);
+  assert.match(compare, /rotationAccelerationRms/);
+  assert.match(compare, /maxRotationStepRad/);
+  assert.match(compare, /meaningful_improvement/);
+  assert.match(compare, /no_regression/);
+
+  assert.match(evaluate, /impactFrame_unchanged/);
+  assert.match(evaluate, /strike_reach_retained/);
+  assert.match(evaluate, /support_foot_drift_bounded/);
+  assert.match(evaluate, /strike_knee_anatomical/);
+  assert.match(evaluate, /guard_hands_compact/);
+  assert.match(evaluate, /provider_is_unimate_neural/);
+  assert.match(evaluate, /unexpectedActions/);
+
+  assert.match(gate, /compare-motion-quality\.py/);
+  assert.match(gate, /evaluate-neural-foundry\.py/);
+  assert.match(promote, /PROMOTE="\$\{PROMOTE:-0\}"/);
+  assert.match(promote, /DRY_RUN/);
+  assert.match(promote, /PROMOTE=1 only after visual audit review/);
 });

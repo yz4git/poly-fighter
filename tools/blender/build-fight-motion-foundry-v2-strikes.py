@@ -183,10 +183,10 @@ def _argv_after_double_dash() -> List[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--kimodo-jab")
-    parser.add_argument("--kimodo-body-blow")
-    parser.add_argument("--kimodo-backfist")
-    parser.add_argument("--kimodo-counter")
+    parser.add_argument("--motion-prior-jab", "--kimodo-jab", dest="motion_prior_jab")
+    parser.add_argument("--motion-prior-body-blow", "--kimodo-body-blow", dest="motion_prior_body_blow")
+    parser.add_argument("--motion-prior-backfist", "--kimodo-backfist", dest="motion_prior_backfist")
+    parser.add_argument("--motion-prior-counter", "--kimodo-counter", dest="motion_prior_counter")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args(_argv_after_double_dash())
 
@@ -201,15 +201,15 @@ def main() -> None:
     scene = bpy.context.scene
 
     prior_paths = {
-        "BF_Jab_L": args.kimodo_jab,
-        "BF_BodyBlow_L": args.kimodo_body_blow,
-        "BF_Backfist_R": args.kimodo_backfist,
-        "BF_Counter_R": args.kimodo_counter,
+        "BF_Jab_L": args.motion_prior_jab,
+        "BF_BodyBlow_L": args.motion_prior_body_blow,
+        "BF_Backfist_R": args.motion_prior_backfist,
+        "BF_Counter_R": args.motion_prior_counter,
     }
     specs = list(STRIKE_SPECS)
     # Counter stays on the proven procedural fallback unless a generated
     # candidate is explicitly supplied. This keeps today's shipping GLB stable.
-    if args.kimodo_counter:
+    if args.motion_prior_counter:
         specs.append(COUNTER_SPEC)
 
     actions = []
@@ -230,9 +230,9 @@ def main() -> None:
         "fps": rig.FPS,
         "actions": [spec.action_name for spec in specs],
         "motionPriorProvider": (
-            "KIMODO_SOMA_BVH_WORLD_DELTA_V1"
-            if any(prior_paths.get(spec.action_name) for spec in specs)
-            else "UAL_AUTHORED_STRIKE_V2"
+            next(iter({move.get("motionPriorProvider") for move in move_metrics}))
+            if len({move.get("motionPriorProvider") for move in move_metrics}) == 1
+            else "HYBRID_MOTION_PRIOR_V1"
         ),
         "moves": move_metrics,
         "boneCount": len(armature.pose.bones),

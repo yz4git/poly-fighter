@@ -191,3 +191,54 @@ Safety against quality regression is group-aware. Shared strikes are rebuilt onl
 ### Why this remains deterministic in game
 
 UniMate is used only to propose better frames **before shipping**. The result is baked into ordinary GLB animation clips. During gameplay the same 60 Hz gameplay tick, authored contact timeline, support-foot rules, UniMate-inspired runtime replacement masks and Kimodo-inspired inertialization remain authoritative. Neural inference never decides hit timing, movement, hurtboxes or hitboxes at runtime.
+
+
+## Neural promotion gate
+
+A neural result is **never promoted merely because inference succeeded**.
+
+After Motion Foundry rebuilds a candidate pack, run:
+
+```bash
+bash tools/unimate/gate-neural-foundry.sh
+```
+
+For every shipping action, `tools/unimate/compare-motion-quality.py` loads the current GLB and candidate GLB in Blender, samples both over the same 60-point normalized timeline and measures shortest-arc quaternion motion over the canonical UAL combat skeleton:
+
+- whole-body rotation-step RMS,
+- rotation-acceleration RMS,
+- maximum one-sample rotation step.
+
+The candidate may worsen none of these by more than 5%, and rotation acceleration or maximum step must improve by at least 2%.
+
+`tools/unimate/evaluate-neural-foundry.py` then applies fighting-game semantic gates:
+
+- gameplay fps/start/end/impact frame must be unchanged,
+- support-foot drift stays bounded,
+- punch reach is retained,
+- kick travel / forward reach / vertical rise are retained,
+- kick knee extension and bend-plane continuity remain anatomical,
+- guard hands remain compact and high,
+- deterministic in-between cleanup must keep immutable anchor errors effectively zero,
+- provider provenance must be `UNIMATE_UAL_BVH_REPLACEMENT_V1`,
+- a production pack cannot add or remove an unreviewed action.
+
+The normal shared-strike build intentionally excludes generated `BF_Counter_R`; it remains experimental until it has a comparable authored baseline and visual review.
+
+Promotion is dry-run by default:
+
+```bash
+bash tools/unimate/promote-neural-foundry.sh
+```
+
+Only after the numerical gate **and** screenshot / gameplay review should the exact accepted packs be copied with:
+
+```bash
+PROMOTE=1 bash tools/unimate/promote-neural-foundry.sh
+```
+
+### UAL joint-count compatibility
+
+The current POLY FIGHTER UAL export can be slightly larger than the 60-joint default used by UniMate's full UniML3D config. UniMate filters object types against `dataset.max_joints` before sampling, so the bridge reads the preprocessed `cond.npy` and expands **only the inference padding/joint width** to the actual UAL count when necessary.
+
+This is compatible with UniMate's public implementation because the root/non-root input and output MLP weights are shared across joints; `max_joints` controls masks, padding and output reshaping rather than a learned per-joint table. The bridge does **not** similarly expand `max_depth`: UniMate's optional depth embedding is learned, so if the UAL kinematic depth exceeds the checkpoint's trained `max_depth`, the neural path safely falls back instead.

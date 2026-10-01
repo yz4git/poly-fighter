@@ -15,7 +15,7 @@ test("optional UniMate bridge uses the official custom-asset and replacement in-
   assert.match(runner, /--inbetween/);
   assert.match(runner, /--keep_frames "\$KEEP_30"/);
   assert.match(runner, /--gt_start_frame 0/);
-  assert.match(runner, /run_animate_motion\.sh" objaverse/);
+  assert.match(runner, /run_animate_motion\.sh objaverse/);
   assert.match(runner, /ANIM_MODE="fk"/);
   assert.match(runner, /EXTRA_BONES_STRATEGY="keep"/);
   assert.match(runner, /export-animated-ual-bvh\.py/);

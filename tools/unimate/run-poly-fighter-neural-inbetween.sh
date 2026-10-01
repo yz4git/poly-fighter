@@ -54,6 +54,12 @@ PY
 [[ -n "$KEEP_FRAMES_60" ]] || write_fallback "KEEP_FRAMES_60 is missing"
 [[ -n "$UNIMATE_ROOT" && -d "$UNIMATE_ROOT/unimate" ]] || write_fallback "UNIMATE_ROOT is not an official UniMate checkout"
 [[ -n "$UNIMATE_EXP_DIR" && -f "$UNIMATE_EXP_DIR/config.json" ]] || write_fallback "UNIMATE_EXP_DIR/config.json is missing"
+
+SOURCE_GLB="$(cd "$(dirname "$SOURCE_GLB")" && pwd)/$(basename "$SOURCE_GLB")"
+UNIMATE_ROOT="$(cd "$UNIMATE_ROOT" && pwd)"
+UNIMATE_EXP_DIR="$(cd "$UNIMATE_EXP_DIR" && pwd)"
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+RESULT="$OUTPUT_DIR/result.json"
 command -v python3 >/dev/null || write_fallback "python3 is unavailable"
 command -v "$BLENDER_BIN" >/dev/null || write_fallback "Blender is unavailable"
 if [[ "$UNIMATE_DEVICE" == cuda* ]] && ! command -v nvidia-smi >/dev/null; then
@@ -62,6 +68,12 @@ fi
 
 BASE_STATS="$UNIMATE_EXP_DIR/dataset_stats.npy"
 [[ -f "$BASE_STATS" ]] || write_fallback "training dataset_stats.npy is missing"
+python3 - "$BASE_STATS" <<'PY' || write_fallback "checkpoint stats do not contain the objaverse normalization used for custom rigs"
+import numpy as np, sys
+stats = np.load(sys.argv[1], allow_pickle=True).item()
+if "objaverse" not in stats:
+    raise SystemExit(1)
+PY
 
 if [[ -n "${UNIMATE_MODEL_PATH:-}" ]]; then
   CHECKPOINT="$UNIMATE_MODEL_PATH"

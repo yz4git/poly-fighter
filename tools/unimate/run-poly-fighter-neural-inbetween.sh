@@ -64,8 +64,13 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 RESULT="$OUTPUT_DIR/result.json"
 command -v python3 >/dev/null || write_fallback "python3 is unavailable"
 command -v "$BLENDER_BIN" >/dev/null || write_fallback "Blender is unavailable"
-if [[ "$UNIMATE_DEVICE" == cuda* ]] && ! command -v nvidia-smi >/dev/null; then
-  write_fallback "CUDA authoring requested but no NVIDIA GPU runtime is available"
+if [[ "$UNIMATE_DEVICE" == cuda* ]]; then
+  command -v nvidia-smi >/dev/null || write_fallback "CUDA authoring requested but no NVIDIA GPU runtime is available"
+  python3 - <<'PY' || write_fallback "CUDA authoring requested but PyTorch CUDA is unavailable"
+import torch
+if not torch.cuda.is_available():
+    raise SystemExit(1)
+PY
 fi
 
 BASE_STATS="$UNIMATE_EXP_DIR/dataset_stats.npy"
@@ -97,7 +102,7 @@ mkdir -p "$WORK" "$PREP" "$EXP" "$GEN" "$ANIMATED"
 SANITIZED_SOURCE="$WORK/polyfighter.glb"
 cp "$SOURCE_GLB" "$SANITIZED_SOURCE"
 
-(
+if ! (
   cd "$UNIMATE_ROOT"
   CHAR_PATH="$SANITIZED_SOURCE" \
   OUTPUT_DIR="$PREP" \
@@ -105,7 +110,9 @@ cp "$SOURCE_GLB" "$SANITIZED_SOURCE"
   FACE_L="thigh_l" \
   FORMATS="glb" \
   bash data_process/scripts/run_preprocess_char.sh
-)
+); then
+  write_fallback "UniMate custom-asset preprocessing failed"
+fi
 
 CANONICAL="$PREP/polyfighter_canonical.glb"
 COND="$PREP/cond.npy"
@@ -245,7 +252,7 @@ Path(sys.argv[1]).write_text(json.dumps({
 }, indent=2) + "\n")
 PY
 
-(
+if ! (
   cd "$UNIMATE_ROOT"
   python3 -m unimate.inference.sample \
     --exp_dir "$EXP" \
@@ -259,14 +266,16 @@ PY
     --inbetween \
     --keep_frames "$KEEP_30" \
     --gt_start_frame 0
-)
+); then
+  write_fallback "UniMate neural in-between inference failed"
+fi
 
 GENERATED_NPY="$(
 find "$GEN/inbetween/motions" -maxdepth 1 -type f -name '*.npy' ! -name '*-gt_*' | sort | head -n 1
 )"
 [[ -n "$GENERATED_NPY" && -s "$GENERATED_NPY" ]] || write_fallback "UniMate in-betweening produced no generated motion feature file"
 
-(
+if ! (
   cd "$UNIMATE_ROOT"
   ANIM_PATH="$GENERATED_NPY" \
   CHAR_PATH="$CANONICAL" \
@@ -275,17 +284,21 @@ find "$GEN/inbetween/motions" -maxdepth 1 -type f -name '*.npy' ! -name '*-gt_*'
   ANIM_MODE="fk" \
   EXTRA_BONES_STRATEGY="keep" \
   bash data_process/scripts/run_animate_motion.sh objaverse
-)
+); then
+  write_fallback "UniMate re-animation failed"
+fi
 
 GENERATED_GLB="$(find "$ANIMATED" -maxdepth 1 -type f -name '*.glb' | sort | head -n 1)"
 [[ -n "$GENERATED_GLB" && -s "$GENERATED_GLB" ]] || write_fallback "UniMate re-animation produced no GLB"
 
 BVH="$OUTPUT_DIR/${ACTION_NAME}.unimate.bvh"
-"$BLENDER_BIN" -b --python "$ROOT/tools/unimate/export-animated-ual-bvh.py" -- \
+if ! "$BLENDER_BIN" -b --python "$ROOT/tools/unimate/export-animated-ual-bvh.py" -- \
   --source "$GENERATED_GLB" \
   --output "$BVH" \
-  --fps 30
-[[ -s "$BVH" ]] || write_fallback "UAL BVH export failed"
+  --fps 30; then
+  write_fallback "UAL BVH export failed"
+fi
+[[ -s "$BVH" ]] || write_fallback "UAL BVH export produced no file"
 
 python3 - "$RESULT" "$ACTION_NAME" "$BVH" "$GENERATED_NPY" "$GENERATED_GLB" "$KEEP_30" "$CHECKPOINT" "$WORK/unimate-compatibility.json" "$SOURCE_ACTION_NAME" <<'PY'
 import json, sys

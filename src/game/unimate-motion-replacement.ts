@@ -115,6 +115,15 @@ function supportFoot(contact?: VisualContactPoint): string | null {
   return null;
 }
 
+function secondaryGroundFoot(contact?: VisualContactPoint): string | null {
+  // Punches should keep a two-foot base through the contact approach. The
+  // opposite foot remains the primary support anchor; the same-side foot gets
+  // a lighter local pin so inertial carry cannot make the stance visibly skate.
+  if (contact === "LEFT_FIST") return "foot_l";
+  if (contact === "RIGHT_FIST") return "foot_r";
+  return null;
+}
+
 function finalize(
   bones: Map<string, THREE.Object3D>,
   pinStrengths: Map<string, number>,
@@ -167,6 +176,7 @@ export function buildUniMateReplacementProfile(input: UniMateReplacementInput): 
     const supportStrength = 0.48 + contact * 0.42;
     seed(contactBone(input.visualContact), strikeStrength, ATTACK_GRAPH_FALLOFF);
     seed(supportFoot(input.visualContact), supportStrength, SUPPORT_GRAPH_FALLOFF);
+    seed(secondaryGroundFoot(input.visualContact), 0.26 + contact * 0.30, LIGHT_GRAPH_FALLOFF);
     seed(oppositeGuardHand(input.visualContact), 0.22 + contact * 0.28, LIGHT_GRAPH_FALLOFF);
     seed("pelvis", 0.16 + contact * 0.22, LIGHT_GRAPH_FALLOFF);
     return finalize(input.bones, pins, "ATTACK_GRAPH_PIN", seeds);

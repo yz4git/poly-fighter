@@ -1,58 +1,131 @@
 {
-  "version": "POLY_FIGHTER_UNIMATE_NEURAL_PRESETS_V1",
+  "version": "POLY_FIGHTER_UNIMATE_NEURAL_PRESETS_V2_SOURCE_TARGET",
   "moves": {
     "jab": {
       "action": "BF_Jab_L",
       "source": "public/models/quaternius/blender-strikes-core.glb",
-      "keepFrames60Hz": [1, 4, 12, 17, 19, 26, 33],
+      "keepFrames60Hz": [
+        1,
+        4,
+        12,
+        17,
+        19,
+        26,
+        33
+      ],
       "prompt": "A trained kickboxer throws one fast left jab from compact guard, keeps the right hand protecting the jaw, preserves grounded balance, and snaps directly back to guard."
     },
     "bodyBlow": {
       "action": "BF_BodyBlow_L",
       "source": "public/models/quaternius/blender-strikes-core.glb",
-      "keepFrames60Hz": [1, 7, 17, 23, 27, 36, 44],
+      "keepFrames60Hz": [
+        1,
+        7,
+        17,
+        23,
+        27,
+        36,
+        44
+      ],
       "prompt": "A trained boxer lowers the center of mass and drives one left body straight with coordinated hips and torso, stable feet, protected right hand, and a controlled return to guard."
     },
     "backfist": {
       "action": "BF_Backfist_R",
       "source": "public/models/quaternius/blender-strikes-core.glb",
-      "keepFrames60Hz": [1, 6, 15, 21, 25, 33, 41],
+      "keepFrames60Hz": [
+        1,
+        6,
+        15,
+        21,
+        25,
+        33,
+        41
+      ],
       "prompt": "A trained martial artist performs one sharp right backfist with a readable elbow-led arc, stable stance, defensive left hand, and immediate recovery to guard without a spin."
     },
     "counter": {
       "action": "BF_Counter_R",
-      "source": "public/models/quaternius/blender-strikes-core.glb",
-      "keepFrames60Hz": [1, 3, 11, 18, 21, 28, 35],
-      "prompt": "A trained fighter makes a compact defensive slip and immediately fires one fast right counter straight, staying balanced and returning to guard."
+      "source": "public/models/quaternius/procedural-fight-core.glb",
+      "keepFrames60Hz": [
+        1,
+        3,
+        11,
+        18,
+        21,
+        28,
+        35
+      ],
+      "prompt": "A trained fighter makes a compact defensive slip and immediately fires one fast right counter straight, staying balanced and returning to guard.",
+      "sourceAction": "PF_Counter_R"
     },
     "cross": {
       "action": "BF_Cross_R",
       "source": "public/models/quaternius/blender-cross-core.glb",
-      "keepFrames60Hz": [1, 6, 16, 21, 24, 33, 42],
+      "keepFrames60Hz": [
+        1,
+        6,
+        16,
+        21,
+        24,
+        33,
+        42
+      ],
       "prompt": "A trained kickboxer throws one crisp right cross with rear hip and shoulder rotation, a stable lead foot, protected left hand, clean follow-through, and recovery to guard."
     },
     "power": {
       "action": "BF_Power_R",
       "source": "public/models/quaternius/blender-fight-core.glb",
-      "keepFrames60Hz": [1, 9, 24, 30, 34, 43, 52],
+      "keepFrames60Hz": [
+        1,
+        9,
+        24,
+        30,
+        34,
+        43,
+        52
+      ],
       "prompt": "A powerful fighter loads the legs and hips then throws one heavy right overdrive straight through the target, preserving a strong support leg and controlled recovery."
     },
     "frontKick": {
       "action": "BF_FrontKick_R",
       "source": "public/models/quaternius/blender-kicks-core.glb",
-      "keepFrames60Hz": [1, 7, 18, 24, 27, 35, 43],
+      "keepFrames60Hz": [
+        1,
+        7,
+        18,
+        24,
+        27,
+        35,
+        43
+      ],
       "prompt": "A trained kickboxer chambers and delivers one compact right front kick, keeps the left support foot planted and the hands in guard, retracts the kicking leg, and returns to stance."
     },
     "lowKick": {
       "action": "BF_LowKick_L",
       "source": "public/models/quaternius/blender-kicks-core.glb",
-      "keepFrames60Hz": [1, 8, 19, 25, 29, 38, 46],
+      "keepFrames60Hz": [
+        1,
+        8,
+        19,
+        25,
+        29,
+        38,
+        46
+      ],
       "prompt": "A trained kickboxer chambers and throws one strong left low round kick with hip rotation, stable right support leg, guarded hands, clear follow-through, and balanced recovery."
     },
     "risingKick": {
       "action": "BF_RisingKick_R",
       "source": "public/models/quaternius/blender-kicks-core.glb",
-      "keepFrames60Hz": [1, 9, 21, 28, 32, 41, 49],
+      "keepFrames60Hz": [
+        1,
+        9,
+        21,
+        28,
+        32,
+        41,
+        49
+      ],
       "prompt": "A trained martial artist performs one rising right kick with a clear chamber, stable left support leg, compact guard, high readable strike line, retraction, and balanced recovery."
     }
   }

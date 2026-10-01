@@ -52,6 +52,29 @@ CMU_TO_UAL: Tuple[Tuple[str, str], ...] = (
 # Kimodo SOMA BVH exports use the public SOMA joint vocabulary. Keeping this
 # map beside the legacy CMU map lets the exact same Motion Foundry contact,
 # support-foot and quality gates consume either provider.
+UNIMATE_UAL_TO_UAL: Tuple[Tuple[str, str], ...] = (
+    ("pelvis", "pelvis"),
+    ("spine_01", "spine_01"),
+    ("spine_02", "spine_02"),
+    ("spine_03", "spine_03"),
+    ("neck_01", "neck_01"),
+    ("Head", "Head"),
+    ("clavicle_l", "clavicle_l"),
+    ("upperarm_l", "upperarm_l"),
+    ("lowerarm_l", "lowerarm_l"),
+    ("hand_l", "hand_l"),
+    ("clavicle_r", "clavicle_r"),
+    ("upperarm_r", "upperarm_r"),
+    ("lowerarm_r", "lowerarm_r"),
+    ("hand_r", "hand_r"),
+    ("thigh_l", "thigh_l"),
+    ("calf_l", "calf_l"),
+    ("foot_l", "foot_l"),
+    ("thigh_r", "thigh_r"),
+    ("calf_r", "calf_r"),
+    ("foot_r", "foot_r"),
+)
+
 KIMODO_SOMA_TO_UAL: Tuple[Tuple[str, str], ...] = (
     ("Hips", "pelvis"),
     ("Spine1", "spine_01"),
@@ -84,6 +107,13 @@ SIDE_SWAP: Mapping[str, str] = {
     "LeftLeg": "RightLeg", "RightLeg": "LeftLeg",
     "LeftShin": "RightShin", "RightShin": "LeftShin",
     "LeftFoot": "RightFoot", "RightFoot": "LeftFoot",
+    "clavicle_l": "clavicle_r", "clavicle_r": "clavicle_l",
+    "upperarm_l": "upperarm_r", "upperarm_r": "upperarm_l",
+    "lowerarm_l": "lowerarm_r", "lowerarm_r": "lowerarm_l",
+    "hand_l": "hand_r", "hand_r": "hand_l",
+    "thigh_l": "thigh_r", "thigh_r": "thigh_l",
+    "calf_l": "calf_r", "calf_r": "calf_l",
+    "foot_l": "foot_r", "foot_r": "foot_l",
 }
 
 
@@ -155,19 +185,48 @@ def _frame_time_from_bvh(path: str) -> float:
 
 def _source_profile(source: bpy.types.Object) -> str:
     names = set(source.pose.bones.keys())
+    if {"pelvis", "spine_02", "upperarm_l", "upperarm_r", "thigh_l", "thigh_r"}.issubset(names):
+        return "UNIMATE_UAL"
     if {"LeftShin", "RightShin", "Spine2", "Chest"}.issubset(names):
         return "KIMODO_SOMA"
     return "CMU"
 
 
 def _source_mapping(source: bpy.types.Object) -> Tuple[Tuple[str, str], ...]:
-    return KIMODO_SOMA_TO_UAL if _source_profile(source) == "KIMODO_SOMA" else CMU_TO_UAL
+    profile = _source_profile(source)
+    if profile == "UNIMATE_UAL":
+        return UNIMATE_UAL_TO_UAL
+    if profile == "KIMODO_SOMA":
+        return KIMODO_SOMA_TO_UAL
+    return CMU_TO_UAL
 
 
 def _source_required_joints(source: bpy.types.Object) -> set[str]:
-    if _source_profile(source) == "KIMODO_SOMA":
+    profile = _source_profile(source)
+    if profile == "UNIMATE_UAL":
+        return {"pelvis", "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r", "upperarm_l", "upperarm_r"}
+    if profile == "KIMODO_SOMA":
         return {"Hips", "LeftLeg", "LeftShin", "LeftFoot", "RightLeg", "RightShin", "RightFoot", "LeftArm", "RightArm"}
     return {"Hips", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "LeftArm", "RightArm"}
+
+
+def _source_event_names(source: bpy.types.Object) -> dict:
+    profile = _source_profile(source)
+    if profile == "UNIMATE_UAL":
+        return {
+            "root": "pelvis",
+            "left_hand": "hand_l",
+            "right_hand": "hand_r",
+            "left_foot": "foot_l",
+            "right_foot": "foot_r",
+        }
+    return {
+        "root": "Hips",
+        "left_hand": "LeftHand",
+        "right_hand": "RightHand",
+        "left_foot": "LeftFoot",
+        "right_foot": "RightFoot",
+    }
 
 
 def _new_bvh_armature(scene: bpy.types.Scene, path: str) -> Tuple[bpy.types.Object, bpy.types.Action]:
@@ -213,11 +272,15 @@ def _kick_event(scene: bpy.types.Scene, source: bpy.types.Object, action: bpy.ty
     frames: List[float] = []
     raw = {"L": {"speed": [], "reach": [], "rise": []}, "R": {"speed": [], "reach": [], "rise": []}}
     previous = {"L": None, "R": None}
+    event_names = _source_event_names(source)
     frame = scan_start
     while frame <= scan_end + 1e-6:
         _set_frame(scene, frame)
-        pelvis = _pose_head(source, "Hips")
-        positions = {"L": _pose_head(source, "LeftFoot"), "R": _pose_head(source, "RightFoot")}
+        pelvis = _pose_head(source, event_names["root"])
+        positions = {
+            "L": _pose_head(source, event_names["left_foot"]),
+            "R": _pose_head(source, event_names["right_foot"]),
+        }
         support = {"L": positions["R"], "R": positions["L"]}
         frames.append(frame)
         for side in ("L", "R"):
@@ -258,11 +321,15 @@ def _strike_event(scene: bpy.types.Scene, source: bpy.types.Object, action: bpy.
     frames: List[float] = []
     raw = {"L": {"speed": [], "reach": []}, "R": {"speed": [], "reach": []}}
     previous = {"L": None, "R": None}
+    event_names = _source_event_names(source)
     frame = scan_start
     while frame <= scan_end + 1e-6:
         _set_frame(scene, frame)
-        pelvis = _pose_head(source, "Hips")
-        positions = {"L": _pose_head(source, "LeftHand"), "R": _pose_head(source, "RightHand")}
+        pelvis = _pose_head(source, event_names["root"])
+        positions = {
+            "L": _pose_head(source, event_names["left_hand"]),
+            "R": _pose_head(source, event_names["right_hand"]),
+        }
         frames.append(frame)
         for side in ("L", "R"):
             hand = positions[side]
@@ -400,8 +467,12 @@ def _target_leg_length(armature: bpy.types.Object, side: str) -> float:
 
 
 def _source_leg_length(source: bpy.types.Object, side: str) -> float:
+    profile = _source_profile(source)
+    if profile == "UNIMATE_UAL":
+        suffix = side.lower()
+        return max(1e-4, source.data.bones[f"thigh_{suffix}"].length + source.data.bones[f"calf_{suffix}"].length)
     prefix = "Left" if side == "L" else "Right"
-    if _source_profile(source) == "KIMODO_SOMA":
+    if profile == "KIMODO_SOMA":
         return max(1e-4, source.data.bones[f"{prefix}Leg"].length + source.data.bones[f"{prefix}Shin"].length)
     return max(1e-4, source.data.bones[f"{prefix}UpLeg"].length + source.data.bones[f"{prefix}Leg"].length)
 
@@ -509,12 +580,15 @@ def build_mocap_prior(
     target_axes: Tuple[Vector, Vector, Vector],
     event_kind: str = "kick",
 ) -> Tuple[bpy.types.Action, MocapPriorMeta]:
-    """Create a UAL-skeleton action from a CMU or Kimodo-SOMA BVH prior."""
+    """Create a UAL action from CMU, Kimodo-SOMA or UniMate-refined UAL BVH."""
     original_fps = scene.render.fps
     source, source_action = _new_bvh_armature(scene, bvh_path)
     profile = _source_profile(source)
     mapping = _source_mapping(source)
-    provider = "KIMODO_SOMA_BVH_WORLD_DELTA_V1" if profile == "KIMODO_SOMA" else "CMU_MOCAP_WORLD_DELTA_V6"
+    provider = {
+        "KIMODO_SOMA": "KIMODO_SOMA_BVH_WORLD_DELTA_V1",
+        "UNIMATE_UAL": "UNIMATE_UAL_BVH_REPLACEMENT_V1",
+    }.get(profile, "CMU_MOCAP_WORLD_DELTA_V6")
     source_fps = 1.0 / _frame_time_from_bvh(bvh_path)
     if event_kind == "strike":
         detected_side, peak, activity = _strike_event(scene, source, source_action, source_fps)
@@ -546,7 +620,7 @@ def build_mocap_prior(
     for frame in source_frames:
         _set_frame(scene, frame)
         samples.append({name: source.pose.bones[name].matrix.copy() for name in sample_names if name in source.pose.bones})
-        source_root_positions.append(_pose_head(source, "Hips"))
+        source_root_positions.append(_pose_head(source, _source_event_names(source)["root"]))
 
     _set_frame(scene, source_frames[0])
     source_axes = _horizontal_basis(source)
@@ -571,7 +645,7 @@ def build_mocap_prior(
     source_scale = _target_leg_length(target, target_side) / _source_leg_length(source, detected_side)
     source_root0 = source_root_positions[0]
 
-    prior_prefix = "KIMODO" if profile == "KIMODO_SOMA" else "CMU135"
+    prior_prefix = "UNIMATE" if profile == "UNIMATE_UAL" else ("KIMODO" if profile == "KIMODO_SOMA" else "CMU135")
     action = bpy.data.actions.new(name=f"{prior_prefix}_{spec.action_name}_PRIOR")
     target.animation_data.action = action
     for pb in target.pose.bones:

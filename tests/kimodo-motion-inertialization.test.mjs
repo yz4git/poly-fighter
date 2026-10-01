@@ -37,6 +37,9 @@ test("runtime samples gameplay-authored motion before inertialization and condit
   assert.match(source, /kimodoInertialMaxAngularVelocity/);
   assert.match(source, /combatMotionContactWeight/);
   assert.match(source, /kimodoInertialAuthoredContactSuppression/);
+  assert.match(source, /fighter\.visual\.root\.userData\.unimateMotionExpansionOverlap/);
+  assert.match(source, /fighter\.visual\.root\.userData\.kimodoInertialTransitionWeight/);
+  assert.match(source, /fighter\.visual\.root\.userData\.unimateReplacementMode/);
 });
 
 test("hitstop freezes transition age but keeps the last measured velocity available", async () => {

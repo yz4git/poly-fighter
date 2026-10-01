@@ -44,7 +44,12 @@ if [[ -n "$JAB" && -n "$BODYBLOW" && -n "$BACKFIST" ]]; then
     --motion-prior-backfist "$BACKFIST"
     --output-dir "$OUT/shared"
   )
-  [[ -n "$COUNTER" ]] && args+=(--motion-prior-counter "$COUNTER")
+  # BF_Counter_R has no shipping authored baseline yet. Keep its neural prior
+  # experimental so the promotion gate can compare every shipped action
+  # apples-to-apples. Opt in only for a dedicated visual review build.
+  if [[ "${INCLUDE_EXPERIMENTAL_COUNTER:-0}" == "1" && -n "$COUNTER" ]]; then
+    args+=(--motion-prior-counter "$COUNTER")
+  fi
   run_blender --python "$ROOT/tools/blender/build-fight-motion-foundry-v2-strikes.py" -- "${args[@]}"
 else
   echo "Shared strikes: neural set incomplete; leave shipping pack unchanged."

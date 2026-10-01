@@ -19,6 +19,7 @@ on:
       - tests/unimate-motion-replacement.test.mjs
       - tests/unimate-motion-inbetween.test.mjs
       - tests/unimate-neural-bridge.test.mjs
+      - tests/test_unimate_promotion_gate.py
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -43,6 +44,7 @@ on:
       - tests/unimate-motion-replacement.test.mjs
       - tests/unimate-motion-inbetween.test.mjs
       - tests/unimate-neural-bridge.test.mjs
+      - tests/test_unimate_promotion_gate.py
       - docs/UNIMATE_MOTION_REFERENCE.md
       - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
@@ -102,3 +104,4 @@ jobs:
           node --test tests/unimate-motion-replacement.test.mjs
           node --test tests/unimate-motion-inbetween.test.mjs
           node --test tests/unimate-neural-bridge.test.mjs
+          python3 -m unittest tests/test_unimate_promotion_gate.py

@@ -12,6 +12,16 @@ import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import {
+  adaptTpsCpuDecision,
+  minimumTpsEnemyTelegraphTicks,
+  tpsCpuActorSnapshot,
+  tpsCpuAttackMove,
+  tpsEnemyReactionWindowTicks,
+  type EnemyAdaptation,
+  type EnemyPersona,
+  type EnemyTactic,
+} from "./tps-enemy-policy";
+import {
   advanceTpsFinishWindow,
   defeatedFighterForWinner,
   isTpsDefeatedSettled,
@@ -67,20 +77,6 @@ const TPS_FLANK_WINDOW_TICKS = 30;
 const TPS_PERFECT_EVADE_TICKS = 18;
 const TPS_INTERCEPT_TICKS = 26;
 const TPS_REVERSAL_TICKS = 24;
-// Human-readable CPU commitment windows for iPhone touch play. Even the fastest
-// jab gets a short authored load before its normal startup frames begin.
-const TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
-  EASY: 22,
-  NORMAL: 18,
-  HARD: 15,
-});
-const TPS_REACTIVE_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
-  EASY: 14,
-  NORMAL: 12,
-  HARD: 10,
-});
-const TPS_HEAVY_TELEGRAPH_BONUS_TICKS = 5;
-const TPS_HEAVY_TELEGRAPH_MOVES = new Set(["power", "risingKick", "dashKick", "throw", "counter"]);
 const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
@@ -103,43 +99,11 @@ const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   counter: 2.66,
 });
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
-type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
-type EnemyPersona = "BRAWLER" | "SKIRMISHER";
-type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH" | "CUT_RETREAT" | "MIRROR_LEFT" | "MIRROR_RIGHT" | "HUNT_INTERCEPT";
 type MatchDramaPhase = "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
   return result.lengthSq() > 1e-8 ? result.normalize() : new THREE.Vector3(1, 0, 0);
-}
-
-const TPS_CPU_ATTACK_MOVES: Partial<Record<CpuIntent, string>> = {
-  JAB: "jab",
-  STRAIGHT: "straight",
-  BACKFIST: "backfist",
-  BODY_BLOW: "bodyBlow",
-  POWER: "power",
-  KICK: "kick",
-  LOW_KICK: "lowKick",
-  RISING_KICK: "risingKick",
-  DASH_KICK: "dashKick",
-  THROW: "throw",
-  COUNTER: "counter",
-};
-
-function cpuActorSnapshot(fighter: FighterRuntime): CpuActorSnapshot {
-  return {
-    health: fighter.health,
-    guardDamage: fighter.guardDamage,
-    state: fighter.state,
-    moveId: fighter.currentMove?.id ?? null,
-    movePower: fighter.currentMove?.power ?? 0,
-    isActive: fighter.isActive(),
-    grounded: fighter.grounded,
-    x: fighter.position.x,
-    z: fighter.position.z,
-    facing: fighter.facing,
-  };
 }
 
 function clampToArena(position: THREE.Vector3, margin = 0.72): void {
@@ -629,7 +593,7 @@ export class TpsFightGame {
       const pendingReaction = Boolean(
         pendingMove
         && this.enemyDirectorTelegraphTicks > 0
-        && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
+        && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
       );
       const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);
       const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
@@ -757,15 +721,6 @@ export class TpsFightGame {
     return true;
   }
 
-  private minimumEnemyTelegraphTicks(moveId: string): number {
-    const baseTicks = TPS_REACTABLE_TELEGRAPH_TICKS[this.difficulty];
-    return baseTicks + (TPS_HEAVY_TELEGRAPH_MOVES.has(moveId) ? TPS_HEAVY_TELEGRAPH_BONUS_TICKS : 0);
-  }
-
-  private enemyReactionWindowTicks(): number {
-    return TPS_REACTIVE_STEP_WINDOW_TICKS[this.difficulty];
-  }
-
   private updateEnemy(): void {
     this.p2.setInput(EMPTY_INPUT);
     const liveDistance = Math.hypot(
@@ -773,8 +728,8 @@ export class TpsFightGame {
       this.p1.position.z - this.p2.position.z,
     );
     const situation = (): CpuSituation => ({
-      self: cpuActorSnapshot(this.p2),
-      opponent: cpuActorSnapshot(this.p1),
+      self: tpsCpuActorSnapshot(this.p2),
+      opponent: tpsCpuActorSnapshot(this.p1),
       distance: Math.hypot(
         this.p1.position.x - this.p2.position.x,
         this.p1.position.z - this.p2.position.z,
@@ -913,7 +868,7 @@ export class TpsFightGame {
         rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
         const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
         const progress = THREE.MathUtils.clamp(1 - this.enemyDirectorTelegraphTicks / totalTicks, 0, 1);
-        const reactionWindow = this.enemyReactionWindowTicks();
+        const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
         rootData.tpsEnemyTelegraphProgress = progress;
         rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
         rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow ? "REACT" : "LOAD";
@@ -960,34 +915,23 @@ export class TpsFightGame {
       return;
     }
 
-    let decision = this.enemyFunDirector.decide(situation());
-    // TPS is a grounded lock-on mode. Translate the shared neutral hop into an
-    // orbital beat rather than introducing camera-hostile bunny hopping.
-    if (decision.intent === "JUMP") decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-as-orbit` };
-    if (this.enemyPersona === "BRAWLER" && decision.intent === "RETREAT" && liveDistance > 1.65) {
-      decision = { ...decision, intent: "APPROACH", reason: `${decision.reason}-brawler-pressure` };
-    } else if (this.enemyPersona === "SKIRMISHER" && decision.intent === "APPROACH" && liveDistance < 1.85) {
-      decision = { ...decision, intent: "SIDESTEP", reason: `${decision.reason}-skirmisher-angle` };
-    }
-    if (this.enemyAdaptation === "HUNT_INTERCEPT" && isAttackIntent(decision.intent) && decision.telegraphTicks > 0 && this.simulationTicks % 4 === 0) {
-      decision = { ...decision, intent: "WAIT", holdTicks: Math.max(2, decision.holdTicks), telegraphTicks: 0, reason: "adapt-hunt-intercept-feint" };
-    } else if (this.enemyAdaptation === "ANTI_STEP" && isAttackIntent(decision.intent) && this.simulationTicks % 3 === 0) {
-      decision = { ...decision, intent: "COUNTER", telegraphTicks: Math.max(4, decision.telegraphTicks), reason: "adapt-anti-step-counter" };
-    } else if (this.enemyAdaptation === "ANTI_RUSH" && decision.intent === "WAIT" && liveDistance < 2.0) {
-      decision = { ...decision, intent: "RETREAT", reason: "adapt-anti-rush-reset" };
-    } else if (this.enemyAdaptation === "CUT_RETREAT" && ["WAIT", "RETREAT"].includes(decision.intent) && liveDistance > 1.25) {
-      decision = { ...decision, intent: "APPROACH", reason: "adapt-cut-retreat-lane" };
-    } else if (["MIRROR_LEFT", "MIRROR_RIGHT"].includes(this.enemyAdaptation) && decision.intent === "WAIT") {
-      decision = { ...decision, intent: "SIDESTEP", reason: "adapt-directional-cut" };
-    }
+    const decision = adaptTpsCpuDecision(
+      this.enemyFunDirector.decide(situation()),
+      {
+        persona: this.enemyPersona,
+        adaptation: this.enemyAdaptation,
+        liveDistance,
+        simulationTicks: this.simulationTicks,
+      },
+    );
     this.enemyDirectorDecision = decision;
     publishDecision(decision);
 
     if (isAttackIntent(decision.intent)) {
-      const moveId = TPS_CPU_ATTACK_MOVES[decision.intent] ?? null;
+      const moveId = tpsCpuAttackMove(decision.intent);
       if (moveId) {
         rootData.tpsCpuDirectorMove = moveId;
-        const telegraphTicks = Math.max(decision.telegraphTicks, this.minimumEnemyTelegraphTicks(moveId));
+        const telegraphTicks = Math.max(decision.telegraphTicks, minimumTpsEnemyTelegraphTicks(this.difficulty, moveId));
         this.enemyDirectorPendingMove = moveId;
         this.enemyDirectorTelegraphTicks = telegraphTicks;
         this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
@@ -1367,7 +1311,7 @@ export class TpsFightGame {
     const lateWindup = Boolean(
       pending
       && pendingMove
-      && this.enemyDirectorTelegraphTicks <= this.enemyReactionWindowTicks()
+      && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
       && pendingDistance <= pendingThreatReach
     );
     const windup = pending && !lateWindup;

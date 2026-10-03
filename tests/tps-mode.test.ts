@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-arena-factory.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
@@ -228,11 +229,13 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
 
 
 test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact", async () => {
-  const [source, page, css] = await Promise.all([
+  const [core, enemyPolicy, page, css] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
   ]);
+  const source = `${core}\n${enemyPolicy}`;
   assert.match(source, /TPS_INTERCEPT_TICKS = 26/);
   assert.match(source, /TPS_REVERSAL_TICKS = 24/);
   assert.match(source, /playerInterceptTicks/);

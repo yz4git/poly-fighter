@@ -13,6 +13,7 @@ import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import {
   adaptTpsCpuDecision,
+  chooseTpsEnemyTactic,
   minimumTpsEnemyTelegraphTicks,
   reviewTpsEnemyHabits,
   tpsCpuActorSnapshot,
@@ -82,7 +83,6 @@ const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
 const TPS_DRAMA_REVIEW_TICKS = 30;
-const ENEMY_TACTIC_INTERVAL = 72;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
@@ -765,25 +765,18 @@ export class TpsFightGame {
     }
     this.enemyTacticTicks -= 1;
     if (this.enemyTacticTicks <= 0) {
-      const slot = Math.floor(this.simulationTicks / ENEMY_TACTIC_INTERVAL);
-      const healthPressure = this.p2.health < this.p1.health ? 1 : 0;
-      const personaBias = this.enemyPersona === "SKIRMISHER" ? 1 : 0;
-      const tacticIndex = (slot + healthPressure + personaBias + (this.difficulty === "HARD" ? 1 : 0)) % 3;
-      this.enemyTactic = this.enemyAdaptation === "ANTI_STEP" || this.enemyAdaptation === "HUNT_INTERCEPT"
-        ? "BAIT"
-        : this.enemyAdaptation === "ANTI_RUSH" || this.enemyAdaptation === "MIRROR_LEFT" || this.enemyAdaptation === "MIRROR_RIGHT"
-          ? "ORBIT"
-          : this.enemyAdaptation === "CUT_RETREAT"
-            ? "PRESSURE"
-            : tacticIndex === 0 ? "PRESSURE" : tacticIndex === 1 ? "ORBIT" : "BAIT";
-      this.enemyOrbitSign = this.enemyAdaptation === "MIRROR_LEFT"
-        ? -1
-        : this.enemyAdaptation === "MIRROR_RIGHT"
-          ? 1
-          : (slot + (this.difficulty === "EASY" ? 1 : 0)) % 2 === 0 ? 1 : -1;
-      const baseTacticTicks = this.difficulty === "HARD" ? 56 : this.difficulty === "EASY" ? 90 : ENEMY_TACTIC_INTERVAL;
-      const dramaTempo = this.dramaPhase === "FINISH" || this.dramaPhase === "CLUTCH" ? 0.82 : this.dramaPhase === "COMEBACK" ? 0.9 : 1;
-      this.enemyTacticTicks = Math.max(42, Math.round(baseTacticTicks * dramaTempo));
+      const selection = chooseTpsEnemyTactic({
+        simulationTicks: this.simulationTicks,
+        p1Health: this.p1.health,
+        p2Health: this.p2.health,
+        persona: this.enemyPersona,
+        adaptation: this.enemyAdaptation,
+        difficulty: this.difficulty,
+        dramaPhase: this.dramaPhase,
+      });
+      this.enemyTactic = selection.tactic;
+      this.enemyOrbitSign = selection.orbitSign;
+      this.enemyTacticTicks = selection.tacticTicks;
     }
 
     const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);

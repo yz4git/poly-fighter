@@ -128,6 +128,61 @@ export function reviewTpsEnemyHabits(
   };
 }
 
+const ENEMY_TACTIC_INTERVAL = 72;
+
+export function chooseTpsEnemyTactic(context: {
+  simulationTicks: number;
+  p1Health: number;
+  p2Health: number;
+  persona: EnemyPersona;
+  adaptation: EnemyAdaptation;
+  difficulty: CpuDifficulty;
+  dramaPhase: "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
+}): { tactic: EnemyTactic; orbitSign: number; tacticTicks: number } {
+  const slot = Math.floor(context.simulationTicks / ENEMY_TACTIC_INTERVAL);
+  const healthPressure = context.p2Health < context.p1Health ? 1 : 0;
+  const personaBias = context.persona === "SKIRMISHER" ? 1 : 0;
+  const tacticIndex = (
+    slot
+    + healthPressure
+    + personaBias
+    + (context.difficulty === "HARD" ? 1 : 0)
+  ) % 3;
+
+  const tactic: EnemyTactic = context.adaptation === "ANTI_STEP" || context.adaptation === "HUNT_INTERCEPT"
+    ? "BAIT"
+    : context.adaptation === "ANTI_RUSH"
+      || context.adaptation === "MIRROR_LEFT"
+      || context.adaptation === "MIRROR_RIGHT"
+      ? "ORBIT"
+      : context.adaptation === "CUT_RETREAT"
+        ? "PRESSURE"
+        : tacticIndex === 0 ? "PRESSURE" : tacticIndex === 1 ? "ORBIT" : "BAIT";
+
+  const orbitSign = context.adaptation === "MIRROR_LEFT"
+    ? -1
+    : context.adaptation === "MIRROR_RIGHT"
+      ? 1
+      : (slot + (context.difficulty === "EASY" ? 1 : 0)) % 2 === 0 ? 1 : -1;
+
+  const baseTacticTicks = context.difficulty === "HARD"
+    ? 56
+    : context.difficulty === "EASY"
+      ? 90
+      : ENEMY_TACTIC_INTERVAL;
+  const dramaTempo = context.dramaPhase === "FINISH" || context.dramaPhase === "CLUTCH"
+    ? 0.82
+    : context.dramaPhase === "COMEBACK"
+      ? 0.9
+      : 1;
+
+  return {
+    tactic,
+    orbitSign,
+    tacticTicks: Math.max(42, Math.round(baseTacticTicks * dramaTempo)),
+  };
+}
+
 export function adaptTpsCpuDecision(
   initialDecision: CpuDecision,
   context: {

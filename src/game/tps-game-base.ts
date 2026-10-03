@@ -11,6 +11,8 @@ import { motionEventsAtContact, sampleCombatMotionAtEvent } from "./combat-motio
 import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
+import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
+import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
   adaptTpsCpuDecision,
   chooseTpsEnemyTactic,
@@ -69,19 +71,6 @@ const TPS_DRAMA_REVIEW_TICKS = 30;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
-const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
-  jab: 2.62,
-  straight: 2.60,
-  backfist: 2.48,
-  bodyBlow: 2.12,
-  power: 2.35,
-  kick: 1.80,
-  lowKick: 0.92,
-  risingKick: 2.06,
-  dashKick: 1.98,
-  throw: 1.75,
-  counter: 2.66,
-});
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 type MatchDramaPhase = "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
 
@@ -954,24 +943,26 @@ export class TpsFightGame {
     const defenderWasAttacking = defender.state === "ATTACK";
     const interceptStrike = attacker === this.p1 && defender === this.p2 && this.playerInterceptTicks > 0;
     const reversalStrike = attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";
-    const blocked = defenderGuarding && move.hitLevel !== "THROW" && !reversalStrike && !interceptStrike;
+    const resolution = computeTpsHitResolution({
+      move,
+      defenderHealth: defender.health,
+      defenderGuarding,
+      defenderWasAttacking,
+      interceptStrike,
+      reversalStrike,
+      playerDna: this.p1Dna,
+      simulationTicks: this.simulationTicks,
+      attackerIsPlayer: attacker === this.p1,
+    });
+    const { blocked, resolvedDamage, lethalImpact, reactionStrength } = resolution;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-    impactPosition.y = TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
-    const damageScale = interceptStrike
-      ? 1.22 * this.p1Dna.interceptDamageScale
-      : reversalStrike
-        ? 1.18 * this.p1Dna.reversalDamageScale
-        : defenderWasAttacking ? 1.12 : 1;
-    const resolvedDamage = blocked ? 0 : Math.max(1, Math.round(move.damage * damageScale));
-    const lethalImpact = !blocked && defender.health <= resolvedDamage;
+    impactPosition.y = tpsImpactHeightForMove(move);
     if (attacker === this.p1 && !blocked) {
       this.trainingProgress.hits += 1;
       if (interceptStrike) this.trainingProgress.intercepts += 1;
       if (reversalStrike) this.trainingProgress.punishes += 1;
     }
-    const reactionStrength = blocked ? 0.72 : 1 + Math.max(0, move.power - 1) * 0.22 + (interceptStrike ? 0.24 : reversalStrike ? 0.18 : defenderWasAttacking ? 0.12 : 0);
-
     if (blocked) {
       defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);
       defender.velocity.x = direction.x * move.knockback * 5;
@@ -1000,27 +991,19 @@ export class TpsFightGame {
       this.setCombatBeat("COUNTER HIT");
     }
 
-    const reactionType = lethalImpact ? "FINISHER" : interceptStrike ? "INTERCEPT" : reversalStrike ? "REVERSAL" : defenderWasAttacking ? "COUNTER" : blocked ? "BLOCK" : move.power >= 1.45 ? "HEAVY" : "NORMAL";
-    const reactionRegion = move.reactionTarget ?? (move.hitLevel === "LOW" ? "LEGS" : "BODY");
-    const reactionVariant = (this.simulationTicks + move.id.length * 3 + (attacker === this.p1 ? 0 : 1)) % 3;
-    const impactPairStrength = THREE.MathUtils.clamp(reactionStrength * (lethalImpact ? 1.18 : 1), 0.7, 1.9);
-    attacker.visual.root.userData.tpsImpactPairRole = "ATTACKER";
-    attacker.visual.root.userData.tpsImpactPairTick = this.simulationTicks;
-    attacker.visual.root.userData.tpsImpactPairMove = move.id;
-    attacker.visual.root.userData.tpsImpactPairStrength = impactPairStrength;
-    attacker.visual.root.userData.tpsImpactPairContact = [impactPosition.x, impactPosition.y, impactPosition.z];
-    defender.visual.root.userData.tpsImpactPairRole = "DEFENDER";
-    defender.visual.root.userData.tpsImpactPairTick = this.simulationTicks;
-    defender.visual.root.userData.tpsImpactPairMove = move.id;
-    defender.visual.root.userData.tpsImpactPairStrength = impactPairStrength;
-    defender.visual.root.userData.tpsImpactPairContact = [impactPosition.x, impactPosition.y, impactPosition.z];
-    defender.visual.root.userData.tpsReactionType = reactionType;
-    defender.visual.root.userData.tpsReactionRegion = reactionRegion;
-    defender.visual.root.userData.tpsReactionVariant = reactionVariant;
-    defender.visual.root.userData.tpsReactionStrength = reactionStrength;
-    defender.visual.root.userData.tpsReactionDirectionX = direction.x;
-    defender.visual.root.userData.tpsReactionDirectionZ = direction.z;
-    defender.visual.root.userData.tpsReactionTick = this.simulationTicks;
+    applyTpsImpactPresentation({
+      attacker,
+      defender,
+      simulationTicks: this.simulationTicks,
+      moveId: move.id,
+      contact: impactPosition,
+      direction,
+      reactionType: resolution.reactionType,
+      reactionRegion: resolution.reactionRegion,
+      reactionVariant: resolution.reactionVariant,
+      reactionStrength,
+      impactPairStrength: resolution.impactPairStrength,
+    });
     if (lethalImpact) {
       defender.hitStop = Math.max(defender.hitStop, move.hitStop + 5);
       attacker.hitStop = Math.max(attacker.hitStop, move.hitStop + 3);
@@ -1033,7 +1016,7 @@ export class TpsFightGame {
       defender: defender.id,
       move,
       blocked,
-      counter: defenderWasAttacking || interceptStrike,
+      counter: resolution.counter,
       throwEscape: false,
       damage: resolvedDamage,
       position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },

@@ -24,10 +24,12 @@ test("Rival Core phase 1-3 adds Fighter DNA and context-sensitive signature rout
 });
 
 test("Rival Core phase 2 records an impact pair and reaction matrix for presentation", async () => {
-  const [source, fighter] = await Promise.all([
+  const [core, impactPresentation, fighter] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/fighter.ts", import.meta.url), "utf8"),
   ]);
+  const source = `${core}\n${impactPresentation}`;
   assert.match(source, /tpsImpactPairRole/);
   assert.match(source, /tpsImpactPairContact/);
   assert.match(source, /tpsReactionRegion/);

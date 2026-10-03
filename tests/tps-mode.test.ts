@@ -3,14 +3,16 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory, enemyPolicy] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, impactResolution, impactPresentation] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-arena-factory.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
@@ -43,7 +45,7 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /TPS_IMPACT_CONTACT_MINIMUM_KICK = 1\.62/);
   assert.match(source, /TPS_IMPACT_HEIGHTS/);
   assert.match(source, /risingKick: 2\.06/);
-  assert.match(source, /impactPosition\.y = TPS_IMPACT_HEIGHTS\[move\.id\]/);
+  assert.match(source, /impactPosition\.y = tpsImpactHeightForMove\(move\)/);
   assert.match(source, /tpsContactSpacingMode/);
   assert.match(source, /impactReadabilityFactor/);
   assert.match(source, /tpsImpactReadabilityFactor/);
@@ -229,13 +231,15 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
 
 
 test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact", async () => {
-  const [core, enemyPolicy, page, css] = await Promise.all([
+  const [core, enemyPolicy, impactResolution, impactPresentation, page, css] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
   ]);
-  const source = `${core}\n${enemyPolicy}`;
+  const source = `${core}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}`;
   assert.match(source, /TPS_INTERCEPT_TICKS = 26/);
   assert.match(source, /TPS_REVERSAL_TICKS = 24/);
   assert.match(source, /playerInterceptTicks/);

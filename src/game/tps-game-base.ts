@@ -14,6 +14,7 @@ import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-are
 import {
   adaptTpsCpuDecision,
   minimumTpsEnemyTelegraphTicks,
+  reviewTpsEnemyHabits,
   tpsCpuActorSnapshot,
   tpsCpuAttackMove,
   tpsEnemyReactionWindowTicks,
@@ -742,41 +743,24 @@ export class TpsFightGame {
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.enemyAdaptReviewTicks -= 1;
     if (this.enemyAdaptReviewTicks <= 0) {
-      const previousAdaptation = this.enemyAdaptation;
-      const actionSamples = this.playerAttackSamples + this.playerStepSamples;
-      const movementSamples = actionSamples + this.playerRetreatSamples;
-      const stepBiasSamples = this.playerLeftStepSamples + this.playerRightStepSamples;
-      if (movementSamples >= 5) {
-        const stepRatio = this.playerStepSamples / Math.max(1, actionSamples);
-        const attackRatio = this.playerAttackSamples / Math.max(1, actionSamples);
-        const retreatRatio = this.playerRetreatSamples / Math.max(1, movementSamples);
-        const sideBias = stepBiasSamples > 0 ? (this.playerRightStepSamples - this.playerLeftStepSamples) / stepBiasSamples : 0;
-        this.enemyAdaptation = this.playerInterceptSamples >= 2
-          ? "HUNT_INTERCEPT"
-          : retreatRatio >= 0.38
-            ? "CUT_RETREAT"
-            : stepRatio >= 0.52 && Math.abs(sideBias) >= 0.55
-              ? sideBias > 0 ? "MIRROR_RIGHT" : "MIRROR_LEFT"
-              : stepRatio >= 0.58
-                ? "ANTI_STEP"
-                : attackRatio >= 0.62 ? "ANTI_RUSH" : "NEUTRAL";
-      }
-      if (previousAdaptation !== this.enemyAdaptation && this.enemyAdaptation !== "NEUTRAL") {
-        const readLabel = this.enemyAdaptation === "ANTI_STEP" ? "ANTI STEP"
-          : this.enemyAdaptation === "ANTI_RUSH" ? "ANTI RUSH"
-            : this.enemyAdaptation === "CUT_RETREAT" ? "CUT OFF"
-              : this.enemyAdaptation === "HUNT_INTERCEPT" ? "HUNT INTERCEPT"
-                : this.enemyAdaptation === "MIRROR_LEFT" ? "CUT LEFT"
-                  : "CUT RIGHT";
-        this.setCombatBeat(`RIVAL: ${readLabel}`, 28);
-      }
-      this.playerAttackSamples = Math.floor(this.playerAttackSamples * 0.45);
-      this.playerStepSamples = Math.floor(this.playerStepSamples * 0.45);
-      this.playerRetreatSamples = Math.floor(this.playerRetreatSamples * 0.40);
-      this.playerLeftStepSamples = Math.floor(this.playerLeftStepSamples * 0.40);
-      this.playerRightStepSamples = Math.floor(this.playerRightStepSamples * 0.40);
-      this.playerInterceptSamples = Math.floor(this.playerInterceptSamples * 0.35);
-      this.playerReversalSamples = Math.floor(this.playerReversalSamples * 0.35);
+      const review = reviewTpsEnemyHabits(this.enemyAdaptation, {
+        attacks: this.playerAttackSamples,
+        steps: this.playerStepSamples,
+        retreats: this.playerRetreatSamples,
+        leftSteps: this.playerLeftStepSamples,
+        rightSteps: this.playerRightStepSamples,
+        intercepts: this.playerInterceptSamples,
+        reversals: this.playerReversalSamples,
+      });
+      this.enemyAdaptation = review.adaptation;
+      if (review.readLabel) this.setCombatBeat(`RIVAL: ${review.readLabel}`, 28);
+      this.playerAttackSamples = review.samples.attacks;
+      this.playerStepSamples = review.samples.steps;
+      this.playerRetreatSamples = review.samples.retreats;
+      this.playerLeftStepSamples = review.samples.leftSteps;
+      this.playerRightStepSamples = review.samples.rightSteps;
+      this.playerInterceptSamples = review.samples.intercepts;
+      this.playerReversalSamples = review.samples.reversals;
       this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
     }
     this.enemyTacticTicks -= 1;

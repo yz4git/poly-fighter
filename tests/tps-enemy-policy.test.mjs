@@ -13,7 +13,7 @@ test("TPS enemy policy isolates telegraph and adaptive decision rules", async ()
   assert.match(source, /export function minimumTpsEnemyTelegraphTicks/);
   assert.match(source, /export function tpsEnemyReactionWindowTicks/);
   assert.match(source, /export function tpsCpuAttackMove/);
-  assert.match(source, /export function adaptTpsCpuDecision/);
+  assert.match(source, /export function reviewTpsEnemyHabits/);\n  assert.match(source, /retreatRatio >= 0\\.38/);\n  assert.match(source, /samples\\.intercepts >= 2/);\n  assert.match(source, /export function adaptTpsCpuDecision/);
   assert.match(source, /adapt-hunt-intercept-feint/);
   assert.match(source, /adapt-anti-step-counter/);
   assert.match(source, /adapt-cut-retreat-lane/);

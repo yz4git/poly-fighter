@@ -62,6 +62,72 @@ export function tpsEnemyReactionWindowTicks(difficulty: CpuDifficulty): number {
   return TPS_REACTIVE_STEP_WINDOW_TICKS[difficulty];
 }
 
+export type TpsEnemyHabitSamples = {
+  attacks: number;
+  steps: number;
+  retreats: number;
+  leftSteps: number;
+  rightSteps: number;
+  intercepts: number;
+  reversals: number;
+};
+
+export function reviewTpsEnemyHabits(
+  current: EnemyAdaptation,
+  samples: TpsEnemyHabitSamples,
+): {
+  adaptation: EnemyAdaptation;
+  readLabel: string | null;
+  samples: TpsEnemyHabitSamples;
+} {
+  const actionSamples = samples.attacks + samples.steps;
+  const movementSamples = actionSamples + samples.retreats;
+  const stepBiasSamples = samples.leftSteps + samples.rightSteps;
+  let adaptation = current;
+
+  if (movementSamples >= 5) {
+    const stepRatio = samples.steps / Math.max(1, actionSamples);
+    const attackRatio = samples.attacks / Math.max(1, actionSamples);
+    const retreatRatio = samples.retreats / Math.max(1, movementSamples);
+    const sideBias = stepBiasSamples > 0
+      ? (samples.rightSteps - samples.leftSteps) / stepBiasSamples
+      : 0;
+
+    adaptation = samples.intercepts >= 2
+      ? "HUNT_INTERCEPT"
+      : retreatRatio >= 0.38
+        ? "CUT_RETREAT"
+        : stepRatio >= 0.52 && Math.abs(sideBias) >= 0.55
+          ? sideBias > 0 ? "MIRROR_RIGHT" : "MIRROR_LEFT"
+          : stepRatio >= 0.58
+            ? "ANTI_STEP"
+            : attackRatio >= 0.62 ? "ANTI_RUSH" : "NEUTRAL";
+  }
+
+  const readLabel = current !== adaptation && adaptation !== "NEUTRAL"
+    ? adaptation === "ANTI_STEP" ? "ANTI STEP"
+      : adaptation === "ANTI_RUSH" ? "ANTI RUSH"
+        : adaptation === "CUT_RETREAT" ? "CUT OFF"
+          : adaptation === "HUNT_INTERCEPT" ? "HUNT INTERCEPT"
+            : adaptation === "MIRROR_LEFT" ? "CUT LEFT"
+              : "CUT RIGHT"
+    : null;
+
+  return {
+    adaptation,
+    readLabel,
+    samples: {
+      attacks: Math.floor(samples.attacks * 0.45),
+      steps: Math.floor(samples.steps * 0.45),
+      retreats: Math.floor(samples.retreats * 0.40),
+      leftSteps: Math.floor(samples.leftSteps * 0.40),
+      rightSteps: Math.floor(samples.rightSteps * 0.40),
+      intercepts: Math.floor(samples.intercepts * 0.35),
+      reversals: Math.floor(samples.reversals * 0.35),
+    },
+  };
+}
+
 export function adaptTpsCpuDecision(
   initialDecision: CpuDecision,
   context: {

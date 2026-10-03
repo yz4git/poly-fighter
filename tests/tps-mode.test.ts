@@ -103,7 +103,7 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
   assert.match(source, /TPS_PERFECT_EVADE_TICKS \+ this\.p1Dna\.perfectEvadeBonusTicks/);
   assert.match(source, /const trackedSideEvade/);
   assert.match(source, /const interceptStrike = attacker === this\.p1/);
-  assert.match(source, /&& !reversalStrike && !interceptStrike/);
+  assert.match(source, /&&\s*!reversalStrike\s*&&\s*!interceptStrike/);
   assert.match(source, /distance > move\.reach \+ 0\.72/);
   assert.match(source, /applyAttackStepIn\(this\.p1, this\.p2\)/);
   assert.match(source, /enemyTactic/);

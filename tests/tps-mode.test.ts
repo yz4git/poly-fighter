@@ -124,8 +124,8 @@ test("TPS player combat is ATTACK plus directional STEP with range attacks, comb
 test("TPS enemy decisions use the shared player-fun director without losing circular movement", async () => {
   const source = await readTpsSource();
   assert.match(source, /new CpuFunDirector\(this\.difficulty, 47\)/);
-  assert.match(source, /this\.enemyFunDirector\.observe\(situation\(\)\)/);
-  assert.match(source, /this\.enemyFunDirector\.decide\(situation\(\)\)/);
+  assert.match(source, /this\.enemyFunDirector\.observe\(this\.enemySituation\(\)\)/);
+  assert.match(source, /this\.enemyFunDirector\.decide\(this\.enemySituation\(\)\)/);
   assert.match(source, /tpsCpuDirectorPolicy = "FUN_DIRECTOR_V1"/);
   assert.match(source, /tpsCpuDirectorReason/);
   assert.match(source, /tpsCpuDirectorComebackMercy/);

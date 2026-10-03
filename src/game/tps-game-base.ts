@@ -602,15 +602,26 @@ export class TpsFightGame {
     sideAxis: number,
   ): void {
     const stepPlan = planTpsStep(move, toEnemy, right, sideAxis);
-    const { stepVector } = stepPlan;
+    this.applyPlayerStepPlan(stepPlan.stepVector, stepPlan.forwardWeight, stepPlan.sideWeight, stepPlan.evadeSign);
+    this.trackPlayerStepThreat();
+  }
+
+  private applyPlayerStepPlan(
+    stepVector: THREE.Vector3,
+    forwardWeight: number,
+    sideWeight: number,
+    evadeSign: number,
+  ): void {
     this.playerStepDirection.copy(stepVector);
-    this.playerStepForwardWeight = stepPlan.forwardWeight;
-    this.playerStepSideWeight = stepPlan.sideWeight;
-    this.playerEvadeSign = stepPlan.evadeSign;
-    if (this.playerStepSideWeight > 0.45) this.trainingProgress.sideSteps += 1;
-    if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
-    else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
-    if (this.playerStepForwardWeight < -0.45) this.playerRetreatSamples += 1;
+    this.playerStepForwardWeight = forwardWeight;
+    this.playerStepSideWeight = sideWeight;
+    this.playerEvadeSign = evadeSign;
+
+    if (sideWeight > 0.45) this.trainingProgress.sideSteps += 1;
+    if (evadeSign < 0) this.playerLeftStepSamples += 1;
+    else if (evadeSign > 0) this.playerRightStepSamples += 1;
+    if (forwardWeight < -0.45) this.playerRetreatSamples += 1;
+
     this.playerEvadeTicks = TPS_STEP_TICKS;
     this.playerEvadeCooldown = Math.max(
       12,
@@ -621,6 +632,9 @@ export class TpsFightGame {
     // inside resolveAttack, when an in-range enemy strike is actually evaded.
     this.playerFlankWindowTicks = 0;
     this.playerPerfectEvadeTicks = 0;
+  }
+
+  private trackPlayerStepThreat(): void {
     const activeIncomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
     const pendingMove = this.enemyDirectorPendingMove
       ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null

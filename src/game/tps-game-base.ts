@@ -12,6 +12,7 @@ import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
+import { buildTpsHudSnapshot } from "./tps-hud-snapshot";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
@@ -1386,53 +1387,38 @@ export class TpsFightGame {
     if (!force && this.simulationTicks % 4 !== 0) return;
     if (!force && this.lastHudTick === this.simulationTicks) return;
     this.lastHudTick = this.simulationTicks;
+
     const enemyThreat = this.enemyThreatStatus();
-    const snapshot: HudSnapshot = {
-      phase: "MATCH",
-      tpsTraining: { ...this.trainingProgress },
-      // Action cues describe the current opportunity, independently of a
-      // signature/combo/drama headline that can remain on screen for 30+ ticks.
-      tpsCue: this.finishPending || this.finished ? "NONE"
-        : enemyThreat.incoming ? "INCOMING"
-          : this.playerReversalTicks > 0 || this.playerPerfectEvadeTicks > 0 ? "PUNISH"
-            : enemyThreat.windup ? "WINDUP"
-              : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE ? "RANGE" : "NONE",
-      round: 1,
-      timer: Math.ceil(this.timerTicks / 60),
-      p1Health: this.p1.health,
-      p2Health: this.p2.health,
-      p1Wins: this.finished && this.resultWinner === "p1" ? 1 : 0,
-      p2Wins: this.finished && this.resultWinner === "p2" ? 1 : 0,
-      p1Name: this.p1.definition.name,
-      p2Name: this.p2.definition.name,
-      message: this.finished
-        ? "BATTLE COMPLETE"
-        : this.combatBeatTicks > 0 && this.combatBeatLabel
-          ? this.combatBeatLabel
-          : this.finishPending
-            ? "KO"
-          : this.p1.state === "ATTACK" && this.p1.currentMove?.id === "dashKick"
-          ? "DASH ATTACK"
-          : this.playerPerfectEvadeTicks > 0
-            ? "PERFECT STEP"
-          : this.playerEvadeTicks > 0 && this.playerStepSideWeight > 0.45
-            ? "SIDE STEP"
-            : this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45
-              ? "FLANK OPEN"
-              : this.p1.state === "ATTACK" && this.playerComboStage > 1
-                ? `COMBO ${this.playerComboStage}`
-                : this.enemyOpeningGraceTicks > 0
-                  ? "READ THE TARGET"
-                  : enemyThreat.windup
-                    ? "WINDUP"
-                    : enemyThreat.incoming
-                      ? "INCOMING"
-                      : Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z) < TPS_STRIKE_RANGE
-                      ? "STRIKE RANGE"
-                      : "TARGET LOCKED",
+    const fightDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const snapshot = buildTpsHudSnapshot({
+      trainingProgress: this.trainingProgress,
+      enemyThreat,
+      finishPending: this.finishPending,
+      finished: this.finished,
+      playerReversalTicks: this.playerReversalTicks,
+      playerPerfectEvadeTicks: this.playerPerfectEvadeTicks,
+      playerEvadeTicks: this.playerEvadeTicks,
+      playerStepSideWeight: this.playerStepSideWeight,
+      playerFlankWindowTicks: this.playerFlankWindowTicks,
+      playerComboStage: this.playerComboStage,
+      combatBeatTicks: this.combatBeatTicks,
+      combatBeatLabel: this.combatBeatLabel,
+      enemyOpeningGraceTicks: this.enemyOpeningGraceTicks,
       p1State: this.p1.state,
       p2State: this.p2.state,
-    };
+      p1MoveId: this.p1.currentMove?.id ?? null,
+      fightDistance,
+      strikeRange: TPS_STRIKE_RANGE,
+      timerTicks: this.timerTicks,
+      p1Health: this.p1.health,
+      p2Health: this.p2.health,
+      resultWinner: this.resultWinner,
+      p1Name: this.p1.definition.name,
+      p2Name: this.p2.definition.name,
+    });
     this.options.onHud?.(snapshot);
   }
 

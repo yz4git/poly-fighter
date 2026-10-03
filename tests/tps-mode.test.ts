@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, impactResolution, impactPresentation, matchDrama] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, impactResolution, impactPresentation, matchDrama, hudSnapshot] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
@@ -12,8 +12,9 @@ async function readTpsSource(): Promise<string> {
     readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-match-drama.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}\n${matchDrama}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}\n${matchDrama}\n${hudSnapshot}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
@@ -212,11 +213,13 @@ test("TPS messages use a face-safe HUD lane and RESULT removes live fight contro
 
 
 test("TPS reactive two-button HUD makes threat, windup, and punish turns explicit", async () => {
-  const [source, page, css] = await Promise.all([
+  const [core, hudSnapshot, page, css] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
   ]);
+  const source = `${core}\n${hudSnapshot}`;
   assert.match(source, /enemyThreatStatus/);
   assert.match(source, /enemyDirectorPendingMove !== null/);
   assert.match(source, /canStillHit/);

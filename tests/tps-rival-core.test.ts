@@ -39,7 +39,11 @@ test("Rival Core phase 2 records an impact pair and reaction matrix for presenta
 
 
 test("Rival Core phase 4 learns retreat, directional step, and intercept habits without frame-perfect reads", async () => {
-  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  const [core, policy] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
+  ]);
+  const source = `${core}\n${policy}`;
   assert.match(source, /CUT_RETREAT/);
   assert.match(source, /MIRROR_LEFT/);
   assert.match(source, /MIRROR_RIGHT/);
@@ -124,14 +128,16 @@ test("training requires fresh resolved successes, never headlines or a KO", asyn
 
 
 test("Rival Core phase 9 makes every CPU attack reactable from a visible commitment", async () => {
-  const [source, presentation] = await Promise.all([
+  const [core, policy, presentation] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8"),
   ]);
+  const source = `${core}\n${policy}`;
   assert.match(source, /TPS_REACTABLE_TELEGRAPH_TICKS/);
   assert.match(source, /NORMAL: 18/);
   assert.match(source, /HARD: 15/);
-  assert.match(source, /minimumEnemyTelegraphTicks/);
+  assert.match(source, /minimumTpsEnemyTelegraphTicks/);
   assert.match(source, /TPS_REACTIVE_STEP_WINDOW_TICKS/);
   assert.match(source, /pendingReaction/);
   assert.match(source, /lateWindup/);

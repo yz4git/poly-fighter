@@ -3,7 +3,7 @@ import { AudioManager } from "./audio";
 import { EffectsManager } from "./effects";
 import { fighterDnaForName, resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { FighterRuntime, type CpuDifficulty } from "./fighter";
-import { CpuFunDirector, isAttackIntent, type CpuActorSnapshot, type CpuDecision, type CpuIntent, type CpuSituation } from "./cpu-director";
+import { CpuFunDirector, isAttackIntent, type CpuDecision, type CpuIntent, type CpuSituation } from "./cpu-director";
 import { FixedStepClock } from "./fixed";
 import { InputSystem } from "./input";
 import { PresentationAnimationController } from "./presentation-animation";

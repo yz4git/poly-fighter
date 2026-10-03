@@ -3,14 +3,7 @@ import type { CpuDifficulty, FighterRuntime } from "./fighter";
 
 export type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
 export type EnemyPersona = "BRAWLER" | "SKIRMISHER";
-export type EnemyAdaptation =
-  | "NEUTRAL"
-  | "ANTI_STEP"
-  | "ANTI_RUSH"
-  | "CUT_RETREAT"
-  | "MIRROR_LEFT"
-  | "MIRROR_RIGHT"
-  | "HUNT_INTERCEPT";
+export type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH" | "CUT_RETREAT" | "MIRROR_LEFT" | "MIRROR_RIGHT" | "HUNT_INTERCEPT";
 
 const TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
   EASY: 22,

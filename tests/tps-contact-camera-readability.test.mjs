@@ -3,15 +3,19 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("TPS contact camera opens the authored strike silhouette without moving gameplay actors", async () => {
-  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  const [source, cameraProfile] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
+  ]);
+  const cameraSource = `${source}\n${cameraProfile}`;
 
-  assert.match(source, /TPS_CAMERA_CONTACT_BACK_BONUS = 0\.18/);
-  assert.match(source, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
-  assert.match(source, /TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0\.20/);
-  assert.match(source, /TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0\.98/);
-  assert.match(source, /TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0\.24/);
-  assert.match(source, /TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0\.10/);
-  assert.match(source, /TPS_CAMERA_LOW_KICK_TARGET_DROP = 0\.16/);
+  assert.match(cameraSource, /TPS_CAMERA_CONTACT_BACK_BONUS = 0\.18/);
+  assert.match(cameraSource, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
+  assert.match(cameraSource, /TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0\.20/);
+  assert.match(cameraSource, /TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0\.98/);
+  assert.match(cameraSource, /TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0\.24/);
+  assert.match(cameraSource, /TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0\.10/);
+  assert.match(cameraSource, /TPS_CAMERA_LOW_KICK_TARGET_DROP = 0\.16/);
   assert.match(source, /sampleCombatMotionAtEvent/);
   assert.match(source, /motionEventsAtContact/);
   assert.match(source, /this\.p1\.moveTick/);

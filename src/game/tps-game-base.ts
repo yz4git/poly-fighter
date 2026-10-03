@@ -10,6 +10,28 @@ import { PresentationAnimationController } from "./presentation-animation";
 import { motionEventsAtContact, sampleCombatMotionAtEvent } from "./combat-motion-timeline";
 import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
+import {
+  TPS_CAMERA_CLOSE_ANCHOR_BLEND,
+  TPS_CAMERA_CLOSE_BACK_DELTA,
+  TPS_CAMERA_CLOSE_SHOULDER_BONUS,
+  TPS_CAMERA_CLOSE_TARGET_LIFT,
+  TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND,
+  TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT,
+  TPS_CAMERA_CONTACT_BACK_BONUS,
+  TPS_CAMERA_CONTACT_SHOULDER_BONUS,
+  TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS,
+  TPS_CAMERA_FRONT_KICK_BACK_BONUS,
+  TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS,
+  TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS,
+  TPS_CAMERA_IMPACT_BACK_DELTA,
+  TPS_CAMERA_IMPACT_SHOULDER,
+  TPS_CAMERA_KICK_CONTACT_BACK_BONUS,
+  TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS,
+  TPS_CAMERA_KICK_TARGET_SIDE_BONUS,
+  TPS_CAMERA_LOW_KICK_TARGET_DROP,
+  TPS_CAMERA_MAX_TRAVEL_SPEED,
+  TPS_CLOSE_ORBIT_SPEED_SCALE,
+} from "./tps-camera-profile";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame } from "./types";
@@ -61,30 +83,6 @@ const TPS_KO_MIN_SHOW_TICKS = 72;
 const TPS_KO_SETTLED_HOLD_TICKS = 30;
 const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
-const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.75;
-const TPS_CAMERA_CLOSE_BACK_DELTA = -0.95;
-const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
-const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
-const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;
-const TPS_CAMERA_CLOSE_TARGET_LIFT = 0.14;
-const TPS_CAMERA_IMPACT_BACK_DELTA = 0.24;
-const TPS_CAMERA_IMPACT_SHOULDER = 0.18;
-// Playtest pass: authored contact frames were technically correct but the
-// shoulder view still stacked both torsos in screen space. These are camera-only
-// offsets driven by the existing authored contact weight, so gameplay position,
-// hitboxes, reach and animation poses remain untouched.
-const TPS_CAMERA_CONTACT_BACK_BONUS = 0.18;
-const TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0.32;
-const TPS_CAMERA_KICK_CONTACT_BACK_BONUS = 0.10;
-const TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS = 0.20;
-const TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS = 0.10;
-const TPS_CAMERA_KICK_TARGET_SIDE_BONUS = 0.08;
-const TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS = 0.98;
-const TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS = 0.24;
-const TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0.10;
-const TPS_CAMERA_LOW_KICK_TARGET_DROP = 0.16;
-const TPS_CAMERA_MAX_TRAVEL_SPEED = 13.2;
-const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;

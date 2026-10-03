@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension] = await Promise.all([
+  const [core, extension, cameraProfile] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}`;
+  return `${core}\n${extension}\n${cameraProfile}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {

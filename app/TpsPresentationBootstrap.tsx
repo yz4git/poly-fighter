@@ -38,42 +38,63 @@ import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-bo
 import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph-handoff";
 import { installTpsThrowStagingPresentation } from "@/src/game/tps-throw-staging";
 
-installRivalCircuitAiRuntime();
-installRivalCircuitMemoryRuntime();
-installRivalCircuitProtocolRuntime();
-installRivalCircuitIntelRuntime();
-installRivalCircuitApexBossRuntime();
-installVantaFighterPresentation();
-installAxionFighterPresentation();
-installTpsArenaSpectaclePresentation();
-installRivalCircuitArenaPresentation();
-installRivalCircuitArenaTactics();
-installTpsGroundingReadabilityPresentation();
-installTpsGuardClashPresentation();
-installTpsThrowStagingPresentation();
-installTpsQuickstepBodyPresentation();
-installTpsTelegraphHandoffPresentation();
-installTpsPunishReadyPresentation();
-installTpsInterceptSilhouettePresentation();
-installTpsBodyBlowLevelChangePresentation();
-installTpsBackfistSweepBoostPresentation();
-installTpsCounterSlipBoostPresentation();
-installTpsImpactFollowthroughPresentation();
-installTpsFrontKickOpenLinePresentation();
-installTpsPowerBodyDrivePresentation();
-installTpsLowKickOpenLinePresentation();
-installTpsCloseNeutralLanePresentation();
-installTpsClosePunchLanePresentation();
-installTpsLatestImpactWavePresentation();
-installTpsFinalImpactVfxReadability();
-installTpsImpactLensPulsePresentation();
-installTpsImpactBeatSyncPresentation();
-installTpsCounterattackHandoffPresentation();
-installTpsAttackActionHandoffPresentation();
-installTpsKickContactShapingPresentation();
-installTpsKickSupportFootPresentation();
-installTpsDashKickGroundContactPresentation();
-installTpsKickPairSpacingPresentation();
+type Installer = () => void;
+
+function installAll(installers: readonly Installer[]): void {
+  for (const install of installers) install();
+}
+
+const RIVAL_RUNTIME_INSTALLERS = [
+  installRivalCircuitAiRuntime,
+  installRivalCircuitMemoryRuntime,
+  installRivalCircuitProtocolRuntime,
+  installRivalCircuitIntelRuntime,
+  installRivalCircuitApexBossRuntime,
+] as const;
+
+const FIGHTER_PRESENTATION_INSTALLERS = [
+  installVantaFighterPresentation,
+  installAxionFighterPresentation,
+] as const;
+
+// Order is part of the presentation contract: each installer wraps the previous
+// PresentationAnimationController update. Keep this list explicit and reviewable.
+const TPS_PRESENTATION_INSTALLERS = [
+  installTpsArenaSpectaclePresentation,
+  installRivalCircuitArenaPresentation,
+  installRivalCircuitArenaTactics,
+  installTpsGroundingReadabilityPresentation,
+  installTpsGuardClashPresentation,
+  installTpsThrowStagingPresentation,
+  installTpsQuickstepBodyPresentation,
+  installTpsTelegraphHandoffPresentation,
+  installTpsPunishReadyPresentation,
+  installTpsInterceptSilhouettePresentation,
+  installTpsBodyBlowLevelChangePresentation,
+  installTpsBackfistSweepBoostPresentation,
+  installTpsCounterSlipBoostPresentation,
+  installTpsImpactFollowthroughPresentation,
+  installTpsFrontKickOpenLinePresentation,
+  installTpsPowerBodyDrivePresentation,
+  installTpsLowKickOpenLinePresentation,
+  installTpsCloseNeutralLanePresentation,
+  installTpsClosePunchLanePresentation,
+  installTpsLatestImpactWavePresentation,
+  installTpsFinalImpactVfxReadability,
+  installTpsImpactLensPulsePresentation,
+  installTpsImpactBeatSyncPresentation,
+  installTpsCounterattackHandoffPresentation,
+  installTpsAttackActionHandoffPresentation,
+  installTpsKickContactShapingPresentation,
+  installTpsKickSupportFootPresentation,
+  installTpsDashKickGroundContactPresentation,
+  installTpsKickPairSpacingPresentation,
+] as const;
+
+installAll(RIVAL_RUNTIME_INSTALLERS);
+installAll(FIGHTER_PRESENTATION_INSTALLERS);
+installAll(TPS_PRESENTATION_INSTALLERS);
+
 // Install last so the two-button chord is the outer gameplay guard. All existing
 // motion/readability wrappers still process the committed finisher on later ticks.
 installRivalCircuitFinishRuntime();

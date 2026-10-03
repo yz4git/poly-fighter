@@ -13,6 +13,7 @@ import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
 import { buildTpsHudSnapshot } from "./tps-hud-snapshot";
+import { computeTpsLockOnProfile } from "./tps-lock-on-profile";
 import { computeTpsContactSpacing } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
@@ -1542,34 +1543,45 @@ export class TpsFightGame {
 
   private updateLockOn(): void {
     this.p2.visual.root.updateMatrixWorld(true);
-    const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+    const distance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
     const { windup, incoming: threat } = this.enemyThreatStatus();
     const inStrikeRange = distance < TPS_STRIKE_RANGE;
-    // Keep the lock cue above the torso at melee range so authored arms, chest
-    // rotation, and hit reactions remain visible instead of sitting under a ring.
-    const lockLift = inStrikeRange ? 0.62 : 0.46;
-    const target = this.p2.visual.root.localToWorld(new THREE.Vector3(0, this.p2.visual.layout.ribY + lockLift, 0));
-    const perfectEvade = this.playerPerfectEvadeTicks > 0;
-    const lockColor = perfectEvade ? 0x6dffb8 : threat ? 0xff506f : windup ? 0xffc45a : inStrikeRange ? 0xffd45c : 0x7ce8ff;
-    this.lockRing.material.color.setHex(lockColor);
-    this.lockStem.material.color.setHex(lockColor);
-    this.targetGroundRing.material.color.setHex(lockColor);
+    const profile = computeTpsLockOnProfile({
+      inStrikeRange,
+      windup,
+      threat,
+      perfectEvade: this.playerPerfectEvadeTicks > 0,
+      renderTime: this.renderTime,
+      contactReadability: Number(
+        this.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0,
+      ),
+    });
+
+    const target = this.p2.visual.root.localToWorld(
+      new THREE.Vector3(
+        0,
+        this.p2.visual.layout.ribY + profile.lockLift,
+        0,
+      ),
+    );
+    this.lockRing.material.color.setHex(profile.lockColor);
+    this.lockStem.material.color.setHex(profile.lockColor);
+    this.targetGroundRing.material.color.setHex(profile.lockColor);
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
-    const pulseRate = threat ? 14.0 : windup ? 8.5 : 5.5;
-    const pulse = (threat ? 1.02 : windup ? 0.96 : inStrikeRange ? 0.88 : 0.86) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.075 : windup ? 0.06 : 0.045);
-    this.lockRing.scale.setScalar(pulse);
+    this.lockRing.scale.setScalar(profile.pulse);
     this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.30, 0));
     this.lockStem.lookAt(this.camera.position);
-    this.targetGroundRing.position.set(this.p2.position.x, 0.035, this.p2.position.z);
-    const groundPulse = (threat ? 1.08 : windup ? 1.02 : 0.95) + Math.sin(this.renderTime * pulseRate) * (threat ? 0.10 : 0.06);
-    this.targetGroundRing.scale.setScalar(groundPulse);
-    const contactReadability = Number(this.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0);
-    const baseGroundOpacity = threat ? 0.68 : windup ? 0.46 : inStrikeRange ? 0.34 : 0.22;
-    // Fade the floor cue under an authored hit so feet/shins remain readable.
-    // The torso lock ring and colour state stay visible, so target awareness is
-    // not lost while the strike silhouette gets a cleaner lower-body line.
-    this.targetGroundRing.material.opacity = baseGroundOpacity * (1 - THREE.MathUtils.clamp(contactReadability, 0, 1) * 0.46);
+    this.targetGroundRing.position.set(
+      this.p2.position.x,
+      0.035,
+      this.p2.position.z,
+    );
+    this.targetGroundRing.scale.setScalar(profile.groundPulse);
+    this.targetGroundRing.material.opacity = profile.groundOpacity;
   }
 
   private checkFinish(): void {

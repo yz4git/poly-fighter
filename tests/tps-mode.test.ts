@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, playerPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, playerPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot, lockOnProfile] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
@@ -15,8 +15,9 @@ async function readTpsSource(): Promise<string> {
     readFile(new URL("../src/game/tps-contact-spacing.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-match-drama.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-lock-on-profile.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}\n${lockOnProfile}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
@@ -56,7 +57,7 @@ test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder c
   assert.match(source, /tpsCloseReadabilityFactor/);
   assert.match(source, /tpsCloseAnchorBlend/);
   assert.match(source, /cameraAnchor\.copy\(this\.p1\.position\)[\s\S]*?\.lerp\(this\.cameraPairMidpoint/);
-  assert.match(source, /lockLift = inStrikeRange \? 0\.62 : 0\.46/);
+  assert.match(source, /const lockLift = input\.inStrikeRange \? 0\.62 : 0\.46/);
   assert.match(source, /enemyThreatStatus/);
   assert.match(source, /enemyThreat\.windup/);
   assert.match(source, /enemyThreat\.incoming/);

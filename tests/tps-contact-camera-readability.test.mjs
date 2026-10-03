@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("TPS contact camera opens the authored strike silhouette without moving gameplay actors", async () => {
-  const [source, cameraProfile] = await Promise.all([
+  const [source, cameraProfile, lockOnProfile] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-lock-on-profile.ts", import.meta.url), "utf8"),
   ]);
-  const cameraSource = `${source}\n${cameraProfile}`;
+  const cameraSource = `${source}\n${cameraProfile}\n${lockOnProfile}`;
 
   assert.match(cameraSource, /TPS_CAMERA_CONTACT_BACK_BONUS = 0\.18/);
   assert.match(cameraSource, /TPS_CAMERA_CONTACT_SHOULDER_BONUS = 0\.32/);
@@ -24,7 +25,7 @@ test("TPS contact camera opens the authored strike silhouette without moving gam
   assert.match(source, /lowKickReadabilityFactor/);
   assert.match(source, /tpsAuthoredContactReadabilityFactor/);
   assert.match(source, /tpsContactReadabilityMove/);
-  assert.match(source, /baseGroundOpacity \* \(1 - THREE\.MathUtils\.clamp\(contactReadability, 0, 1\) \* 0\.46\)/);
+  assert.match(cameraSource, /baseGroundOpacity \* \(1 - clamp01\(input\.contactReadability\) \* 0\.46\)/);
 
   // The readability pass is intentionally camera/UI-only: no contact-driven
   // writes to p1/p2 simulation positions are introduced inside updateCamera.

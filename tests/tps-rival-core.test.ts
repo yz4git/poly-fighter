@@ -58,12 +58,13 @@ test("Rival Core phase 4 learns retreat, directional step, and intercept habits 
 });
 
 test("Rival Core phase 5 drives match drama through presentation and tempo, not hidden damage buffs", async () => {
-  const [core, policy] = await Promise.all([
+  const [core, policy, drama] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-match-drama.ts", import.meta.url), "utf8"),
   ]);
-  const source = `${core}\n${policy}`;
-  assert.match(source, /MatchDramaPhase/);
+  const source = `${core}\n${policy}\n${drama}`;
+  assert.match(source, /TpsMatchDramaPhase/);
   assert.match(source, /updateMatchDrama/);
   assert.match(source, /MOMENTUM SHIFT/);
   assert.match(source, /FINAL STAND/);

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, impactResolution, impactPresentation] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, impactResolution, impactPresentation, matchDrama] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
@@ -11,8 +11,9 @@ async function readTpsSource(): Promise<string> {
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-match-drama.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}\n${matchDrama}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {

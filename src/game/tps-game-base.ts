@@ -11,6 +11,7 @@ import { motionEventsAtContact, sampleCombatMotionAtEvent } from "./combat-motio
 import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
+import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
@@ -72,7 +73,6 @@ const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
 const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
-type MatchDramaPhase = "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
@@ -174,7 +174,7 @@ export class TpsFightGame {
   private enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
   private enemyPersona: EnemyPersona = "BRAWLER";
   private enemyAdaptation: EnemyAdaptation = "NEUTRAL";
-  private dramaPhase: MatchDramaPhase = "OPENING";
+  private dramaPhase: TpsMatchDramaPhase = "OPENING";
   private dramaIntensity = 0.14;
   private dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
   private simulationTicks = 0;
@@ -421,42 +421,23 @@ export class TpsFightGame {
     this.dramaReviewTicks -= 1;
     if (this.dramaReviewTicks > 0) return;
     this.dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
-    const previous = this.dramaPhase;
-    const healthGap = Math.abs(this.p1.health - this.p2.health);
-    const bothLow = this.p1.health <= 32 && this.p2.health <= 32;
-    const someoneCritical = Math.min(this.p1.health, this.p2.health) <= 16;
-    const comebackState = healthGap >= 24 && Math.min(this.p1.health, this.p2.health) <= 42;
-    const pressureState = this.playerComboStage >= 2 || this.playerPerfectEvadeTicks > 0 || this.combatBeatTicks > 0 || healthGap >= 34;
 
-    this.dramaPhase = this.timerTicks > 93 * 60
-      ? "OPENING"
-      : someoneCritical
-        ? "FINISH"
-        : bothLow
-          ? "CLUTCH"
-          : comebackState
-            ? "COMEBACK"
-            : pressureState
-              ? "PRESSURE"
-              : "NEUTRAL";
-    this.dramaIntensity = this.dramaPhase === "FINISH"
-      ? 0.96
-      : this.dramaPhase === "CLUTCH"
-        ? 0.84
-        : this.dramaPhase === "COMEBACK"
-          ? 0.66
-          : this.dramaPhase === "PRESSURE"
-            ? 0.48
-            : this.dramaPhase === "NEUTRAL" ? 0.28 : 0.14;
-    this.camera.userData.tpsDramaPhase = this.dramaPhase;
-    this.camera.userData.tpsDramaIntensity = this.dramaIntensity;
-    this.p1.visual.root.userData.tpsDramaPhase = this.dramaPhase;
-    this.p2.visual.root.userData.tpsDramaPhase = this.dramaPhase;
-    if (previous !== this.dramaPhase) {
-      if (this.dramaPhase === "CLUTCH") this.setCombatBeat("CLUTCH", 30);
-      else if (this.dramaPhase === "FINISH") this.setCombatBeat("FINAL STAND", 30);
-      else if (this.dramaPhase === "COMEBACK") this.setCombatBeat("MOMENTUM SHIFT", 26);
-    }
+    const drama = computeTpsMatchDrama({
+      previousPhase: this.dramaPhase,
+      timerTicks: this.timerTicks,
+      p1Health: this.p1.health,
+      p2Health: this.p2.health,
+      playerComboStage: this.playerComboStage,
+      playerPerfectEvadeTicks: this.playerPerfectEvadeTicks,
+      combatBeatTicks: this.combatBeatTicks,
+    });
+    this.dramaPhase = drama.phase;
+    this.dramaIntensity = drama.intensity;
+    this.camera.userData.tpsDramaPhase = drama.phase;
+    this.camera.userData.tpsDramaIntensity = drama.intensity;
+    this.p1.visual.root.userData.tpsDramaPhase = drama.phase;
+    this.p2.visual.root.userData.tpsDramaPhase = drama.phase;
+    if (drama.beatLabel) this.setCombatBeat(drama.beatLabel, drama.beatTicks);
   }
 
   private updatePlayer(input: InputFrame): void {

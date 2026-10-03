@@ -1,4 +1,5 @@
 import { isAttackIntent, type CpuActorSnapshot, type CpuDecision, type CpuIntent } from "./cpu-director";
+import type { TpsMatchDramaPhase } from "./tps-match-drama";
 import type { CpuDifficulty, FighterRuntime } from "./fighter";
 
 export type EnemyTactic = "PRESSURE" | "ORBIT" | "BAIT";
@@ -137,7 +138,7 @@ export function chooseTpsEnemyTactic(context: {
   persona: EnemyPersona;
   adaptation: EnemyAdaptation;
   difficulty: CpuDifficulty;
-  dramaPhase: "OPENING" | "NEUTRAL" | "PRESSURE" | "COMEBACK" | "CLUTCH" | "FINISH";
+  dramaPhase: TpsMatchDramaPhase;
 }): { tactic: EnemyTactic; orbitSign: number; tacticTicks: number } {
   const slot = Math.floor(context.simulationTicks / ENEMY_TACTIC_INTERVAL);
   const healthPressure = context.p2Health < context.p1Health ? 1 : 0;

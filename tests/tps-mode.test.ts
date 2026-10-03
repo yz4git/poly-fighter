@@ -3,18 +3,19 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-arena-factory.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
   const source = await readTpsSource();
-  assert.match(source, /ARENA_RADIUS = 6\.8/);
-  assert.match(source, /new THREE\.CircleGeometry\(ARENA_RADIUS/);
+  assert.match(source, /TPS_ARENA_RADIUS = 6\.8/);
+  assert.match(source, /new THREE\.CircleGeometry\(TPS_ARENA_RADIUS/);
   assert.match(source, /horizontalDirection\(this\.p1\.position, this\.p2\.position\)/);
   assert.match(source, /new THREE\.Vector3\(-toEnemy\.z, 0, toEnemy\.x\)/);
   assert.match(source, /fighter\.visual\.root\.quaternion\.setFromUnitVectors\(MODEL_FORWARD, forward\)/);

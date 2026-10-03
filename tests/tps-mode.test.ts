@@ -136,11 +136,15 @@ test("TPS enemy decisions use the shared player-fun director without losing circ
 });
 
 test("TPS result records a visible winner instead of a zero-zero duel score", async () => {
-  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  const [core, hudSnapshot] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
+  ]);
+  const source = `${core}\n${hudSnapshot}`;
   assert.match(source, /resultWinner/);
   assert.match(source, /this\.resultWinner = winner/);
-  assert.match(source, /p1Wins: this\.finished && this\.resultWinner === "p1" \? 1 : 0/);
-  assert.match(source, /p2Wins: this\.finished && this\.resultWinner === "p2" \? 1 : 0/);
+  assert.match(source, /p1Wins: input\.finished && input\.resultWinner === "p1" \? 1 : 0/);
+  assert.match(source, /p2Wins: input\.finished && input\.resultWinner === "p2" \? 1 : 0/);
 });
 
 test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", async () => {

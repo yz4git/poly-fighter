@@ -36,6 +36,7 @@ import {
 import {
   computeTpsCameraFraming,
   TPS_CAMERA_MAX_TRAVEL_SPEED,
+  type TpsCameraFraming,
 } from "./tps-camera-profile";
 import {
   composeTpsMoveVector,
@@ -1311,8 +1312,7 @@ export class TpsFightGame {
     const attackMoveId = attackMove?.id ?? null;
 
     // Read the same deterministic 60 Hz contact envelope that drives authored
-    // clip sampling. The imported-model runtime stores its debug value on an
-    // internal host, not fighter.visual.root, so derive it from the timeline.
+    // clip sampling instead of depending on presentation-only runtime telemetry.
     const authoredContactWeight = attackMove
       ? sampleCombatMotionAtEvent(
         attackMove,
@@ -1336,55 +1336,91 @@ export class TpsFightGame {
       dramaIntensity: this.dramaIntensity,
     });
 
+    this.configureCameraTargets(framing, right);
+    this.publishCameraFraming(framing, attackMoveId);
+    this.advanceCameraRig(framing, forward, right, delta);
+  }
+
+  private configureCameraTargets(
+    framing: TpsCameraFraming,
+    right: THREE.Vector3,
+  ): void {
     // At melee range, orbit around the pair instead of keeping the camera rooted
-    // directly behind the foreground player. This reduces foreground occlusion
-    // without changing simulation positions, hitboxes, reach, or authored clips.
+    // directly behind the foreground player.
     this.cameraPairMidpoint.copy(this.p1.position).lerp(this.p2.position, 0.5);
-    this.cameraAnchor.copy(this.p1.position).lerp(this.cameraPairMidpoint, framing.closeAnchorBlend);
-    this.cameraFocus.copy(this.p2.position).lerp(this.cameraPairMidpoint, framing.closeTargetBlend);
+    this.cameraAnchor.copy(this.p1.position)
+      .lerp(this.cameraPairMidpoint, framing.closeAnchorBlend);
+    this.cameraFocus.copy(this.p2.position)
+      .lerp(this.cameraPairMidpoint, framing.closeTargetBlend);
     this.cameraTarget.copy(this.cameraFocus)
       .addScaledVector(right, framing.targetSideShift)
       .add(new THREE.Vector3(0, framing.targetHeight, 0));
+  }
 
-    this.camera.userData.tpsCloseReadabilityFactor = framing.closeFactor;
-    this.camera.userData.tpsAuthoredContactReadabilityFactor = framing.authoredContactReadabilityFactor;
-    this.camera.userData.tpsKickContactReadabilityFactor = framing.kickContactReadabilityFactor;
-    this.camera.userData.tpsFrontKickReadabilityFactor = framing.frontKickReadabilityFactor;
-    this.camera.userData.tpsLowKickReadabilityFactor = framing.lowKickReadabilityFactor;
-    this.camera.userData.tpsContactReadabilityMove = attackMoveId;
-    this.camera.userData.tpsCloseAnchorBlend = framing.closeAnchorBlend;
-    this.camera.userData.tpsCloseTargetBlend = framing.closeTargetBlend;
-    this.camera.userData.tpsImpactReadabilityFactor = framing.impactReadabilityFactor;
-    this.camera.userData.tpsDramaCinematicFactor = framing.dramaCinematicFactor;
-    this.camera.userData.tpsShoulderOffset = framing.shoulderOffset;
-    this.camera.userData.tpsBackDistance = framing.backDistance;
-    this.camera.userData.tpsTargetHeight = framing.targetHeight;
+  private publishCameraFraming(
+    framing: TpsCameraFraming,
+    attackMoveId: string | null,
+  ): void {
+    const data = this.camera.userData;
+    data.tpsCloseReadabilityFactor = framing.closeFactor;
+    data.tpsAuthoredContactReadabilityFactor = framing.authoredContactReadabilityFactor;
+    data.tpsKickContactReadabilityFactor = framing.kickContactReadabilityFactor;
+    data.tpsFrontKickReadabilityFactor = framing.frontKickReadabilityFactor;
+    data.tpsLowKickReadabilityFactor = framing.lowKickReadabilityFactor;
+    data.tpsContactReadabilityMove = attackMoveId;
+    data.tpsCloseAnchorBlend = framing.closeAnchorBlend;
+    data.tpsCloseTargetBlend = framing.closeTargetBlend;
+    data.tpsImpactReadabilityFactor = framing.impactReadabilityFactor;
+    data.tpsDramaCinematicFactor = framing.dramaCinematicFactor;
+    data.tpsShoulderOffset = framing.shoulderOffset;
+    data.tpsBackDistance = framing.backDistance;
+    data.tpsTargetHeight = framing.targetHeight;
+  }
 
+  private advanceCameraRig(
+    framing: TpsCameraFraming,
+    forward: THREE.Vector3,
+    right: THREE.Vector3,
+    delta: number,
+  ): void {
     this.cameraDesired.copy(this.cameraAnchor)
       .addScaledVector(forward, -framing.backDistance)
       .addScaledVector(right, framing.desiredShoulderOffset)
       .add(new THREE.Vector3(0, framing.cameraHeight, 0));
 
     // Keep distant navigation responsive, but add inertia as the fight closes.
-    // This prevents a one-frame shoulder-camera surge when approach becomes orbit.
     ease(this.camera.position, this.cameraDesired, framing.cameraPositionRate, delta);
-    if (this.cameraImpact > 0.001) {
-      const impact = this.cameraImpact;
-      this.cameraImpact *= Math.exp(-10 * delta);
-      this.camera.position.addScaledVector(right, Math.sin(this.renderTime * 76) * impact);
-      this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
-    }
-
-    // Cap the complete frame displacement after both follow motion and impact shake.
-    const maxCameraTravel = TPS_CAMERA_MAX_TRAVEL_SPEED * delta;
-    this.cameraFrameDelta.copy(this.camera.position).sub(this.cameraFrameStart);
-    if (maxCameraTravel > 0 && this.cameraFrameDelta.lengthSq() > maxCameraTravel * maxCameraTravel) {
-      this.camera.position.copy(this.cameraFrameStart).add(this.cameraFrameDelta.setLength(maxCameraTravel));
-    }
+    this.applyCameraImpactShake(right, delta);
+    this.clampCameraFrameTravel(delta);
 
     // Smooth the look target as well as camera position.
     ease(this.cameraLookTarget, this.cameraTarget, 12.0, delta);
     this.camera.lookAt(this.cameraLookTarget);
+  }
+
+  private applyCameraImpactShake(right: THREE.Vector3, delta: number): void {
+    if (this.cameraImpact <= 0.001) return;
+
+    const impact = this.cameraImpact;
+    this.cameraImpact *= Math.exp(-10 * delta);
+    this.camera.position.addScaledVector(
+      right,
+      Math.sin(this.renderTime * 76) * impact,
+    );
+    this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
+  }
+
+  private clampCameraFrameTravel(delta: number): void {
+    // Cap the complete frame displacement after both follow motion and impact shake.
+    const maxCameraTravel = TPS_CAMERA_MAX_TRAVEL_SPEED * delta;
+    this.cameraFrameDelta.copy(this.camera.position).sub(this.cameraFrameStart);
+    if (
+      maxCameraTravel > 0
+      && this.cameraFrameDelta.lengthSq() > maxCameraTravel * maxCameraTravel
+    ) {
+      this.camera.position.copy(this.cameraFrameStart)
+        .add(this.cameraFrameDelta.setLength(maxCameraTravel));
+    }
   }
 
   private setCombatBeat(label: string, ticks = TPS_COMBAT_BEAT_TICKS): void {

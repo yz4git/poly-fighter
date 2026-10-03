@@ -25,7 +25,6 @@ export const TPS_CAMERA_FRONT_KICK_BACK_BONUS = 0.10;
 export const TPS_CAMERA_LOW_KICK_TARGET_DROP = 0.16;
 
 export const TPS_CAMERA_MAX_TRAVEL_SPEED = 13.2;
-export const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
 
 export type TpsCameraFramingInput = {
   fightDistance: number;

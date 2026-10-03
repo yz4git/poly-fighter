@@ -36,8 +36,17 @@ import {
 import {
   computeTpsCameraFraming,
   TPS_CAMERA_MAX_TRAVEL_SPEED,
-  TPS_CLOSE_ORBIT_SPEED_SCALE,
 } from "./tps-camera-profile";
+import {
+  composeTpsMoveVector,
+  planTpsStep,
+  tpsCloseLocomotionSpeedScale,
+  tpsInputAxes,
+  tpsLegacyThrowPressed,
+  tpsPlayerMoveSpeed,
+  tpsReactiveStepThreat,
+  tpsStepSpeedMultiplier,
+} from "./tps-player-policy";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
@@ -461,16 +470,15 @@ export class TpsFightGame {
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
-    const forwardAxis = (input.up ? 1 : 0) - (input.down ? 1 : 0);
-    const sideAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const { forwardAxis, sideAxis } = tpsInputAxes(input);
     if (forwardAxis < 0 && this.simulationTicks % 12 === 0) this.playerRetreatSamples += 1;
-    const move = toEnemy.clone().multiplyScalar(forwardAxis).addScaledVector(right, sideAxis);
-    const moveSpeed = (this.p1.definition.archetype === "SPEED" ? 4.0 : 3.35) * this.p1Dna.moveSpeedScale;
+    const move = composeTpsMoveVector(toEnemy, right, { forwardAxis, sideAxis });
+    const moveSpeed = tpsPlayerMoveSpeed(this.p1.definition.archetype, this.p1Dna.moveSpeedScale);
 
     // Keep the old keyboard-only G+K throw reachable for regression/debugging,
     // but it is deliberately absent from the TPS touch UI. The player-facing
     // control scheme is ATTACK + STEP only.
-    const legacyThrowPressed = input.guard && input.kick && (stepPressed || legacyKickPressed);
+    const legacyThrowPressed = tpsLegacyThrowPressed(input, stepPressed, legacyKickPressed);
     if (legacyThrowPressed && this.p1.canAct()) {
       this.playerEvadeTicks = 0;
       this.playerAttackQueued = false;
@@ -526,13 +534,12 @@ export class TpsFightGame {
     }
 
     if (stepPressed && this.playerEvadeCooldown <= 0) {
-      const stepVector = move.lengthSq() > 0.001
-        ? move.clone().normalize()
-        : toEnemy.clone().multiplyScalar(-1);
+      const stepPlan = planTpsStep(move, toEnemy, right, sideAxis);
+      const { stepVector } = stepPlan;
       this.playerStepDirection.copy(stepVector);
-      this.playerStepForwardWeight = stepVector.dot(toEnemy);
-      this.playerStepSideWeight = Math.abs(stepVector.dot(right));
-      this.playerEvadeSign = sideAxis === 0 ? 0 : sideAxis > 0 ? 1 : -1;
+      this.playerStepForwardWeight = stepPlan.forwardWeight;
+      this.playerStepSideWeight = stepPlan.sideWeight;
+      this.playerEvadeSign = stepPlan.evadeSign;
       if (this.playerStepSideWeight > 0.45) this.trainingProgress.sideSteps += 1;
       if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
       else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
@@ -550,25 +557,23 @@ export class TpsFightGame {
         && this.enemyDirectorTelegraphTicks > 0
         && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
       );
-      const incomingMove = activeIncomingMove ?? (pendingReaction ? pendingMove : null);
-      const incomingDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
-      const incomingThreatReach = incomingMove
-        ? incomingMove.reach + (this.enemyDirectorPendingMove === "dashKick" ? 1.8 : 0.9)
-        : 0;
-      const incomingFrames = activeIncomingMove
-        ? activeIncomingMove.startup + activeIncomingMove.active - this.p2.moveTick
-        : pendingReaction && incomingMove
-          ? this.enemyDirectorTelegraphTicks + incomingMove.startup + incomingMove.active
-          : 0;
-      const reactiveSideStep = Boolean(
-        this.playerStepSideWeight > 0.45
-        && incomingMove
-        && incomingMove.hitLevel !== "THROW"
-        && incomingFrames > 0
-        && incomingDistance <= incomingThreatReach
+      const incomingDistance = Math.hypot(
+        this.p2.position.x - this.p1.position.x,
+        this.p2.position.z - this.p1.position.z,
       );
-      this.playerStepThreatTicks = reactiveSideStep ? Math.max(TPS_STEP_TICKS + 2, incomingFrames + TPS_STEP_TICKS + 2) : 0;
-      this.playerStepThreatMoveId = reactiveSideStep ? incomingMove?.id ?? null : null;
+      const stepThreat = tpsReactiveStepThreat({
+        sideWeight: this.playerStepSideWeight,
+        activeIncomingMove,
+        pendingMove,
+        pendingMoveId: this.enemyDirectorPendingMove,
+        pendingReaction,
+        pendingTelegraphTicks: this.enemyDirectorTelegraphTicks,
+        enemyMoveTick: this.p2.moveTick,
+        incomingDistance,
+        stepTicks: TPS_STEP_TICKS,
+      });
+      this.playerStepThreatTicks = stepThreat.ticks;
+      this.playerStepThreatMoveId = stepThreat.moveId;
     }
 
     if (this.playerEvadeTicks > 0) {
@@ -580,13 +585,11 @@ export class TpsFightGame {
         this.p1.updatePhysics(FIXED_STEP);
         return;
       }
-      const baseStepMultiplier = this.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;
-      const directionalStepBonus = this.playerStepForwardWeight < -0.45
-        ? 0.48
-        : this.playerStepForwardWeight > 0.45
-          ? -0.16
-          : 0.08;
-      const stepMultiplier = (baseStepMultiplier + directionalStepBonus) * this.p1Dna.stepSpeedScale;
+      const stepMultiplier = tpsStepSpeedMultiplier(
+        this.p1.definition.archetype,
+        this.playerStepForwardWeight,
+        this.p1Dna.stepSpeedScale,
+      );
       this.playerEvadeTicks -= 1;
       this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);
       this.p1.state = "SIDESTEP";
@@ -603,10 +606,11 @@ export class TpsFightGame {
         this.p2.position.x - this.p1.position.x,
         this.p2.position.z - this.p1.position.z,
       );
-      const closeOrbitFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
-      const lateralInputWeight = Math.abs(sideAxis) / Math.max(1, Math.abs(forwardAxis) + Math.abs(sideAxis));
-      const closeOrbitScale = THREE.MathUtils.lerp(1, TPS_CLOSE_ORBIT_SPEED_SCALE, closeOrbitFactor);
-      const locomotionSpeedScale = THREE.MathUtils.lerp(1, closeOrbitScale, lateralInputWeight);
+      const locomotionSpeedScale = tpsCloseLocomotionSpeedScale(
+        fightDistance,
+        forwardAxis,
+        sideAxis,
+      );
       this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * locomotionSpeedScale);
       this.p1.state = "WALK";
     } else {

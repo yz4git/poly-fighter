@@ -367,48 +367,63 @@ export class TpsFightGame {
 
   private step(): void {
     if (this.paused || this.finished) return;
-    if (this.combatBeatTicks > 0) this.combatBeatTicks -= 1;
-    else this.combatBeatLabel = null;
+    this.tickCombatBeat();
     if (this.finishPending) {
-      this.simulationTicks += 1;
-      this.input.clear();
-
-      // A KO must remain visible as a physical event. Stop all new combat/input,
-      // but keep deterministic passive physics and presentation alive until the
-      // defeated fighter has actually landed and rested on the floor.
-      this.p1.updatePhysics(FIXED_STEP);
-      this.p2.updatePhysics(FIXED_STEP);
-      clampToArena(this.p1.position);
-      clampToArena(this.p2.position);
-      this.updateVisual(this.p1, this.p2, this.renderTime);
-      this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
-
-      const defeated = defeatedFighterForWinner(this.resultWinner, this.p1, this.p2);
-      const finishWindow = advanceTpsFinishWindow(
-        this.finishTicks,
-        this.finishSettledTicks,
-        isTpsDefeatedSettled(defeated),
-      );
-      this.finishTicks = finishWindow.ticks;
-      this.finishSettledTicks = finishWindow.settledTicks;
-
-      if (finishWindow.complete) {
-        this.finishPending = false;
-        this.finished = true;
-        const winner = this.resultWinner ?? "draw";
-        this.publishHud(true);
-        if (this.options.training) this.rematch();
-        else this.options.onResult?.(winner);
-      } else {
-        this.publishHud(false);
-      }
+      this.advancePendingFinish();
       return;
     }
+    this.advanceActiveFight();
+  }
+
+  private tickCombatBeat(): void {
+    if (this.combatBeatTicks > 0) this.combatBeatTicks -= 1;
+    else this.combatBeatLabel = null;
+  }
+
+  private advancePendingFinish(): void {
+    this.simulationTicks += 1;
+    this.input.clear();
+
+    // A KO must remain visible as a physical event. Stop all new combat/input,
+    // but keep deterministic passive physics and presentation alive until the
+    // defeated fighter has actually landed and rested on the floor.
+    this.p1.updatePhysics(FIXED_STEP);
+    this.p2.updatePhysics(FIXED_STEP);
+    clampToArena(this.p1.position);
+    clampToArena(this.p2.position);
+    this.updateVisual(this.p1, this.p2, this.renderTime);
+    this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
+
+    const defeated = defeatedFighterForWinner(this.resultWinner, this.p1, this.p2);
+    const finishWindow = advanceTpsFinishWindow(
+      this.finishTicks,
+      this.finishSettledTicks,
+      isTpsDefeatedSettled(defeated),
+    );
+    this.finishTicks = finishWindow.ticks;
+    this.finishSettledTicks = finishWindow.settledTicks;
+
+    if (!finishWindow.complete) {
+      this.publishHud(false);
+      return;
+    }
+
+    this.finishPending = false;
+    this.finished = true;
+    const winner = this.resultWinner ?? "draw";
+    this.publishHud(true);
+    if (this.options.training) this.rematch();
+    else this.options.onResult?.(winner);
+  }
+
+  private advanceActiveFight(): void {
     this.simulationTicks += 1;
     if (!this.options.training) this.timerTicks = Math.max(0, this.timerTicks - 1);
+
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
+
     // A short authored step-in keeps lock-on melee responsive without pulling a
     // fighter across the arena. It is only active during startup and only when
     // the target is already just outside normal contact range.

@@ -13,6 +13,7 @@ import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
 import { buildTpsHudSnapshot } from "./tps-hud-snapshot";
+import { computeTpsContactSpacing } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
@@ -80,9 +81,6 @@ const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
 const TPS_DRAMA_REVIEW_TICKS = 30;
-const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
-const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
-const TPS_IMPACT_CONTACT_MINIMUM_KICK = 1.62;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -1241,41 +1239,42 @@ export class TpsFightGame {
   }
 
   private separateFighters(): void {
-    const delta = new THREE.Vector3(this.p2.position.x - this.p1.position.x, 0, this.p2.position.z - this.p1.position.z);
+    const delta = new THREE.Vector3(
+      this.p2.position.x - this.p1.position.x,
+      0,
+      this.p2.position.z - this.p1.position.z,
+    );
     const distance = delta.length();
-    const p1Throwing = this.p1.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p1.state);
-    const p2Throwing = this.p2.currentMove?.hitLevel === "THROW" && ["ATTACK", "THROW"].includes(this.p2.state);
-    // Preserve throw contact. For resolved normal strikes, open a slightly wider
-    // contact lane only while hit-stop freezes the pair. Hit detection has already
-    // completed before this runs, so gameplay reach stays unchanged; the following
-    // visual pass can solve the striking limb back onto the opponent from a clearer
-    // full-body silhouette.
-    const impactFrozen = Math.max(this.p1.hitStop, this.p2.hitStop) > 0;
-    const p1Impacting = this.p1.state === "ATTACK"
-      && ["HIT", "BLOCK_STUN", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(this.p2.state);
-    const p2Impacting = this.p2.state === "ATTACK"
-      && ["HIT", "BLOCK_STUN", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(this.p1.state);
-    const impactPair = impactFrozen && (p1Impacting || p2Impacting);
-    const throwContact = p1Throwing || p2Throwing;
-    const impactMove = p1Impacting ? this.p1.currentMove : p2Impacting ? this.p2.currentMove : null;
-    const impactMoveId = impactMove?.id ?? null;
-    const impactMinimum = impactMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(impactMoveId)
-      ? TPS_IMPACT_CONTACT_MINIMUM_KICK
-      : impactMoveId && ["power", "backfist", "counter"].includes(impactMoveId)
-        ? TPS_IMPACT_CONTACT_MINIMUM_HEAVY
-        : TPS_IMPACT_CONTACT_MINIMUM;
-    const minimum = throwContact ? 0.98 : impactPair ? impactMinimum : 1.12;
-    const spacingMode = throwContact ? "THROW" : impactPair ? "IMPACT_PAIR" : "NEUTRAL";
-    this.p1.visual.root.userData.tpsContactSpacingMode = spacingMode;
-    this.p2.visual.root.userData.tpsContactSpacingMode = spacingMode;
+    const spacing = computeTpsContactSpacing({
+      p1State: this.p1.state,
+      p2State: this.p2.state,
+      p1Move: this.p1.currentMove,
+      p2Move: this.p2.currentMove,
+      p1HitStop: this.p1.hitStop,
+      p2HitStop: this.p2.hitStop,
+    });
+
+    this.publishContactSpacing(spacing.mode, spacing.minimum, spacing.impactMoveId);
+    if (distance >= spacing.minimum || distance < 1e-5) return;
+
+    const correction = delta.normalize().multiplyScalar(
+      (spacing.minimum - distance) * 0.5,
+    );
+    this.p1.position.addScaledVector(correction, -1);
+    this.p2.position.add(correction);
+  }
+
+  private publishContactSpacing(
+    mode: "THROW" | "IMPACT_PAIR" | "NEUTRAL",
+    minimum: number,
+    impactMoveId: string | null,
+  ): void {
+    this.p1.visual.root.userData.tpsContactSpacingMode = mode;
+    this.p2.visual.root.userData.tpsContactSpacingMode = mode;
     this.p1.visual.root.userData.tpsContactSpacingMinimum = minimum;
     this.p2.visual.root.userData.tpsContactSpacingMinimum = minimum;
     this.p1.visual.root.userData.tpsContactSpacingMove = impactMoveId;
     this.p2.visual.root.userData.tpsContactSpacingMove = impactMoveId;
-    if (distance >= minimum || distance < 1e-5) return;
-    const correction = delta.normalize().multiplyScalar((minimum - distance) * 0.5);
-    this.p1.position.addScaledVector(correction, -1);
-    this.p2.position.add(correction);
   }
 
   private updateVisual(fighter: FighterRuntime, opponent: FighterRuntime, time: number): void {

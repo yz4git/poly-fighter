@@ -135,12 +135,13 @@ test("training requires fresh resolved successes, never headlines or a KO", asyn
 
 
 test("Rival Core phase 9 makes every CPU attack reactable from a visible commitment", async () => {
-  const [core, policy, presentation] = await Promise.all([
+  const [core, enemyPolicy, playerPolicy, presentation] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-player-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8"),
   ]);
-  const source = `${core}\n${policy}`;
+  const source = `${core}\n${enemyPolicy}\n${playerPolicy}`;
   assert.match(source, /TPS_REACTABLE_TELEGRAPH_TICKS/);
   assert.match(source, /NORMAL: 18/);
   assert.match(source, /HARD: 15/);

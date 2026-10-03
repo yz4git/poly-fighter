@@ -458,164 +458,29 @@ export class TpsFightGame {
     if (attackPressed) this.playerAttackSamples += 1;
     if (stepPressed) this.playerStepSamples += 1;
 
-    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;
-    if (this.playerComboGraceTicks > 0) this.playerComboGraceTicks -= 1;
-    else if (this.p1.state !== "ATTACK") this.playerComboStage = 0;
-    if (this.playerFlankWindowTicks > 0) this.playerFlankWindowTicks -= 1;
-    if (this.playerFlankAttackTicks > 0) this.playerFlankAttackTicks -= 1;
-    if (this.playerPerfectEvadeTicks > 0) this.playerPerfectEvadeTicks -= 1;
-    if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
-    if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
-    if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+    this.tickPlayerWindows();
 
     const toEnemy = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-toEnemy.z, 0, toEnemy.x);
     const { forwardAxis, sideAxis } = tpsInputAxes(input);
     if (forwardAxis < 0 && this.simulationTicks % 12 === 0) this.playerRetreatSamples += 1;
     const move = composeTpsMoveVector(toEnemy, right, { forwardAxis, sideAxis });
-    const moveSpeed = tpsPlayerMoveSpeed(this.p1.definition.archetype, this.p1Dna.moveSpeedScale);
+    const moveSpeed = tpsPlayerMoveSpeed(
+      this.p1.definition.archetype,
+      this.p1Dna.moveSpeedScale,
+    );
 
-    // Keep the old keyboard-only G+K throw reachable for regression/debugging,
-    // but it is deliberately absent from the TPS touch UI. The player-facing
-    // control scheme is ATTACK + STEP only.
-    const legacyThrowPressed = tpsLegacyThrowPressed(input, stepPressed, legacyKickPressed);
-    if (legacyThrowPressed && this.p1.canAct()) {
-      this.playerEvadeTicks = 0;
-      this.playerAttackQueued = false;
-      this.playerComboStage = 0;
-      this.playerComboGraceTicks = 0;
-      this.p1.beginMove("throw");
-      this.p1.updatePhysics(FIXED_STEP);
-      return;
-    }
-
-    // ATTACK taps during recovery are buffered. Once the current move finishes,
-    // the next context-sensitive strike starts immediately, giving repeated taps
-    // a reliable three-hit combo without requiring frame-perfect timing.
-    if (this.p1.state === "ATTACK") {
-      if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
-      // A repeated ATTACK only chains if the previous strike actually reached the target.
-      // This keeps mash-friendly hit confirms while making whiffs meaningfully punishable.
-      const comboConfirmed = this.p1.hitTargets.has(this.p2.id);
-      this.p1.advanceAttack();
-      this.p1.updatePhysics(FIXED_STEP);
-      if (this.p1.state !== "ATTACK") {
-        if (this.playerAttackQueued && this.playerComboStage < 3 && comboConfirmed && this.p1.canAct()) {
-          this.playerAttackQueued = false;
-          this.beginContextAttack();
-        } else {
-          this.playerAttackQueued = false;
-          if (!comboConfirmed || this.playerComboStage >= 3) {
-            this.playerComboStage = 0;
-            this.playerComboGraceTicks = 0;
-          }
-        }
-      }
-      return;
-    }
-
-    if (this.advanceLockedState(this.p1)) {
-      this.playerEvadeTicks = 0;
-      this.playerStepAttackQueued = false;
-      this.playerAttackQueued = false;
-      this.playerComboStage = 0;
-      this.playerComboGraceTicks = 0;
-      this.playerFlankAttackTicks = 0;
-      return;
-    }
-
-    // Consume once at the first actionable tick after STEP. Never shorten the
-    // evade itself, carry it through a hit, or turn held ATTACK into auto-fire.
-    if (this.playerStepAttackQueued && this.playerEvadeTicks <= 0) {
-      this.playerStepAttackQueued = false;
-      this.beginContextAttack();
-      this.p1.updatePhysics(FIXED_STEP);
-      return;
-    }
+    if (this.tryLegacyPlayerThrow(input, stepPressed, legacyKickPressed)) return;
+    if (this.advancePlayerAttack(attackPressed)) return;
+    if (this.recoverPlayerFromLockedState()) return;
+    if (this.consumeQueuedStepAttack()) return;
 
     if (stepPressed && this.playerEvadeCooldown <= 0) {
-      const stepPlan = planTpsStep(move, toEnemy, right, sideAxis);
-      const { stepVector } = stepPlan;
-      this.playerStepDirection.copy(stepVector);
-      this.playerStepForwardWeight = stepPlan.forwardWeight;
-      this.playerStepSideWeight = stepPlan.sideWeight;
-      this.playerEvadeSign = stepPlan.evadeSign;
-      if (this.playerStepSideWeight > 0.45) this.trainingProgress.sideSteps += 1;
-      if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
-      else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
-      if (this.playerStepForwardWeight < -0.45) this.playerRetreatSamples += 1;
-      this.playerEvadeTicks = TPS_STEP_TICKS;
-      this.playerEvadeCooldown = Math.max(12, Math.round(TPS_STEP_COOLDOWN_TICKS * this.p1Dna.stepCooldownScale));
-      // A side STEP by itself is only movement. Flank advantage is awarded later,
-      // inside resolveAttack, when an in-range enemy strike is actually evaded.
-      this.playerFlankWindowTicks = 0;
-      this.playerPerfectEvadeTicks = 0;
-      const activeIncomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
-      const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
-      const pendingReaction = Boolean(
-        pendingMove
-        && this.enemyDirectorTelegraphTicks > 0
-        && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
-      );
-      const incomingDistance = Math.hypot(
-        this.p2.position.x - this.p1.position.x,
-        this.p2.position.z - this.p1.position.z,
-      );
-      const stepThreat = tpsReactiveStepThreat({
-        sideWeight: this.playerStepSideWeight,
-        activeIncomingMove,
-        pendingMove,
-        pendingMoveId: this.enemyDirectorPendingMove,
-        pendingReaction,
-        pendingTelegraphTicks: this.enemyDirectorTelegraphTicks,
-        enemyMoveTick: this.p2.moveTick,
-        incomingDistance,
-        stepTicks: TPS_STEP_TICKS,
-      });
-      this.playerStepThreatTicks = stepThreat.ticks;
-      this.playerStepThreatMoveId = stepThreat.moveId;
+      this.beginPlayerStep(move, toEnemy, right, sideAxis);
     }
+    if (this.advancePlayerStep(attackPressed, toEnemy, moveSpeed)) return;
 
-    if (this.playerEvadeTicks > 0) {
-      if (attackPressed && this.playerStepForwardWeight <= 0.45) this.playerStepAttackQueued = true;
-      if (attackPressed && this.playerStepForwardWeight > 0.45) {
-        this.playerEvadeTicks = 0;
-        this.playerFlankWindowTicks = 0;
-        this.beginDashAttack(toEnemy);
-        this.p1.updatePhysics(FIXED_STEP);
-        return;
-      }
-      const stepMultiplier = tpsStepSpeedMultiplier(
-        this.p1.definition.archetype,
-        this.playerStepForwardWeight,
-        this.p1Dna.stepSpeedScale,
-      );
-      this.playerEvadeTicks -= 1;
-      this.p1.position.addScaledVector(this.playerStepDirection, FIXED_STEP * moveSpeed * stepMultiplier);
-      this.p1.state = "SIDESTEP";
-      this.p1.updatePhysics(FIXED_STEP);
-      return;
-    }
-
-    if (move.lengthSq() > 0.001) {
-      move.normalize();
-      // Near-contact pure strafing can otherwise orbit the opponent fast enough
-      // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;
-      // forward/back movement and the authored STEP burst keep their full speed.
-      const fightDistance = Math.hypot(
-        this.p2.position.x - this.p1.position.x,
-        this.p2.position.z - this.p1.position.z,
-      );
-      const locomotionSpeedScale = tpsCloseLocomotionSpeedScale(
-        fightDistance,
-        forwardAxis,
-        sideAxis,
-      );
-      this.p1.position.addScaledVector(move, FIXED_STEP * moveSpeed * locomotionSpeedScale);
-      this.p1.state = "WALK";
-    } else {
-      this.p1.state = "IDLE";
-    }
+    this.applyPlayerLocomotion(move, moveSpeed, forwardAxis, sideAxis);
 
     if (attackPressed) {
       const threat = this.enemyThreatStatus();
@@ -627,6 +492,210 @@ export class TpsFightGame {
       this.beginContextAttack();
     }
     this.p1.updatePhysics(FIXED_STEP);
+  }
+
+  private tickPlayerWindows(): void {
+    if (this.playerEvadeCooldown > 0) this.playerEvadeCooldown -= 1;
+    if (this.playerComboGraceTicks > 0) this.playerComboGraceTicks -= 1;
+    else if (this.p1.state !== "ATTACK") this.playerComboStage = 0;
+    if (this.playerFlankWindowTicks > 0) this.playerFlankWindowTicks -= 1;
+    if (this.playerFlankAttackTicks > 0) this.playerFlankAttackTicks -= 1;
+    if (this.playerPerfectEvadeTicks > 0) this.playerPerfectEvadeTicks -= 1;
+    if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
+    if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
+    if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+  }
+
+  private tryLegacyPlayerThrow(
+    input: InputFrame,
+    stepPressed: boolean,
+    legacyKickPressed: boolean,
+  ): boolean {
+    // Keep the old keyboard-only G+K throw reachable for regression/debugging,
+    // but it is deliberately absent from the TPS touch UI. The player-facing
+    // control scheme is ATTACK + STEP only.
+    const legacyThrowPressed = tpsLegacyThrowPressed(input, stepPressed, legacyKickPressed);
+    if (!legacyThrowPressed || !this.p1.canAct()) return false;
+
+    this.playerEvadeTicks = 0;
+    this.playerAttackQueued = false;
+    this.playerComboStage = 0;
+    this.playerComboGraceTicks = 0;
+    this.p1.beginMove("throw");
+    this.p1.updatePhysics(FIXED_STEP);
+    return true;
+  }
+
+  private advancePlayerAttack(attackPressed: boolean): boolean {
+    if (this.p1.state !== "ATTACK") return false;
+
+    // ATTACK taps during recovery are buffered. Once the current move finishes,
+    // the next context-sensitive strike starts immediately.
+    if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
+    // A repeated ATTACK only chains if the previous strike actually reached the target.
+    const comboConfirmed = this.p1.hitTargets.has(this.p2.id);
+    this.p1.advanceAttack();
+    this.p1.updatePhysics(FIXED_STEP);
+
+    if (this.p1.state !== "ATTACK") {
+      if (
+        this.playerAttackQueued
+        && this.playerComboStage < 3
+        && comboConfirmed
+        && this.p1.canAct()
+      ) {
+        this.playerAttackQueued = false;
+        this.beginContextAttack();
+      } else {
+        this.playerAttackQueued = false;
+        if (!comboConfirmed || this.playerComboStage >= 3) {
+          this.playerComboStage = 0;
+          this.playerComboGraceTicks = 0;
+        }
+      }
+    }
+    return true;
+  }
+
+  private recoverPlayerFromLockedState(): boolean {
+    if (!this.advanceLockedState(this.p1)) return false;
+
+    this.playerEvadeTicks = 0;
+    this.playerStepAttackQueued = false;
+    this.playerAttackQueued = false;
+    this.playerComboStage = 0;
+    this.playerComboGraceTicks = 0;
+    this.playerFlankAttackTicks = 0;
+    return true;
+  }
+
+  private consumeQueuedStepAttack(): boolean {
+    // Consume once at the first actionable tick after STEP. Never shorten the
+    // evade itself, carry it through a hit, or turn held ATTACK into auto-fire.
+    if (!this.playerStepAttackQueued || this.playerEvadeTicks > 0) return false;
+
+    this.playerStepAttackQueued = false;
+    this.beginContextAttack();
+    this.p1.updatePhysics(FIXED_STEP);
+    return true;
+  }
+
+  private beginPlayerStep(
+    move: THREE.Vector3,
+    toEnemy: THREE.Vector3,
+    right: THREE.Vector3,
+    sideAxis: number,
+  ): void {
+    const stepPlan = planTpsStep(move, toEnemy, right, sideAxis);
+    const { stepVector } = stepPlan;
+    this.playerStepDirection.copy(stepVector);
+    this.playerStepForwardWeight = stepPlan.forwardWeight;
+    this.playerStepSideWeight = stepPlan.sideWeight;
+    this.playerEvadeSign = stepPlan.evadeSign;
+    if (this.playerStepSideWeight > 0.45) this.trainingProgress.sideSteps += 1;
+    if (this.playerEvadeSign < 0) this.playerLeftStepSamples += 1;
+    else if (this.playerEvadeSign > 0) this.playerRightStepSamples += 1;
+    if (this.playerStepForwardWeight < -0.45) this.playerRetreatSamples += 1;
+    this.playerEvadeTicks = TPS_STEP_TICKS;
+    this.playerEvadeCooldown = Math.max(
+      12,
+      Math.round(TPS_STEP_COOLDOWN_TICKS * this.p1Dna.stepCooldownScale),
+    );
+
+    // A side STEP by itself is only movement. Flank advantage is awarded later,
+    // inside resolveAttack, when an in-range enemy strike is actually evaded.
+    this.playerFlankWindowTicks = 0;
+    this.playerPerfectEvadeTicks = 0;
+    const activeIncomingMove = this.p2.state === "ATTACK" ? this.p2.currentMove : null;
+    const pendingMove = this.enemyDirectorPendingMove
+      ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null
+      : null;
+    const pendingReaction = Boolean(
+      pendingMove
+      && this.enemyDirectorTelegraphTicks > 0
+      && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
+    );
+    const incomingDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const stepThreat = tpsReactiveStepThreat({
+      sideWeight: this.playerStepSideWeight,
+      activeIncomingMove,
+      pendingMove,
+      pendingMoveId: this.enemyDirectorPendingMove,
+      pendingReaction,
+      pendingTelegraphTicks: this.enemyDirectorTelegraphTicks,
+      enemyMoveTick: this.p2.moveTick,
+      incomingDistance,
+      stepTicks: TPS_STEP_TICKS,
+    });
+    this.playerStepThreatTicks = stepThreat.ticks;
+    this.playerStepThreatMoveId = stepThreat.moveId;
+  }
+
+  private advancePlayerStep(
+    attackPressed: boolean,
+    toEnemy: THREE.Vector3,
+    moveSpeed: number,
+  ): boolean {
+    if (this.playerEvadeTicks <= 0) return false;
+
+    if (attackPressed && this.playerStepForwardWeight <= 0.45) {
+      this.playerStepAttackQueued = true;
+    }
+    if (attackPressed && this.playerStepForwardWeight > 0.45) {
+      this.playerEvadeTicks = 0;
+      this.playerFlankWindowTicks = 0;
+      this.beginDashAttack(toEnemy);
+      this.p1.updatePhysics(FIXED_STEP);
+      return true;
+    }
+
+    const stepMultiplier = tpsStepSpeedMultiplier(
+      this.p1.definition.archetype,
+      this.playerStepForwardWeight,
+      this.p1Dna.stepSpeedScale,
+    );
+    this.playerEvadeTicks -= 1;
+    this.p1.position.addScaledVector(
+      this.playerStepDirection,
+      FIXED_STEP * moveSpeed * stepMultiplier,
+    );
+    this.p1.state = "SIDESTEP";
+    this.p1.updatePhysics(FIXED_STEP);
+    return true;
+  }
+
+  private applyPlayerLocomotion(
+    move: THREE.Vector3,
+    moveSpeed: number,
+    forwardAxis: number,
+    sideAxis: number,
+  ): void {
+    if (move.lengthSq() <= 0.001) {
+      this.p1.state = "IDLE";
+      return;
+    }
+
+    move.normalize();
+    // Near-contact pure strafing can otherwise orbit the opponent fast enough
+    // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;
+    // forward/back movement and the authored STEP burst keep their full speed.
+    const fightDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
+    );
+    const locomotionSpeedScale = tpsCloseLocomotionSpeedScale(
+      fightDistance,
+      forwardAxis,
+      sideAxis,
+    );
+    this.p1.position.addScaledVector(
+      move,
+      FIXED_STEP * moveSpeed * locomotionSpeedScale,
+    );
+    this.p1.state = "WALK";
   }
 
   private beginContextAttack(): boolean {

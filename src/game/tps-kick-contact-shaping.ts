@@ -2,12 +2,13 @@ import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { solveCombatLimb } from "./combat-motion-authoring";
 import { PresentationAnimationController } from "./presentation-animation";
-
-type ImportedLeg = {
-  thigh: THREE.Object3D;
-  calf: THREE.Object3D;
-  foot: THREE.Object3D;
-};
+import {
+  importedLeg,
+  importedRuntimeHost,
+  importedRuntimeModel,
+  setWorldQuaternion,
+  type ImportedLeg,
+} from "./tps-imported-runtime";
 
 type KickContactShapeState = {
   host: THREE.Object3D | null;
@@ -36,34 +37,6 @@ function ensureState(fighter: FighterRuntime): KickContactShapeState {
   };
   states.set(fighter, state);
   return state;
-}
-
-function importedRuntimeHost(fighter: FighterRuntime): THREE.Object3D | null {
-  return fighter.visual.root.children.find(
-    (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
-  ) ?? null;
-}
-
-function importedModel(host: THREE.Object3D): THREE.Object3D | null {
-  return host.children.find((child) => child.type === "Group" || child.children.length > 0)
-    ?? host.children[0]
-    ?? null;
-}
-
-function importedLeg(model: THREE.Object3D, suffix: "l" | "r"): ImportedLeg | null {
-  const thigh = model.getObjectByName(`thigh_${suffix}`);
-  const calf = model.getObjectByName(`calf_${suffix}`);
-  const foot = model.getObjectByName(`foot_${suffix}`);
-  return thigh && calf && foot ? { thigh, calf, foot } : null;
-}
-
-function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaternion): void {
-  if (!object.parent) {
-    object.quaternion.copy(desiredWorld).normalize();
-    return;
-  }
-  const parentWorld = object.parent.getWorldQuaternion(new THREE.Quaternion());
-  object.quaternion.copy(parentWorld.invert().multiply(desiredWorld)).normalize();
 }
 
 function removePreviousShape(fighter: FighterRuntime, state: KickContactShapeState): void {
@@ -97,7 +70,7 @@ function contactEnvelope(fighter: FighterRuntime): number {
 function targetBodyPoints(opponent: FighterRuntime): { pelvis: THREE.Vector3; chest: THREE.Vector3 } | null {
   const host = importedRuntimeHost(opponent);
   if (!host) return null;
-  const model = importedModel(host);
+  const model = importedRuntimeModel(host);
   const pelvisBone = model?.getObjectByName("pelvis");
   const chestBone = model?.getObjectByName("spine_03");
   if (!pelvisBone || !chestBone) return null;
@@ -129,7 +102,7 @@ function applyKickContactShape(
 
   const host = importedRuntimeHost(fighter);
   if (!host) return;
-  const model = importedModel(host);
+  const model = importedRuntimeModel(host);
   if (!model) return;
   const suffix: "l" | "r" = move.visualContact === "LEFT_FOOT" ? "l" : "r";
   const leg = importedLeg(model, suffix);

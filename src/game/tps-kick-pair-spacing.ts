@@ -2,14 +2,14 @@ import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { solveCombatLimb } from "./combat-motion-authoring";
 import { PresentationAnimationController } from "./presentation-animation";
-
-type LegSuffix = "l" | "r";
-
-type ImportedLeg = {
-  thigh: THREE.Object3D;
-  calf: THREE.Object3D;
-  foot: THREE.Object3D;
-};
+import {
+  importedLeg,
+  importedRuntimeHost,
+  importedRuntimeModel,
+  setWorldQuaternion,
+  type ImportedLeg,
+  type LegSuffix,
+} from "./tps-imported-runtime";
 
 type LegSnapshot = {
   leg: ImportedLeg | null;
@@ -54,25 +54,6 @@ function ensureState(fighter: FighterRuntime): KickPairSpacingState {
   };
   states.set(fighter, state);
   return state;
-}
-
-function runtimeHost(fighter: FighterRuntime): THREE.Object3D | null {
-  return fighter.visual.root.children.find(
-    (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
-  ) ?? null;
-}
-
-function runtimeModel(host: THREE.Object3D): THREE.Object3D | null {
-  return host.children.find((child) => child.type === "Group" || child.children.length > 0)
-    ?? host.children[0]
-    ?? null;
-}
-
-function importedLeg(model: THREE.Object3D, suffix: LegSuffix): ImportedLeg | null {
-  const thigh = model.getObjectByName(`thigh_${suffix}`);
-  const calf = model.getObjectByName(`calf_${suffix}`);
-  const foot = model.getObjectByName(`foot_${suffix}`);
-  return thigh && calf && foot ? { thigh, calf, foot } : null;
 }
 
 function snapshotLeg(snapshot: LegSnapshot, leg: ImportedLeg): void {
@@ -128,15 +109,6 @@ function envelope(fighter: FighterRuntime): number {
   return THREE.MathUtils.clamp(enter * exit, 0, 1);
 }
 
-function setWorldQuaternion(object: THREE.Object3D, desiredWorld: THREE.Quaternion): void {
-  if (!object.parent) {
-    object.quaternion.copy(desiredWorld).normalize();
-    return;
-  }
-  const parentWorld = object.parent.getWorldQuaternion(new THREE.Quaternion());
-  object.quaternion.copy(parentWorld.invert().multiply(desiredWorld)).normalize();
-}
-
 function solveLegToTarget(
   leg: ImportedLeg,
   suffix: LegSuffix,
@@ -167,8 +139,8 @@ function hostLocalDeltaForWorldDelta(host: THREE.Object3D, worldDelta: THREE.Vec
 }
 
 function chestPoint(fighter: FighterRuntime): THREE.Vector3 | null {
-  const host = runtimeHost(fighter);
-  const model = host ? runtimeModel(host) : null;
+  const host = importedRuntimeHost(fighter);
+  const model = host ? importedRuntimeModel(host) : null;
   const chest = model?.getObjectByName("spine_03");
   return chest ? chest.getWorldPosition(new THREE.Vector3()) : null;
 }
@@ -200,8 +172,8 @@ function applyKickPairSpacing(
     return;
   }
 
-  const host = runtimeHost(fighter);
-  const model = host ? runtimeModel(host) : null;
+  const host = importedRuntimeHost(fighter);
+  const model = host ? importedRuntimeModel(host) : null;
   const left = model ? importedLeg(model, "l") : null;
   const right = model ? importedLeg(model, "r") : null;
   if (!host || !model || !left || !right) return;

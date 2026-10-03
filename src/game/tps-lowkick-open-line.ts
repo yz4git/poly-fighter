@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
+import { contactSide, importedRuntimeHost } from "./tps-imported-runtime";
 
 type LowKickLineState = {
   host: THREE.Object3D | null;
@@ -25,16 +26,6 @@ function ensureState(fighter: FighterRuntime): LowKickLineState {
   };
   states.set(fighter, state);
   return state;
-}
-
-function importedRuntimeHost(fighter: FighterRuntime): THREE.Object3D | null {
-  return fighter.visual.root.children.find(
-    (child) => child.name.startsWith("quaternius-ubc-") && child.name.endsWith("-runtime"),
-  ) ?? null;
-}
-
-function contactSide(contact: string | undefined): -1 | 1 {
-  return contact === "LEFT_FOOT" ? -1 : 1;
 }
 
 function removeLowKickLine(fighter: FighterRuntime, state: LowKickLineState): void {

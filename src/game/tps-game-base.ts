@@ -741,62 +741,6 @@ export class TpsFightGame {
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
     const rootData = this.p2.visual.root.userData;
 
-    const publishDecision = (decision: CpuDecision, moveId: string | null = null): void => {
-      rootData.tpsCpuDirectorPolicy = "FUN_DIRECTOR_V1";
-      rootData.tpsCpuDirectorIntent = decision.intent;
-      rootData.tpsCpuDirectorReason = decision.reason;
-      rootData.tpsCpuDirectorComebackMercy = decision.comebackMercy;
-      rootData.tpsCpuDirectorPressure = decision.pressure;
-      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
-      rootData.tpsCpuDirectorMove = moveId;
-      rootData.tpsCpuPersona = this.enemyPersona;
-      rootData.tpsCpuAdaptation = this.enemyAdaptation;
-    };
-
-    const moveEnemy = (intent: CpuIntent): void => {
-      if (intent === "GUARD") {
-        this.p2.state = "GUARD";
-        return;
-      }
-      if (intent === "WAIT") {
-        this.p2.state = "IDLE";
-        return;
-      }
-      const movement = new THREE.Vector3();
-      if (intent === "APPROACH") movement.copy(towardPlayer);
-      else if (intent === "RETREAT") movement.copy(towardPlayer).multiplyScalar(-1);
-      else if (intent === "SIDESTEP" || intent === "JUMP") movement.copy(tangent).multiplyScalar(this.enemyOrbitSign);
-      if (movement.lengthSq() <= 1e-6) {
-        this.p2.state = "IDLE";
-        return;
-      }
-      const baseSpeed = (this.p2.definition.archetype === "SPEED" ? 3.45 : 2.95) * this.p2Dna.moveSpeedScale;
-      const difficultySpeed = this.difficulty === "HARD" ? 1.08 : this.difficulty === "EASY" ? 0.9 : 1;
-      this.p2.position.addScaledVector(movement.normalize(), FIXED_STEP * baseSpeed * difficultySpeed);
-      this.p2.state = "WALK";
-    };
-
-    const beginDirectorMove = (moveId: string, intent: CpuIntent): boolean => {
-      const began = this.p2.beginMove(moveId);
-      if (!began) return false;
-      rootData.tpsCpuDirectorMove = moveId;
-      rootData.tpsCpuDirectorIntent = intent;
-      rootData.tpsCpuDirectorTelegraphTicks = 0;
-      rootData.tpsEnemyTelegraphProgress = 0;
-      rootData.tpsEnemyTelegraphPhase = "STRIKE";
-      this.enemyDirectorTelegraphTotalTicks = 0;
-      if (moveId === "dashKick") {
-        const burstSpeed = this.p2.definition.archetype === "SPEED" ? 5.0 : 4.45;
-        this.p2.velocity.x = towardPlayer.x * burstSpeed;
-        this.p2.velocity.z = towardPlayer.z * burstSpeed;
-      }
-      // Mirror the shared director's two neutral post-attack input frames. The
-      // hold begins only after ATTACK unlocks, so it creates a real punish/read beat.
-      this.enemyDirectorHoldTicks = 2;
-      this.enemyCooldown = Math.max(this.enemyCooldown, 2);
-      return true;
-    };
-
     if (this.enemyDirectorPendingMove) {
       if (this.enemyDirectorTelegraphTicks > 0) {
         this.enemyDirectorTelegraphTicks -= 1;
@@ -816,7 +760,7 @@ export class TpsFightGame {
       const moveId = this.enemyDirectorPendingMove;
       const intent = this.enemyDirectorDecision?.intent ?? "JAB";
       this.enemyDirectorPendingMove = null;
-      if (beginDirectorMove(moveId, intent)) {
+      if (this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) {
         this.p2.updatePhysics(FIXED_STEP);
         return;
       }
@@ -834,8 +778,8 @@ export class TpsFightGame {
         comebackMercy: 0,
         pressure: 0,
       };
-      publishDecision(openingDecision);
-      moveEnemy(openingIntent);
+      this.publishEnemyDecision(openingDecision);
+      this.moveEnemy(openingIntent, towardPlayer, tangent);
       this.p2.updatePhysics(FIXED_STEP);
       return;
     }
@@ -843,8 +787,8 @@ export class TpsFightGame {
     if (this.enemyDirectorDecision && this.enemyDirectorHoldTicks > 0) {
       const heldIntent = isAttackIntent(this.enemyDirectorDecision.intent) ? "WAIT" : this.enemyDirectorDecision.intent;
       this.enemyDirectorHoldTicks -= 1;
-      publishDecision(this.enemyDirectorDecision, isAttackIntent(this.enemyDirectorDecision.intent) ? rootData.tpsCpuDirectorMove ?? null : null);
-      moveEnemy(heldIntent);
+      this.publishEnemyDecision(this.enemyDirectorDecision, isAttackIntent(this.enemyDirectorDecision.intent) ? rootData.tpsCpuDirectorMove ?? null : null);
+      this.moveEnemy(heldIntent, towardPlayer, tangent);
       this.p2.updatePhysics(FIXED_STEP);
       if (this.enemyDirectorHoldTicks <= 0) this.enemyDirectorDecision = null;
       return;
@@ -860,7 +804,7 @@ export class TpsFightGame {
       },
     );
     this.enemyDirectorDecision = decision;
-    publishDecision(decision);
+    this.publishEnemyDecision(decision);
 
     if (isAttackIntent(decision.intent)) {
       const moveId = tpsCpuAttackMove(decision.intent);
@@ -881,8 +825,93 @@ export class TpsFightGame {
     }
 
     this.enemyDirectorHoldTicks = Math.max(1, decision.holdTicks - 1);
-    moveEnemy(decision.intent);
+    this.moveEnemy(decision.intent, towardPlayer, tangent);
     this.p2.updatePhysics(FIXED_STEP);
+  }
+
+  private publishEnemyDecision(
+    decision: CpuDecision,
+    moveId: string | null = null,
+  ): void {
+    const rootData = this.p2.visual.root.userData;
+    rootData.tpsCpuDirectorPolicy = "FUN_DIRECTOR_V1";
+    rootData.tpsCpuDirectorIntent = decision.intent;
+    rootData.tpsCpuDirectorReason = decision.reason;
+    rootData.tpsCpuDirectorComebackMercy = decision.comebackMercy;
+    rootData.tpsCpuDirectorPressure = decision.pressure;
+    rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+    rootData.tpsCpuDirectorMove = moveId;
+    rootData.tpsCpuPersona = this.enemyPersona;
+    rootData.tpsCpuAdaptation = this.enemyAdaptation;
+  }
+
+  private moveEnemy(
+    intent: CpuIntent,
+    towardPlayer: THREE.Vector3,
+    tangent: THREE.Vector3,
+  ): void {
+    if (intent === "GUARD") {
+      this.p2.state = "GUARD";
+      return;
+    }
+    if (intent === "WAIT") {
+      this.p2.state = "IDLE";
+      return;
+    }
+
+    const movement = new THREE.Vector3();
+    if (intent === "APPROACH") movement.copy(towardPlayer);
+    else if (intent === "RETREAT") movement.copy(towardPlayer).multiplyScalar(-1);
+    else if (intent === "SIDESTEP" || intent === "JUMP") {
+      movement.copy(tangent).multiplyScalar(this.enemyOrbitSign);
+    }
+
+    if (movement.lengthSq() <= 1e-6) {
+      this.p2.state = "IDLE";
+      return;
+    }
+
+    const baseSpeed = (this.p2.definition.archetype === "SPEED" ? 3.45 : 2.95)
+      * this.p2Dna.moveSpeedScale;
+    const difficultySpeed = this.difficulty === "HARD"
+      ? 1.08
+      : this.difficulty === "EASY"
+        ? 0.9
+        : 1;
+    this.p2.position.addScaledVector(
+      movement.normalize(),
+      FIXED_STEP * baseSpeed * difficultySpeed,
+    );
+    this.p2.state = "WALK";
+  }
+
+  private beginEnemyDirectorMove(
+    moveId: string,
+    intent: CpuIntent,
+    towardPlayer: THREE.Vector3,
+  ): boolean {
+    const began = this.p2.beginMove(moveId);
+    if (!began) return false;
+
+    const rootData = this.p2.visual.root.userData;
+    rootData.tpsCpuDirectorMove = moveId;
+    rootData.tpsCpuDirectorIntent = intent;
+    rootData.tpsCpuDirectorTelegraphTicks = 0;
+    rootData.tpsEnemyTelegraphProgress = 0;
+    rootData.tpsEnemyTelegraphPhase = "STRIKE";
+    this.enemyDirectorTelegraphTotalTicks = 0;
+
+    if (moveId === "dashKick") {
+      const burstSpeed = this.p2.definition.archetype === "SPEED" ? 5.0 : 4.45;
+      this.p2.velocity.x = towardPlayer.x * burstSpeed;
+      this.p2.velocity.z = towardPlayer.z * burstSpeed;
+    }
+
+    // Mirror the shared director's two neutral post-attack input frames. The
+    // hold begins only after ATTACK unlocks, so it creates a real punish/read beat.
+    this.enemyDirectorHoldTicks = 2;
+    this.enemyCooldown = Math.max(this.enemyCooldown, 2);
+    return true;
   }
 
   private advanceLockedState(fighter: FighterRuntime): boolean {

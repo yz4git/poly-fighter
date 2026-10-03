@@ -30,24 +30,7 @@ import {
   tpsWinnerForHealth,
 } from "./tps-finish-flow";
 import {
-  TPS_CAMERA_CLOSE_ANCHOR_BLEND,
-  TPS_CAMERA_CLOSE_BACK_DELTA,
-  TPS_CAMERA_CLOSE_SHOULDER_BONUS,
-  TPS_CAMERA_CLOSE_TARGET_LIFT,
-  TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND,
-  TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT,
-  TPS_CAMERA_CONTACT_BACK_BONUS,
-  TPS_CAMERA_CONTACT_SHOULDER_BONUS,
-  TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS,
-  TPS_CAMERA_FRONT_KICK_BACK_BONUS,
-  TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS,
-  TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS,
-  TPS_CAMERA_IMPACT_BACK_DELTA,
-  TPS_CAMERA_IMPACT_SHOULDER,
-  TPS_CAMERA_KICK_CONTACT_BACK_BONUS,
-  TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS,
-  TPS_CAMERA_KICK_TARGET_SIDE_BONUS,
-  TPS_CAMERA_LOW_KICK_TARGET_DROP,
+  computeTpsCameraFraming,
   TPS_CAMERA_MAX_TRAVEL_SPEED,
   TPS_CLOSE_ORBIT_SPEED_SCALE,
 } from "./tps-camera-profile";
@@ -1151,26 +1134,16 @@ export class TpsFightGame {
     this.cameraFrameStart.copy(this.camera.position);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const fightDistance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
-    const closeFactor = THREE.MathUtils.clamp((2.6 - fightDistance) / 1.7, 0, 1);
-    const compactLandscapeFactor = THREE.MathUtils.clamp((2.45 - this.camera.aspect) / 0.45, 0, 1);
-    const flankCameraFactor = THREE.MathUtils.clamp(
-      Math.max(this.playerPerfectEvadeTicks, this.playerFlankWindowTicks, this.playerFlankAttackTicks) / TPS_FLANK_WINDOW_TICKS,
-      0,
-      1,
+    const fightDistance = Math.hypot(
+      this.p2.position.x - this.p1.position.x,
+      this.p2.position.z - this.p1.position.z,
     );
-    const flankLaneShift = this.playerEvadeSign * flankCameraFactor * 0.56;
-    // Rotate the close camera toward a stronger 3/4 side lane while preserving
-    // roughly the same orbit radius. This reveals the locked target beside the
-    // foreground fighter instead of zooming toward the pair or hiding them inline.
-    // Compact iPhone landscape still receives a small additional shoulder offset.
-    const impactReadabilityFactor = THREE.MathUtils.clamp(Math.max(this.p1.hitStop, this.p2.hitStop) / 9, 0, 1);
     const attackMove = this.p1.state === "ATTACK" ? this.p1.currentMove : null;
     const attackMoveId = attackMove?.id ?? null;
+
     // Read the same deterministic 60 Hz contact envelope that drives authored
     // clip sampling. The imported-model runtime stores its debug value on an
-    // internal host, not fighter.visual.root, so reading root.userData here
-    // made the camera factor stay at zero during real play.
+    // internal host, not fighter.visual.root, so derive it from the timeline.
     const authoredContactWeight = attackMove
       ? sampleCombatMotionAtEvent(
         attackMove,
@@ -1178,92 +1151,69 @@ export class TpsFightGame {
         motionEventsAtContact(0.5),
       ).contactWeight
       : 0;
-    const authoredContactReadabilityFactor = THREE.MathUtils.clamp(authoredContactWeight * closeFactor, 0, 1);
-    const kickContactReadabilityFactor = authoredContactReadabilityFactor * (
-      attackMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(attackMoveId) ? 1 : 0
-    );
-    const frontKickReadabilityFactor = attackMoveId === "kick" ? authoredContactReadabilityFactor : 0;
-    const lowKickReadabilityFactor = attackMoveId === "lowKick" ? authoredContactReadabilityFactor : 0;
-    const dramaCinematicFactor = ["COMEBACK", "CLUTCH", "FINISH"].includes(this.dramaPhase) ? this.dramaIntensity : 0;
-    const backDistance = 4.70
-      + closeFactor * TPS_CAMERA_CLOSE_BACK_DELTA
-      + compactLandscapeFactor * 0.18
-      + impactReadabilityFactor * TPS_CAMERA_IMPACT_BACK_DELTA
-      + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_BACK_BONUS
-      + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_BACK_BONUS
-      + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_BACK_BONUS
-      - dramaCinematicFactor * 0.16;
-    const shoulderOffset = 2.50
-      + closeFactor * TPS_CAMERA_CLOSE_SHOULDER_BONUS
-      + compactLandscapeFactor * (0.52 + closeFactor * 0.48)
-      + impactReadabilityFactor * TPS_CAMERA_IMPACT_SHOULDER
-      + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_SHOULDER_BONUS
-      + kickContactReadabilityFactor * TPS_CAMERA_KICK_CONTACT_SHOULDER_BONUS
-      + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_SHOULDER_BONUS
-      + dramaCinematicFactor * 0.08;
-    const cameraHeight = 2.36 + closeFactor * 0.24 + compactLandscapeFactor * 0.06 + impactReadabilityFactor * 0.035 + dramaCinematicFactor * 0.025;
-    const targetHeight = 1.22
-      + closeFactor * TPS_CAMERA_CLOSE_TARGET_LIFT
-      - lowKickReadabilityFactor * TPS_CAMERA_LOW_KICK_TARGET_DROP;
+
+    const framing = computeTpsCameraFraming({
+      fightDistance,
+      aspect: this.camera.aspect,
+      playerPerfectEvadeTicks: this.playerPerfectEvadeTicks,
+      playerFlankWindowTicks: this.playerFlankWindowTicks,
+      playerFlankAttackTicks: this.playerFlankAttackTicks,
+      flankWindowTicks: TPS_FLANK_WINDOW_TICKS,
+      playerEvadeSign: this.playerEvadeSign,
+      maxHitStop: Math.max(this.p1.hitStop, this.p2.hitStop),
+      attackMoveId,
+      authoredContactWeight,
+      dramaPhase: this.dramaPhase,
+      dramaIntensity: this.dramaIntensity,
+    });
+
     // At melee range, orbit around the pair instead of keeping the camera rooted
     // directly behind the foreground player. This reduces foreground occlusion
     // without changing simulation positions, hitboxes, reach, or authored clips.
     this.cameraPairMidpoint.copy(this.p1.position).lerp(this.p2.position, 0.5);
-    const closeAnchorBlend = closeFactor * TPS_CAMERA_CLOSE_ANCHOR_BLEND;
-    const closeTargetBlend = closeFactor * TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND;
-    this.cameraAnchor.copy(this.p1.position).lerp(this.cameraPairMidpoint, closeAnchorBlend);
-    this.cameraFocus.copy(this.p2.position).lerp(this.cameraPairMidpoint, closeTargetBlend);
+    this.cameraAnchor.copy(this.p1.position).lerp(this.cameraPairMidpoint, framing.closeAnchorBlend);
+    this.cameraFocus.copy(this.p2.position).lerp(this.cameraPairMidpoint, framing.closeTargetBlend);
     this.cameraTarget.copy(this.cameraFocus)
-      .addScaledVector(
-        right,
-        TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT * closeFactor
-          - flankLaneShift
-          + impactReadabilityFactor * 0.080
-          + authoredContactReadabilityFactor * TPS_CAMERA_CONTACT_TARGET_SIDE_BONUS
-          + kickContactReadabilityFactor * TPS_CAMERA_KICK_TARGET_SIDE_BONUS
-          + frontKickReadabilityFactor * TPS_CAMERA_FRONT_KICK_TARGET_SIDE_BONUS,
-      )
-      .add(new THREE.Vector3(0, targetHeight, 0));
-    this.camera.userData.tpsCloseReadabilityFactor = closeFactor;
-    this.camera.userData.tpsAuthoredContactReadabilityFactor = authoredContactReadabilityFactor;
-    this.camera.userData.tpsKickContactReadabilityFactor = kickContactReadabilityFactor;
-    this.camera.userData.tpsFrontKickReadabilityFactor = frontKickReadabilityFactor;
-    this.camera.userData.tpsLowKickReadabilityFactor = lowKickReadabilityFactor;
+      .addScaledVector(right, framing.targetSideShift)
+      .add(new THREE.Vector3(0, framing.targetHeight, 0));
+
+    this.camera.userData.tpsCloseReadabilityFactor = framing.closeFactor;
+    this.camera.userData.tpsAuthoredContactReadabilityFactor = framing.authoredContactReadabilityFactor;
+    this.camera.userData.tpsKickContactReadabilityFactor = framing.kickContactReadabilityFactor;
+    this.camera.userData.tpsFrontKickReadabilityFactor = framing.frontKickReadabilityFactor;
+    this.camera.userData.tpsLowKickReadabilityFactor = framing.lowKickReadabilityFactor;
     this.camera.userData.tpsContactReadabilityMove = attackMoveId;
-    this.camera.userData.tpsCloseAnchorBlend = closeAnchorBlend;
-    this.camera.userData.tpsCloseTargetBlend = closeTargetBlend;
-    this.camera.userData.tpsImpactReadabilityFactor = impactReadabilityFactor;
-    this.camera.userData.tpsDramaCinematicFactor = dramaCinematicFactor;
-    this.camera.userData.tpsShoulderOffset = shoulderOffset;
-    this.camera.userData.tpsBackDistance = backDistance;
-    this.camera.userData.tpsTargetHeight = targetHeight;
+    this.camera.userData.tpsCloseAnchorBlend = framing.closeAnchorBlend;
+    this.camera.userData.tpsCloseTargetBlend = framing.closeTargetBlend;
+    this.camera.userData.tpsImpactReadabilityFactor = framing.impactReadabilityFactor;
+    this.camera.userData.tpsDramaCinematicFactor = framing.dramaCinematicFactor;
+    this.camera.userData.tpsShoulderOffset = framing.shoulderOffset;
+    this.camera.userData.tpsBackDistance = framing.backDistance;
+    this.camera.userData.tpsTargetHeight = framing.targetHeight;
+
     this.cameraDesired.copy(this.cameraAnchor)
-      .addScaledVector(forward, -backDistance)
-      .addScaledVector(right, shoulderOffset + flankLaneShift * 0.36)
-      .add(new THREE.Vector3(0, cameraHeight, 0));
+      .addScaledVector(forward, -framing.backDistance)
+      .addScaledVector(right, framing.desiredShoulderOffset)
+      .add(new THREE.Vector3(0, framing.cameraHeight, 0));
+
     // Keep distant navigation responsive, but add inertia as the fight closes.
     // This prevents a one-frame shoulder-camera surge when approach becomes orbit.
-    const cameraPositionRate = THREE.MathUtils.lerp(10.2, 8.0, closeFactor)
-      + authoredContactReadabilityFactor * 1.6;
-    ease(this.camera.position, this.cameraDesired, cameraPositionRate, delta);
+    ease(this.camera.position, this.cameraDesired, framing.cameraPositionRate, delta);
     if (this.cameraImpact > 0.001) {
       const impact = this.cameraImpact;
       this.cameraImpact *= Math.exp(-10 * delta);
       this.camera.position.addScaledVector(right, Math.sin(this.renderTime * 76) * impact);
       this.camera.position.y += Math.cos(this.renderTime * 91) * impact * 0.36;
     }
+
     // Cap the complete frame displacement after both follow motion and impact shake.
-    // Close orbit can rotate a wide shoulder rig quickly; the cap preserves the
-    // composition and hit feel while preventing a single-frame camera surge.
     const maxCameraTravel = TPS_CAMERA_MAX_TRAVEL_SPEED * delta;
     this.cameraFrameDelta.copy(this.camera.position).sub(this.cameraFrameStart);
     if (maxCameraTravel > 0 && this.cameraFrameDelta.lengthSq() > maxCameraTravel * maxCameraTravel) {
       this.camera.position.copy(this.cameraFrameStart).add(this.cameraFrameDelta.setLength(maxCameraTravel));
     }
-    // Smooth the look target as well as camera position. Close-range lock-on can
-    // rotate the target basis quickly during sidesteps, blocks, and hit-stop;
-    // smoothing both halves of the rig prevents a visible aim snap while keeping
-    // the opponent centered.
+
+    // Smooth the look target as well as camera position.
     ease(this.cameraLookTarget, this.cameraTarget, 12.0, delta);
     this.camera.lookAt(this.cameraLookTarget);
   }

@@ -38,7 +38,7 @@ import {
 } from "./tps-camera-profile";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
-import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame } from "./types";
+import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
 import { EMPTY_INPUT } from "./types";
 
 export interface TpsFightGameOptions {
@@ -963,33 +963,8 @@ export class TpsFightGame {
       if (interceptStrike) this.trainingProgress.intercepts += 1;
       if (reversalStrike) this.trainingProgress.punishes += 1;
     }
-    if (blocked) {
-      defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);
-      defender.velocity.x = direction.x * move.knockback * 5;
-      defender.velocity.z = direction.z * move.knockback * 5;
-    } else {
-      defender.receiveDamage(resolvedDamage, move.hitStun, move.knockback, direction.x >= 0 ? 1 : -1, Boolean(move.knockdown), move.hitStop);
-      const knockback = move.knockback * 18 * reactionStrength;
-      defender.velocity.x = direction.x * knockback;
-      defender.velocity.z = direction.z * knockback;
-    }
-
-    if (interceptStrike) {
-      this.playerInterceptTicks = 0;
-      this.enemyDirectorPendingMove = null;
-      this.enemyDirectorTelegraphTicks = 0;
-      this.enemyDirectorTelegraphTotalTicks = 0;
-      this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
-      this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
-      this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "INTERRUPTED";
-      this.enemyDirectorDecision = null;
-      this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);
-      this.setCombatBeat(this.p1Dna.signature.intercept);
-    } else if (reversalStrike) {
-      this.setCombatBeat(this.p1Dna.signature.reversal);
-    } else if (defenderWasAttacking && !blocked) {
-      this.setCombatBeat("COUNTER HIT");
-    }
+    this.applyResolvedDamage(defender, move, blocked, resolvedDamage, reactionStrength, direction);
+    this.applySpecialStrikeState(interceptStrike, reversalStrike, defenderWasAttacking, blocked);
 
     applyTpsImpactPresentation({
       attacker,
@@ -1021,15 +996,91 @@ export class TpsFightGame {
       damage: resolvedDamage,
       position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },
     };
+    this.emitImpactFeedback(
+      attacker,
+      event,
+      blocked,
+      lethalImpact,
+      interceptStrike,
+      reversalStrike,
+    );
+  }
+
+  private applyResolvedDamage(
+    defender: FighterRuntime,
+    move: MoveDefinition,
+    blocked: boolean,
+    resolvedDamage: number,
+    reactionStrength: number,
+    direction: THREE.Vector3,
+  ): void {
+    if (blocked) {
+      defender.receiveBlock(move.guardDamage, move.blockStun, move.hitStop);
+      defender.velocity.x = direction.x * move.knockback * 5;
+      defender.velocity.z = direction.z * move.knockback * 5;
+      return;
+    }
+
+    defender.receiveDamage(
+      resolvedDamage,
+      move.hitStun,
+      move.knockback,
+      direction.x >= 0 ? 1 : -1,
+      Boolean(move.knockdown),
+      move.hitStop,
+    );
+    const knockback = move.knockback * 18 * reactionStrength;
+    defender.velocity.x = direction.x * knockback;
+    defender.velocity.z = direction.z * knockback;
+  }
+
+  private applySpecialStrikeState(
+    interceptStrike: boolean,
+    reversalStrike: boolean,
+    defenderWasAttacking: boolean,
+    blocked: boolean,
+  ): void {
+    if (interceptStrike) {
+      this.playerInterceptTicks = 0;
+      this.enemyDirectorPendingMove = null;
+      this.enemyDirectorTelegraphTicks = 0;
+      this.enemyDirectorTelegraphTotalTicks = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
+      this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "INTERRUPTED";
+      this.enemyDirectorDecision = null;
+      this.enemyDirectorHoldTicks = Math.max(this.enemyDirectorHoldTicks, 12);
+      this.setCombatBeat(this.p1Dna.signature.intercept);
+      return;
+    }
+
+    if (reversalStrike) {
+      this.setCombatBeat(this.p1Dna.signature.reversal);
+      return;
+    }
+
+    if (defenderWasAttacking && !blocked) this.setCombatBeat("COUNTER HIT");
+  }
+
+  private emitImpactFeedback(
+    attacker: FighterRuntime,
+    event: HitEvent,
+    blocked: boolean,
+    lethalImpact: boolean,
+    interceptStrike: boolean,
+    reversalStrike: boolean,
+  ): void {
     this.effects.hit(event);
     this.graphics.hit(event, this.camera);
     this.audio.impact(event);
+
     if (!blocked) {
       const attackerDna = attacker === this.p1 ? this.p1Dna : this.p2Dna;
       if (lethalImpact) this.audio.combatSignature("FINAL_IMPACT", attackerDna.id);
       else if (interceptStrike) this.audio.combatSignature("INTERCEPT", attackerDna.id);
       else if (reversalStrike) this.audio.combatSignature("REVERSAL", attackerDna.id);
     }
+
     if (!blocked && this.settings.get().vibration && attacker.id === "p1") {
       const hapticPattern: number | number[] = lethalImpact
         ? [28, 18, 42]
@@ -1037,7 +1088,7 @@ export class TpsFightGame {
           ? [8, 14, 16]
           : reversalStrike
             ? [12, 12, 22]
-            : move.power > 1.45 ? 22 : 9;
+            : event.move.power > 1.45 ? 22 : 9;
       navigator.vibrate?.(hapticPattern);
     }
   }

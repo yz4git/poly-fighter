@@ -1468,23 +1468,21 @@ export class TpsFightGame {
   }
 
   private resetRound(): void {
-    this.playerStepAttackQueued = false;
     this.p1.resetForRound(0, 3.2, 1);
     this.p2.resetForRound(0, -2.2, -1);
-    this.enemyCooldown = 52;
-    this.enemyOpeningGraceTicks = 132;
-    this.enemyTactic = "ORBIT";
-    this.enemyTacticTicks = 0;
-    this.enemyOrbitSign = 1;
-    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
-    this.enemyDirectorDecision = null;
-    this.enemyDirectorHoldTicks = 0;
-    this.enemyDirectorTelegraphTicks = 0;
-    this.enemyDirectorTelegraphTotalTicks = 0;
-    this.enemyDirectorPendingMove = null;
-    this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
-    this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
-    this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "NONE";
+    this.resetPlayerRoundState();
+    this.resetEnemyRoundState();
+    this.resetMatchRoundState();
+
+    this.graphics.reset();
+    this.updateVisual(this.p1, this.p2, 0);
+    this.updateVisual(this.p2, this.p1, 0.23);
+    this.resetRoundCamera();
+    this.updateLockOn();
+  }
+
+  private resetPlayerRoundState(): void {
+    this.playerStepAttackQueued = false;
     this.playerEvadeTicks = 0;
     this.playerEvadeCooldown = 0;
     this.playerEvadeSign = 0;
@@ -1501,8 +1499,7 @@ export class TpsFightGame {
     this.playerStepThreatMoveId = null;
     this.playerInterceptTicks = 0;
     this.playerReversalTicks = 0;
-    this.combatBeatLabel = null;
-    this.combatBeatTicks = 0;
+
     this.playerAttackSamples = 0;
     this.playerStepSamples = 0;
     this.playerRetreatSamples = 0;
@@ -1510,9 +1507,36 @@ export class TpsFightGame {
     this.playerRightStepSamples = 0;
     this.playerInterceptSamples = 0;
     this.playerReversalSamples = 0;
+  }
+
+  private resetEnemyRoundState(): void {
+    this.enemyCooldown = 52;
+    this.enemyOpeningGraceTicks = 132;
+    this.enemyTactic = "ORBIT";
+    this.enemyTacticTicks = 0;
+    this.enemyOrbitSign = 1;
+    this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
+    this.enemyDirectorDecision = null;
+    this.enemyDirectorHoldTicks = 0;
+    this.enemyDirectorTelegraphTicks = 0;
+    this.enemyDirectorTelegraphTotalTicks = 0;
+    this.enemyDirectorPendingMove = null;
+
+    const rootData = this.p2.visual.root.userData;
+    rootData.tpsEnemyTelegraphProgress = 0;
+    rootData.tpsEnemyTelegraphMove = null;
+    rootData.tpsEnemyTelegraphPhase = "NONE";
+
     this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
-    this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";
+    this.enemyPersona = this.p2.definition.archetype === "SPEED"
+      ? "SKIRMISHER"
+      : "BRAWLER";
     this.enemyAdaptation = "NEUTRAL";
+  }
+
+  private resetMatchRoundState(): void {
+    this.combatBeatLabel = null;
+    this.combatBeatTicks = 0;
     this.dramaPhase = "OPENING";
     this.dramaIntensity = 0.14;
     this.dramaReviewTicks = TPS_DRAMA_REVIEW_TICKS;
@@ -1523,9 +1547,9 @@ export class TpsFightGame {
     this.finishTicks = 0;
     this.finishSettledTicks = 0;
     this.resultWinner = null;
-    this.graphics.reset();
-    this.updateVisual(this.p1, this.p2, 0);
-    this.updateVisual(this.p2, this.p1, 0.23);
+  }
+
+  private resetRoundCamera(): void {
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     this.camera.position.copy(this.p1.position)
@@ -1533,7 +1557,6 @@ export class TpsFightGame {
       .addScaledVector(right, 2.50)
       .add(new THREE.Vector3(0, 2.32, 0));
     this.updateCamera(1);
-    this.updateLockOn();
   }
 
   private publishHud(force: boolean): void {

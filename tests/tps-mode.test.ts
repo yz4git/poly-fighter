@@ -166,14 +166,20 @@ test("TPS main UI exposes exactly ATTACK and STEP with no legacy duel route", as
 
 
 test("TPS KO presentation waits for the defeated fighter to land before RESULT", async () => {
-  const source = await readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8");
+  const [core, finishFlow] = await Promise.all([
+    readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-finish-flow.ts", import.meta.url), "utf8"),
+  ]);
+  const source = `${core}\n${finishFlow}`;
   assert.match(source, /TPS_KO_MIN_SHOW_TICKS = 72/);
   assert.match(source, /TPS_KO_SETTLED_HOLD_TICKS = 30/);
+  assert.match(source, /TPS_KO_MAX_SHOW_TICKS = 150/);
   assert.match(source, /finishPending/);
   assert.match(source, /this\.p1\.updatePhysics\(FIXED_STEP\)/);
   assert.match(source, /this\.p2\.updatePhysics\(FIXED_STEP\)/);
   assert.match(source, /defeated\.grounded/);
-  assert.match(source, /this\.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS/);
+  assert.match(core, /advanceTpsFinishWindow/);
+  assert.match(core, /isTpsDefeatedSettled/);
   assert.match(source, /this\.options\.onResult\?\.\(winner\)/);
   assert.doesNotMatch(source, /setTimeout\(\(\) => this\.options\.onResult/);
 });

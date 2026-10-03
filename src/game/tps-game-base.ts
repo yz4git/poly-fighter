@@ -12,6 +12,12 @@ import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import {
+  advanceTpsFinishWindow,
+  defeatedFighterForWinner,
+  isTpsDefeatedSettled,
+  tpsWinnerForHealth,
+} from "./tps-finish-flow";
+import {
   TPS_CAMERA_CLOSE_ANCHOR_BLEND,
   TPS_CAMERA_CLOSE_BACK_DELTA,
   TPS_CAMERA_CLOSE_SHOULDER_BONUS,
@@ -79,9 +85,6 @@ const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
 const TPS_DRAMA_REVIEW_TICKS = 30;
-const TPS_KO_MIN_SHOW_TICKS = 72;
-const TPS_KO_SETTLED_HOLD_TICKS = 30;
-const TPS_KO_MAX_SHOW_TICKS = 150;
 const ENEMY_TACTIC_INTERVAL = 72;
 const TPS_IMPACT_CONTACT_MINIMUM = 1.52;
 const TPS_IMPACT_CONTACT_MINIMUM_HEAVY = 1.58;
@@ -422,7 +425,6 @@ export class TpsFightGame {
     else this.combatBeatLabel = null;
     if (this.finishPending) {
       this.simulationTicks += 1;
-      this.finishTicks += 1;
       this.input.clear();
 
       // A KO must remain visible as a physical event. Stop all new combat/input,
@@ -435,17 +437,16 @@ export class TpsFightGame {
       this.updateVisual(this.p1, this.p2, this.renderTime);
       this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
 
-      const defeated = this.resultWinner === "p1"
-        ? this.p2
-        : this.resultWinner === "p2"
-          ? this.p1
-          : null;
-      const settled = !defeated || (defeated.grounded && defeated.position.y <= 0.001 && Math.abs(defeated.velocity.y) <= 0.001);
-      this.finishSettledTicks = settled ? this.finishSettledTicks + 1 : 0;
+      const defeated = defeatedFighterForWinner(this.resultWinner, this.p1, this.p2);
+      const finishWindow = advanceTpsFinishWindow(
+        this.finishTicks,
+        this.finishSettledTicks,
+        isTpsDefeatedSettled(defeated),
+      );
+      this.finishTicks = finishWindow.ticks;
+      this.finishSettledTicks = finishWindow.settledTicks;
 
-      const landingShown = this.finishTicks >= TPS_KO_MIN_SHOW_TICKS
-        && this.finishSettledTicks >= TPS_KO_SETTLED_HOLD_TICKS;
-      if (landingShown || this.finishTicks >= TPS_KO_MAX_SHOW_TICKS) {
+      if (finishWindow.complete) {
         this.finishPending = false;
         this.finished = true;
         const winner = this.resultWinner ?? "draw";
@@ -1420,7 +1421,7 @@ export class TpsFightGame {
     this.finishTicks = 0;
     this.finishSettledTicks = 0;
     this.input.clear();
-    const winner = this.p1.health === this.p2.health ? "draw" : this.p1.health > this.p2.health ? "p1" : "p2";
+    const winner = tpsWinnerForHealth(this.p1.health, this.p2.health);
     this.resultWinner = winner;
     this.publishHud(true);
     this.audio.ko();

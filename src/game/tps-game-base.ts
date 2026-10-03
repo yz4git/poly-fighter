@@ -1050,33 +1050,36 @@ export class TpsFightGame {
     return false;
   }
 
-  private resolveAttack(attacker: FighterRuntime, defender: FighterRuntime, defenderGuarding: boolean): void {
+  private resolveAttack(
+    attacker: FighterRuntime,
+    defender: FighterRuntime,
+    defenderGuarding: boolean,
+  ): void {
     const move = attacker.currentMove;
-    if (attacker.state !== "ATTACK" || !move || !attacker.isActive() || attacker.hitTargets.has(defender.id)) return;
-    const trackedSideEvade = defender === this.p1
-      && attacker === this.p2
-      && this.playerStepThreatTicks > 0
-      && this.playerStepThreatMoveId === move.id
-      && this.playerStepSideWeight > 0.45
-      && move.hitLevel !== "THROW";
-    if (trackedSideEvade) {
-      attacker.hitTargets.add(defender.id);
-      this.playerStepThreatTicks = 0;
-      this.playerStepThreatMoveId = null;
-      this.playerFlankWindowTicks = Math.max(this.playerFlankWindowTicks, TPS_FLANK_WINDOW_TICKS);
-      this.playerPerfectEvadeTicks = Math.max(this.playerPerfectEvadeTicks, TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks);
-      this.playerReversalTicks = Math.max(this.playerReversalTicks, TPS_REVERSAL_TICKS);
-      this.trainingProgress.perfectEvades += 1;
-      this.setCombatBeat("REVERSAL");
-      return;
-    }
-    const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
+    if (
+      attacker.state !== "ATTACK"
+      || !move
+      || !attacker.isActive()
+      || attacker.hitTargets.has(defender.id)
+    ) return;
+
+    if (this.tryResolveTrackedSideEvade(attacker, defender, move)) return;
+
+    const distance = Math.hypot(
+      defender.position.x - attacker.position.x,
+      defender.position.z - attacker.position.z,
+    );
     if (distance > move.reach + 0.72) return;
 
     attacker.hitTargets.add(defender.id);
     const defenderWasAttacking = defender.state === "ATTACK";
-    const interceptStrike = attacker === this.p1 && defender === this.p2 && this.playerInterceptTicks > 0;
-    const reversalStrike = attacker === this.p1 && this.playerFlankAttackTicks > 0 && move.hitLevel !== "THROW";
+    const interceptStrike = attacker === this.p1
+      && defender === this.p2
+      && this.playerInterceptTicks > 0;
+    const reversalStrike = attacker === this.p1
+      && this.playerFlankAttackTicks > 0
+      && move.hitLevel !== "THROW";
+
     const resolution = computeTpsHitResolution({
       move,
       defenderHealth: defender.health,
@@ -1092,13 +1095,22 @@ export class TpsFightGame {
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
     impactPosition.y = tpsImpactHeightForMove(move);
-    if (attacker === this.p1 && !blocked) {
-      this.trainingProgress.hits += 1;
-      if (interceptStrike) this.trainingProgress.intercepts += 1;
-      if (reversalStrike) this.trainingProgress.punishes += 1;
-    }
-    this.applyResolvedDamage(defender, move, blocked, resolvedDamage, reactionStrength, direction);
-    this.applySpecialStrikeState(interceptStrike, reversalStrike, defenderWasAttacking, blocked);
+
+    this.recordPlayerHitProgress(attacker, blocked, interceptStrike, reversalStrike);
+    this.applyResolvedDamage(
+      defender,
+      move,
+      blocked,
+      resolvedDamage,
+      reactionStrength,
+      direction,
+    );
+    this.applySpecialStrikeState(
+      interceptStrike,
+      reversalStrike,
+      defenderWasAttacking,
+      blocked,
+    );
 
     applyTpsImpactPresentation({
       attacker,
@@ -1113,12 +1125,7 @@ export class TpsFightGame {
       reactionStrength,
       impactPairStrength: resolution.impactPairStrength,
     });
-    if (lethalImpact) {
-      defender.hitStop = Math.max(defender.hitStop, move.hitStop + 5);
-      attacker.hitStop = Math.max(attacker.hitStop, move.hitStop + 3);
-      this.cameraImpact = Math.max(this.cameraImpact, 0.078);
-      this.setCombatBeat("FINAL IMPACT", TPS_FINISHER_BEAT_TICKS);
-    }
+    if (lethalImpact) this.applyLethalImpactFreeze(attacker, defender, move);
 
     const event: HitEvent = {
       attacker: attacker.id,
@@ -1128,7 +1135,11 @@ export class TpsFightGame {
       counter: resolution.counter,
       throwEscape: false,
       damage: resolvedDamage,
-      position: { x: impactPosition.x, y: impactPosition.y, z: impactPosition.z },
+      position: {
+        x: impactPosition.x,
+        y: impactPosition.y,
+        z: impactPosition.z,
+      },
     };
     this.emitImpactFeedback(
       attacker,
@@ -1138,6 +1149,63 @@ export class TpsFightGame {
       interceptStrike,
       reversalStrike,
     );
+  }
+
+  private tryResolveTrackedSideEvade(
+    attacker: FighterRuntime,
+    defender: FighterRuntime,
+    move: MoveDefinition,
+  ): boolean {
+    const trackedSideEvade = defender === this.p1
+      && attacker === this.p2
+      && this.playerStepThreatTicks > 0
+      && this.playerStepThreatMoveId === move.id
+      && this.playerStepSideWeight > 0.45
+      && move.hitLevel !== "THROW";
+    if (!trackedSideEvade) return false;
+
+    attacker.hitTargets.add(defender.id);
+    this.playerStepThreatTicks = 0;
+    this.playerStepThreatMoveId = null;
+    this.playerFlankWindowTicks = Math.max(
+      this.playerFlankWindowTicks,
+      TPS_FLANK_WINDOW_TICKS,
+    );
+    this.playerPerfectEvadeTicks = Math.max(
+      this.playerPerfectEvadeTicks,
+      TPS_PERFECT_EVADE_TICKS + this.p1Dna.perfectEvadeBonusTicks,
+    );
+    this.playerReversalTicks = Math.max(
+      this.playerReversalTicks,
+      TPS_REVERSAL_TICKS,
+    );
+    this.trainingProgress.perfectEvades += 1;
+    this.setCombatBeat("REVERSAL");
+    return true;
+  }
+
+  private recordPlayerHitProgress(
+    attacker: FighterRuntime,
+    blocked: boolean,
+    interceptStrike: boolean,
+    reversalStrike: boolean,
+  ): void {
+    if (attacker !== this.p1 || blocked) return;
+
+    this.trainingProgress.hits += 1;
+    if (interceptStrike) this.trainingProgress.intercepts += 1;
+    if (reversalStrike) this.trainingProgress.punishes += 1;
+  }
+
+  private applyLethalImpactFreeze(
+    attacker: FighterRuntime,
+    defender: FighterRuntime,
+    move: MoveDefinition,
+  ): void {
+    defender.hitStop = Math.max(defender.hitStop, move.hitStop + 5);
+    attacker.hitStop = Math.max(attacker.hitStop, move.hitStop + 3);
+    this.cameraImpact = Math.max(this.cameraImpact, 0.078);
+    this.setCombatBeat("FINAL IMPACT", TPS_FINISHER_BEAT_TICKS);
   }
 
   private applyResolvedDamage(

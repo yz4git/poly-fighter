@@ -686,116 +686,23 @@ export class TpsFightGame {
       this.p1.position.x - this.p2.position.x,
       this.p1.position.z - this.p2.position.z,
     );
-    const situation = (): CpuSituation => ({
-      self: tpsCpuActorSnapshot(this.p2),
-      opponent: tpsCpuActorSnapshot(this.p1),
-      distance: Math.hypot(
-        this.p1.position.x - this.p2.position.x,
-        this.p1.position.z - this.p2.position.z,
-      ),
-    });
-    this.enemyFunDirector.observe(situation());
+    this.enemyFunDirector.observe(this.enemySituation());
     if (this.advanceLockedState(this.p2)) return;
 
     this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
-    this.enemyAdaptReviewTicks -= 1;
-    if (this.enemyAdaptReviewTicks <= 0) {
-      const review = reviewTpsEnemyHabits(this.enemyAdaptation, {
-        attacks: this.playerAttackSamples,
-        steps: this.playerStepSamples,
-        retreats: this.playerRetreatSamples,
-        leftSteps: this.playerLeftStepSamples,
-        rightSteps: this.playerRightStepSamples,
-        intercepts: this.playerInterceptSamples,
-        reversals: this.playerReversalSamples,
-      });
-      this.enemyAdaptation = review.adaptation;
-      if (review.readLabel) this.setCombatBeat(`RIVAL: ${review.readLabel}`, 28);
-      this.playerAttackSamples = review.samples.attacks;
-      this.playerStepSamples = review.samples.steps;
-      this.playerRetreatSamples = review.samples.retreats;
-      this.playerLeftStepSamples = review.samples.leftSteps;
-      this.playerRightStepSamples = review.samples.rightSteps;
-      this.playerInterceptSamples = review.samples.intercepts;
-      this.playerReversalSamples = review.samples.reversals;
-      this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
-    }
-    this.enemyTacticTicks -= 1;
-    if (this.enemyTacticTicks <= 0) {
-      const selection = chooseTpsEnemyTactic({
-        simulationTicks: this.simulationTicks,
-        p1Health: this.p1.health,
-        p2Health: this.p2.health,
-        persona: this.enemyPersona,
-        adaptation: this.enemyAdaptation,
-        difficulty: this.difficulty,
-        dramaPhase: this.dramaPhase,
-      });
-      this.enemyTactic = selection.tactic;
-      this.enemyOrbitSign = selection.orbitSign;
-      this.enemyTacticTicks = selection.tacticTicks;
-    }
+    this.reviewEnemyHabitsIfDue();
+    this.refreshEnemyTacticIfDue();
 
     const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
-    const rootData = this.p2.visual.root.userData;
 
-    if (this.enemyDirectorPendingMove) {
-      if (this.enemyDirectorTelegraphTicks > 0) {
-        this.enemyDirectorTelegraphTicks -= 1;
-        rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
-        const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
-        const progress = THREE.MathUtils.clamp(1 - this.enemyDirectorTelegraphTicks / totalTicks, 0, 1);
-        const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
-        rootData.tpsEnemyTelegraphProgress = progress;
-        rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
-        rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow ? "REACT" : "LOAD";
-        rootData.tpsEnemyReactionWindowTicks = reactionWindow;
-        const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
-        this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent) ? "GUARD" : "IDLE";
-        this.p2.updatePhysics(FIXED_STEP);
-        return;
-      }
-      const moveId = this.enemyDirectorPendingMove;
-      const intent = this.enemyDirectorDecision?.intent ?? "JAB";
-      this.enemyDirectorPendingMove = null;
-      if (this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) {
-        this.p2.updatePhysics(FIXED_STEP);
-        return;
-      }
-    }
-
-    // Keep the title-card/read window non-hostile. It still moves so the enemy
-    // feels alive, but no decision is remembered as an attack before play begins.
-    if (this.enemyOpeningGraceTicks > 0) {
-      const openingIntent: CpuIntent = liveDistance > 2.35 ? "APPROACH" : "SIDESTEP";
-      const openingDecision: CpuDecision = {
-        intent: openingIntent,
-        holdTicks: 1,
-        telegraphTicks: 0,
-        reason: "opening-read-window",
-        comebackMercy: 0,
-        pressure: 0,
-      };
-      this.publishEnemyDecision(openingDecision);
-      this.moveEnemy(openingIntent, towardPlayer, tangent);
-      this.p2.updatePhysics(FIXED_STEP);
-      return;
-    }
-
-    if (this.enemyDirectorDecision && this.enemyDirectorHoldTicks > 0) {
-      const heldIntent = isAttackIntent(this.enemyDirectorDecision.intent) ? "WAIT" : this.enemyDirectorDecision.intent;
-      this.enemyDirectorHoldTicks -= 1;
-      this.publishEnemyDecision(this.enemyDirectorDecision, isAttackIntent(this.enemyDirectorDecision.intent) ? rootData.tpsCpuDirectorMove ?? null : null);
-      this.moveEnemy(heldIntent, towardPlayer, tangent);
-      this.p2.updatePhysics(FIXED_STEP);
-      if (this.enemyDirectorHoldTicks <= 0) this.enemyDirectorDecision = null;
-      return;
-    }
+    if (this.advanceEnemyTelegraph(towardPlayer)) return;
+    if (this.runEnemyOpeningGrace(liveDistance, towardPlayer, tangent)) return;
+    if (this.runHeldEnemyDecision(towardPlayer, tangent)) return;
 
     const decision = adaptTpsCpuDecision(
-      this.enemyFunDirector.decide(situation()),
+      this.enemyFunDirector.decide(this.enemySituation()),
       {
         persona: this.enemyPersona,
         adaptation: this.enemyAdaptation,
@@ -806,27 +713,171 @@ export class TpsFightGame {
     this.enemyDirectorDecision = decision;
     this.publishEnemyDecision(decision);
 
-    if (isAttackIntent(decision.intent)) {
-      const moveId = tpsCpuAttackMove(decision.intent);
-      if (moveId) {
-        rootData.tpsCpuDirectorMove = moveId;
-        const telegraphTicks = Math.max(decision.telegraphTicks, minimumTpsEnemyTelegraphTicks(this.difficulty, moveId));
-        this.enemyDirectorPendingMove = moveId;
-        this.enemyDirectorTelegraphTicks = telegraphTicks;
-        this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
-        rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;
-        rootData.tpsEnemyTelegraphProgress = 0;
-        rootData.tpsEnemyTelegraphMove = moveId;
-        rootData.tpsEnemyTelegraphPhase = "LOAD";
-        this.p2.state = ["POWER", "THROW", "COUNTER"].includes(decision.intent) ? "GUARD" : "IDLE";
-        this.p2.updatePhysics(FIXED_STEP);
-        return;
-      }
-    }
+    if (this.queueEnemyAttackDecision(decision)) return;
 
     this.enemyDirectorHoldTicks = Math.max(1, decision.holdTicks - 1);
     this.moveEnemy(decision.intent, towardPlayer, tangent);
     this.p2.updatePhysics(FIXED_STEP);
+  }
+
+  private enemySituation(): CpuSituation {
+    return {
+      self: tpsCpuActorSnapshot(this.p2),
+      opponent: tpsCpuActorSnapshot(this.p1),
+      distance: Math.hypot(
+        this.p1.position.x - this.p2.position.x,
+        this.p1.position.z - this.p2.position.z,
+      ),
+    };
+  }
+
+  private reviewEnemyHabitsIfDue(): void {
+    this.enemyAdaptReviewTicks -= 1;
+    if (this.enemyAdaptReviewTicks > 0) return;
+
+    const review = reviewTpsEnemyHabits(this.enemyAdaptation, {
+      attacks: this.playerAttackSamples,
+      steps: this.playerStepSamples,
+      retreats: this.playerRetreatSamples,
+      leftSteps: this.playerLeftStepSamples,
+      rightSteps: this.playerRightStepSamples,
+      intercepts: this.playerInterceptSamples,
+      reversals: this.playerReversalSamples,
+    });
+    this.enemyAdaptation = review.adaptation;
+    if (review.readLabel) this.setCombatBeat(`RIVAL: ${review.readLabel}`, 28);
+    this.playerAttackSamples = review.samples.attacks;
+    this.playerStepSamples = review.samples.steps;
+    this.playerRetreatSamples = review.samples.retreats;
+    this.playerLeftStepSamples = review.samples.leftSteps;
+    this.playerRightStepSamples = review.samples.rightSteps;
+    this.playerInterceptSamples = review.samples.intercepts;
+    this.playerReversalSamples = review.samples.reversals;
+    this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
+  }
+
+  private refreshEnemyTacticIfDue(): void {
+    this.enemyTacticTicks -= 1;
+    if (this.enemyTacticTicks > 0) return;
+
+    const selection = chooseTpsEnemyTactic({
+      simulationTicks: this.simulationTicks,
+      p1Health: this.p1.health,
+      p2Health: this.p2.health,
+      persona: this.enemyPersona,
+      adaptation: this.enemyAdaptation,
+      difficulty: this.difficulty,
+      dramaPhase: this.dramaPhase,
+    });
+    this.enemyTactic = selection.tactic;
+    this.enemyOrbitSign = selection.orbitSign;
+    this.enemyTacticTicks = selection.tacticTicks;
+  }
+
+  private advanceEnemyTelegraph(towardPlayer: THREE.Vector3): boolean {
+    if (!this.enemyDirectorPendingMove) return false;
+
+    const rootData = this.p2.visual.root.userData;
+    if (this.enemyDirectorTelegraphTicks > 0) {
+      this.enemyDirectorTelegraphTicks -= 1;
+      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+      const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
+      const progress = THREE.MathUtils.clamp(
+        1 - this.enemyDirectorTelegraphTicks / totalTicks,
+        0,
+        1,
+      );
+      const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
+      rootData.tpsEnemyTelegraphProgress = progress;
+      rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
+      rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow
+        ? "REACT"
+        : "LOAD";
+      rootData.tpsEnemyReactionWindowTicks = reactionWindow;
+      const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
+      this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent) ? "GUARD" : "IDLE";
+      this.p2.updatePhysics(FIXED_STEP);
+      return true;
+    }
+
+    const moveId = this.enemyDirectorPendingMove;
+    const intent = this.enemyDirectorDecision?.intent ?? "JAB";
+    this.enemyDirectorPendingMove = null;
+    if (!this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) return false;
+    this.p2.updatePhysics(FIXED_STEP);
+    return true;
+  }
+
+  private runEnemyOpeningGrace(
+    liveDistance: number,
+    towardPlayer: THREE.Vector3,
+    tangent: THREE.Vector3,
+  ): boolean {
+    if (this.enemyOpeningGraceTicks <= 0) return false;
+
+    // Keep the title-card/read window non-hostile. It still moves so the enemy
+    // feels alive, but no decision is remembered as an attack before play begins.
+    const openingIntent: CpuIntent = liveDistance > 2.35 ? "APPROACH" : "SIDESTEP";
+    const openingDecision: CpuDecision = {
+      intent: openingIntent,
+      holdTicks: 1,
+      telegraphTicks: 0,
+      reason: "opening-read-window",
+      comebackMercy: 0,
+      pressure: 0,
+    };
+    this.publishEnemyDecision(openingDecision);
+    this.moveEnemy(openingIntent, towardPlayer, tangent);
+    this.p2.updatePhysics(FIXED_STEP);
+    return true;
+  }
+
+  private runHeldEnemyDecision(
+    towardPlayer: THREE.Vector3,
+    tangent: THREE.Vector3,
+  ): boolean {
+    if (!this.enemyDirectorDecision || this.enemyDirectorHoldTicks <= 0) return false;
+
+    const heldIntent = isAttackIntent(this.enemyDirectorDecision.intent)
+      ? "WAIT"
+      : this.enemyDirectorDecision.intent;
+    this.enemyDirectorHoldTicks -= 1;
+    this.publishEnemyDecision(
+      this.enemyDirectorDecision,
+      isAttackIntent(this.enemyDirectorDecision.intent)
+        ? this.p2.visual.root.userData.tpsCpuDirectorMove ?? null
+        : null,
+    );
+    this.moveEnemy(heldIntent, towardPlayer, tangent);
+    this.p2.updatePhysics(FIXED_STEP);
+    if (this.enemyDirectorHoldTicks <= 0) this.enemyDirectorDecision = null;
+    return true;
+  }
+
+  private queueEnemyAttackDecision(decision: CpuDecision): boolean {
+    if (!isAttackIntent(decision.intent)) return false;
+
+    const moveId = tpsCpuAttackMove(decision.intent);
+    if (!moveId) return false;
+
+    const rootData = this.p2.visual.root.userData;
+    rootData.tpsCpuDirectorMove = moveId;
+    const telegraphTicks = Math.max(
+      decision.telegraphTicks,
+      minimumTpsEnemyTelegraphTicks(this.difficulty, moveId),
+    );
+    this.enemyDirectorPendingMove = moveId;
+    this.enemyDirectorTelegraphTicks = telegraphTicks;
+    this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
+    rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;
+    rootData.tpsEnemyTelegraphProgress = 0;
+    rootData.tpsEnemyTelegraphMove = moveId;
+    rootData.tpsEnemyTelegraphPhase = "LOAD";
+    this.p2.state = ["POWER", "THROW", "COUNTER"].includes(decision.intent)
+      ? "GUARD"
+      : "IDLE";
+    this.p2.updatePhysics(FIXED_STEP);
+    return true;
   }
 
   private publishEnemyDecision(

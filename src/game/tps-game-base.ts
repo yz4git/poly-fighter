@@ -94,6 +94,10 @@ function horizontalDistance(a: THREE.Vector3, b: THREE.Vector3): number {
   return Math.hypot(b.x - a.x, b.z - a.z);
 }
 
+function horizontalRadius(position: THREE.Vector3): number {
+  return Math.hypot(position.x, position.z);
+}
+
 function clampToArena(position: THREE.Vector3, margin = 0.72): void {
   const radial = new THREE.Vector2(position.x, position.z);
   const maximum = ARENA_RADIUS - margin;
@@ -733,7 +737,7 @@ export class TpsFightGame {
     const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
     const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
     const interceptStrike = this.playerInterceptTicks > 0;
-    const defenderNearWall = horizontalDistance(new THREE.Vector3(), this.p2.position) >= ARENA_RADIUS - 1.35;
+    const defenderNearWall = horizontalRadius(this.p2.position) >= ARENA_RADIUS - 1.35;
     const choice = resolveContextAttack({
       fighterName: this.p1.definition.name,
       distance,

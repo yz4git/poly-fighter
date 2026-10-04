@@ -90,6 +90,10 @@ function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vect
   return result.lengthSq() > 1e-8 ? result.normalize() : new THREE.Vector3(1, 0, 0);
 }
 
+function horizontalDistance(a: THREE.Vector3, b: THREE.Vector3): number {
+  return Math.hypot(b.x - a.x, b.z - a.z);
+}
+
 function clampToArena(position: THREE.Vector3, margin = 0.72): void {
   const radial = new THREE.Vector2(position.x, position.z);
   const maximum = ARENA_RADIUS - margin;
@@ -645,10 +649,7 @@ export class TpsFightGame {
       && this.enemyDirectorTelegraphTicks > 0
       && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
     );
-    const incomingDistance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const incomingDistance = horizontalDistance(this.p1.position, this.p2.position);
     const stepThreat = tpsReactiveStepThreat({
       sideWeight: this.playerStepSideWeight,
       activeIncomingMove,
@@ -712,10 +713,7 @@ export class TpsFightGame {
     // Near-contact pure strafing can otherwise orbit the opponent fast enough
     // to outrun an over-shoulder camera. Taper only ordinary lateral locomotion;
     // forward/back movement and the authored STEP burst keep their full speed.
-    const fightDistance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
     const locomotionSpeedScale = tpsCloseLocomotionSpeedScale(
       fightDistance,
       forwardAxis,
@@ -730,12 +728,12 @@ export class TpsFightGame {
 
   private beginContextAttack(): boolean {
     if (!this.p1.canAct()) return false;
-    const distance = Math.hypot(this.p2.position.x - this.p1.position.x, this.p2.position.z - this.p1.position.z);
+    const distance = horizontalDistance(this.p1.position, this.p2.position);
     const stage = Math.min(2, this.playerComboStage);
     const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
     const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
     const interceptStrike = this.playerInterceptTicks > 0;
-    const defenderNearWall = Math.hypot(this.p2.position.x, this.p2.position.z) >= ARENA_RADIUS - 1.35;
+    const defenderNearWall = horizontalDistance(new THREE.Vector3(), this.p2.position) >= ARENA_RADIUS - 1.35;
     const choice = resolveContextAttack({
       fighterName: this.p1.definition.name,
       distance,
@@ -781,10 +779,7 @@ export class TpsFightGame {
 
   private updateEnemy(): void {
     this.p2.setInput(EMPTY_INPUT);
-    const liveDistance = Math.hypot(
-      this.p1.position.x - this.p2.position.x,
-      this.p1.position.z - this.p2.position.z,
-    );
+    const liveDistance = horizontalDistance(this.p2.position, this.p1.position);
     this.enemyFunDirector.observe(this.enemySituation());
     if (this.advanceLockedState(this.p2)) return;
 
@@ -823,10 +818,7 @@ export class TpsFightGame {
     return {
       self: tpsCpuActorSnapshot(this.p2),
       opponent: tpsCpuActorSnapshot(this.p1),
-      distance: Math.hypot(
-        this.p1.position.x - this.p2.position.x,
-        this.p1.position.z - this.p2.position.z,
-      ),
+      distance: horizontalDistance(this.p2.position, this.p1.position),
     };
   }
 
@@ -1096,10 +1088,7 @@ export class TpsFightGame {
 
     if (this.tryResolveTrackedSideEvade(attacker, defender, move)) return;
 
-    const distance = Math.hypot(
-      defender.position.x - attacker.position.x,
-      defender.position.z - attacker.position.z,
-    );
+    const distance = horizontalDistance(attacker.position, defender.position);
     if (distance > move.reach + 0.72) return;
 
     attacker.hitTargets.add(defender.id);
@@ -1329,7 +1318,7 @@ export class TpsFightGame {
   private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || attacker.moveTick > move.startup) return;
-    const distance = Math.hypot(defender.position.x - attacker.position.x, defender.position.z - attacker.position.z);
+    const distance = horizontalDistance(attacker.position, defender.position);
     const desiredContact = Math.max(1.02, move.reach + 0.52);
     if (distance <= desiredContact || distance > desiredContact + 0.72) return;
     const remaining = distance - desiredContact;
@@ -1395,10 +1384,7 @@ export class TpsFightGame {
     this.cameraFrameStart.copy(this.camera.position);
     const forward = horizontalDirection(this.p1.position, this.p2.position);
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const fightDistance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
     const attackMove = this.p1.state === "ATTACK" ? this.p1.currentMove : null;
     const attackMoveId = attackMove?.id ?? null;
 
@@ -1525,10 +1511,7 @@ export class TpsFightGame {
     const pendingMove = this.enemyDirectorPendingMove
       ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null
       : null;
-    const distance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const distance = horizontalDistance(this.p1.position, this.p2.position);
     return computeTpsEnemyThreat({
       pendingMove,
       pendingTelegraphTicks: this.enemyDirectorTelegraphTicks,
@@ -1542,10 +1525,7 @@ export class TpsFightGame {
 
   private updateLockOn(): void {
     this.p2.visual.root.updateMatrixWorld(true);
-    const distance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const distance = horizontalDistance(this.p1.position, this.p2.position);
     const { windup, incoming: threat } = this.enemyThreatStatus();
     const inStrikeRange = distance < TPS_STRIKE_RANGE;
     const profile = computeTpsLockOnProfile({
@@ -1694,10 +1674,7 @@ export class TpsFightGame {
     this.lastHudTick = this.simulationTicks;
 
     const enemyThreat = this.enemyThreatStatus();
-    const fightDistance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
+    const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
     const snapshot = buildTpsHudSnapshot({
       trainingProgress: this.trainingProgress,
       enemyThreat,

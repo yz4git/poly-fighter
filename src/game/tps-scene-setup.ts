@@ -14,6 +14,10 @@ export type TpsSceneSetup = {
   targetGroundRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
 };
 
+export function tpsPixelRatioCap(quality: Quality): number {
+  return quality === "LOW" ? 1 : quality === "HIGH" ? 1.75 : 1.35;
+}
+
 export function createTpsSceneSetup(input: {
   mount: HTMLElement;
   quality: Quality;
@@ -46,8 +50,7 @@ export function createTpsSceneSetup(input: {
   );
   input.mount.replaceChildren(renderer.domElement);
 
-  const maxDpr = input.quality === "LOW" ? 1 : input.quality === "HIGH" ? 1.75 : 1.35;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tpsPixelRatioCap(input.quality)));
 
   const hemi = new THREE.HemisphereLight(0xaedcff, 0x07101d, 2.35);
   const key = new THREE.DirectionalLight(0xffffff, 3.8);

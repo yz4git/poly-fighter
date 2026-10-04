@@ -77,7 +77,7 @@ import {
   tpsStepSpeedMultiplier,
 } from "./tps-player-policy";
 import { finalizeTpsFighterVisual, prepareTpsFighterVisual } from "./tps-visual-state";
-import { createTpsSceneSetup } from "./tps-scene-setup";
+import { createTpsSceneSetup, tpsPixelRatioCap } from "./tps-scene-setup";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
@@ -254,8 +254,7 @@ export class TpsFightGame {
   updateSettings(patch: Parameters<SettingsManager["update"]>[0]): void {
     const settings = this.settings.update(patch);
     this.audio.setEnabled(settings.audio);
-    const dpr = settings.quality === "LOW" ? 1 : settings.quality === "HIGH" ? 1.75 : 1.35;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dpr));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tpsPixelRatioCap(settings.quality)));
     this.resize();
     this.graphics.setQuality(settings.quality);
   }

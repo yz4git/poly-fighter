@@ -3,11 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, gameplayProfile, arenaFactory, enemyPolicy, playerPolicy, threatPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot, lockOnProfile] = await Promise.all([
+  const [core, extension, cameraProfile, gameplayProfile, geometry, sceneSetup, visualState, arenaFactory, enemyPolicy, playerPolicy, threatPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot, lockOnProfile] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-gameplay-profile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-geometry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-scene-setup.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-visual-state.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-arena-factory.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-player-policy.ts", import.meta.url), "utf8"),
@@ -19,7 +22,7 @@ async function readTpsSource(): Promise<string> {
     readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-lock-on-profile.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${gameplayProfile}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${threatPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}\n${lockOnProfile}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${gameplayProfile}\n${geometry}\n${sceneSetup}\n${visualState}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${threatPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}\n${lockOnProfile}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {
@@ -222,15 +225,16 @@ test("TPS messages use a face-safe HUD lane and RESULT removes live fight contro
 
 
 test("TPS reactive two-button HUD makes threat, windup, and punish turns explicit", async () => {
-  const [core, hudSnapshot, page, css] = await Promise.all([
+  const [core, hudSnapshot, threatPolicy, page, css] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-threat-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
   ]);
-  const source = `${core}\n${hudSnapshot}`;
+  const source = `${core}\n${hudSnapshot}\n${threatPolicy}`;
   assert.match(source, /enemyThreatStatus/);
-  assert.match(source, /enemyDirectorPendingMove !== null/);
+  assert.match(source, /pendingTelegraphTicks > 0/);
   assert.match(source, /canStillHit/);
   assert.match(source, /inThreatReach/);
   assert.match(source, /"WINDUP"/);
@@ -244,15 +248,17 @@ test("TPS reactive two-button HUD makes threat, windup, and punish turns explici
 
 
 test("TPS Combat v2 adds intercepts, reversals, adaptive personas, reaction grading, and final impact", async () => {
-  const [core, enemyPolicy, impactResolution, impactPresentation, page, css] = await Promise.all([
+  const [core, gameplayProfile, playerPolicy, enemyPolicy, impactResolution, impactPresentation, page, css] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-gameplay-profile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-player-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/playtest-polish.css", import.meta.url), "utf8"),
   ]);
-  const source = `${core}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}`;
+  const source = `${core}\n${gameplayProfile}\n${playerPolicy}\n${enemyPolicy}\n${impactResolution}\n${impactPresentation}`;
   assert.match(source, /TPS_INTERCEPT_TICKS = 26/);
   assert.match(source, /TPS_REVERSAL_TICKS = 24/);
   assert.match(source, /playerInterceptTicks/);

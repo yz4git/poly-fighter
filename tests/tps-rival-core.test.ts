@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("Rival Core phase 1-3 adds Fighter DNA and context-sensitive signature routing", async () => {
-  const [dna, source] = await Promise.all([
+  const [dna, core, playerPolicy] = await Promise.all([
     readFile(new URL("../src/game/fighter-dna.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-player-policy.ts", import.meta.url), "utf8"),
   ]);
+  const source = `${core}\n${playerPolicy}`;
   assert.match(dna, /KAIRO/);
   assert.match(dna, /SERA/);
   assert.match(dna, /BREAK LINE/);

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { AudioManager } from "./audio";
 import { EffectsManager } from "./effects";
-import { fighterDnaForName, resolveContextAttack, type FighterDna } from "./fighter-dna";
+import { fighterDnaForName, type FighterDna } from "./fighter-dna";
 import { FighterRuntime, type CpuDifficulty } from "./fighter";
 import { CpuFunDirector, isAttackIntent, type CpuDecision, type CpuIntent, type CpuSituation } from "./cpu-director";
 import { FixedStepClock } from "./fixed";
@@ -43,6 +43,7 @@ import {
 } from "./tps-camera-profile";
 import {
   composeTpsMoveVector,
+  planTpsContextAttack,
   planTpsStep,
   tpsCloseLocomotionSpeedScale,
   tpsInputAxes,
@@ -732,37 +733,35 @@ export class TpsFightGame {
 
   private beginContextAttack(): boolean {
     if (!this.p1.canAct()) return false;
-    const distance = horizontalDistance(this.p1.position, this.p2.position);
-    const stage = Math.min(2, this.playerComboStage);
-    const reversalStrike = this.playerReversalTicks > 0 && this.playerStepSideWeight > 0.45;
-    const flankStrike = this.playerFlankWindowTicks > 0 && this.playerStepSideWeight > 0.45;
-    const interceptStrike = this.playerInterceptTicks > 0;
-    const defenderNearWall = horizontalRadius(this.p2.position) >= ARENA_RADIUS - 1.35;
-    const choice = resolveContextAttack({
+
+    const plan = planTpsContextAttack({
       fighterName: this.p1.definition.name,
-      distance,
-      comboStage: stage,
-      flankOpen: flankStrike,
-      reversalOpen: reversalStrike,
-      interceptOpen: interceptStrike,
-      defenderAttacking: this.p2.state === "ATTACK",
-      defenderNearWall,
+      distance: horizontalDistance(this.p1.position, this.p2.position),
+      comboStage: this.playerComboStage,
+      playerReversalTicks: this.playerReversalTicks,
+      playerStepSideWeight: this.playerStepSideWeight,
+      playerFlankWindowTicks: this.playerFlankWindowTicks,
+      playerInterceptTicks: this.playerInterceptTicks,
+      defenderState: this.p2.state,
+      defenderNearWall: horizontalRadius(this.p2.position) >= ARENA_RADIUS - 1.35,
       selfHealth: this.p1.health,
       defenderHealth: this.p2.health,
     });
-    if (!this.p1.beginMove(choice.moveId)) return false;
-    this.playerComboStage = reversalStrike ? 1 : stage + 1;
+    if (!this.p1.beginMove(plan.choice.moveId)) return false;
+
+    this.playerComboStage = plan.nextComboStage;
     this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
     this.p1.visual.root.userData.tpsFighterDna = this.p1Dna.id;
-    this.p1.visual.root.userData.tpsContextMove = choice.moveId;
-    this.p1.visual.root.userData.tpsSignatureAction = choice.signature;
-    this.p1.visual.root.userData.tpsContextBeat = choice.beat;
-    if (choice.beat) this.setCombatBeat(choice.beat);
-    if (reversalStrike) {
+    this.p1.visual.root.userData.tpsContextMove = plan.choice.moveId;
+    this.p1.visual.root.userData.tpsSignatureAction = plan.choice.signature;
+    this.p1.visual.root.userData.tpsContextBeat = plan.choice.beat;
+    if (plan.choice.beat) this.setCombatBeat(plan.choice.beat);
+
+    if (plan.reversalStrike) {
       this.playerReversalSamples += 1;
       this.playerReversalTicks = 0;
     }
-    if (flankStrike) {
+    if (plan.flankStrike) {
       this.playerFlankAttackTicks = 28;
       this.playerFlankWindowTicks = 0;
     }

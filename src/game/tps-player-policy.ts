@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { MoveDefinition, InputFrame } from "./types";
+import { resolveContextAttack, type ContextAttackChoice } from "./fighter-dna";
+import type { FighterState, MoveDefinition, InputFrame } from "./types";
 
 export const TPS_CLOSE_ORBIT_SPEED_SCALE = 0.65;
 
@@ -14,6 +15,54 @@ export type TpsStepPlan = {
   sideWeight: number;
   evadeSign: number;
 };
+
+export type TpsContextAttackPlan = {
+  choice: ContextAttackChoice;
+  reversalStrike: boolean;
+  flankStrike: boolean;
+  interceptStrike: boolean;
+  nextComboStage: number;
+};
+
+export function planTpsContextAttack(input: {
+  fighterName: string;
+  distance: number;
+  comboStage: number;
+  playerReversalTicks: number;
+  playerStepSideWeight: number;
+  playerFlankWindowTicks: number;
+  playerInterceptTicks: number;
+  defenderState: FighterState;
+  defenderNearWall: boolean;
+  selfHealth: number;
+  defenderHealth: number;
+}): TpsContextAttackPlan {
+  const stage = Math.min(2, input.comboStage);
+  const reversalStrike = input.playerReversalTicks > 0
+    && input.playerStepSideWeight > 0.45;
+  const flankStrike = input.playerFlankWindowTicks > 0
+    && input.playerStepSideWeight > 0.45;
+  const interceptStrike = input.playerInterceptTicks > 0;
+  const choice = resolveContextAttack({
+    fighterName: input.fighterName,
+    distance: input.distance,
+    comboStage: stage,
+    flankOpen: flankStrike,
+    reversalOpen: reversalStrike,
+    interceptOpen: interceptStrike,
+    defenderAttacking: input.defenderState === "ATTACK",
+    defenderNearWall: input.defenderNearWall,
+    selfHealth: input.selfHealth,
+    defenderHealth: input.defenderHealth,
+  });
+  return {
+    choice,
+    reversalStrike,
+    flankStrike,
+    interceptStrike,
+    nextComboStage: reversalStrike ? 1 : stage + 1,
+  };
+}
 
 export function tpsInputAxes(input: InputFrame): TpsInputAxes {
   return {

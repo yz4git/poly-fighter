@@ -12,7 +12,7 @@ import { SettingsManager } from "./settings";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
-import { buildTpsHudSnapshot } from "./tps-hud-snapshot";
+import { buildTpsHudSnapshot, type TpsHudSnapshotInput } from "./tps-hud-snapshot";
 import { computeTpsLockOnProfile } from "./tps-lock-on-profile";
 import { computeTpsEnemyThreat } from "./tps-threat-policy";
 import { computeTpsContactSpacing } from "./tps-contact-spacing";
@@ -1676,12 +1676,13 @@ export class TpsFightGame {
     if (!force && this.simulationTicks % 4 !== 0) return;
     if (!force && this.lastHudTick === this.simulationTicks) return;
     this.lastHudTick = this.simulationTicks;
+    this.options.onHud?.(buildTpsHudSnapshot(this.hudSnapshotInput()));
+  }
 
-    const enemyThreat = this.enemyThreatStatus();
-    const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
-    const snapshot = buildTpsHudSnapshot({
+  private hudSnapshotInput(): TpsHudSnapshotInput {
+    return {
       trainingProgress: this.trainingProgress,
-      enemyThreat,
+      enemyThreat: this.enemyThreatStatus(),
       finishPending: this.finishPending,
       finished: this.finished,
       playerReversalTicks: this.playerReversalTicks,
@@ -1696,7 +1697,7 @@ export class TpsFightGame {
       p1State: this.p1.state,
       p2State: this.p2.state,
       p1MoveId: this.p1.currentMove?.id ?? null,
-      fightDistance,
+      fightDistance: horizontalDistance(this.p1.position, this.p2.position),
       strikeRange: TPS_STRIKE_RANGE,
       timerTicks: this.timerTicks,
       p1Health: this.p1.health,
@@ -1704,8 +1705,7 @@ export class TpsFightGame {
       resultWinner: this.resultWinner,
       p1Name: this.p1.definition.name,
       p2Name: this.p2.definition.name,
-    });
-    this.options.onHud?.(snapshot);
+    };
   }
 
   destroy(): void {

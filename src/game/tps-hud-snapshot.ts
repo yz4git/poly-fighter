@@ -1,7 +1,7 @@
 import type { TpsWinner } from "./tps-finish-flow";
 import type { FighterState, HudSnapshot, TpsTrainingProgress } from "./types";
 
-export function buildTpsHudSnapshot(input: {
+export type TpsHudSnapshotInput = {
   trainingProgress: TpsTrainingProgress;
   enemyThreat: { windup: boolean; incoming: boolean };
   finishPending: boolean;
@@ -26,7 +26,9 @@ export function buildTpsHudSnapshot(input: {
   resultWinner: TpsWinner | null;
   p1Name: string;
   p2Name: string;
-}): HudSnapshot {
+};
+
+export function buildTpsHudSnapshot(input: TpsHudSnapshotInput): HudSnapshot {
   const tpsCue: NonNullable<HudSnapshot["tpsCue"]> = input.finishPending || input.finished
     ? "NONE"
     : input.enemyThreat.incoming

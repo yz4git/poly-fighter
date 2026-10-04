@@ -51,6 +51,7 @@ import {
   tpsReactiveStepThreat,
   tpsStepSpeedMultiplier,
 } from "./tps-player-policy";
+import { finalizeTpsFighterVisual, prepareTpsFighterVisual } from "./tps-visual-state";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
@@ -83,7 +84,6 @@ const TPS_COMBAT_BEAT_TICKS = 34;
 const TPS_FINISHER_BEAT_TICKS = 72;
 const TPS_ADAPT_REVIEW_TICKS = 180;
 const TPS_DRAMA_REVIEW_TICKS = 30;
-const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
@@ -1376,26 +1376,19 @@ export class TpsFightGame {
     this.p2.visual.root.userData.tpsContactSpacingMove = impactMoveId;
   }
 
-  private updateVisual(fighter: FighterRuntime, opponent: FighterRuntime, time: number): void {
-    fighter.facing = opponent.position.x >= fighter.position.x ? 1 : -1;
-    const forward = horizontalDirection(fighter.position, opponent.position);
-    fighter.visual.root.userData.combatTps = true;
-    fighter.visual.root.userData.tpsFighterDna = fighter === this.p1 ? this.p1Dna.id : this.p2Dna.id;
-    fighter.visual.root.userData.combatMotionForward = forward.toArray();
-    if (fighter.state === "SIDESTEP") {
-      const direction = fighter === this.p1 ? this.playerStepDirection : fighter.velocity;
-      const side = direction.x * forward.z - direction.z * forward.x;
-      const along = direction.dot(forward);
-      fighter.visual.root.userData.combatStepDirection = Math.abs(side) > Math.abs(along) ? side < 0 ? "L" : "R" : along < 0 ? "B" : "F";
-    }
+  private updateVisual(
+    fighter: FighterRuntime,
+    opponent: FighterRuntime,
+    time: number,
+  ): void {
+    const forward = prepareTpsFighterVisual({
+      fighter,
+      opponent,
+      fighterDnaId: fighter === this.p1 ? this.p1Dna.id : this.p2Dna.id,
+      playerStepDirection: this.playerStepDirection,
+    });
     this.animation.update(fighter, opponent, time);
-    // The shared 1v1 attack aura is intentionally large and reads well from
-    // the side camera, but in shoulder-view TPS it becomes a full-screen
-    // translucent slab at contact. Keep particles/flash impacts and suppress
-    // only that presentation aura in this mode.
-    fighter.visual.aura.visible = false;
-    fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);
-    fighter.visual.root.updateMatrixWorld(true);
+    finalizeTpsFighterVisual(fighter, forward);
   }
 
   private updateCamera(delta: number): void {

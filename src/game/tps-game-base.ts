@@ -20,7 +20,7 @@ import {
 } from "./tps-geometry";
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
 import { buildTpsHudSnapshot, type TpsHudSnapshotInput } from "./tps-hud-snapshot";
-import { computeTpsLockOnProfile } from "./tps-lock-on-profile";
+import { computeTpsLockOnProfile, type TpsLockOnProfile } from "./tps-lock-on-profile";
 import { computeTpsEnemyThreat } from "./tps-threat-policy";
 import {
   FIXED_STEP,
@@ -1525,9 +1525,8 @@ export class TpsFightGame {
     this.p2.visual.root.updateMatrixWorld(true);
     const distance = horizontalDistance(this.p1.position, this.p2.position);
     const { windup, incoming: threat } = this.enemyThreatStatus();
-    const inStrikeRange = distance < TPS_STRIKE_RANGE;
     const profile = computeTpsLockOnProfile({
-      inStrikeRange,
+      inStrikeRange: distance < TPS_STRIKE_RANGE,
       windup,
       threat,
       perfectEvade: this.playerPerfectEvadeTicks > 0,
@@ -1536,7 +1535,6 @@ export class TpsFightGame {
         this.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0,
       ),
     });
-
     const target = this.p2.visual.root.localToWorld(
       new THREE.Vector3(
         0,
@@ -1544,14 +1542,24 @@ export class TpsFightGame {
         0,
       ),
     );
+    this.applyLockOnProfile(profile, target);
+  }
+
+  private applyLockOnProfile(
+    profile: TpsLockOnProfile,
+    target: THREE.Vector3,
+  ): void {
     this.lockRing.material.color.setHex(profile.lockColor);
     this.lockStem.material.color.setHex(profile.lockColor);
     this.targetGroundRing.material.color.setHex(profile.lockColor);
+
     this.lockRing.position.copy(target);
     this.lockRing.lookAt(this.camera.position);
     this.lockRing.scale.setScalar(profile.pulse);
+
     this.lockStem.position.copy(target).add(new THREE.Vector3(0, -0.30, 0));
     this.lockStem.lookAt(this.camera.position);
+
     this.targetGroundRing.position.set(
       this.p2.position.x,
       0.035,

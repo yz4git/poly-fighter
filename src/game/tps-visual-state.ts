@@ -13,9 +13,9 @@ export function prepareTpsFighterVisual(input: {
   fighter: FighterRuntime;
   opponent: FighterRuntime;
   fighterDnaId: FighterDnaId;
-  playerStepDirection: THREE.Vector3;
+  stepDirection: THREE.Vector3;
 }): THREE.Vector3 {
-  const { fighter, opponent, fighterDnaId, playerStepDirection } = input;
+  const { fighter, opponent, fighterDnaId, stepDirection } = input;
   fighter.facing = opponent.position.x >= fighter.position.x ? 1 : -1;
   const forward = horizontalDirection(fighter.position, opponent.position);
 
@@ -25,9 +25,8 @@ export function prepareTpsFighterVisual(input: {
   data.combatMotionForward = forward.toArray();
 
   if (fighter.state === "SIDESTEP") {
-    const direction = fighter.id === "p1" ? playerStepDirection : fighter.velocity;
-    const side = direction.x * forward.z - direction.z * forward.x;
-    const along = direction.dot(forward);
+    const side = stepDirection.x * forward.z - stepDirection.z * forward.x;
+    const along = stepDirection.dot(forward);
     data.combatStepDirection = Math.abs(side) > Math.abs(along)
       ? side < 0 ? "L" : "R"
       : along < 0 ? "B" : "F";

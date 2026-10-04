@@ -1372,7 +1372,7 @@ export class TpsFightGame {
       fighter,
       opponent,
       fighterDnaId: fighter === this.p1 ? this.p1Dna.id : this.p2Dna.id,
-      playerStepDirection: this.playerStepDirection,
+      stepDirection: fighter === this.p1 ? this.playerStepDirection : fighter.velocity,
     });
     this.animation.update(fighter, opponent, time);
     finalizeTpsFighterVisual(fighter, forward);

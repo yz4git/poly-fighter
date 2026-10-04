@@ -9,8 +9,8 @@ import { InputSystem } from "./input";
 import { PresentationAnimationController } from "./presentation-animation";
 import { motionEventsAtContact, sampleCombatMotionAtEvent } from "./combat-motion-timeline";
 import { SettingsManager } from "./settings";
-import { TpsGraphicsDirector } from "./tps-graphics";
-import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
+import type { TpsGraphicsDirector } from "./tps-graphics";
+import { TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-arena-factory";
 import {
   clampToArena,
   ease,
@@ -77,6 +77,7 @@ import {
   tpsStepSpeedMultiplier,
 } from "./tps-player-policy";
 import { finalizeTpsFighterVisual, prepareTpsFighterVisual } from "./tps-visual-state";
+import { createTpsSceneSetup } from "./tps-scene-setup";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
@@ -198,29 +199,21 @@ export class TpsFightGame {
     this.difficulty = options.difficulty ?? "NORMAL";
     const settings = this.settings.load();
 
-    try {
-      this.renderer = new THREE.WebGLRenderer({
-        antialias: settings.quality !== "LOW",
-        alpha: false,
-        powerPreference: "high-performance",
-        failIfMajorPerformanceCaveat: false,
-      });
-    } catch {
-      options.onFallback?.("TPSモードのWebGLを初期化できませんでした。Safariを再読み込みしてもう一度お試しください。");
-      throw new Error("POLY_FIGHTER_TPS_WEBGL_UNAVAILABLE");
-    }
+    const setup = createTpsSceneSetup({
+      mount,
+      quality: settings.quality,
+      effectsGroup: this.effects.group,
+      onFallback: options.onFallback,
+    });
+    this.renderer = setup.renderer;
+    this.scene = setup.scene;
+    this.camera = setup.camera;
+    this.graphics = setup.graphics;
+    this.arenaDisposables = setup.arenaDisposables;
+    this.lockRing = setup.lockRing;
+    this.lockStem = setup.lockStem;
+    this.targetGroundRing = setup.targetGroundRing;
 
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x030b16);
-    this.scene.fog = new THREE.FogExp2(0x030b16, 0.032);
-    this.camera = new THREE.PerspectiveCamera(47, 1, 0.1, 80);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.shadowMap.enabled = false;
-    this.renderer.domElement.setAttribute("aria-label", "POLY FIGHTER TPS lock-on battle arena");
-    this.mount.replaceChildren(this.renderer.domElement);
-
-    const dpr = settings.quality === "LOW" ? 1 : settings.quality === "HIGH" ? 1.75 : 1.35;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dpr));
     this.resize();
     window.addEventListener("resize", this.resize);
     window.addEventListener("orientationchange", this.resize);
@@ -235,18 +228,6 @@ export class TpsFightGame {
     document.addEventListener("visibilitychange", this.visibilityHandler);
     this.input.attachKeyboard(document);
 
-    const hemi = new THREE.HemisphereLight(0xaedcff, 0x07101d, 2.35);
-    const key = new THREE.DirectionalLight(0xffffff, 3.8);
-    key.position.set(-4, 9, 5);
-    const rim = new THREE.DirectionalLight(0x42c9ff, 2.8);
-    rim.position.set(5, 4, -6);
-    this.scene.add(hemi, key, rim);
-
-    const arena = createCircularArena();
-    this.arenaDisposables = arena.disposables;
-    this.scene.add(arena.group, this.effects.group);
-    this.graphics = new TpsGraphicsDirector(this.scene, this.renderer, ARENA_RADIUS, settings.quality);
-
     this.p1 = new FighterRuntime("p1", options.p1Definition, false, createFighterVisual(options.p1Definition, settings.quality, options.p1Model ?? "ORIGINAL"));
     this.p2 = new FighterRuntime("p2", options.p2Definition, true, createFighterVisual(options.p2Definition, settings.quality, options.p2Model ?? "ORIGINAL"));
     this.p1Dna = fighterDnaForName(this.p1.definition.name);
@@ -254,37 +235,6 @@ export class TpsFightGame {
     this.scene.add(this.p1.visual.root, this.p2.visual.root);
     this.enemyPersona = this.p2.definition.archetype === "SPEED" ? "SKIRMISHER" : "BRAWLER";
     this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
-
-    const lockGeometry = new THREE.TorusGeometry(0.38, 0.018, 8, 48);
-    const lockMaterial = new THREE.MeshBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.82, depthTest: true, depthWrite: false });
-    this.lockRing = new THREE.Mesh(lockGeometry, lockMaterial);
-    this.lockRing.renderOrder = 20;
-    this.scene.add(this.lockRing);
-    this.arenaDisposables.push(lockGeometry, lockMaterial);
-
-    const stemGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0.34, 0)]);
-    const stemMaterial = new THREE.LineBasicMaterial({ color: 0x7ce8ff, transparent: true, opacity: 0.76, depthTest: true, depthWrite: false });
-    this.lockStem = new THREE.Line(stemGeometry, stemMaterial);
-    this.lockStem.renderOrder = 20;
-    this.scene.add(this.lockStem);
-    this.arenaDisposables.push(stemGeometry, stemMaterial);
-
-    // Keep target location readable even when the foreground player overlaps it.
-    const targetGroundGeometry = new THREE.RingGeometry(0.58, 0.70, 48);
-    const targetGroundMaterial = new THREE.MeshBasicMaterial({
-      color: 0x7ce8ff,
-      transparent: true,
-      opacity: 0.3,
-      depthTest: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    this.targetGroundRing = new THREE.Mesh(targetGroundGeometry, targetGroundMaterial);
-    this.targetGroundRing.name = "tps-target-ground-ring";
-    this.targetGroundRing.rotation.x = -Math.PI / 2;
-    this.targetGroundRing.position.y = 0.035;
-    this.scene.add(this.targetGroundRing);
-    this.arenaDisposables.push(targetGroundGeometry, targetGroundMaterial);
 
     this.effects.onShake = (amount) => {
       if (!this.settings.get().cameraShake) return;

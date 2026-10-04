@@ -1,0 +1,15 @@
+export const FIXED_STEP = 1 / 60;
+export const ROUND_TICKS = 99 * 60;
+export const TPS_STRIKE_RANGE = 2.12;
+export const TPS_CLOSE_ATTACK_RANGE = 1.58;
+export const TPS_STEP_TICKS = 9;
+export const TPS_STEP_COOLDOWN_TICKS = 18;
+export const TPS_COMBO_GRACE_TICKS = 34;
+export const TPS_FLANK_WINDOW_TICKS = 30;
+export const TPS_PERFECT_EVADE_TICKS = 18;
+export const TPS_INTERCEPT_TICKS = 26;
+export const TPS_REVERSAL_TICKS = 24;
+export const TPS_COMBAT_BEAT_TICKS = 34;
+export const TPS_FINISHER_BEAT_TICKS = 72;
+export const TPS_ADAPT_REVIEW_TICKS = 180;
+export const TPS_DRAMA_REVIEW_TICKS = 30;

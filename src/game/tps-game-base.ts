@@ -15,6 +15,23 @@ import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama
 import { buildTpsHudSnapshot, type TpsHudSnapshotInput } from "./tps-hud-snapshot";
 import { computeTpsLockOnProfile } from "./tps-lock-on-profile";
 import { computeTpsEnemyThreat } from "./tps-threat-policy";
+import {
+  FIXED_STEP,
+  ROUND_TICKS,
+  TPS_ADAPT_REVIEW_TICKS,
+  TPS_CLOSE_ATTACK_RANGE,
+  TPS_COMBAT_BEAT_TICKS,
+  TPS_COMBO_GRACE_TICKS,
+  TPS_DRAMA_REVIEW_TICKS,
+  TPS_FINISHER_BEAT_TICKS,
+  TPS_FLANK_WINDOW_TICKS,
+  TPS_INTERCEPT_TICKS,
+  TPS_PERFECT_EVADE_TICKS,
+  TPS_REVERSAL_TICKS,
+  TPS_STEP_COOLDOWN_TICKS,
+  TPS_STEP_TICKS,
+  TPS_STRIKE_RANGE,
+} from "./tps-gameplay-profile";
 import { computeTpsContactSpacing } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
@@ -70,21 +87,6 @@ export interface TpsFightGameOptions {
   onFallback?: (message: string) => void;
 }
 
-const FIXED_STEP = 1 / 60;
-const ROUND_TICKS = 99 * 60;
-const TPS_STRIKE_RANGE = 2.12;
-const TPS_CLOSE_ATTACK_RANGE = 1.58;
-const TPS_STEP_TICKS = 9;
-const TPS_STEP_COOLDOWN_TICKS = 18;
-const TPS_COMBO_GRACE_TICKS = 34;
-const TPS_FLANK_WINDOW_TICKS = 30;
-const TPS_PERFECT_EVADE_TICKS = 18;
-const TPS_INTERCEPT_TICKS = 26;
-const TPS_REVERSAL_TICKS = 24;
-const TPS_COMBAT_BEAT_TICKS = 34;
-const TPS_FINISHER_BEAT_TICKS = 72;
-const TPS_ADAPT_REVIEW_TICKS = 180;
-const TPS_DRAMA_REVIEW_TICKS = 30;
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
   const result = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);

@@ -853,31 +853,43 @@ export class TpsFightGame {
 
   private advanceEnemyTelegraph(towardPlayer: THREE.Vector3): boolean {
     if (!this.enemyDirectorPendingMove) return false;
-
-    const rootData = this.p2.visual.root.userData;
     if (this.enemyDirectorTelegraphTicks > 0) {
-      this.enemyDirectorTelegraphTicks -= 1;
-      rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
-      const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
-      const progress = THREE.MathUtils.clamp(
-        1 - this.enemyDirectorTelegraphTicks / totalTicks,
-        0,
-        1,
-      );
-      const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
-      rootData.tpsEnemyTelegraphProgress = progress;
-      rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
-      rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow
-        ? "REACT"
-        : "LOAD";
-      rootData.tpsEnemyReactionWindowTicks = reactionWindow;
-      const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
-      this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent) ? "GUARD" : "IDLE";
+      this.tickEnemyTelegraph();
       this.p2.updatePhysics(FIXED_STEP);
       return true;
     }
+    return this.commitEnemyTelegraphedMove(towardPlayer);
+  }
 
+  private tickEnemyTelegraph(): void {
+    this.enemyDirectorTelegraphTicks -= 1;
+    const rootData = this.p2.visual.root.userData;
+    rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
+
+    const totalTicks = Math.max(1, this.enemyDirectorTelegraphTotalTicks);
+    const progress = THREE.MathUtils.clamp(
+      1 - this.enemyDirectorTelegraphTicks / totalTicks,
+      0,
+      1,
+    );
+    const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
+    rootData.tpsEnemyTelegraphProgress = progress;
+    rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
+    rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow
+      ? "REACT"
+      : "LOAD";
+    rootData.tpsEnemyReactionWindowTicks = reactionWindow;
+
+    const intent = this.enemyDirectorDecision?.intent ?? "WAIT";
+    this.p2.state = ["POWER", "THROW", "COUNTER"].includes(intent)
+      ? "GUARD"
+      : "IDLE";
+  }
+
+  private commitEnemyTelegraphedMove(towardPlayer: THREE.Vector3): boolean {
     const moveId = this.enemyDirectorPendingMove;
+    if (!moveId) return false;
+
     const intent = this.enemyDirectorDecision?.intent ?? "JAB";
     this.enemyDirectorPendingMove = null;
     if (!this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) return false;

@@ -39,7 +39,7 @@ import {
   TPS_STEP_TICKS,
   TPS_STRIKE_RANGE,
 } from "./tps-gameplay-profile";
-import { computeTpsContactSpacing } from "./tps-contact-spacing";
+import { computeTpsContactSpacing, type TpsContactSpacingMode } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
@@ -59,6 +59,7 @@ import {
   defeatedFighterForWinner,
   isTpsDefeatedSettled,
   tpsWinnerForHealth,
+  type TpsWinner,
 } from "./tps-finish-flow";
 import {
   computeTpsCameraFraming,
@@ -91,7 +92,7 @@ export interface TpsFightGameOptions {
   difficulty?: CpuDifficulty;
   training?: boolean;
   onHud?: (snapshot: HudSnapshot) => void;
-  onResult?: (winner: "p1" | "p2" | "draw") => void;
+  onResult?: (winner: TpsWinner) => void;
   onFallback?: (message: string) => void;
 }
 
@@ -137,7 +138,7 @@ export class TpsFightGame {
   private finishPending = false;
   private finishTicks = 0;
   private finishSettledTicks = 0;
-  private resultWinner: "p1" | "p2" | "draw" | null = null;
+  private resultWinner: TpsWinner | null = null;
   private lastHudTick = -1;
   private runtimeFailureReported = false;
   private readonly cameraTarget = new THREE.Vector3();
@@ -1300,7 +1301,7 @@ export class TpsFightGame {
   }
 
   private publishContactSpacing(
-    mode: "THROW" | "IMPACT_PAIR" | "NEUTRAL",
+    mode: TpsContactSpacingMode,
     minimum: number,
     impactMoveId: string | null,
   ): void {

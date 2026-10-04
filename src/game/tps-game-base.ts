@@ -14,6 +14,7 @@ import { createCircularArena, TPS_ARENA_RADIUS as ARENA_RADIUS } from "./tps-are
 import { computeTpsMatchDrama, type TpsMatchDramaPhase } from "./tps-match-drama";
 import { buildTpsHudSnapshot } from "./tps-hud-snapshot";
 import { computeTpsLockOnProfile } from "./tps-lock-on-profile";
+import { computeTpsEnemyThreat } from "./tps-threat-policy";
 import { computeTpsContactSpacing } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
@@ -1528,31 +1529,22 @@ export class TpsFightGame {
   }
 
   private enemyThreatStatus(): { windup: boolean; incoming: boolean } {
-    const pending = this.enemyDirectorPendingMove !== null && this.enemyDirectorTelegraphTicks > 0;
-    const pendingMove = this.enemyDirectorPendingMove ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null : null;
-    const pendingDistance = Math.hypot(
-      this.p2.position.x - this.p1.position.x,
-      this.p2.position.z - this.p1.position.z,
-    );
-    const pendingThreatReach = pendingMove
-      ? pendingMove.reach + (pendingMove.id === "dashKick" ? 1.8 : 0.9)
-      : 0;
-    const lateWindup = Boolean(
-      pending
-      && pendingMove
-      && this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
-      && pendingDistance <= pendingThreatReach
-    );
-    const windup = pending && !lateWindup;
-    const move = this.p2.currentMove;
-    if (this.p2.state !== "ATTACK" || !move) return { windup, incoming: lateWindup };
+    const pendingMove = this.enemyDirectorPendingMove
+      ? this.p2.definition.moves[this.enemyDirectorPendingMove] ?? null
+      : null;
     const distance = Math.hypot(
       this.p2.position.x - this.p1.position.x,
       this.p2.position.z - this.p1.position.z,
     );
-    const canStillHit = this.p2.moveTick < move.startup + Math.max(1, move.active);
-    const inThreatReach = distance <= move.reach + 0.9;
-    return { windup, incoming: canStillHit && inThreatReach };
+    return computeTpsEnemyThreat({
+      pendingMove,
+      pendingTelegraphTicks: this.enemyDirectorTelegraphTicks,
+      reactionWindowTicks: tpsEnemyReactionWindowTicks(this.difficulty),
+      activeState: this.p2.state,
+      activeMove: this.p2.currentMove,
+      activeMoveTick: this.p2.moveTick,
+      distance,
+    });
   }
 
   private updateLockOn(): void {

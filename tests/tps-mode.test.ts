@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function readTpsSource(): Promise<string> {
-  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, playerPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot, lockOnProfile] = await Promise.all([
+  const [core, extension, cameraProfile, arenaFactory, enemyPolicy, playerPolicy, threatPolicy, impactResolution, impactPresentation, contactSpacing, matchDrama, hudSnapshot, lockOnProfile] = await Promise.all([
     readFile(new URL("../src/game/tps-game-base.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-game.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-camera-profile.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-arena-factory.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-enemy-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-player-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/game/tps-threat-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-resolution.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-impact-presentation.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-contact-spacing.ts", import.meta.url), "utf8"),
@@ -17,7 +18,7 @@ async function readTpsSource(): Promise<string> {
     readFile(new URL("../src/game/tps-hud-snapshot.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/game/tps-lock-on-profile.ts", import.meta.url), "utf8"),
   ]);
-  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}\n${lockOnProfile}`;
+  return `${core}\n${extension}\n${cameraProfile}\n${arenaFactory}\n${enemyPolicy}\n${playerPolicy}\n${threatPolicy}\n${impactResolution}\n${impactPresentation}\n${contactSpacing}\n${matchDrama}\n${hudSnapshot}\n${lockOnProfile}`;
 }
 
 test("TPS lock-on battle owns circular 360-degree locomotion and over-shoulder camera", async () => {

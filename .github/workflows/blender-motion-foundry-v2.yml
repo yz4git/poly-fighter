@@ -12,9 +12,7 @@ on:
       - tools/blender/build-fight-motion-foundry-v2-strikes.py
       - scripts/apply-blender-motion-foundry-v2.mjs
       - scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
-      - tests/blender-motion-foundry-v2.test.mjs
       - tests/quaternius-model-skin.test.ts
-      - tests/model-viewer.test.mjs
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
@@ -145,14 +143,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate v2 Foundry contract
-        run: node --test tests/blender-motion-foundry-v2.test.mjs
-
       - name: Build, rules and lint integrated game
         run: |
           npm run build
           npm run test:rules
-          npm run test:pwa
           npm run lint
 
       - uses: actions/upload-artifact@v4

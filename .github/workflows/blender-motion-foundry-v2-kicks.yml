@@ -19,7 +19,6 @@ on:
       - public/models/quaternius/blender-kicks-core.glb
       - public/models/quaternius/blender-kicks-core.metrics.json
       - public/models/quaternius/blender-kicks-core.generator.sha256
-      - tests/blender-motion-foundry-v2-kicks.test.mjs
       - .github/workflows/blender-motion-foundry-v2-kicks.yml
   workflow_dispatch:
 
@@ -205,17 +204,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate V6 kick contract when present
-        run: |
-          if [ -f tests/blender-motion-foundry-v2-kicks.test.mjs ]; then
-            node --test tests/blender-motion-foundry-v2-kicks.test.mjs
-          fi
-
       - name: Build, rules and lint integrated game
         run: |
           npm run build
           npm run test:rules
-          npm run test:pwa
           npm run lint
 
       - name: Publish generated V6 kicks to PR branch

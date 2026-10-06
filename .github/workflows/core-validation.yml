@@ -49,7 +49,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Static regression suite
+      - name: Behavior regression suite
         run: npm run test:ci:static
       - name: Lint
         run: npm run lint

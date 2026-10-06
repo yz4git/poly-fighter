@@ -179,7 +179,6 @@ async function auditLinkedSequence(sessionId, sequence) {
         const left = footPoint(game.p1, 'l');
         const right = footPoint(game.p1, 'r');
         if (!left || !right) return { error: 'missing-foot', sequenceIndex, moveId, tick };
-        const data = game.p1.visual.root.userData;
         frames.push({
           sequenceIndex,
           moveId,
@@ -188,10 +187,6 @@ async function auditLinkedSequence(sessionId, sequence) {
           leftHeight: left.y,
           rightHeight: right.y,
           minFootHeight: Math.min(left.y, right.y),
-          bridge: Number(data.tpsKickSpamGroundBridge ?? 0),
-          bridgeMove: String(data.tpsKickSpamGroundBridgeMove ?? 'NONE'),
-          supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
-          supportFootMove: String(data.tpsKickSupportFootMove ?? 'NONE'),
           simulationY: game.p1.position.y,
           grounded: Boolean(game.p1.grounded),
         });
@@ -210,8 +205,6 @@ async function auditLinkedSequence(sessionId, sequence) {
     return {
       sequence,
       frameCount: frames.length,
-      bridgeFrames: frames.filter((frame) => frame.bridge > 0.5).length,
-      transitionBridgeFrames: transitionFrames.filter((frame) => frame.bridge > 0.5).length,
       worstMinFootHeight: Math.max(...frames.map((frame) => frame.minFootHeight)),
       airborne,
       transitionFrames,
@@ -252,17 +245,12 @@ async function poseFirstLink(sessionId, nextTick) {
     game.renderer.render(game.scene, game.camera);
     const left = footPoint(game.p1, 'l');
     const right = footPoint(game.p1, 'r');
-    const data = game.p1.visual.root.userData;
     return {
       moveId: game.p1.currentMove?.id ?? null,
       tick: game.p1.moveTick,
       leftHeight: left?.y ?? null,
       rightHeight: right?.y ?? null,
       minFootHeight: left && right ? Math.min(left.y, right.y) : null,
-      bridge: Number(data.tpsKickSpamGroundBridge ?? 0),
-      bridgeMove: String(data.tpsKickSpamGroundBridgeMove ?? 'NONE'),
-      supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
-      supportFootMove: String(data.tpsKickSupportFootMove ?? 'NONE'),
       simulationY: game.p1.position.y,
       grounded: Boolean(game.p1.grounded),
     };

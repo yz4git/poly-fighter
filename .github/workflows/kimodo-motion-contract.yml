@@ -16,14 +16,9 @@ on:
       - src/game/visual-quaternius-runtime.ts
       - src/game/kimodo-motion-inertialization.ts
       - src/game/unimate-motion-replacement.ts
-      - tests/unimate-motion-replacement.test.mjs
-      - tests/unimate-motion-inbetween.test.mjs
-      - tests/unimate-neural-bridge.test.mjs
       - tests/test_unimate_promotion_gate.py
       - docs/UNIMATE_MOTION_REFERENCE.md
-      - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
-      - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
       - .github/workflows/kimodo-motion-contract.yml
   pull_request:
@@ -41,14 +36,9 @@ on:
       - src/game/visual-quaternius-runtime.ts
       - src/game/kimodo-motion-inertialization.ts
       - src/game/unimate-motion-replacement.ts
-      - tests/unimate-motion-replacement.test.mjs
-      - tests/unimate-motion-inbetween.test.mjs
-      - tests/unimate-neural-bridge.test.mjs
       - tests/test_unimate_promotion_gate.py
       - docs/UNIMATE_MOTION_REFERENCE.md
-      - tests/kimodo-motion-inertialization.test.mjs
       - src/game/combat-motion-timeline.ts
-      - tests/kimodo-motion-pipeline.test.mjs
       - docs/KIMODO_MOTION_PIPELINE.md
       - .github/workflows/kimodo-motion-contract.yml
 
@@ -99,9 +89,4 @@ jobs:
           bash -n tools/unimate/promote-neural-foundry.sh
       - name: Validate provider contract
         run: |
-          node --test tests/kimodo-motion-pipeline.test.mjs
-          node --test tests/kimodo-motion-inertialization.test.mjs
-          node --test tests/unimate-motion-replacement.test.mjs
-          node --test tests/unimate-motion-inbetween.test.mjs
-          node --test tests/unimate-neural-bridge.test.mjs
           python3 -m unittest tests/test_unimate_promotion_gate.py

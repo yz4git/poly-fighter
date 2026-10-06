@@ -18,20 +18,14 @@ import { installTpsCloseNeutralLanePresentation } from "@/src/game/tps-close-neu
 import { installTpsClosePunchLanePresentation } from "@/src/game/tps-close-punch-lane";
 import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-slip-boost";
 import { installTpsCounterattackHandoffPresentation } from "@/src/game/tps-counterattack-handoff";
-import { installTpsDashKickGroundContactPresentation } from "@/src/game/tps-dashkick-ground-contact";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
-import { installTpsFrontKickOpenLinePresentation } from "@/src/game/tps-frontkick-open-line";
 import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsImpactBeatSyncPresentation } from "@/src/game/tps-impact-beat-sync";
 import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact-followthrough";
 import { installTpsImpactLensPulsePresentation } from "@/src/game/tps-impact-lens-pulse";
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
-import { installTpsKickContactShapingPresentation } from "@/src/game/tps-kick-contact-shaping";
-import { installTpsKickPairSpacingPresentation } from "@/src/game/tps-kick-pair-spacing";
-import { installTpsKickSupportFootPresentation } from "@/src/game/tps-kick-support-foot";
 import { installTpsLatestImpactWavePresentation } from "@/src/game/tps-latest-impact-wave";
-import { installTpsLowKickOpenLinePresentation } from "@/src/game/tps-lowkick-open-line";
 import { installTpsPowerBodyDrivePresentation } from "@/src/game/tps-power-body-drive";
 import { installTpsPunishReadyPresentation } from "@/src/game/tps-punish-ready";
 import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-body";
@@ -74,9 +68,7 @@ const TPS_PRESENTATION_INSTALLERS = [
   installTpsBackfistSweepBoostPresentation,
   installTpsCounterSlipBoostPresentation,
   installTpsImpactFollowthroughPresentation,
-  installTpsFrontKickOpenLinePresentation,
   installTpsPowerBodyDrivePresentation,
-  installTpsLowKickOpenLinePresentation,
   installTpsCloseNeutralLanePresentation,
   installTpsClosePunchLanePresentation,
   installTpsLatestImpactWavePresentation,
@@ -85,10 +77,6 @@ const TPS_PRESENTATION_INSTALLERS = [
   installTpsImpactBeatSyncPresentation,
   installTpsCounterattackHandoffPresentation,
   installTpsAttackActionHandoffPresentation,
-  installTpsKickContactShapingPresentation,
-  installTpsKickSupportFootPresentation,
-  installTpsDashKickGroundContactPresentation,
-  installTpsKickPairSpacingPresentation,
 ] as const;
 
 installAll(RIVAL_RUNTIME_INSTALLERS);

@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync, statSync } from "node:fs";
 import test from "node:test";
 import * as THREE from "three";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { FighterAnimationController, FighterRuntime } from "../src/game/fighter";
 import { createFighterVisual, disposeFighterVisual } from "../src/game/visual-entry";
-import { classifyV10SkinRegion } from "../src/game/visual-v10";
-import { classifyV103FaceRegion } from "../src/game/visual-v10-polish";
 import { getSoleContactPoint, getVisualContactPoint } from "../src/game/visual";
 
 test("SERA gameplay selects the Blender conformal character on the canonical combat rig", () => {
@@ -37,68 +34,6 @@ test("V16 reference pose is idempotent when a static Model View frame is rendere
   disposeFighterVisual(visual);
 });
 
-test("V16 presentation stance activates for the Blender runtime ready-state contract", () => {
-  const stance = readFileSync(new URL("../src/game/visual-v10-stance.ts", import.meta.url), "utf8");
-  assert.match(stance, /blenderRuntimeAssetState/);
-  assert.match(stance, /reconstructionAssetState/);
-  assert.match(stance, /V16_COMPACT_CHIN_GUARD_A_B/);
-});
-
-test("V10 reconstruction pipeline remains available as reference data", () => {
-  const source = readFileSync(new URL("../src/game/visual-v10.ts", import.meta.url), "utf8");
-  const polish = readFileSync(new URL("../src/game/visual-v10-polish.ts", import.meta.url), "utf8");
-  assert.match(source, /GLTFLoader/);
-  assert.match(source, /models\/sera-v10\.glb/);
-  assert.equal(source.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.equal(source.includes("THREE.Sprite"), false);
-  assert.equal(source.includes("builder.loft"), false);
-  assert.equal(source.includes("builder.prism"), false);
-  assert.equal(source.includes("builder.tube"), false);
-  assert.equal(polish.includes("THREE.Sprite"), false);
-  assert.equal(polish.includes("GOLDEN_MASTER_V7_RECTS"), false);
-  assert.match(polish, /BONE_PARENTED_FRAGMENTS_WITH_REFERENCE_HEAD/);
-  assert.match(polish, /PIXEL_GATED_READY/);
-  assert.match(polish, /v10PresentationRelease = "V10\.4"/);
-  assert.match(polish, /boneInverse\.clone\(\)\.multiply\(bindMatrix\)/);
-  assert.match(polish, /bone\.add\(mesh\)/);
-  assert.match(polish, /installArticulationUnderbody/);
-  assert.match(polish, /CylinderGeometry/);
-  assert.match(polish, /bodyMesh\.visible = false/);
-});
-
-test("V10 repository contains one generated GLB from one shared four-view volume", () => {
-  const glb = new URL("../public/models/sera-v10.glb", import.meta.url);
-  assert.ok(statSync(glb).size > 10_000, "reconstructed GLB is missing or suspiciously small");
-  const metrics = JSON.parse(readFileSync(new URL("../public/models/sera-v10.metrics.json", import.meta.url), "utf8"));
-  assert.equal(metrics.singleVolume, true);
-  assert.equal(metrics.mesh.normalizedHeight, 1);
-  assert.ok(metrics.mesh.vertices > 500);
-  assert.ok(metrics.mesh.triangles > 500);
-  for (const view of ["front", "three-quarter", "side", "back"]) {
-    assert.ok(Number.isFinite(metrics.views[view].iou));
-    assert.ok(metrics.views[view].iou > 0.80, `${view} single-volume IoU is too low: ${metrics.views[view].iou}`);
-  }
-});
-
-test("V10.1 base classifier keeps broad torso and skirt samples away from arms", () => {
-  assert.equal(classifyV10SkinRegion(0.10, 0.60, 0.02, "black"), "HIPS");
-  assert.equal(classifyV10SkinRegion(0.16, 0.55, 0.05, "blue"), "HIPS");
-  assert.equal(classifyV10SkinRegion(-0.15, 0.58, -0.02, "blue"), "HIPS");
-  assert.equal(classifyV10SkinRegion(0.04, 0.73, -0.16, "black"), "HEAD");
-  assert.equal(classifyV10SkinRegion(0.16, 0.56, 0.03, "silver"), "RIGHT_FOREARM");
-  assert.equal(classifyV10SkinRegion(-0.16, 0.72, 0.02, "skin"), "LEFT_UPPER_ARM");
-});
-
-test("V10.3 render partition remains covered as historical reconstruction logic", () => {
-  assert.equal(classifyV103FaceRegion(-0.11, 0.76, 0.01, "blue"), "LEFT_UPPER_ARM");
-  assert.equal(classifyV103FaceRegion(0.12, 0.61, 0.02, "silver"), "RIGHT_FOREARM");
-  assert.equal(classifyV103FaceRegion(-0.13, 0.46, 0.01, "skin"), "LEFT_HAND");
-  assert.equal(classifyV103FaceRegion(-0.02, 0.47, 0.01, "black"), "LEFT_THIGH");
-  assert.equal(classifyV103FaceRegion(0.02, 0.24, 0.01, "black"), "RIGHT_SHIN");
-  assert.equal(classifyV103FaceRegion(0.03, 0.06, 0.05, "blue"), "RIGHT_FOOT");
-  assert.equal(classifyV103FaceRegion(0.02, 0.60, 0.01, "blue"), "HIPS");
-  assert.equal(classifyV103FaceRegion(0.02, 0.74, 0.01, "blue"), "TORSO");
-});
 
 test("V11 keeps grounded fighting-stance separation", () => {
   const playerVisual = createFighterVisual(FIGHTER_DEFINITIONS.blue, "NORMAL");

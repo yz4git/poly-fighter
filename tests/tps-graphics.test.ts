@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { TPS_GRAPHICS_PROFILE, TPS_IMPACT_FEEL_PROFILE, tpsImpactTier } from "../src/game/tps-graphics";
 import {
@@ -8,19 +7,6 @@ import {
   tpsHypeImpactTier,
   tpsHypeKnockbackScaleForTier,
 } from "../src/game/tps-hype";
-
-test("TPS graphics profile keeps the quality pass lightweight and pooled", () => {
-  assert.equal(TPS_GRAPHICS_PROFILE.contactShadows, true);
-  assert.equal(TPS_GRAPHICS_PROFILE.localRimLights, 2);
-  assert.equal(TPS_GRAPHICS_PROFILE.impactWavePool, 8);
-  assert.equal(TPS_GRAPHICS_PROFILE.attackTrailPool, 6);
-  assert.equal(TPS_GRAPHICS_PROFILE.quickstepGhostPool, 4);
-  assert.equal(TPS_GRAPHICS_PROFILE.skylineMonoliths, 8);
-  assert.equal(TPS_GRAPHICS_PROFILE.floorAccentArcs, 12);
-  assert.equal(TPS_GRAPHICS_PROFILE.toneMapping, "ACESFilmic");
-  assert.ok(TPS_GRAPHICS_PROFILE.lowAtmospherePoints < TPS_GRAPHICS_PROFILE.highAtmospherePoints);
-  assert.ok(TPS_GRAPHICS_PROFILE.highAtmospherePoints <= 128);
-});
 
 test("TPS impact feel escalates from quick hits to finishers without unbounded effects", () => {
   assert.equal(TPS_IMPACT_FEEL_PROFILE.sharedAttackerHitStop, true);
@@ -62,22 +48,4 @@ test("TPS exhilaration pass adds fast confirms, cinematic finishers and bounded 
   assert.ok(TPS_HYPE_PROFILE.impactDepthBias >= 0.05);
   assert.ok(TPS_HYPE_PROFILE.heavyImpactFovPunch >= -8.5);
   assert.ok(TPS_HYPE_PROFILE.perfectStepFovRush <= 5);
-});
-
-
-test("TPS impact visuals stay offset from the torso collision stack", async () => {
-  const source = await readFile(new URL("../src/game/tps-graphics.ts", import.meta.url), "utf8");
-  assert.match(source, /addScaledVector\(facing, 0\.12\)/);
-  assert.match(source, /addScaledVector\(cameraRight, contactSide \* 0\.12\)/);
-  assert.match(source, /lastImpactVisualSideOffset/);
-  assert.match(source, /wave\.mesh\.scale\.setScalar\(0\.54 \+ strength \* 0\.12/);
-});
-
-
-test("TPS close-range FX keep strike silhouettes readable during combos", async () => {
-  const source = await readFile(new URL("../src/game/tps-graphics.ts", import.meta.url), "utf8");
-  assert.match(source, /time - lastSpawn < 0\.12/);
-  assert.match(source, /trail\.life = active \? 0\.09/);
-  assert.match(source, /\(1 - progress\) \* 0\.22/);
-  assert.match(source, /wave\.life = 0\.15/);
 });

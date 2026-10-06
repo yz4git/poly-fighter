@@ -421,13 +421,17 @@ export class FighterAnimationController {
     const activePulse = move && fighter.isActive() ? 1 : 0;
     const basis = fighterBasis(fighter.facing, opponent.position.clone().sub(fighter.position));
     const scale = visual.root.scale.x;
+    const rootRotation = fighterRootQuaternion(
+      fighter.facing,
+      visual.root.userData.combatTps ? visual.root.userData.combatMotionForward : undefined,
+    );
 
     visual.root.position.set(
       fighter.position.x,
       fighter.position.y + visualGroundOffset(visual),
       fighter.position.z,
     );
-    visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+    visual.root.quaternion.copy(rootRotation);
     visual.root.updateMatrixWorld(true);
 
     visual.hips.position.set(0, layout.hipsY + Math.sin(timeSeconds * 7.5) * (state === "IDLE" ? 0.018 : 0.006), 0);
@@ -671,7 +675,7 @@ export class FighterAnimationController {
       const deathPhase = THREE.MathUtils.clamp(fighter.stateMachine.stateTicks / 72, 0, 1);
       const deathSample = sampleQuaterniusMotion("Death01", deathPhase);
       const deathHead = quaterniusMotionDelta("Death01", deathPhase, "head");
-      visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      visual.root.quaternion.copy(rootRotation);
       visual.root.rotateZ(fighter.facing * THREE.MathUtils.lerp(0, 1.35, Math.min(1, fighter.stateMachine.stateTicks / 22)));
       visual.hips.position.y += Math.min(0, deathSample.hipsDelta[1]) * 0.10;
       visual.rig.bones.spineUpper.rotation.z = 0.20 + deathHead[0] * 0.50;
@@ -682,7 +686,7 @@ export class FighterAnimationController {
       visual.leftArm.root.rotation.z = -0.65;
       visual.rightArm.root.rotation.z = 0.65;
     } else if (state === "WAKEUP") {
-      visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      visual.root.quaternion.copy(rootRotation);
       visual.root.rotateZ(fighter.facing * 1.35 * (1 - Math.min(1, fighter.stateMachine.stateTicks / 22)));
       solvePlantedFeet();
     } else {

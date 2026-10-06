@@ -10,6 +10,10 @@ on:
       - src/game/presentation-animation.ts
       - tests/combat-motion.test.ts
       - tests/kick-ankle.test.ts
+      - tests/tps-visual-state.test.ts
+      - src/game/rig.ts
+      - src/game/fighter.ts
+      - src/game/tps-visual-state.ts
       - .github/workflows/combat-motion-quality.yml
   pull_request:
     branches: [main]
@@ -19,6 +23,10 @@ on:
       - src/game/presentation-animation.ts
       - tests/combat-motion.test.ts
       - tests/kick-ankle.test.ts
+      - tests/tps-visual-state.test.ts
+      - src/game/rig.ts
+      - src/game/fighter.ts
+      - src/game/tps-visual-state.ts
       - .github/workflows/combat-motion-quality.yml
 
 permissions:
@@ -40,4 +48,4 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Validate real skeletons, move clocks, and kick ankle continuity
-        run: node --import tsx --test tests/combat-motion.test.ts tests/kick-ankle.test.ts
+        run: node --import tsx --test tests/combat-motion.test.ts tests/kick-ankle.test.ts tests/tps-visual-state.test.ts

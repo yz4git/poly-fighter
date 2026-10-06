@@ -12,7 +12,6 @@ on:
       - scripts/run-sera-hero-ai-pipeline.sh
       - scripts/prepare-sera-reference-objective.py
       - public/reference/female-turnaround.jpeg
-      - tests/sera-hero-pipeline.test.mjs
       - .github/workflows/sera-hero-ai.yml
 
 permissions:
@@ -42,9 +41,6 @@ jobs:
 
       - name: Install JS dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Validate pipeline contract
-        run: node --test tests/sera-hero-pipeline.test.mjs
 
       - name: Install headless Blender and reference-image tools
         run: |

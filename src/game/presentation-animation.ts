@@ -636,8 +636,10 @@ export class PresentationAnimationController extends FighterAnimationController 
     // position remains exactly where combat resolution placed it.
     applyTpsImpactReadability(fighter, opponent);
     applyTpsPowerBodySeparation(fighter, opponent);
-    applyTpsKickSilhouette(fighter, opponent);
-    applyTpsDashKickSilhouette(fighter, opponent);
+    if (fighter.visual.root.userData.quaterniusModelState !== "ready") {
+      applyTpsKickSilhouette(fighter, opponent);
+      applyTpsDashKickSilhouette(fighter, opponent);
+    }
     applyTpsThrowPairReadability(fighter, opponent);
 
     const authoredAttack = fighter.state === "ATTACK"
@@ -647,7 +649,10 @@ export class PresentationAnimationController extends FighterAnimationController 
     if (fighter.visual.root.userData.quaterniusModelState === "ready") {
       // The imported down clip owns the fall. Do not rotate it a second time
       // using the legacy proxy skeleton's root tilt.
-      fighter.visual.root.quaternion.copy(fighterRootQuaternion(fighter.facing));
+      fighter.visual.root.quaternion.copy(fighterRootQuaternion(
+        fighter.facing,
+        fighter.visual.root.userData.combatTps ? fighter.visual.root.userData.combatMotionForward : undefined,
+      ));
       fighter.visual.root.updateMatrixWorld(true);
     }
     updateQuaterniusModelSkin(fighter, timeSeconds);

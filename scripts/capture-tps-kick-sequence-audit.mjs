@@ -78,11 +78,12 @@ const gameLookup = `
   }
 `;
 
-async function poseMove(sessionId, moveId, stage) {
+async function poseMove(sessionId, moveId, stage, correctionsEnabled = false) {
   return execute(sessionId, `${gameLookup}
     const game = findGame();
-    const [moveId, stage] = arguments;
+    const [moveId, stage, correctionsEnabled] = arguments;
     if (!game) return { error: 'game-not-found' };
+    game.settings.update({ motionCorrections: correctionsEnabled });
     cancelAnimationFrame(game.raf);
     game.running = false;
     game.finished = false;
@@ -105,6 +106,10 @@ async function poseMove(sessionId, moveId, stage) {
       game.updateVisual(game.p1, game.p2, auditTime);
       game.updateVisual(game.p2, game.p1, auditTime + 0.007);
     }
+
+    const readyHost = game.p1.visual.root.children.find(child => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+    const readyFoot = readyHost?.getObjectByName(moveId === 'lowKick' ? 'foot_r' : 'foot_l');
+    const readySupportHeight = readyFoot?.getWorldPosition(new readyFoot.position.constructor()).y ?? null;
 
     if (!game.p1.beginMove(moveId)) return { error: 'begin-move-failed', moveId };
     const move = game.p1.currentMove;
@@ -162,7 +167,12 @@ async function poseMove(sessionId, moveId, stage) {
     const targetPelvisPoint = point(targetPelvis);
     const strikeScreen = project(strike);
     const targetChestScreen = project(targetChest);
-    const data = game.p1.visual.root.userData;
+    const suffix = move.visualContact === 'LEFT_FOOT' ? 'l' : 'r';
+    const hip = actor.getObjectByName('thigh_' + suffix).getWorldPosition(new strike.position.constructor());
+    const knee = actor.getObjectByName('calf_' + suffix).getWorldPosition(new strike.position.constructor());
+    const ankle = strike.getWorldPosition(new strike.position.constructor());
+    const kneeDegrees = hip.sub(knee).angleTo(ankle.sub(knee)) * 180 / Math.PI;
+
     return {
       moveId,
       stage,
@@ -182,20 +192,9 @@ async function poseMove(sessionId, moveId, stage) {
       strikeHeight: strikePoint?.y ?? null,
       torsoLean: chestPoint && pelvisPoint ? Math.hypot(chestPoint.x - pelvisPoint.x, chestPoint.z - pelvisPoint.z) : null,
       strikeTargetScreenDistance: strikeScreen && targetChestScreen ? Math.hypot(strikeScreen.x - targetChestScreen.x, strikeScreen.y - targetChestScreen.y) : null,
-      frontKickOpenLine: Number(data.tpsFrontKickOpenLine ?? 0),
-      lowKickOpenLine: Number(data.tpsLowKickOpenLine ?? 0),
-      kickSilhouette: Number(data.tpsKickSilhouette ?? 0),
-      dashKickSilhouette: Number(data.tpsDashKickSilhouette ?? 0),
-      supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
-      supportFootMove: String(data.tpsKickSupportFootMove ?? 'NONE'),
-      supportFootSide: String(data.tpsKickSupportFootSide ?? 'NONE'),
-      supportFootRawDrift: Number(data.tpsKickSupportFootRawDrift ?? 0),
-      supportFootDrift: Number(data.tpsKickSupportFootDrift ?? 0),
-      supportFootRawPlanarDrift: Number(data.tpsKickSupportFootRawPlanarDrift ?? 0),
-      supportFootPlanarDrift: Number(data.tpsKickSupportFootPlanarDrift ?? 0),
-      supportFootRawAngle: Number(data.tpsKickSupportFootRawAngle ?? 0),
-      supportFootAngle: Number(data.tpsKickSupportFootAngle ?? 0),
-      supportFootAnchor: Array.isArray(data.tpsKickSupportFootAnchor) ? [...data.tpsKickSupportFootAnchor] : null,
+      readySupportHeight,
+      strikeKneeDegrees: kneeDegrees,
+      motionMode: String(importedHost(game.p1)?.userData?.quaterniusMotionMode ?? 'UNKNOWN'),
       cameraContactReadability: Number(game.camera.userData.tpsAuthoredContactReadabilityFactor ?? 0),
       cameraKickReadability: Number(game.camera.userData.tpsKickContactReadabilityFactor ?? 0),
       cameraFrontKickReadability: Number(game.camera.userData.tpsFrontKickReadabilityFactor ?? 0),
@@ -207,7 +206,7 @@ async function poseMove(sessionId, moveId, stage) {
       state: game.p1.state,
       simulationPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
     };
-  `, [moveId, stage]);
+  `, [moveId, stage, correctionsEnabled]);
 }
 
 let sessionId = null;
@@ -260,29 +259,40 @@ try {
     }
   }
 
+  results.correctedContact = {};
+  for (const moveId of ['kick', 'lowKick', 'risingKick', 'dashKick']) {
+    const corrected = await poseMove(sessionId, moveId, 'contact', true);
+    if (corrected?.error) throw new Error(JSON.stringify(corrected));
+    results.correctedContact[moveId] = corrected;
+    await screenshot(sessionId, `${outputDir}/tps-kick-${moveId.toLowerCase()}-corrected-contact.png`);
+  }
+
   // Persist measurements before assertions so a failed readability threshold
   // still leaves complete evidence for the next visual correction pass.
   await writeFile(`${outputDir}/tps-kick-sequence.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
 
-  // Grounded kicks must keep a believable support foot: near its entry anchor,
-  // with controlled pivot rather than skating or corkscrewing. Dash Kick uses
-  // its separate ground-contact contract and is therefore excluded here.
-  const supportLimits = {
-    kick: { planar: 0.12, angle: 24 },
-    lowKick: { planar: 0.13, angle: 30 },
-    risingKick: { planar: 0.10, angle: 22 },
-  };
-  const thresholdEpsilon = 1e-6;
-  for (const [moveId, limit] of Object.entries(supportLimits)) {
-    const contact = results[moveId].contact;
-    if (!(contact.supportFootLock > 0.8)) throw new Error(`${moveId} support-foot lock was not active at contact: ${JSON.stringify(contact)}`);
-    if (contact.supportFootMove !== moveId) throw new Error(`${moveId} support-foot marker mismatch: ${JSON.stringify(contact)}`);
-    if (!(contact.supportFootPlanarDrift <= limit.planar + thresholdEpsilon)) throw new Error(`${moveId} support foot still skates at contact: ${JSON.stringify(contact)}`);
-    if (!(contact.supportFootAngle <= limit.angle + thresholdEpsilon)) throw new Error(`${moveId} support foot still over-rotates at contact: ${JSON.stringify(contact)}`);
-    if (!(contact.supportHeight < 0.48)) throw new Error(`${moveId} support foot lifted too far at contact: ${JSON.stringify(contact)}`);
-    if (Math.abs(contact.simulationPosition.x) > 1e-6 || Math.abs(contact.simulationPosition.y) > 1e-6 || Math.abs(contact.simulationPosition.z - 0.82) > 1e-6) {
-      throw new Error(`${moveId} presentation support-foot correction changed simulation position: ${JSON.stringify(contact)}`);
+  // Measure the final rendered skeleton, after all presentation and root yaw.
+  for (const moveId of ['kick', 'lowKick', 'risingKick', 'dashKick']) {
+    for (const frame of Object.values(results[moveId])) {
+      if (frame.readySupportHeight === null || Math.abs(frame.supportHeight - frame.readySupportHeight) > 0.035) {
+        throw new Error(`${moveId}/${frame.stage}: supporting foot left its actual ready floor: ${JSON.stringify(frame)}`);
+      }
+      if (Math.abs(frame.simulationPosition.x) > 1e-6 || Math.abs(frame.simulationPosition.y) > 1e-6 || Math.abs(frame.simulationPosition.z - 0.82) > 1e-6) {
+        throw new Error(`${moveId}: presentation changed simulation position: ${JSON.stringify(frame)}`);
+      }
     }
+    const contact = results[moveId].contact;
+    if (!(contact.strikeKneeDegrees > 120 && contact.strikeKneeDegrees < 170)) {
+      throw new Error(`${moveId}: final strike knee is folded or overextended: ${JSON.stringify(contact)}`);
+    }
+    if (contact.motionMode !== 'RAW_CLIP_PLAYBACK') {
+      throw new Error(`${moveId}: audit must verify the default corrections-OFF path: ${JSON.stringify(contact)}`);
+    }
+    const corrected = results.correctedContact[moveId];
+    if (corrected.motionMode !== 'CORRECTED' || Math.abs(corrected.strikeKneeDegrees - contact.strikeKneeDegrees) > 1) {
+      throw new Error(`${moveId}: optional corrections changed the strike leg: ${JSON.stringify({ contact, corrected })}`);
+    }
+
   }
 
   if (!(results.lowKick.contact.strikeHeight < results.kick.contact.strikeHeight - 0.45)) {

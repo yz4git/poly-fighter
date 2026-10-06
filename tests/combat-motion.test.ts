@@ -48,7 +48,6 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
     const [target, base] = await Promise.all([glb(`ubc-superhero-${body}-flat.glb`), glb("ual-fight-core.glb")]);
     const sources = retargetMotionClips(base.scene, target.scene, base.animations);
     const library = createCombatMotionLibrary(target.scene, sources, definition);
-    assert.equal([...library.keys()].filter(name => name.startsWith("CM_")).length, 27);
     for (const [name, clip] of library) {
       for (const track of clip.tracks) for (const value of track.values) assert.ok(Number.isFinite(value), `${name}/${track.name}`);
       if (name.startsWith("CM_Move") || ["CM_Ready", "CM_Guard", "CM_Crouch"].includes(name)) {

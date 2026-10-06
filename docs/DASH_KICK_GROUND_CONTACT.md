@@ -1,7 +1,7 @@
-# Dash Kick ground-contact presentation
+# Grounded kick motion
 
-Dash Kick keeps its gameplay move definition, timing, reach, hitboxes and simulation untouched. The TPS presentation layer now preserves one planted support foot from startup through contact and early recovery.
+All four imported kick clips are authored once per body type by `createCombatMotionLibrary`. Supporting feet use one solve against the ready-stance floor and a level sole. The strike leg retains the source thigh/calf rotations. Dash Kick removes the source jump from the pelvis track while preserving the strike pose and torso motion. Common ready poses handle entry and recovery.
 
-The imported Blender clip still provides the strike-leg and torso motion. A late presentation-only correction samples the last grounded neutral foot pose, solves the support leg back to that floor anchor, translates only the imported visible model by any remaining vertical gap, and then re-solves the strike leg back toward its pre-correction world target.
+The six runtime kick wrappers have been removed. Presentation no longer repeatedly solves the strike leg, retreats the model, or changes the pose again after sampling. TPS root yaw is set from the opponent direction before world-space presentation work. The motion-correction switch controls optional runtime conditioning.
 
-The kick sequence audit rejects startup/contact/recovery frames where the Dash Kick support foot rises above the grounded ankle band or where both feet are simultaneously airborne.
+Gameplay timing, reach, hitboxes and simulation positions remain owned by the combat runtime. Real male/female skeleton tests check strike geometry, grounded support and ankle continuity. WebGL audits inspect the final rendered bones and linked kicks instead of wrapper telemetry.

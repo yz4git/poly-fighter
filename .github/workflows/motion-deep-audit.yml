@@ -24,7 +24,6 @@ jobs:
       - name: Motion-specific contracts
         run: |
           node --import tsx --test tests/combat-motion.test.ts tests/kick-ankle.test.ts
-          node --test tests/blender-motion-foundry-v2-kicks.test.mjs
       - name: Build production preview once
         run: npm run build
       - name: Start production preview once

@@ -53,3 +53,5 @@ See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for details.
 Project reference artwork under `public/reference/` has explicit provenance notes
 in [`public/reference/README.md`](public/reference/README.md). New reference assets
 should not be committed without documenting their origin and reuse terms.
+
+Motion and testing details: [grounded kicks](docs/DASH_KICK_GROUND_CONTACT.md), [current test suite](docs/TESTING.md).

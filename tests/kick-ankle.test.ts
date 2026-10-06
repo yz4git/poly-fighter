@@ -13,7 +13,7 @@ async function glb(name: string) {
 }
 
 for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", FIGHTER_DEFINITIONS.blue]] as const) {
-  test(`${body}: kick ankles follow the shin, support soles stay level, leg paths are preserved`, async () => {
+  test(`${body}: kicks preserve strike geometry with grounded support and continuous ankles`, async () => {
     const [target, base, kicks, air] = await Promise.all([
       glb(`ubc-superhero-${body}-flat.glb`), glb("ual-fight-core.glb"), glb("blender-kicks-core.glb"), glb("blender-airborne-core.glb"),
     ]);
@@ -37,6 +37,7 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
       }));
       return { points, feet };
     };
+    const ready = pose(library.get("CM_Ready")!, 0);
     const diagnostics: Record<string, unknown> = {};
     for (const name of ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"]) {
       const strike = name === "BF_LowKick_L" ? "l" : "r";
@@ -48,11 +49,19 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
         const u = frame / 60;
         const before = pose(source.get(name)!, u);
         const after = pose(corrected, u);
+        assert.ok(Math.abs(after.points[`foot_${support}`].y - ready.points[`foot_${support}`].y) < .003, `${name}/${u}: support foot left the floor`);
+        assert.ok(after.feet[support].soleTilt <= ready.feet[support].soleTilt + .05, `${name}/${u}: banked support sole ${after.feet[support].soleTilt}`);
         if (u >= .27 && u <= .73) {
           const expected = name === "BF_LowKick_L" ? [45, 75] : name === "BF_RisingKick_R" ? [65, 95] : [85, 115];
           assert.ok(after.feet[strike].ankleDegrees >= expected[0] && after.feet[strike].ankleDegrees <= expected[1], `${name}/${u}: ankle ${after.feet[strike].ankleDegrees}`);
-          if (name !== "BF_DashKick_R") assert.ok(after.feet[support].soleTilt < 1.5, `${name}/${u}: banked support sole ${after.feet[support].soleTilt}`);
-          for (const n of ["pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r"]) assert.ok(before.points[n].distanceTo(after.points[n]) < .002, `${name}/${u}: changed ${n} trajectory`);
+          for (const n of [`thigh_${strike}`, `calf_${strike}`, `foot_${strike}`]) {
+            const original = before.points[n].clone().sub(before.points.pelvis);
+            const authored = after.points[n].clone().sub(after.points.pelvis);
+            assert.ok(original.distanceTo(authored) < .002, `${name}/${u}: reshaped strike ${n}`);
+          }
+          const knee = (p: typeof after.points) => p[`thigh_${strike}`].clone().sub(p[`calf_${strike}`]).angleTo(p[`foot_${strike}`].clone().sub(p[`calf_${strike}`]));
+          assert.ok(Math.abs(knee(before.points) - knee(after.points)) < .01, `${name}/${u}: changed strike knee angle`);
+          if (name === "BF_DashKick_R") assert.ok(after.points.pelvis.y <= ready.points.pelvis.y + .003, `${name}/${u}: source jump was not removed`);
         }
         if (previous) for (const s of ["l", "r"]) {
           const delta = THREE.MathUtils.radToDeg(previous.feet[s].q.angleTo(after.feet[s].q));
@@ -60,6 +69,10 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
         }
         previous = after;
         frames.push({ u, before: { strike: before.feet[strike].ankleDegrees, sole: before.feet[support].soleTilt }, after: { strike: after.feet[strike].ankleDegrees, sole: after.feet[support].soleTilt } });
+      }
+      for (const u of [0, 1]) {
+        const recovered = pose(corrected, u);
+        for (const n of Object.keys(ready.points)) assert.ok(ready.points[n].distanceTo(recovered.points[n]) < .005, `${name}/${u}: entry or recovery pops at ${n}`);
       }
       diagnostics[name] = frames;
     }

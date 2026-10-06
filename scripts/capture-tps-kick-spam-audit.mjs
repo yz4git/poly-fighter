@@ -149,7 +149,6 @@ async function auditSequence(sessionId, sequence) {
         const left = footPoint(game.p1, 'l');
         const right = footPoint(game.p1, 'r');
         if (!left || !right) return { error: 'missing-foot', moveId, sequenceIndex, tick };
-        const data = game.p1.visual.root.userData;
         frames.push({
           sequenceIndex,
           moveId,
@@ -157,10 +156,6 @@ async function auditSequence(sessionId, sequence) {
           leftHeight: left.y,
           rightHeight: right.y,
           minFootHeight: Math.min(left.y, right.y),
-          bridge: Number(data.tpsKickSpamGroundBridge ?? 0),
-          bridgeMove: String(data.tpsKickSpamGroundBridgeMove ?? 'NONE'),
-          bridgeSupportHeight: Number(data.tpsKickSpamGroundBridgeSupportHeight ?? 0),
-          supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
           simulationY: game.p1.position.y,
           grounded: Boolean(game.p1.grounded),
         });
@@ -181,7 +176,6 @@ async function auditSequence(sessionId, sequence) {
     return {
       sequence,
       frameCount: frames.length,
-      bridgeFrames: frames.filter((frame) => frame.bridge > 0.5).length,
       worstMinFootHeight: Math.max(...frames.map((frame) => frame.minFootHeight)),
       airborne,
       ungroundedSimulation,
@@ -222,7 +216,6 @@ async function poseRestartFrame(sessionId, previousMoveId, nextMoveId) {
 
     const left = footPoint(game.p1, 'l');
     const right = footPoint(game.p1, 'r');
-    const data = game.p1.visual.root.userData;
     return {
       previousMoveId,
       nextMoveId,
@@ -230,9 +223,6 @@ async function poseRestartFrame(sessionId, previousMoveId, nextMoveId) {
       leftHeight: left?.y ?? null,
       rightHeight: right?.y ?? null,
       minFootHeight: left && right ? Math.min(left.y, right.y) : null,
-      bridge: Number(data.tpsKickSpamGroundBridge ?? 0),
-      bridgeMove: String(data.tpsKickSpamGroundBridgeMove ?? 'NONE'),
-      supportFootLock: Number(data.tpsKickSupportFoot ?? 0),
       simulationY: game.p1.position.y,
       grounded: Boolean(game.p1.grounded),
     };

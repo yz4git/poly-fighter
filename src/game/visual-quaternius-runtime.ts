@@ -846,7 +846,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusLowKickMotionSource = kickSource("BF_LowKick_L");
     visual.root.userData.quaterniusRisingKickMotionSource = kickSource("BF_RisingKick_R");
     visual.root.userData.quaterniusDashKickMotionSource = blenderAirborneClips.has("BF_DashKick_R")
-      ? "BLENDER_MOTION_FOUNDRY_V2_AIRBORNE"
+      ? "BLENDER_MOTION_FOUNDRY_GROUNDED_DASH"
       : "PROCEDURAL_FALLBACK";
     const reactionSource = (name: string) => blenderReactionClips.has(name)
       ? "BLENDER_MOTION_FOUNDRY_V2_REACTIONS"
@@ -910,8 +910,10 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   // Kimodo-inspired post conditioning is presentation-only: it smooths the
   // root/body channel and uses inferred foot contacts to suppress skating while
   // leaving authored strike end-effectors and deterministic gameplay untouched.
-  applyKimodoMotionConditioning({ model: runtime.model, bones: runtime.bones }, fighter, delta);
   const correctionsEnabled = motionCorrectionsEnabled();
+  if (correctionsEnabled) {
+    applyKimodoMotionConditioning({ model: runtime.model, bones: runtime.bones }, fighter, delta);
+  }
   // New clips already contain an anatomical guard. The legacy assistance toggle
   // remains meaningful only for an independently missing optional clip pack.
   if (correctionsEnabled && !runtime.clips.has("CM_Ready")) {

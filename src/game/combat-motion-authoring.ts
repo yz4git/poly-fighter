@@ -159,6 +159,11 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
 
   body();
   const ready = capture(nodes);
+  const readyPelvis = nodes.get("pelvis")!.getWorldPosition(new THREE.Vector3());
+  const readyFeet = new Map(["l", "r"].map(suffix => [suffix, {
+    position: nodes.get(`foot_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
+    rotation: nodes.get(`foot_${suffix}`)!.getWorldQuaternion(new THREE.Quaternion()),
+  }]));
   const result = new Map<string, THREE.AnimationClip>();
   function author(name: string, duration: number, sample: (u: number) => void, samples = 25): void {
     const times = Float32Array.from({ length: samples }, (_, i) => i * duration / (samples - 1));
@@ -345,7 +350,34 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     }
   }
 
-  // Existing mocap/Blender body mechanics remain authoritative through contact.
+  function groundKickSupport(name: string): void {
+    if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
+    const suffix = name === "BF_LowKick_L" ? "r" : "l";
+    const reference = readyFeet.get(suffix)!;
+    const pelvis = nodes.get("pelvis")!;
+    rig.updateMatrixWorld(true);
+    if (name === "BF_DashKick_R") {
+      // Dash is a grounded drive in gameplay. Bake out the source jump once;
+      // retain the strike leg's local rotations instead of solving it again.
+      const position = pelvis.getWorldPosition(new THREE.Vector3());
+      position.y = Math.min(position.y, readyPelvis.y);
+      pelvis.position.copy(pelvis.parent!.worldToLocal(position));
+      rig.updateMatrixWorld(true);
+    }
+    const thigh = nodes.get(`thigh_${suffix}`)!;
+    const calf = nodes.get(`calf_${suffix}`)!;
+    const foot = nodes.get(`foot_${suffix}`)!;
+    const target = foot.getWorldPosition(new THREE.Vector3());
+    // Keep the authored pivot, with a bounded footprint and a level sole.
+    const planar = target.clone().sub(reference.position).setY(0);
+    planar.clampLength(0, height * .04);
+    target.copy(reference.position).add(planar);
+    solveCombatLimb(thigh, calf, foot, target, calf.getWorldPosition(new THREE.Vector3()));
+    worldRotation(foot, reference.rotation);
+    rig.updateMatrixWorld(true);
+  }
+
+  // Existing mocap/Blender strike mechanics remain authoritative through contact.
   // Common entry/exit poses remove arm drops and foot pops between libraries.
   for (const [name, source] of sourceClips) {
     if (!name.startsWith("BF_")) continue;
@@ -378,6 +410,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         bone.quaternion.slerp(reference.rotation, weight);
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
+      groundKickSupport(name);
     }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
   // Mirror world-space bind deltas, not raw local Euler angles: UBC's left and

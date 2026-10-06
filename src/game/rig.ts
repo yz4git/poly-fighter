@@ -37,8 +37,14 @@ export function fighterBasis(facing: number, opponentDelta?: THREE.Vector3): Fig
   return { forward, up, side };
 }
 
-export function fighterRootQuaternion(facing: number): THREE.Quaternion {
-  const forward = new THREE.Vector3(facing >= 0 ? 1 : -1, 0, 0);
+export function fighterRootQuaternion(facing: number, motionForward?: readonly number[]): THREE.Quaternion {
+  const forward = motionForward
+    ? new THREE.Vector3(motionForward[0], 0, motionForward[2])
+    : new THREE.Vector3(facing >= 0 ? 1 : -1, 0, 0);
+  if (!Number.isFinite(forward.lengthSq()) || forward.lengthSq() < 1e-8) {
+    forward.set(facing >= 0 ? 1 : -1, 0, 0);
+  }
+  forward.normalize();
   return new THREE.Quaternion().setFromUnitVectors(MODEL_FORWARD, forward);
 }
 

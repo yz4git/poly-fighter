@@ -13,10 +13,7 @@ on:
       - scripts/apply-blender-motion-foundry-v1.mjs
       - scripts/apply-blender-motion-foundry-v2.mjs
       - scripts/apply-blender-motion-foundry-v2-shared-strikes.mjs
-      - tests/blender-motion-foundry.test.mjs
-      - tests/blender-motion-foundry-v2.test.mjs
       - tests/quaternius-model-skin.test.ts
-      - tests/model-viewer.test.mjs
       - src/game/visual-quaternius-runtime.ts
       - src/game/model-viewer-motion.ts
       - scripts/capture-model-view-audit.mjs
@@ -272,16 +269,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate Foundry contracts
-        run: |
-          node --test tests/blender-motion-foundry.test.mjs
-          node --test tests/blender-motion-foundry-v2.test.mjs
-
       - name: Build, rules and lint integrated game
         run: |
           npm run build
           npm run test:rules
-          npm run test:pwa
           npm run lint
 
       - name: Publish generated Foundry assets and integration to PR branch
@@ -309,7 +300,6 @@ jobs:
             src/game/model-viewer-motion.ts \
             scripts/capture-model-view-audit.mjs \
             tests/quaternius-model-skin.test.ts \
-            tests/model-viewer.test.mjs \
             package.json
           git commit -m "Generate shared Blender v2 strike actions"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}

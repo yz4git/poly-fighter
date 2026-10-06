@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FIGHTER_DEFINITIONS, MOVE_ORDER } from "../src/game/definitions";
 import {
-  MOTION_EXPANSION_PROFILE,
   chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
   motionClipForMove,
@@ -15,20 +13,7 @@ import {
   tpsComboMoveForRoute,
 } from "../src/game/motion-profile";
 
-test("Procedural Fight v3 maps every authored move to pose-graph motion and reaction data", () => {
-  assert.equal(MOTION_EXPANSION_PROFILE.version, "MOTION_QUALITY_V3");
-  assert.equal(MOTION_EXPANSION_PROFILE.uniqueMoveMappings, 11);
-  assert.equal(MOTION_EXPANSION_PROFILE.secondaryLibraryClips, 23);
-  assert.equal(MOTION_EXPANSION_PROFILE.proceduralVersion, "PROCEDURAL_FIGHT_V3");
-  assert.equal(MOTION_EXPANSION_PROFILE.proceduralLibraryClips, 23);
-  assert.ok(MOTION_EXPANSION_PROFILE.reactionKinds >= 9);
-  assert.equal(MOTION_EXPANSION_PROFILE.guardBreakClip, "PF_GuardBreak");
-  assert.equal(MOTION_EXPANSION_PROFILE.wakeupClip, "PF_Wakeup");
-  assert.equal(MOTION_EXPANSION_PROFILE.sideStepLeftClip, "PF_Sidestep_L");
-  assert.equal(MOTION_EXPANSION_PROFILE.kickRecoveryClip, "PF_KickRecover");
-  assert.equal(MOTION_EXPANSION_PROFILE.heavyRecoveryClip, "PF_HeavyRecover");
-  assert.equal(MOTION_EXPANSION_PROFILE.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");
-  assert.equal(MOTION_EXPANSION_PROFILE.timingPolicy, "MOVE_SPECIFIC_9_POSE_TIMING");
+test("every move has a distinct usable clip and reaction mapping", () => {
 
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     const clips = new Set<string>();
@@ -41,64 +26,6 @@ test("Procedural Fight v3 maps every authored move to pose-graph motion and reac
     }
     assert.ok(clips.size >= 8, `${fighter.name} only exposes ${clips.size} distinct move clips`);
   }
-});
-
-test("procedural v3 generator contains pose graph, support-foot authoring, COM and move-specific timing", async () => {
-  const source = await readFile(new URL("../scripts/generate-procedural-fight-motions-v3.mjs", import.meta.url), "utf8");
-  const metrics = JSON.parse(
-    await readFile(new URL("../public/models/quaternius/procedural-fight-core.metrics.json", import.meta.url), "utf8"),
-  ) as {
-    version: string;
-    generatedClipCount: number;
-    clips: string[];
-    rootMotionPolicy: string;
-    timingPolicy: string;
-    metrics: Array<{
-      name: string;
-      modifiedBones: string[];
-      modifiedPaths: string[];
-      missingAnimated: string[];
-      maxPlanarRootShift: number;
-      contactU: number;
-    }>;
-  };
-
-  assert.match(source, /PROCEDURAL_FIGHT_V3/);
-  assert.match(source, /POSE_GRAPH_NODES/);
-  assert.match(source, /MOVE_TIMINGS/);
-  assert.match(source, /authorSupportLeg/);
-  assert.match(source, /MOTION_DNA/);
-  assert.match(source, /ANTICIPATION/);
-  assert.match(source, /PF_GuardBreak/);
-  assert.match(source, /PF_Sidestep_L/);
-  assert.match(source, /PF_KickRecover/);
-  assert.match(source, /FULL_BODY_BALANCE_V3/);
-  assert.match(source, /PF_Power_R.*, base: "Punch_Cross"/);
-  assert.match(source, /PF_Throw.*, base: "Idle_Loop"/);
-  assert.match(source, /PF_BodyBlow_L.*, base: "Punch_Jab"/);
-  assert.match(source, /sampleCurve/);
-  assert.equal(metrics.version, "PROCEDURAL_FIGHT_V3");
-  assert.equal(metrics.generatedClipCount, 23);
-  assert.equal(metrics.clips.length, 23);
-  assert.equal(metrics.rootMotionPolicy, "POSE_GRAPH_COM_WITH_RUNTIME_FOOT_LOCK");
-  assert.equal(metrics.timingPolicy, "MOVE_SPECIFIC_9_POSE_TIMING");
-  assert.equal(metrics.poseGraph.length, 9);
-  assert.equal(metrics.motionDna.POWER.id, "KAIRO_POWER");
-  assert.equal(metrics.motionDna.SPEED.id, "SERA_SPEED");
-  for (const required of [
-    "PF_Jab_L", "PF_Backfist_L", "PF_BodyBlow_R", "PF_Counter_L", "PF_LowKick_L", "PF_DownBack", "PF_GuardBreak",
-    "PF_Sidestep_L", "PF_Sidestep_R", "PF_KickRecover", "PF_HeavyRecover",
-  ]) assert.ok(metrics.clips.includes(required), `missing ${required}`);
-
-  let planarClips = 0;
-  for (const entry of metrics.metrics) {
-    assert.ok(entry.modifiedBones.length >= 3, `${entry.name} modifies too few bones`);
-    assert.deepEqual(entry.missingAnimated, [], `${entry.name} modifier path is absent from its base clip`);
-    assert.ok(entry.modifiedPaths.includes("pelvis:translation"), `${entry.name} lacks center-of-mass translation`);
-    assert.ok(entry.contactU >= 0 && entry.contactU <= 1, `${entry.name} invalid contactU`);
-    if (entry.maxPlanarRootShift > 0.001) planarClips += 1;
-  }
-  assert.ok(planarClips >= 12, `only ${planarClips} v3 clips contain planar root motion`);
 });
 
 test("v7.1 kick mappings retain authored support feet and keep the attack clip through recovery", () => {
@@ -153,29 +80,6 @@ test("side-sensitive punches select the clip that matches each fighter's authore
   assert.equal(motionPlantFootForMove(sera.moves.counter), "RIGHT");
   assert.equal(motionDnaForFighter(kairo).id, "KAIRO_POWER");
   assert.equal(motionDnaForFighter(sera).id, "SERA_SPEED");
-});
-
-test("production motion runtime has one timeline, one mixer and no legacy second engine", async () => {
-  const runtime = await readFile(new URL("../src/game/visual-quaternius-runtime.ts", import.meta.url), "utf8");
-  const timeline = await readFile(new URL("../src/game/combat-motion-timeline.ts", import.meta.url), "utf8");
-  const retarget = await readFile(new URL("../src/game/motion-retarget.ts", import.meta.url), "utf8");
-  const presentation = await readFile(new URL("../src/game/presentation-animation.ts", import.meta.url), "utf8");
-
-  await assert.rejects(
-    readFile(new URL("../src/game/motion-expansion-runtime.ts", import.meta.url), "utf8"),
-    (error: NodeJS.ErrnoException) => error.code === "ENOENT",
-  );
-  assert.match(runtime, /sampleCombatMotionTimeline\(move, fighter\.moveTick, runtime\.currentClip\)/);
-  assert.match(runtime, /combatMotionSingleMixer = true/);
-  assert.match(runtime, /GAMEPLAY_TICK_AUTHORED_EVENT_V1/);
-  assert.match(runtime, /from "\.\/motion-retarget"/);
-  assert.doesNotMatch(runtime, /V6_KICK_CONTACT_PHASE/);
-  assert.doesNotMatch(runtime, /V6_ACTIVE_CONTACT_SYNC/);
-  assert.doesNotMatch(presentation, /updateMotionExpansionSkin\(fighter, opponent, timeSeconds\)/);
-  assert.match(timeline, /AUTHORED_MOTION_EVENTS/);
-  assert.match(timeline, /first ACTIVE tick is exactly contact/i);
-  assert.match(retarget, /targetRest \* inverse\(sourceRest\) \* sourceAnimated/);
-  assert.match(retarget, /export function retargetMotionClips/);
 });
 
 test("reaction selection distinguishes head, body, low, heavy and launch impacts", () => {

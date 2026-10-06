@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { motionCorrectionsEnabled, setMotionCorrectionsEnabled } from "../src/game/motion-correction-state";
+import { SettingsManager } from "../src/game/settings";
+import { motionCorrectionsEnabled } from "../src/game/motion-correction-state";
 
-test("motion corrections default OFF and can be toggled", () => {
+test("settings default to corrections OFF and apply changes to runtime", () => {
+  const settings = new SettingsManager();
+  assert.equal(settings.get().motionCorrections, false);
   assert.equal(motionCorrectionsEnabled(), false);
-  setMotionCorrectionsEnabled(true);
+  settings.update({ motionCorrections: true });
   assert.equal(motionCorrectionsEnabled(), true);
-  setMotionCorrectionsEnabled(false);
+  settings.update({ motionCorrections: false });
   assert.equal(motionCorrectionsEnabled(), false);
 });

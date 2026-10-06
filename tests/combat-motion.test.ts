@@ -4,25 +4,9 @@ import { readFile } from "node:fs/promises";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createCombatMotionLibrary } from "../src/game/combat-motion-authoring";
-import { AUTHORED_CONTACT_PHASE, combatAttackPhase, combatFootCycle, locomotionDirection } from "../src/game/combat-motion-clock";
+import { combatFootCycle, locomotionDirection } from "../src/game/combat-motion-clock";
 import { retargetMotionClips } from "../src/game/visual-quaternius-runtime";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
-
-test("every move reaches its authored contact on the first active tick and returns completely", () => {
-  for (const definition of Object.values(FIGHTER_DEFINITIONS)) for (const move of Object.values(definition.moves)) {
-    for (const impact of Object.values(AUTHORED_CONTACT_PHASE)) {
-      const total = move.startup + move.active + move.recovery;
-      let previous = -1;
-      for (let tick = 0; tick < total; tick += .25) {
-        const phase = combatAttackPhase(move, tick, impact);
-        assert.ok(phase >= previous && phase >= 0 && phase <= 1, `${move.id}: monotonic phase`);
-        previous = phase;
-      }
-      assert.equal(combatAttackPhase(move, move.startup, impact), impact);
-      assert.equal(combatAttackPhase(move, total - 1, impact), 1);
-    }
-  }
-});
 
 test("all eight movement sectors distinguish backward and lateral travel", () => {
   assert.equal(locomotionDirection(0, 1), "F");

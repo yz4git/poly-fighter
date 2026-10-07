@@ -387,9 +387,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const reach = target.clone().sub(hipWorld);
     const maximumReach = (upper + lower) * .965;
     if (upper > 1e-6 && lower > 1e-6 && reach.length() > maximumReach) {
-      const balance = reach.normalize().multiplyScalar(
-        Math.min(reach.length() - maximumReach, height * .045),
-      );
+      const balance = reach.setLength(Math.min(reach.length() - maximumReach, height * .045));
       const shifted = pelvis.getWorldPosition(new THREE.Vector3()).add(balance);
       pelvis.position.copy(pelvis.parent!.worldToLocal(shifted));
       rig.updateMatrixWorld(true);

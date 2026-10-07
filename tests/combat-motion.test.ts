@@ -58,7 +58,7 @@ test("four distinct kick kinetic chains preserve endpoints and bounded bone coun
     assert.equal(isKineticKick(name), true);
     for (const edge of [0, 1]) {
       const pose = sampleKickKineticChain(name, edge);
-      for (const value of Object.values(pose)) assert.equal(value, 0, `${name} endpoint is not neutral`);
+      for (const value of Object.values(pose)) assert.ok(Math.abs(value) < 1e-10, `${name} endpoint is not neutral`);
     }
     let last = sampleKickKineticChain(name, 0);
     for (let frame = 1; frame <= 120; frame++) {

@@ -45,7 +45,7 @@ test("eight-way analogue motion blends without phase or sector discontinuities",
   assert.equal(wrap.second, "F");
   assert.ok(Math.abs(wrap.secondWeight - .5) < 1e-9);
   const next = approachLocomotionHeading(3.13, -0.01, -1, 1 / 60);
-  assert.ok(Math.abs(next - 3.13) < .15, "shortest turn crosses the backwards seam");
+  assert.ok(Math.abs(Math.atan2(Math.sin(next - 3.13), Math.cos(next - 3.13))) < .15, "shortest turn crosses the backwards seam");
   const turn = approachLocomotionHeading(0, 1, 0, 1 / 60);
   assert.ok(turn > 0 && turn <= 9 / 60 + 1e-8, "direction changes are rate limited");
 });

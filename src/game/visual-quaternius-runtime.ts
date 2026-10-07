@@ -987,9 +987,10 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.combatMotionSingleMixer = true;
   fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
   runtime.model.updateMatrixWorld(true);
-  // Capture the final rendered pose after conditioning/corrections. The next
-  // clip switch can therefore inherit actual on-screen velocity rather than
-  // only the previous authored keyframe.
+  // Contact locking runs on the final authored/blended walk pose, including
+  // TPS. Record history only AFTER planting; otherwise walk->attack would
+  // inertialize from a pose that the player never actually saw.
+  if (fighter.state === "WALK") finalizeQuaterniusModelPose(fighter, timeSeconds);
   recordInertialPose(runtime.bones, runtime.poseHistory, motionDelta);
 }
 

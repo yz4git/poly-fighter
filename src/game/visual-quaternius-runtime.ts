@@ -6,7 +6,7 @@ import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
-import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection } from "./combat-motion-clock";
+import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import {
@@ -70,6 +70,8 @@ type QuaterniusRuntime = {
   bones: Map<string, THREE.Object3D>;
   currentClip: string;
   currentAction: THREE.AnimationAction | null;
+  walkActions: Map<string, THREE.AnimationAction>;
+  walkHeading: number | null;
   lastTime: number;
   lastMoveTick: number;
   lastReactionSerial: number;
@@ -95,6 +97,7 @@ type QuaterniusRuntime = {
   finalTime: number;
 };
 
+const CONTINUOUS_WALK_CLIP = "CM_Move_BLEND";
 const runtimes = new WeakMap<THREE.Group, QuaterniusRuntime>();
 const installTokens = new WeakMap<THREE.Group, object>();
 const modelPromises = new Map<QuaterniusBodyType, Promise<THREE.Group>>();
@@ -521,7 +524,13 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
     return { name: proceduralAttackClip(move.id) ?? "BF_Cross_R", loop: false, speed: 1 / seconds };
   }
   switch (fighter.state) {
-    case "WALK": return { name: `CM_Move_${locomotionDirection(runtime.motionX, runtime.motionZ)}`, loop: true, speed: 1 };
+    case "WALK": return {
+      name: LOCOMOTION_DIRECTIONS.every((d) => runtime.clips.has(`CM_Move_${d}`))
+        ? CONTINUOUS_WALK_CLIP
+        : `CM_Move_${locomotionDirection(runtime.motionX, runtime.motionZ)}`,
+      loop: true,
+      speed: 1,
+    };
     case "CROUCH": return { name: "CM_Crouch", loop: true, speed: 1 };
     case "GUARD": return { name: "CM_Guard", loop: true, speed: 1 };
     case "BLOCK_STUN": return { name: "CM_Block", loop: false, speed: 1 };
@@ -583,14 +592,16 @@ function transitionFadeSeconds(previous: string, next: string): number {
 }
 
 function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false): void {
-  const clip = runtime.clips.get(name) ?? runtime.clips.get("CM_Ready") ?? runtime.clips.get("Idle_Loop");
+  const blendedWalk = name === CONTINUOUS_WALK_CLIP;
+  const clip = runtime.clips.get(blendedWalk ? "CM_Move_F" : name)
+    ?? runtime.clips.get("CM_Ready") ?? runtime.clips.get("Idle_Loop");
   if (!clip) return;
-  if (runtime.currentClip === clip.name && !restart) {
+  if (runtime.currentClip === name && !restart) {
     runtime.currentAction?.setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
     return;
   }
   runtime.transitionPose.clear();
-  if (runtime.currentAction) {
+  if (runtime.currentAction || runtime.currentClip === CONTINUOUS_WALK_CLIP) {
     // Preserve both the rendered outgoing pose and its measured local velocity.
     // The destination clip will be sampled immediately after this switch, then
     // velocity-aware inertialization carries momentum across the discontinuity.
@@ -607,6 +618,13 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   // Snapshot the rendered pose before stopping. Same-clip repeats and combo
   // interruptions cannot reset a live outgoing action or accumulate old weights.
   runtime.mixer.stopAllAction();
+  if (blendedWalk) {
+    runtime.walkHeading = null;
+    runtime.currentClip = CONTINUOUS_WALK_CLIP;
+    runtime.currentAction = null;
+    runtime.host.userData.quaterniusCurrentClip = CONTINUOUS_WALK_CLIP;
+    return;
+  }
   const action = runtime.mixer.clipAction(clip, runtime.model);
   action.reset().setEffectiveWeight(1).setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
   action.enabled = true;
@@ -629,10 +647,50 @@ function advance(runtime: QuaterniusRuntime, timeSeconds: number, frozen = false
   return frozen ? 0 : delta;
 }
 
-function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime): void {
+/**
+ * Sample at most two adjacent full-body walk clips on one gait phase. Using the
+ * same mixer and normalized phase preserves the support/swing foot, even when
+ * the stick crosses an eight-way sector boundary. No motion runs per idle bone.
+ */
+function sampleContinuousWalk(runtime: QuaterniusRuntime, delta: number): void {
+  runtime.walkHeading = approachLocomotionHeading(
+    runtime.walkHeading, runtime.motionX, runtime.motionZ, delta,
+  );
+  const blend = locomotionBlendAtHeading(runtime.walkHeading);
+  for (const direction of LOCOMOTION_DIRECTIONS) {
+    const weight = (direction === blend.first ? blend.firstWeight : 0)
+      + (direction === blend.second ? blend.secondWeight : 0);
+    let action = runtime.walkActions.get(direction);
+    if (weight <= 1e-5) {
+      if (action?.isRunning()) action.stop();
+      continue;
+    }
+    if (!action) {
+      const clip = runtime.clips.get(`CM_Move_${direction}`);
+      if (!clip) continue;
+      action = runtime.mixer.clipAction(clip, runtime.model);
+      runtime.walkActions.set(direction, action);
+    }
+    if (!action.isRunning()) {
+      action.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+    }
+    action.enabled = true;
+    action.setEffectiveWeight(weight).setEffectiveTimeScale(0);
+    action.time = action.getClip().duration * runtime.gaitPhase;
+  }
+  runtime.mixer.update(0);
+  runtime.host.userData.combatMotionBlendPrimary = blend.first;
+  runtime.host.userData.combatMotionBlendSecondary = blend.second;
+  runtime.host.userData.combatMotionBlendWeight = blend.secondWeight;
+  runtime.host.userData.combatMotionBlendHeading = runtime.walkHeading;
+}
+
+function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delta: number): void {
+  const continuousWalk = runtime.currentClip === CONTINUOUS_WALK_CLIP;
   const action = runtime.currentAction;
   const clip = runtime.clips.get(runtime.currentClip);
-  if (!action || !clip) return;
+  if (continuousWalk) sampleContinuousWalk(runtime, delta);
+  else if (!action || !clip) return;
   const ticks = fighter.stateMachine.stateTicks;
   let phase: number | null = null;
   const move = fighter.currentMove;
@@ -657,7 +715,7 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime):
   else if (fighter.state === "WAKEUP") phase = Math.min(1, ticks / 22);
   else if (fighter.state === "JUMP") phase = Math.min(1, ticks / 38);
   else if (runtime.currentClip === "CM_Land") phase = Math.min(1, 1 - (runtime.landingEnd - runtime.clock) / .18);
-  if (phase !== null) {
+  if (phase !== null && action && clip) {
     action.setEffectiveTimeScale(0);
     action.time = clip.duration * phase;
     runtime.mixer.update(0);
@@ -798,6 +856,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       clips: retargetedClips,
       currentClip: "",
       currentAction: null,
+      walkActions: new Map(), walkHeading: null,
       lastTime: 0,
       lastMoveTick: -1,
       lastReactionSerial: -1,
@@ -886,7 +945,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   const desired = desiredClip(fighter, runtime);
   playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
   const motionDelta = advance(runtime, timeSeconds, fighter.hitStop > 0);
-  synchronizeMotion(runtime, fighter);
+  synchronizeMotion(runtime, fighter, motionDelta);
   // Mirror transition telemetry onto the public fighter root so WebGL playtest
   // audits can verify the exact on-screen handoff instead of reading a stale
   // compatibility layer. The authoritative values still live on runtime.host.

@@ -9,6 +9,8 @@ on:
       - app/TpsPresentationBootstrap.tsx
       - src/game/tps-close-punch-lane.ts
       - src/game/tps-bodyblow-level-change.ts
+      - src/game/combat-motion-authoring.ts
+      - src/game/combat-punch-kinetics.ts
       - scripts/capture-tps-close-punch-lane-audit.mjs
       - .github/workflows/tps-close-punch-lane-audit.yml
   push:
@@ -18,6 +20,8 @@ on:
       - app/TpsPresentationBootstrap.tsx
       - src/game/tps-close-punch-lane.ts
       - src/game/tps-bodyblow-level-change.ts
+      - src/game/combat-motion-authoring.ts
+      - src/game/combat-punch-kinetics.ts
       - scripts/capture-tps-close-punch-lane-audit.mjs
       - .github/workflows/tps-close-punch-lane-audit.yml
 

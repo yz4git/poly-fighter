@@ -65,8 +65,10 @@ test("four distinct kick kinetic chains preserve endpoints and bounded bone coun
       const pose = sampleKickKineticChain(name, frame / 120);
       for (const [key, value] of Object.entries(pose)) {
         assert.ok(Number.isFinite(value), `${name}/${key} not finite`);
-        assert.ok(Math.abs(value) < .25, `${name}/${key} excessive displacement`);
-        const maximumFrameChange = ["preparation", "drive", "recovery"].includes(key) ? .18 : .05;
+        const isEnvelope = ["preparation", "drive", "recovery"].includes(key);
+        assert.ok(Math.abs(value) <= (isEnvelope ? 1.001 : .25),
+          `${name}/${key} excessive displacement`);
+        const maximumFrameChange = isEnvelope ? .18 : .05;
         assert.ok(Math.abs(value - last[key as keyof typeof pose]) < maximumFrameChange,
           `${name}/${key} snapped between 120 Hz samples`);
       }

@@ -596,7 +596,7 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   const clip = runtime.clips.get(blendedWalk ? "CM_Move_F" : name)
     ?? runtime.clips.get("CM_Ready") ?? runtime.clips.get("Idle_Loop");
   if (!clip) return;
-  if (runtime.currentClip === name && !restart) {
+  if (runtime.currentClip === (blendedWalk ? CONTINUOUS_WALK_CLIP : clip.name) && !restart) {
     runtime.currentAction?.setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
     return;
   }

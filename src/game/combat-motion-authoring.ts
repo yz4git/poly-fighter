@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
+import { isKineticKick, sampleKickKineticChain } from "./combat-kinetic-chain";
 import type { FighterDefinition } from "./types";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
@@ -351,7 +352,38 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     }
   }
 
-  function groundKickSupport(name: string): void {
+  /**
+   * A complete movement chain is baked after sampling the Blender source:
+   * support hip carries weight first, the thorax unwinds late, and the guard
+   * counter-rotates during recovery. No additive live mixer and no rewrites of
+   * the kick thigh/calf/ankle rotations.
+   */
+  function bakeKickKinetics(name: string, u: number): void {
+    if (!isKineticKick(name)) return;
+    const motion = sampleKickKineticChain(name, u);
+    if (u <= 0 || u >= 1) return;
+    const pelvis = nodes.get("pelvis")!;
+    rig.updateMatrixWorld(true);
+    const translation = new THREE.Vector3(
+      motion.comSide * height * handedness,
+      motion.comVertical * height,
+      motion.comForward * height,
+    );
+    if (translation.lengthSq() > 1e-12) {
+      const location = pelvis.getWorldPosition(new THREE.Vector3()).add(translation);
+      pelvis.position.copy(pelvis.parent!.worldToLocal(location));
+      rig.updateMatrixWorld(true);
+    }
+    rotate("spine_02", Y, motion.torsoYaw * handedness * .60);
+    rotate("spine_03", Y, motion.torsoYaw * handedness * .40);
+    rotate("spine_02", X, motion.torsoPitch * .58);
+    rotate("spine_03", X, motion.torsoPitch * .42);
+    rotate("clavicle_l", Y, motion.shoulderYaw * handedness);
+    rotate("clavicle_r", Y, -motion.shoulderYaw * handedness);
+    rig.updateMatrixWorld(true);
+  }
+
+  function groundKickSupport(name: string, u: number): void {
     if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
     const suffix = name === "BF_LowKick_L" ? "r" : "l";
     const reference = readyFeet.get(suffix)!;
@@ -397,7 +429,14 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     // avoid frame-to-frame IK pole flips as the pelvis twists through a kick.
     const pole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
     solveCombatLimb(thigh, calf, foot, target, pole);
-    worldRotation(foot, reference.rotation);
+    // A planted foot can yaw on its sole during hip drive, but must never bank,
+    // rise, or abruptly change ankle bend. The same authored contact clock
+    // drives the support pivot and the upper-body kinetic sequence.
+    const pivot = sampleKickKineticChain(name, u).supportPivot;
+    const pivotWorld = new THREE.Quaternion()
+      .setFromAxisAngle(Y, pivot * handedness)
+      .multiply(reference.rotation);
+    worldRotation(foot, pivotWorld);
     rig.updateMatrixWorld(true);
   }
 
@@ -434,7 +473,8 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         bone.quaternion.slerp(reference.rotation, weight);
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
-      groundKickSupport(name);
+      bakeKickKinetics(name, u);
+      groundKickSupport(name, u);
     }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
   // Mirror world-space bind deltas, not raw local Euler angles: UBC's left and

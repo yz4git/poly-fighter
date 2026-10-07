@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createCombatMotionLibrary } from "../src/game/combat-motion-authoring";
 import { combatFootCycle, locomotionDirection, locomotionBlendAtHeading, approachLocomotionHeading } from "../src/game/combat-motion-clock";
+import { isKineticKick, sampleKickKineticChain } from "../src/game/combat-kinetic-chain";
 import { retargetMotionClips } from "../src/game/visual-quaternius-runtime";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 
@@ -48,6 +49,35 @@ test("eight-way analogue motion blends without phase or sector discontinuities",
   assert.ok(Math.abs(Math.atan2(Math.sin(next - 3.13), Math.cos(next - 3.13))) < .15, "shortest turn crosses the backwards seam");
   const turn = approachLocomotionHeading(0, 1, 0, 1 / 60);
   assert.ok(turn > 0 && turn <= 9 / 60 + 1e-8, "direction changes are rate limited");
+});
+
+test("four distinct kick kinetic chains preserve endpoints and bounded bone counter-rotation", () => {
+  const names = ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"];
+  const profiles = new Set<string>();
+  for (const name of names) {
+    assert.equal(isKineticKick(name), true);
+    for (const edge of [0, 1]) {
+      const pose = sampleKickKineticChain(name, edge);
+      for (const value of Object.values(pose)) assert.equal(value, 0, `${name} endpoint is not neutral`);
+    }
+    let last = sampleKickKineticChain(name, 0);
+    for (let frame = 1; frame <= 120; frame++) {
+      const pose = sampleKickKineticChain(name, frame / 120);
+      for (const [key, value] of Object.entries(pose)) {
+        assert.ok(Number.isFinite(value), `${name}/${key} not finite`);
+        assert.ok(Math.abs(value) < .25, `${name}/${key} excessive displacement`);
+        assert.ok(Math.abs(value - last[key as keyof typeof pose]) < .05,
+          `${name}/${key} snapped between 120 Hz samples`);
+      }
+      last = pose;
+    }
+    const contact = sampleKickKineticChain(name, .55);
+    assert.ok(contact.drive > .5, `${name} missing transfer into strike`);
+    profiles.add(contact.supportPivot.toFixed(5) + ":" + contact.torsoPitch.toFixed(5));
+  }
+  assert.equal(profiles.size, 4, "front, low, rising and dash should not share a generic motion");
+  assert.equal(isKineticKick("BF_Cross_R"), false);
+  assert.equal(sampleKickKineticChain("BF_Cross_R", .5).torsoYaw, 0);
 });
 
 async function glb(name: string) {

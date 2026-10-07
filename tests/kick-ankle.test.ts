@@ -18,6 +18,7 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
       glb(`ubc-superhero-${body}-flat.glb`), glb("ual-fight-core.glb"), glb("blender-kicks-core.glb"), glb("blender-airborne-core.glb"),
     ]);
     target.scene.updateMatrixWorld(true);
+    const bodyHeight = new THREE.Box3().setFromObject(target.scene).getSize(new THREE.Vector3()).y;
     const node = (name: string) => target.scene.getObjectByName(name)!;
     const upLocal = Object.fromEntries(["l", "r"].map(s => [s, new THREE.Vector3(0, 1, 0).applyQuaternion(node(`foot_${s}`).getWorldQuaternion(new THREE.Quaternion()).invert())]));
     const source = new Map([base, kicks, air].flatMap(pack => [...retargetMotionClips(pack.scene, target.scene, pack.animations)]));
@@ -61,6 +62,14 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
           }
           const knee = (p: typeof after.points) => p[`thigh_${strike}`].clone().sub(p[`calf_${strike}`]).angleTo(p[`foot_${strike}`].clone().sub(p[`calf_${strike}`]));
           assert.ok(Math.abs(knee(before.points) - knee(after.points)) < .01, `${name}/${u}: changed strike knee angle`);
+          // Imported source-pelvis motion must not tunnel the entire fighter
+          // into the enemy. Strike limb geometry remains authoritative.
+          const pelvisDrift = Math.hypot(
+            after.points.pelvis.x - ready.points.pelvis.x,
+            after.points.pelvis.z - ready.points.pelvis.z,
+          );
+          assert.ok(pelvisDrift < bodyHeight * .25,
+            `${name}/${u}: excessive attack pelvis travel ${pelvisDrift.toFixed(4)}`);
           if (name === "BF_DashKick_R") assert.ok(after.points.pelvis.y <= ready.points.pelvis.y + .003, `${name}/${u}: source jump was not removed`);
         }
         if (previous) for (const s of ["l", "r"]) {

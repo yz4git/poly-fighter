@@ -66,7 +66,12 @@ export function solveCombatLimb(root: THREE.Object3D, mid: THREE.Object3D, end: 
  * The control points use fractions of actual body height, not bone Euler axes.
  */
 export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<string, THREE.AnimationClip>, definition: FighterDefinition): Map<string, THREE.AnimationClip> {
-  const key = definition.archetype;
+  // Optional Blender asset packs can arrive in different combinations.
+  // A body-only key otherwise reuses an incomplete library with missing
+  // imported punches/kicks after a later asset pack becomes available.
+  const sourceSignature = [...sourceClips].map(([name, clip]) =>
+    `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
+  const key = `${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;

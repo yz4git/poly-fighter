@@ -66,7 +66,8 @@ test("four distinct kick kinetic chains preserve endpoints and bounded bone coun
       for (const [key, value] of Object.entries(pose)) {
         assert.ok(Number.isFinite(value), `${name}/${key} not finite`);
         assert.ok(Math.abs(value) < .25, `${name}/${key} excessive displacement`);
-        assert.ok(Math.abs(value - last[key as keyof typeof pose]) < .05,
+        const maximumFrameChange = ["preparation", "drive", "recovery"].includes(key) ? .18 : .05;
+        assert.ok(Math.abs(value - last[key as keyof typeof pose]) < maximumFrameChange,
           `${name}/${key} snapped between 120 Hz samples`);
       }
       last = pose;

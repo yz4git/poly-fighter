@@ -353,6 +353,33 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   }
 
   /**
+   * Imported retarget clips sometimes contain a large planar pelvis travel
+   * (up to most of a fighter's body width). The gameplay root already moves
+   * through the arena, so retaining that extra clip translation drives the
+   * fighter torso into the opponent while the boot pierces through the target.
+   *
+   * Limit *only* pelvis planar translation relative to the common ready pose.
+   * Translating its whole hierarchy keeps authored hip/knee/ankle geometry and
+   * the strike's velocity ordering; planted stance is then re-solved below.
+   * Vertical take-off / fall motion is not altered here.
+   */
+  function constrainKickPelvisTravel(name: string, u: number): void {
+    if (!isKineticKick(name)) return;
+    const pelvis = nodes.get("pelvis")!;
+    rig.updateMatrixWorld(true);
+    const original = pelvis.getWorldPosition(new THREE.Vector3());
+    const lateral = original.clone().sub(readyPelvis);
+    lateral.y = 0;
+    const maximum = height * (name === "BF_DashKick_R" ? 0.18 : 0.14);
+    if (lateral.lengthSq() <= maximum * maximum) return;
+    const bounded = lateral.clone().setLength(maximum);
+    const reduction = smoothMotion(u / 0.16) * (1 - smoothMotion((u - 0.80) / 0.20));
+    const corrected = original.add(bounded.sub(lateral).multiplyScalar(reduction));
+    pelvis.position.copy(pelvis.parent!.worldToLocal(corrected));
+    rig.updateMatrixWorld(true);
+  }
+
+  /**
    * A complete movement chain is baked after sampling the Blender source:
    * support hip carries weight first, the thorax unwinds late, and the guard
    * counter-rotates during recovery. No additive live mixer and no rewrites of
@@ -473,6 +500,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         bone.quaternion.slerp(reference.rotation, weight);
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
+      constrainKickPelvisTravel(name, u);
       bakeKickKinetics(name, u);
       groundKickSupport(name, u);
     }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));

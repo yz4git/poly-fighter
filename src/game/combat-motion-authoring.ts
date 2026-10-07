@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
 import { isKineticKick, sampleKickKineticChain } from "./combat-kinetic-chain";
+import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./combat-punch-kinetics";
 import type { FighterDefinition } from "./types";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
@@ -467,6 +468,93 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     rig.updateMatrixWorld(true);
   }
 
+  /**
+   * Turn the flat imported arm strike into a ground-up movement chain, without
+   * inventing a new end-effector trajectory or rewriting hitbox timing.
+   *
+   * First constrain the baked pelvis root (world movement belongs to gameplay),
+   * then wind the hips / trunk / shoulders, replant both feet with anatomical IK,
+   * and finally re-solve the hands toward their sampled Blender positions.
+   * Guard-arm IK is weaker than strike-hand IK so opponent-facing coverage does
+   * not cause a rigid, perfectly static non-striking elbow.
+   */
+  function bakePunchKinetics(name: string, u: number): void {
+    if (!isKineticPunch(name) || u <= 0 || u >= 1) return;
+    const motion = samplePunchKineticChain(name, u);
+    const striking = punchStrikeSide(name)!;
+    const guarding = striking === "l" ? "r" : "l";
+    rig.updateMatrixWorld(true);
+    const pelvis = nodes.get("pelvis")!;
+    const sourcePelvis = pelvis.getWorldPosition(new THREE.Vector3());
+    const sourceHands = new Map(["l", "r"].map(suffix => [suffix, nodes.get(`hand_${suffix}`)!.getWorldPosition(new THREE.Vector3())]));
+    const sourceElbows = new Map(["l", "r"].map(suffix => [suffix, nodes.get(`lowerarm_${suffix}`)!.getWorldPosition(new THREE.Vector3())]));
+
+    // Prevent punch clip root-motion from duplicating the deterministic arena
+    // movement; preserve vertical level changes for body blows and counters.
+    const planar = sourcePelvis.clone().sub(readyPelvis).setY(0);
+    const limit = height * (name === "BF_Power_R" ? .14 : .105);
+    const attenuation = smoothMotion(u / .16) * (1 - smoothMotion((u - .82) / .18));
+    const clamp = planar.length() > limit
+      ? planar.clone().setLength(limit).sub(planar).multiplyScalar(attenuation)
+      : new THREE.Vector3();
+    const transfer = new THREE.Vector3(
+      motion.comSide * height * handedness,
+      motion.comVertical * height,
+      motion.comForward * height,
+    );
+    const translation = clamp.add(transfer);
+    if (translation.lengthSq() > 1e-12) {
+      pelvis.position.copy(pelvis.parent!.worldToLocal(sourcePelvis.clone().add(translation)));
+      rig.updateMatrixWorld(true);
+    }
+
+    rotate("pelvis", Y, motion.pelvisYaw * handedness);
+    rotate("spine_02", Y, motion.torsoYaw * handedness * .42);
+    rotate("spine_03", Y, motion.torsoYaw * handedness * .58);
+    rotate("spine_02", X, motion.torsoPitch * .38);
+    rotate("spine_03", X, motion.torsoPitch * .62);
+    rotate("spine_03", Z, motion.chestRoll * handedness);
+    rotate("Head", Y, motion.headCounterYaw * handedness);
+    rotate(`clavicle_${striking}`, Y, motion.strikeClavicleYaw * handedness);
+    rotate(`clavicle_${guarding}`, Y, motion.guardClavicleYaw * handedness);
+    rig.updateMatrixWorld(true);
+
+    // A planted leg may turn on the sole, not slide or collapse into a reverse
+    // knee. Both feet remain on the same ground plane through the strike.
+    for (const suffix of ["l", "r"] as const) {
+      const reference = readyFeet.get(suffix)!;
+      const thigh = nodes.get(`thigh_${suffix}`)!;
+      const calf = nodes.get(`calf_${suffix}`)!;
+      const foot = nodes.get(`foot_${suffix}`)!;
+      const target = foot.getWorldPosition(new THREE.Vector3());
+      const slide = target.clone().sub(reference.position).setY(0).clampLength(0, height * .035);
+      target.copy(reference.position).add(slide);
+      const kneePole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
+      solveCombatLimb(thigh, calf, foot, target, kneePole);
+      const pivot = suffix === striking ? motion.stancePivot : -motion.stancePivot * .14;
+      worldRotation(foot, new THREE.Quaternion()
+        .setFromAxisAngle(Y, pivot * handedness)
+        .multiply(reference.rotation));
+    }
+    rig.updateMatrixWorld(true);
+
+    // Preserve the animators' glove silhouette and original elbow bend plane.
+    // A soft end-effector constraint absorbs the extra chest/shoulder torque
+    // instead of allowing the imported fist to arc sideways at hit contact.
+    for (const suffix of [striking, guarding]) {
+      const upper = nodes.get(`upperarm_${suffix}`)!;
+      const elbow = nodes.get(`lowerarm_${suffix}`)!;
+      const hand = nodes.get(`hand_${suffix}`)!;
+      const preserved = sourceHands.get(suffix)!.clone().add(translation);
+      const bias = suffix === striking ? motion.contactLock : motion.guardRetention;
+      const current = hand.getWorldPosition(new THREE.Vector3());
+      const corrected = current.lerp(preserved, bias);
+      const pole = sourceElbows.get(suffix)!.clone().add(translation);
+      solveCombatLimb(upper, elbow, hand, corrected, pole);
+    }
+    rig.updateMatrixWorld(true);
+  }
+
   // Existing mocap/Blender strike mechanics remain authoritative through contact.
   // Common entry/exit poses remove arm drops and foot pops between libraries.
   for (const [name, source] of sourceClips) {
@@ -503,6 +591,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       constrainKickPelvisTravel(name, u);
       bakeKickKinetics(name, u);
       groundKickSupport(name, u);
+      bakePunchKinetics(name, u);
     }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
   // Mirror world-space bind deltas, not raw local Euler angles: UBC's left and
@@ -532,6 +621,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         nodes.get(name)!.quaternion.slerp(reference.rotation, weight);
         if (name === "pelvis") nodes.get(name)!.position.lerp(reference.position, weight);
       }
+      bakePunchKinetics(to, u);
     }, Math.max(3, Math.round(source.duration * 60) + 1));
   }
   mixer.stopAllAction(); mixer.uncacheRoot(rig);

@@ -163,6 +163,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   const readyFeet = new Map(["l", "r"].map(suffix => [suffix, {
     position: nodes.get(`foot_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
     rotation: nodes.get(`foot_${suffix}`)!.getWorldQuaternion(new THREE.Quaternion()),
+    knee: nodes.get(`calf_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
   }]));
   const result = new Map<string, THREE.AnimationClip>();
   function author(name: string, duration: number, sample: (u: number) => void, samples = 25): void {
@@ -372,7 +373,32 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const planar = target.clone().sub(reference.position).setY(0);
     planar.clampLength(0, height * .04);
     target.copy(reference.position).add(planar);
-    solveCombatLimb(thigh, calf, foot, target, calf.getWorldPosition(new THREE.Vector3()));
+
+    // Support-first balance: when the source pelvis drive pulls the hip beyond
+    // the planted leg's anatomical reach, shift the WHOLE pelvis (and thus the
+    // authored striking leg) slightly toward support before solving the stance
+    // knee. Never stretch the support shin or re-pose the striking leg to hide a
+    // bad center-of-mass trajectory.
+    const hipWorld = thigh.getWorldPosition(new THREE.Vector3());
+    const kneeWorld = calf.getWorldPosition(new THREE.Vector3());
+    const ankleWorld = foot.getWorldPosition(new THREE.Vector3());
+    const upper = hipWorld.distanceTo(kneeWorld);
+    const lower = kneeWorld.distanceTo(ankleWorld);
+    const reach = target.clone().sub(hipWorld);
+    const maximumReach = (upper + lower) * .965;
+    if (upper > 1e-6 && lower > 1e-6 && reach.length() > maximumReach) {
+      const balance = reach.normalize().multiplyScalar(
+        Math.min(reach.length() - maximumReach, height * .045),
+      );
+      const shifted = pelvis.getWorldPosition(new THREE.Vector3()).add(balance);
+      pelvis.position.copy(pelvis.parent!.worldToLocal(shifted));
+      rig.updateMatrixWorld(true);
+    }
+
+    // Blend the source knee's bend-plane with the neutral anatomical plane to
+    // avoid frame-to-frame IK pole flips as the pelvis twists through a kick.
+    const pole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
+    solveCombatLimb(thigh, calf, foot, target, pole);
     worldRotation(foot, reference.rotation);
     rig.updateMatrixWorld(true);
   }

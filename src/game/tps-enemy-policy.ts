@@ -7,9 +7,9 @@ export type EnemyPersona = "BRAWLER" | "SKIRMISHER";
 export type EnemyAdaptation = "NEUTRAL" | "ANTI_STEP" | "ANTI_RUSH" | "CUT_RETREAT" | "MIRROR_LEFT" | "MIRROR_RIGHT" | "HUNT_INTERCEPT";
 
 const TPS_REACTABLE_TELEGRAPH_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
-  EASY: 22,
-  NORMAL: 18,
-  HARD: 15,
+  EASY: 16,
+  NORMAL: 12,
+  HARD: 9,
 });
 
 const TPS_REACTIVE_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = Object.freeze({
@@ -18,7 +18,7 @@ const TPS_REACTIVE_STEP_WINDOW_TICKS: Readonly<Record<CpuDifficulty, number>> = 
   HARD: 10,
 });
 
-const TPS_HEAVY_TELEGRAPH_BONUS_TICKS = 5;
+const TPS_HEAVY_TELEGRAPH_BONUS_TICKS = 7;
 const TPS_HEAVY_TELEGRAPH_MOVES = new Set(["power", "risingKick", "dashKick", "throw", "counter"]);
 
 const TPS_CPU_ATTACK_MOVES: Partial<Record<CpuIntent, string>> = {

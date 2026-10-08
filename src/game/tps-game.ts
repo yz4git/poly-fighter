@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
 import { resolveContextAttack, type FighterDna } from "./fighter-dna";
+import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
   chooseTpsComboContinuationRoute,
@@ -138,7 +139,6 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   const interceptOpen = game.playerInterceptTicks > 0;
   const defenderNearWall = Math.hypot(game.p2.position.x, game.p2.position.z) >= 5.45;
   const defenderAttacking = game.p2.state === "ATTACK";
-  const desperation = game.p1.health <= 24 && game.p2.health <= 34 && distance <= 1.82;
   const signatureChoice = resolveContextAttack({
     fighterName: game.p1.definition.name,
     distance,
@@ -151,12 +151,11 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     selfHealth: game.p1.health,
     defenderHealth: game.p2.health,
   });
+  // Special attacks are rewards for actual evasions/intercepts; low HP, wall
+  // proximity or an attacking enemy no longer override deliberate stick input.
   const useSignatureContext = reversalOpen
     || interceptOpen
-    || desperation
-    || (flank && stage === 0)
-    || (defenderNearWall && stage >= 1)
-    || (defenderAttacking && stage === 0 && distance <= 1.48);
+    || (flank && stage === 0);
   if (useSignatureContext) {
     if (!game.p1.beginMove(signatureChoice.moveId)) return false;
     game.__comboRoute = undefined;
@@ -194,7 +193,16 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     });
   }
 
-  const moveId = tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
+  const opener = chooseTpsOpeningStrike({
+    distance,
+    forward: game.p1.input.up,
+    back: game.p1.input.down,
+    lateral: game.p1.input.left || game.p1.input.right,
+  });
+  if (stage === 0 && !flank && !perfect) game.__comboRoute = opener.route;
+  const moveId = stage === 0 && !flank && !perfect
+    ? opener.moveId
+    : tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
   if (!game.p1.beginMove(moveId)) return false;
 
   // A successful lateral PERFECT STEP creates a large side gap by design. The

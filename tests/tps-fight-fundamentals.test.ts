@@ -10,6 +10,7 @@ import {
   TPS_ATTACK_AIM_TURN_PER_TICK,
 } from "../src/game/tps-fight-fundamentals";
 import { minimumTpsEnemyTelegraphTicks } from "../src/game/tps-enemy-policy";
+import { tpsReactiveStepThreat } from "../src/game/tps-player-policy";
 
 const moves = FIGHTER_DEFINITIONS.red.moves;
 
@@ -88,4 +89,24 @@ test("CPU normal/light attacks begin promptly, heavy attacks remain readable", (
   }
   assert.ok(minimumTpsEnemyTelegraphTicks("EASY", "jab") >
     minimumTpsEnemyTelegraphTicks("HARD", "jab"));
+});
+
+test("perfect evade timing is limited to the sidestep itself, not a stored automatic dodge", () => {
+  const threatening = tpsReactiveStepThreat({
+    sideWeight: 1, activeIncomingMove: moves.straight, pendingMove: null,
+    pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,
+    enemyMoveTick: 0, incomingDistance: 1.5, stepTicks: 9,
+  });
+  assert.ok(threatening.ticks >= 9 && threatening.ticks <= 15);
+  assert.equal(threatening.moveId, "straight");
+  assert.equal(tpsReactiveStepThreat({
+    sideWeight: 0, activeIncomingMove: moves.straight, pendingMove: null,
+    pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,
+    enemyMoveTick: 0, incomingDistance: 1.5, stepTicks: 9,
+  }).ticks, 0, "forward STEP cannot earn a lateral dodge bonus");
+  assert.equal(tpsReactiveStepThreat({
+    sideWeight: 1, activeIncomingMove: null, pendingMove: null,
+    pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,
+    enemyMoveTick: 0, incomingDistance: 1.5, stepTicks: 9,
+  }).ticks, 0, "stepping without an incoming attack is just repositioning");
 });

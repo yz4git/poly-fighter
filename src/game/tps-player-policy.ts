@@ -165,7 +165,9 @@ export function tpsReactiveStepThreat(input: {
   );
   return {
     ticks: reactiveSideStep
-      ? Math.max(input.stepTicks + 2, incomingFrames + input.stepTicks + 2)
+      // The physical sidestep must occur near contact. A STEP triggered long
+      // before startup cannot bank an automatic perfect evade for the future.
+      ? Math.min(input.stepTicks + 6, Math.max(input.stepTicks, incomingFrames + 1))
       : 0,
     moveId: reactiveSideStep ? incomingMove?.id ?? null : null,
   };

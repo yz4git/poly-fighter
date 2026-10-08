@@ -17,9 +17,15 @@ export function prepareTpsFighterVisual(input: {
 }): THREE.Vector3 {
   const { fighter, opponent, fighterDnaId, stepDirection } = input;
   fighter.facing = opponent.position.x >= fighter.position.x ? 1 : -1;
-  const forward = horizontalDirection(fighter.position, opponent.position);
-
   const data = fighter.visual.root.userData;
+  const committed = fighter.state === "ATTACK"
+    ? data.tpsCommittedAttackForward
+    : null;
+  const forward = Array.isArray(committed) && committed.length >= 3
+    && committed.every((value: unknown) => typeof value === "number" && Number.isFinite(value))
+    ? new THREE.Vector3(committed[0], 0, committed[2]).normalize()
+    : horizontalDirection(fighter.position, opponent.position);
+
   data.combatTps = true;
   data.tpsFighterDna = fighterDnaId;
   data.combatMotionForward = forward.toArray();

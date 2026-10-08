@@ -256,6 +256,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     game.p1.state === "ATTACK"
     && activeMove
     && game.p1.hitTargets.has(game.p2.id)
+    && game.p1.visual.root.userData.tpsCleanHitConfirmed === true
     && game.playerComboStage < 3
   ) {
     const linkWindow = tpsComboLinkWindow(activeMove);
@@ -544,7 +545,13 @@ prototype.updateVisual = function updateVisual(
   if (game.simulationTicks === 0) {
     forward.copy(horizontalDirection(game.p2.position, game.p1.position));
   }
-  fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, forward);
+  const committed = fighter.state === "ATTACK"
+    ? fighter.visual.root.userData.tpsCommittedAttackForward
+    : null;
+  const visualForward = Array.isArray(committed) && committed.length >= 3
+    ? new THREE.Vector3(committed[0], 0, committed[2]).normalize()
+    : forward;
+  fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, visualForward);
   fighter.visual.root.updateMatrixWorld(true);
   finalizeQuaterniusModelPose(fighter, time);
 };

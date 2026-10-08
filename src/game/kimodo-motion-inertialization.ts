@@ -115,16 +115,18 @@ export function beginInertialTransition(
   bones: Map<string, THREE.Object3D>,
   history: Map<string, InertialPoseSample>,
   transition: Map<string, InertialTransitionSample>,
+  velocityCarry = 1,
 ): void {
   transition.clear();
+  const carry = THREE.MathUtils.clamp(Number.isFinite(velocityCarry) ? velocityCarry : 0, 0, 1);
   for (const [name, bone] of bones) {
     if (!(bone as THREE.Bone).isBone) continue;
     const previous = history.get(name);
     transition.set(name, {
       position: bone.position.clone(),
       rotation: bone.quaternion.clone().normalize(),
-      linearVelocity: previous?.linearVelocity.clone() ?? new THREE.Vector3(),
-      angularVelocity: previous?.angularVelocity.clone() ?? new THREE.Vector3(),
+      linearVelocity: previous?.linearVelocity.clone().multiplyScalar(carry) ?? new THREE.Vector3(),
+      angularVelocity: previous?.angularVelocity.clone().multiplyScalar(carry) ?? new THREE.Vector3(),
     });
   }
 }

@@ -9,6 +9,7 @@ on:
       - src/game/visual-quaternius-runtime.ts
       - src/game/presentation-animation.ts
       - tests/combat-motion.test.ts
+      - tests/combat-motion-handoff.test.ts
       - tests/kick-ankle.test.ts
       - tests/tps-visual-state.test.ts
       - src/game/rig.ts
@@ -22,6 +23,7 @@ on:
       - src/game/visual-quaternius-runtime.ts
       - src/game/presentation-animation.ts
       - tests/combat-motion.test.ts
+      - tests/combat-motion-handoff.test.ts
       - tests/kick-ankle.test.ts
       - tests/tps-visual-state.test.ts
       - src/game/rig.ts
@@ -48,4 +50,4 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Validate real skeletons, move clocks, and kick ankle continuity
-        run: node --import tsx --test tests/combat-motion.test.ts tests/kick-ankle.test.ts tests/tps-visual-state.test.ts
+        run: node --import tsx --test tests/combat-motion.test.ts tests/combat-motion-handoff.test.ts tests/kick-ankle.test.ts tests/tps-visual-state.test.ts

@@ -6,6 +6,7 @@ import {
   turnTpsCommittedAttackAim,
   tpsAttackWindupAdvance,
   tpsCanConfirmCombo,
+  chooseTpsOpeningStrike,
   TPS_ATTACK_AIM_TURN_PER_TICK,
 } from "../src/game/tps-fight-fundamentals";
 import { minimumTpsEnemyTelegraphTicks } from "../src/game/tps-enemy-policy";
@@ -61,6 +62,20 @@ test("combo continuation requires genuine unblocked contact", () => {
   assert.equal(tpsCanConfirmCombo(false, true), false);
   assert.equal(tpsCanConfirmCombo(true, false), false);
   assert.equal(tpsCanConfirmCombo(true, true), true);
+});
+
+test("direction held with the existing ATTACK button selects intentional neutral strikes", () => {
+  const f = (distance: number, forward = false, back = false, lateral = false) =>
+    chooseTpsOpeningStrike({ distance, forward, back, lateral });
+  assert.deepEqual(f(1.42), { moveId: "jab", route: "CLOSE_A" });
+  assert.deepEqual(f(1.42, true), { moveId: "straight", route: "CLOSE_A" });
+  assert.deepEqual(f(1.42, false, true), { moveId: "backfist", route: "CLOSE_B" });
+  assert.deepEqual(f(1.42, false, false, true), { moveId: "bodyBlow", route: "CLOSE_B" });
+  assert.deepEqual(f(1.85), { moveId: "kick", route: "FAR" });
+  assert.deepEqual(f(1.85, false, true), { moveId: "lowKick", route: "FAR" });
+  assert.deepEqual(f(1.85, false, false, true), { moveId: "lowKick", route: "FAR" });
+  for (const move of ["jab", "straight", "backfist", "bodyBlow", "kick", "lowKick"])
+    assert.ok(moves[move], `${move}: existing move retained, no additional combat system`);
 });
 
 test("CPU normal/light attacks begin promptly, heavy attacks remain readable", () => {

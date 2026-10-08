@@ -3,11 +3,12 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterRuntime } from "./fighter";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
-import type { FighterDefinition } from "./types";
+import type { FighterDefinition, FighterState } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
+import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import {
   applyInertialTransition,
@@ -71,6 +72,7 @@ type QuaterniusRuntime = {
   currentClip: string;
   currentAction: THREE.AnimationAction | null;
   walkActions: Map<string, THREE.AnimationAction>;
+  activeWalkDirections: Set<string>;
   walkHeading: number | null;
   lastTime: number;
   lastMoveTick: number;
@@ -91,6 +93,7 @@ type QuaterniusRuntime = {
   landingEnd: number;
   transitionAge: number;
   transitionDuration: number;
+  handoffMode: CombatMotionHandoffMode;
   transitionPose: Map<string, InertialTransitionSample>;
   poseHistory: Map<string, InertialPoseSample>;
   plantedFeet: { l: THREE.Vector3 | null; r: THREE.Vector3 | null };
@@ -577,21 +580,7 @@ function isAuthoredAttackClip(name: string): boolean {
   return AUTHORED_ATTACK_CLIP_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
-function transitionFadeSeconds(previous: string, next: string): number {
-  if (next === "CM_Block" || next.startsWith("BF_Hit") || next.startsWith("BF_CounterHit")) return .032;
-  if (next === "CM_Wakeup") return .05;
-  // UniMate motion expansion pins an overlap between adjacent generated
-  // segments. Runtime cannot regenerate frames, so attack->attack transitions
-  // emulate that seam with a slightly wider inertial overlap while the
-  // topology replacement mask makes the incoming strike chain authoritative.
-  if (isAuthoredAttackClip(previous) && isAuthoredAttackClip(next)) return .075;
-  if (next.startsWith("CM_Move") && previous.startsWith("CM_Move")) return .085;
-  if (next.startsWith("CM_Step")) return .035;
-  if (next === "CM_Ready" || next === "CM_Guard") return .11;
-  return .055;
-}
-
-function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false): void {
+function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false, nextState: FighterState = "IDLE"): void {
   const blendedWalk = name === CONTINUOUS_WALK_CLIP;
   const clip = runtime.clips.get(blendedWalk ? "CM_Move_F" : name)
     ?? runtime.clips.get("CM_Ready") ?? runtime.clips.get("Idle_Loop");
@@ -600,14 +589,23 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
     runtime.currentAction?.setEffectiveTimeScale(loop ? speed : Math.max(.25, clip.duration * speed));
     return;
   }
+  const handoff = planCombatMotionHandoff(
+    runtime.currentClip,
+    blendedWalk ? CONTINUOUS_WALK_CLIP : clip.name,
+    nextState,
+  );
   runtime.transitionPose.clear();
   if (runtime.currentAction || runtime.currentClip === CONTINUOUS_WALK_CLIP) {
     // Preserve both the rendered outgoing pose and its measured local velocity.
     // The destination clip will be sampled immediately after this switch, then
     // velocity-aware inertialization carries momentum across the discontinuity.
-    beginInertialTransition(runtime.bones, runtime.poseHistory, runtime.transitionPose);
+    beginInertialTransition(runtime.bones, runtime.poseHistory, runtime.transitionPose, handoff.velocityCarry);
   }
-  runtime.transitionDuration = transitionFadeSeconds(runtime.currentClip, clip.name);
+  runtime.handoffMode = handoff.mode;
+  runtime.transitionDuration = handoff.duration;
+  runtime.host.userData.combatMotionHandoffMode = handoff.mode;
+  runtime.host.userData.combatMotionHandoffDuration = handoff.duration;
+  runtime.host.userData.combatMotionHandoffVelocityCarry = handoff.velocityCarry;
   runtime.transitionAge = 0;
   runtime.host.userData.kimodoInertializationVersion = KIMODO_MOTION_INERTIALIZATION_VERSION;
   runtime.host.userData.kimodoInertialTransitionFrom = runtime.currentClip;
@@ -618,6 +616,7 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   // Snapshot the rendered pose before stopping. Same-clip repeats and combo
   // interruptions cannot reset a live outgoing action or accumulate old weights.
   runtime.mixer.stopAllAction();
+  runtime.activeWalkDirections.clear();
   if (blendedWalk) {
     runtime.walkHeading = null;
     runtime.currentClip = CONTINUOUS_WALK_CLIP;
@@ -662,7 +661,11 @@ function sampleContinuousWalk(runtime: QuaterniusRuntime, delta: number): void {
       + (direction === blend.second ? blend.secondWeight : 0);
     let action = runtime.walkActions.get(direction);
     if (weight <= 1e-5) {
-      if (action?.isRunning()) action.stop();
+      // AnimationAction.isRunning() reports false at effective timeScale=0.
+      // Directional walk poses are explicitly clocked, so use our own activity
+      // set instead. Otherwise stale weighted actions stay in the mixer.
+      if (action && runtime.activeWalkDirections.has(direction)) action.stop();
+      runtime.activeWalkDirections.delete(direction);
       continue;
     }
     if (!action) {
@@ -671,8 +674,9 @@ function sampleContinuousWalk(runtime: QuaterniusRuntime, delta: number): void {
       action = runtime.mixer.clipAction(clip, runtime.model);
       runtime.walkActions.set(direction, action);
     }
-    if (!action.isRunning()) {
+    if (!runtime.activeWalkDirections.has(direction)) {
       action.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+      runtime.activeWalkDirections.add(direction);
     }
     action.enabled = true;
     action.setEffectiveWeight(weight).setEffectiveTimeScale(0);
@@ -730,6 +734,7 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
     currentClip: runtime.currentClip,
     visualContact: fighter.currentMove?.visualContact,
     contactWeight: authoredContactWeight,
+    handoffMode: runtime.handoffMode,
   });
   const inertial = applyInertialTransition(
     runtime.bones,
@@ -856,14 +861,15 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       clips: retargetedClips,
       currentClip: "",
       currentAction: null,
-      walkActions: new Map(), walkHeading: null,
+      walkActions: new Map(),
+      activeWalkDirections: new Set(), walkHeading: null,
       lastTime: 0,
       lastMoveTick: -1,
       lastReactionSerial: -1,
       lastPosition: null, motionX: 0, motionZ: 1, gaitPhase: 0,
       lastYaw: null, turnRate: 0, lastState: "", lastStateTicks: 0,
       stateDuration: 1, clock: 0, landingEnd: 0,
-      transitionAge: 1, transitionDuration: .05, transitionPose: new Map(), poseHistory: new Map(),
+      transitionAge: 1, transitionDuration: .05, handoffMode: "GENERAL", transitionPose: new Map(), poseHistory: new Map(),
       plantedFeet: { l: null, r: null }, finalTime: -1,
       bodyType: resources.bodyType,
       modelUrl: resources.modelUrl,
@@ -943,7 +949,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.lastMoveTick = fighter.moveTick;
   runtime.lastReactionSerial = fighter.reactionSerial;
   const desired = desiredClip(fighter, runtime);
-  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop));
+  playClip(runtime, desired.name, desired.loop, desired.speed, restartingAttack || restartingReaction || (restartedState && !desired.loop), fighter.state);
   const motionDelta = advance(runtime, timeSeconds, fighter.hitStop > 0);
   synchronizeMotion(runtime, fighter, motionDelta);
   // Mirror transition telemetry onto the public fighter root so WebGL playtest
@@ -952,6 +958,8 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.unimateMotionExpansionOverlap = Number(
     runtime.host.userData.unimateMotionExpansionOverlap ?? 0,
   );
+  fighter.visual.root.userData.combatMotionHandoffMode = runtime.handoffMode;
+  fighter.visual.root.userData.combatMotionHandoffDuration = runtime.transitionDuration;
   fighter.visual.root.userData.kimodoInertialTransitionActive = Boolean(
     runtime.host.userData.kimodoInertialTransitionActive,
   );

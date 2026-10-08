@@ -928,6 +928,21 @@ export class TpsFightGame {
     const moveId = tpsCpuAttackMove(decision.intent);
     if (!moveId) return false;
 
+    const move = this.p2.definition.moves[moveId];
+    const distance = horizontalDistance(this.p2.position, this.p1.position);
+    // Fair neutral: the CPU also needs to gain range *before* it commits.
+    // A telegraph from outside striking distance used to waste a full action
+    // without even having a chance to connect.
+    if (move && distance > move.reach + .38) {
+      this.enemyDirectorDecision = { ...decision, intent: "APPROACH", reason: "close-distance-before-committing" };
+      this.enemyDirectorHoldTicks = 6;
+      this.publishEnemyDecision(this.enemyDirectorDecision);
+      const toward = horizontalDirection(this.p2.position, this.p1.position);
+      this.moveEnemy("APPROACH", toward, new THREE.Vector3(-toward.z, 0, toward.x));
+      this.p2.updatePhysics(FIXED_STEP);
+      return true;
+    }
+
     const rootData = this.p2.visual.root.userData;
     rootData.tpsCpuDirectorMove = moveId;
     const telegraphTicks = Math.max(

@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import type { FighterState, VisualContactPoint } from "./types";
+import type { CombatMotionHandoffMode } from "./combat-motion-handoff";
 
 export const UNIMATE_MOTION_REPLACEMENT_VERSION = "UNIMATE_INSPIRED_TOPOLOGY_REPLACEMENT_V1";
 
@@ -9,11 +10,12 @@ export type UniMateReplacementInput = {
   currentClip: string;
   visualContact?: VisualContactPoint;
   contactWeight: number;
+  handoffMode?: CombatMotionHandoffMode;
 };
 
 export type UniMateReplacementProfile = {
   scales: Map<string, number>;
-  mode: "NONE" | "ATTACK_GRAPH_PIN" | "LOCOMOTION_LOWER_BODY" | "GUARD_UPPER_BODY" | "LANDING_LOWER_BODY";
+  mode: "NONE" | "ATTACK_GRAPH_PIN" | "LOCOMOTION_LOWER_BODY" | "GUARD_UPPER_BODY" | "LANDING_LOWER_BODY" | "HIT_REACTION_GRAPH" | "BLOCK_REACTION_GRAPH";
   seedBones: string[];
   protectedBoneCount: number;
   strongestPin: number;
@@ -182,6 +184,30 @@ export function buildUniMateReplacementProfile(input: UniMateReplacementInput): 
     return finalize(input.bones, pins, "ATTACK_GRAPH_PIN", seeds);
   }
 
+  if (input.state === "HIT") {
+    // Contact-reactive joints must follow the incoming blow immediately.
+    // An outgoing kick/punch should never carry its former head and torso
+    // rotation through the start of a stun animation.
+    seed("Head", .91, ATTACK_GRAPH_FALLOFF);
+    seed("spine_03", .88, SUPPORT_GRAPH_FALLOFF);
+    seed("spine_02", .77, SUPPORT_GRAPH_FALLOFF);
+    seed("pelvis", .57, LIGHT_GRAPH_FALLOFF);
+    seed("hand_l", .48, LIGHT_GRAPH_FALLOFF);
+    seed("hand_r", .48, LIGHT_GRAPH_FALLOFF);
+    return finalize(input.bones, pins, "HIT_REACTION_GRAPH", seeds);
+  }
+
+  if (input.state === "BLOCK_STUN") {
+    // Defender keeps the two-fist shield while a blocked strike transfers
+    // force into the shoulders. Stop an old attacking arm from passing through
+    // the incoming guard pose.
+    seed("hand_l", .88, SUPPORT_GRAPH_FALLOFF);
+    seed("hand_r", .88, SUPPORT_GRAPH_FALLOFF);
+    seed("spine_03", .61, LIGHT_GRAPH_FALLOFF);
+    seed("Head", .47, LIGHT_GRAPH_FALLOFF);
+    return finalize(input.bones, pins, "BLOCK_REACTION_GRAPH", seeds);
+  }
+
   if (input.currentClip === "CM_Land") {
     seed("foot_l", 0.78, SUPPORT_GRAPH_FALLOFF);
     seed("foot_r", 0.78, SUPPORT_GRAPH_FALLOFF);
@@ -198,8 +224,10 @@ export function buildUniMateReplacementProfile(input: UniMateReplacementInput): 
   }
 
   if (input.state === "GUARD") {
-    seed("hand_l", 0.36, LIGHT_GRAPH_FALLOFF);
-    seed("hand_r", 0.36, LIGHT_GRAPH_FALLOFF);
+    const recoveryFromAttack = input.handoffMode === "ATTACK_TO_GUARD";
+    seed("hand_l", recoveryFromAttack ? .70 : .36, LIGHT_GRAPH_FALLOFF);
+    seed("hand_r", recoveryFromAttack ? .70 : .36, LIGHT_GRAPH_FALLOFF);
+    if (recoveryFromAttack) seed("spine_03", .32, LIGHT_GRAPH_FALLOFF);
     return finalize(input.bones, pins, "GUARD_UPPER_BODY", seeds);
   }
 

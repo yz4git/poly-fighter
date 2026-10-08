@@ -41,6 +41,7 @@ import {
 } from "./tps-gameplay-profile";
 import { computeTpsContactSpacing, type TpsContactSpacingMode } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
+import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo } from "./tps-fight-fundamentals";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
   adaptTpsCpuDecision,
@@ -160,6 +161,7 @@ export class TpsFightGame {
   private playerComboStage = 0;
   private playerComboGraceTicks = 0;
   private playerAttackQueued = false;
+  private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
   private playerFlankWindowTicks = 0;
   private playerFlankAttackTicks = 0;
   private playerPerfectEvadeTicks = 0;
@@ -367,6 +369,10 @@ export class TpsFightGame {
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
+    // Commit strike heading as the attack starts, then turn only a few degrees
+    // per simulation tick. Side-stepping a windup now creates an actual whiff.
+    this.trackCommittedAttack(this.p1, this.p2);
+    this.trackCommittedAttack(this.p2, this.p1);
 
     // A short authored step-in keeps lock-on melee responsive without pulling a
     // fighter across the arena. It is only active during startup and only when
@@ -383,6 +389,26 @@ export class TpsFightGame {
     this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
     this.checkFinish();
     this.publishHud(false);
+  }
+
+  private trackCommittedAttack(attacker: FighterRuntime, defender: FighterRuntime): void {
+    if (attacker.state !== "ATTACK" || !attacker.currentMove) {
+      this.attackCommitments.delete(attacker);
+      delete attacker.visual.root.userData.tpsCommittedAttackForward;
+      return;
+    }
+    const current = this.attackCommitments.get(attacker);
+    const toward = horizontalDirection(attacker.position, defender.position);
+    if (!current || current.move !== attacker.currentMove || attacker.moveTick < current.lastTick) {
+      const forward = toward.clone();
+      this.attackCommitments.set(attacker, { move: attacker.currentMove, lastTick: attacker.moveTick, forward });
+      attacker.visual.root.userData.tpsCommittedAttackForward = forward.toArray();
+      return;
+    }
+    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z);
+    current.forward.set(next.x, 0, next.z);
+    current.lastTick = attacker.moveTick;
+    attacker.visual.root.userData.tpsCommittedAttackForward = current.forward.toArray();
   }
 
   private updateMatchDrama(): void {
@@ -491,7 +517,10 @@ export class TpsFightGame {
     // the next context-sensitive strike starts immediately.
     if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
     // A repeated ATTACK only chains if the previous strike actually reached the target.
-    const comboConfirmed = this.p1.hitTargets.has(this.p2.id);
+    const comboConfirmed = tpsCanConfirmCombo(
+      this.p1.hitTargets.has(this.p2.id),
+      this.p1.visual.root.userData.tpsCleanHitConfirmed === true,
+    );
     this.p1.advanceAttack();
     this.p1.updatePhysics(FIXED_STEP);
 
@@ -1034,10 +1063,24 @@ export class TpsFightGame {
       || attacker.hitTargets.has(defender.id)
     ) return;
 
-    if (this.tryResolveTrackedSideEvade(attacker, defender, move)) return;
-
-    const distance = horizontalDistance(attacker.position, defender.position);
-    if (distance > move.reach + 0.72) return;
+    const aim = this.attackCommitments.get(attacker)?.forward
+      ?? horizontalDirection(attacker.position, defender.position);
+    const geometry = evaluateTpsStrikeGeometry({
+      move,
+      attackerX: attacker.position.x, attackerZ: attacker.position.z,
+      defenderX: defender.position.x, defenderZ: defender.position.z,
+      forwardX: aim.x, forwardZ: aim.z,
+    });
+    attacker.visual.root.userData.tpsStrikeReach = geometry.reach;
+    attacker.visual.root.userData.tpsStrikeLateral = geometry.lateral;
+    attacker.visual.root.userData.tpsStrikeDepth = geometry.longitudinal;
+    attacker.visual.root.userData.tpsStrikeContact = geometry.connected;
+    if (!geometry.connected) {
+      // Dodge rewards now require the player to physically escape the strike
+      // lane; simply pressing STEP during a telegraph is not invulnerability.
+      this.tryResolveTrackedSideEvade(attacker, defender, move);
+      return;
+    }
 
     attacker.hitTargets.add(defender.id);
     const defenderWasAttacking = defender.state === "ATTACK";
@@ -1060,6 +1103,7 @@ export class TpsFightGame {
       attackerIsPlayer: attacker === this.p1,
     });
     const { blocked, resolvedDamage, lethalImpact, reactionStrength } = resolution;
+    attacker.visual.root.userData.tpsCleanHitConfirmed = !blocked;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
     impactPosition.y = tpsImpactHeightForMove(move);
@@ -1267,11 +1311,11 @@ export class TpsFightGame {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || attacker.moveTick > move.startup) return;
     const distance = horizontalDistance(attacker.position, defender.position);
-    const desiredContact = Math.max(1.02, move.reach + 0.52);
-    if (distance <= desiredContact || distance > desiredContact + 0.72) return;
-    const remaining = distance - desiredContact;
-    const stepDistance = Math.min(remaining, 0.038 + move.power * 0.014);
-    attacker.position.addScaledVector(horizontalDirection(attacker.position, defender.position), stepDistance);
+    const stepDistance = tpsAttackWindupAdvance(move, distance);
+    if (stepDistance <= 0) return;
+    const committed = this.attackCommitments.get(attacker)?.forward
+      ?? horizontalDirection(attacker.position, defender.position);
+    attacker.position.addScaledVector(committed, stepDistance);
   }
 
   private separateFighters(): void {

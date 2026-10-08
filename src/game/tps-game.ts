@@ -22,7 +22,7 @@ import {
 
 export type { TpsFightGameOptions } from "./tps-game-base";
 
-export const TPS_STEP_DISTANCE_SCALE = 2;
+export const TPS_STEP_DISTANCE_SCALE = 1.35;
 const FIXED_STEP = 1 / 60;
 const ENEMY_TRACK_RATE = 0.16;
 const ENEMY_SIDE_STEP_TRACK_RATE = 0.06;
@@ -326,9 +326,9 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
 
   coreUpdatePlayer.call(this, input);
 
-  // The core already moved one STEP distance this tick. Add the same authored
-  // displacement once more so forward/back/left/right/diagonal STEP all travel
-  // exactly 2x without changing duration, cooldown, or dodge timing.
+  // STEP is a precise spacing action, not a full-arena escape. Keep its
+  // original recovery/cooldown, but bound the extra travel so a dodge can end
+  // inside counterattack range instead of always leaping beyond reach.
   if (game.p1.state === "SIDESTEP" && game.playerStepDirection.lengthSq() > 1e-6) {
     const moveSpeed = (game.p1.definition.archetype === "SPEED" ? 4.0 : 3.35) * game.p1Dna.moveSpeedScale;
     const baseStepMultiplier = game.p1.definition.archetype === "SPEED" ? 2.55 : 2.45;

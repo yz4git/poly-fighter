@@ -76,3 +76,25 @@ export function turnTpsCommittedAttackAim(
 export function tpsCanConfirmCombo(attackerConnected: boolean, unblocked: boolean): boolean {
   return attackerConnected && unblocked;
 }
+
+/**
+ * Existing ATTACK + movement stick inputs now express player intent on the
+ * opener. No new buttons or gauges: short jab is neutral, forward commits to
+ * a cross, backward protects range, and lateral commits to the body.
+ * Opponent distance still decides which *existing* strike can physically reach.
+ */
+export function chooseTpsOpeningStrike(input: {
+  distance: number;
+  forward: boolean;
+  back: boolean;
+  lateral: boolean;
+}): { moveId: "jab" | "straight" | "kick" | "lowKick" | "backfist" | "bodyBlow"; route: "CLOSE_A" | "CLOSE_B" | "FAR" } {
+  const far = input.distance > 1.65;
+  if (far) {
+    return { moveId: input.back || input.lateral ? "lowKick" : "kick", route: "FAR" };
+  }
+  if (input.forward) return { moveId: "straight", route: "CLOSE_A" };
+  if (input.back) return { moveId: "backfist", route: "CLOSE_B" };
+  if (input.lateral) return { moveId: "bodyBlow", route: "CLOSE_B" };
+  return { moveId: "jab", route: "CLOSE_A" };
+}

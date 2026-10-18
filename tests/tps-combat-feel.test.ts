@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
 import { TpsFightGame } from "../src/game/tps-game-base";
+import { TpsFightGame as LiveTpsFightGame } from "../src/game/tps-game";
 import { FighterRuntime } from "../src/game/fighter";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { fighterDnaForName } from "../src/game/fighter-dna";
@@ -25,12 +26,12 @@ type Sim = {
   applyAttackStepIn(a: FighterRuntime, d: FighterRuntime): void;
   resolveAttack(a: FighterRuntime, d: FighterRuntime, guarding: boolean): void;
 };
-function simulation(telegraphTicks = 12, distance = 1.44): Sim {
+function simulation(telegraphTicks = 12, distance = 1.44, live = false): Sim {
   const p1 = new FighterRuntime("p1", FIGHTER_DEFINITIONS.red);
   const p2 = new FighterRuntime("p2", FIGHTER_DEFINITIONS.blue, true);
   p1.resetForRound(0, distance / 2, 1); p2.resetForRound(0, -distance / 2, -1);
   const wait = { intent: "WAIT", holdTicks: 30, telegraphTicks: 0, reason: "test", comebackMercy: 0, pressure: 0 };
-  const game = Object.assign(Object.create(TpsFightGame.prototype), {
+  const game = Object.assign(Object.create(live ? LiveTpsFightGame.prototype : TpsFightGame.prototype), {
     p1, p2, difficulty: "NORMAL", p1Dna: fighterDnaForName(p1.definition.name), p2Dna: fighterDnaForName(p2.definition.name),
     attackCommitments: new WeakMap(), simulationTicks: 0,
     playerEvadeTicks: 0, playerEvadeCooldown: 0, playerEvadeSign: 0,
@@ -48,6 +49,9 @@ function simulation(telegraphTicks = 12, distance = 1.44): Sim {
     enemyTelegraphAim: null, enemyTelegraphAimMove: null, enemyAttackCount: 0,
     enemyPostAttackTicks: 0, enemyPostAttackIntent: "WAIT", enemyLastMoveId: null,
     trainingProgress: { hits: 0, sideSteps: 0, perfectEvades: 0, punishes: 0, intercepts: 0 },
+    scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(),
+    __hypeDirector: { step() {}, comboShift() {}, hit() {}, dash() {} },
+    audio: { rush() {}, comboShift() {}, hypeImpact() {} },
     emitImpactFeedback() {},
   });
   return game as Sim;
@@ -57,6 +61,7 @@ function tick(game: Sim, input: Partial<InputFrame> = {}) {
   game.updateEnemy();
   game.trackCommittedAttack(game.p1, game.p2); game.trackCommittedAttack(game.p2, game.p1);
   game.applyAttackStepIn(game.p1, game.p2); game.applyAttackStepIn(game.p2, game.p1);
+  game.resolveAttack(game.p1, game.p2, false);
   game.resolveAttack(game.p2, game.p1, false);
 }
 
@@ -69,6 +74,27 @@ test("REACT cue sidestep physically escapes the first jab and earns exactly one 
   assert.ok(game.playerReversalTicks > 0);
   for (let i = 0; i < 5; i++) tick(game);
   assert.equal(game.trainingProgress.perfectEvades, 1, "one attack cannot pay the dodge reward twice");
+});
+
+test("live TPS controller converts a physically earned sidestep into a reachable counter", () => {
+  const game = simulation(12, 1.44, true);
+  tick(game, { right: true, guard: true });
+  for (let i = 0; i < 30 && game.trainingProgress.perfectEvades === 0; i++) tick(game);
+  assert.equal(game.trainingProgress.perfectEvades, 1);
+  tick(game, { punch: true });
+  for (let i = 0; i < 35 && game.trainingProgress.punishes === 0; i++) tick(game);
+  assert.equal(game.trainingProgress.punishes, 1);
+  assert.ok(game.p2.health < 100);
+});
+
+test("a STEP begun just before contact is still hit while inside the attack lane", () => {
+  const game = simulation(0, 1.34);
+  game.enemyDirectorPendingMove = null;
+  game.p2.beginMove("jab"); game.p2.moveTick = game.p2.currentMove!.startup - 1;
+  game.trackCommittedAttack(game.p2, game.p1);
+  tick(game, { right: true, guard: true });
+  assert.ok(game.p1.health < 100);
+  assert.equal(game.trainingProgress.perfectEvades, 0);
 });
 
 test("standing still takes the jab; an early/out-of-range step cannot bank a perfect evade", () => {

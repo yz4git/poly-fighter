@@ -3,6 +3,10 @@ import type { ReactionTarget } from "./types";
 export const CONTACT_REACTION_VERSION = "CONTACT_REACTION_V1";
 export type ContactReactionRegion = "HEAD" | "BODY" | "LEGS" | "BLOCK";
 
+export function ownsContactReaction(data: Record<string, unknown>): boolean {
+  return data.quaterniusModelState === "ready" && data.tpsContactReactionVersion === CONTACT_REACTION_VERSION;
+}
+
 export function contactReactionClip(region: ReactionTarget, side: "LEFT" | "RIGHT", blocked: boolean): string {
   return blocked ? `CM_Block_${side === "LEFT" ? "L" : "R"}`
     : `CM_Hit_${region}_${side === "LEFT" ? "L" : "R"}`;

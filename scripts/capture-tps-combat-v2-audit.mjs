@@ -100,6 +100,9 @@ const resetSnippet = `
   game.playerEvadeTicks = 0;
   game.playerEvadeCooldown = 0;
   game.playerStepThreatTicks = 0;
+  game.playerStepThreatPosition = null;
+  game.__openingStrikeRange = undefined;
+  game.__queuedStepOpener = undefined;
   game.playerFlankWindowTicks = 0;
   game.playerFlankAttackTicks = 0;
   game.playerPerfectEvadeTicks = 0;
@@ -112,6 +115,11 @@ const resetSnippet = `
   game.combatBeatTicks = 0;
   game.enemyOpeningGraceTicks = 0;
   game.enemyDirectorPendingMove = null;
+  game.enemyTelegraphAim = null;
+  game.enemyTelegraphAimMove = null;
+  game.enemyPostAttackTicks = 0;
+  game.enemyAttackCount = 0;
+  game.enemyLastMoveId = null;
   game.enemyDirectorTelegraphTicks = 0;
   game.enemyDirectorTelegraphTotalTicks = 0;
   game.enemyDirectorDecision = null;
@@ -328,7 +336,10 @@ try {
     const game = findGame();
     ${resetSnippet}
     if (!game.p2.beginMove('power')) return { error: 'enemy-power-begin-failed' };
-    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 1);
+    // Model a windup that already has a committed direction. A STEP one frame
+    // before a wide strike's contact is physically too late, not invincible.
+    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 8);
+    game.trackCommittedAttack(game.p2, game.p1);
     game.press('right', 'tps-v2-reversal-side');
     game.press('guard', 'tps-v2-reversal-step');
     game.step();

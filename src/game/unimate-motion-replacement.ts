@@ -185,6 +185,11 @@ export function buildUniMateReplacementProfile(input: UniMateReplacementInput): 
   }
 
   if (input.state === "HIT") {
+    if (input.currentClip.startsWith("CM_Hit_")) {
+      // The baked pelvis and both complete leg chains own their planted feet.
+      // Carrying only some of the old joint rotations breaks that IK solution.
+      for (const n of ["pelvis", "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"]) seed(n, 1, LIGHT_GRAPH_FALLOFF);
+    }
     // Contact-reactive joints must follow the incoming blow immediately.
     // An outgoing kick/punch should never carry its former head and torso
     // rotation through the start of a stun animation.
@@ -198,6 +203,9 @@ export function buildUniMateReplacementProfile(input: UniMateReplacementInput): 
   }
 
   if (input.state === "BLOCK_STUN") {
+    if (input.currentClip.startsWith("CM_Block_")) {
+      for (const n of ["pelvis", "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"]) seed(n, 1, LIGHT_GRAPH_FALLOFF);
+    }
     // Defender keeps the two-fist shield while a blocked strike transfers
     // force into the shoulders. Stop an old attacking arm from passing through
     // the incoming guard pose.

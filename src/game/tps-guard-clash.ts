@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import { ownsContactReaction } from "./combat-contact-reaction";
 import { PresentationAnimationController } from "./presentation-animation";
 
 type AppliedBoneDelta = {
@@ -104,6 +105,7 @@ function applyGuardClash(fighter: FighterRuntime, opponent: FighterRuntime, stat
   if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") return;
 
   const defending = fighter.state === "BLOCK_STUN";
+  if (defending && ownsContactReaction(root.userData)) return;
   const attackingIntoGuard = fighter.state === "ATTACK"
     && Boolean(fighter.currentMove)
     && opponent.state === "BLOCK_STUN";

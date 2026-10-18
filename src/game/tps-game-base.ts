@@ -871,11 +871,6 @@ export class TpsFightGame {
 
   private advanceEnemyTelegraph(towardPlayer: THREE.Vector3): boolean {
     if (!this.enemyDirectorPendingMove) return false;
-    if (this.enemyDirectorTelegraphTicks <= tpsEnemyReactionWindowTicks(this.difficulty)
-      && (!this.enemyTelegraphAim || this.enemyTelegraphAimMove !== this.enemyDirectorPendingMove)) {
-      this.enemyTelegraphAim = towardPlayer.clone();
-      this.enemyTelegraphAimMove = this.enemyDirectorPendingMove;
-    }
     if (this.enemyDirectorTelegraphTicks > 0) {
       this.tickEnemyTelegraph();
       this.p2.updatePhysics(FIXED_STEP);
@@ -896,6 +891,11 @@ export class TpsFightGame {
       1,
     );
     const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
+    if (this.enemyDirectorTelegraphTicks <= reactionWindow
+      && (!this.enemyTelegraphAim || this.enemyTelegraphAimMove !== this.enemyDirectorPendingMove)) {
+      this.enemyTelegraphAim = horizontalDirection(this.p2.position, this.p1.position);
+      this.enemyTelegraphAimMove = this.enemyDirectorPendingMove;
+    }
     rootData.tpsEnemyTelegraphProgress = progress;
     rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
     rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow

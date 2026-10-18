@@ -21,6 +21,9 @@
   clips with early upper-body recoil, delayed hip transfer and a recovery step.
   These use the existing stun clock and single animation mixer. Attacker and
   defender presentation share the same contact tick and effect height.
+  Legacy host recoil/guard tilts yield to these complete clips, and inertial
+  transitions preserve their complete pelvis/leg solutions rather than mixing
+  part of an outgoing stance into the planted feet.
 
 Regression coverage includes actual fixed-step cue/STEP/contact behavior,
 standing/early/far controls, touch selection, CPU phrases and both male/female

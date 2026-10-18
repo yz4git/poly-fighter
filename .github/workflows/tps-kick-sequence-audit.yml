@@ -32,12 +32,27 @@ jobs:
     timeout-minutes: 13
     steps:
       - uses: actions/checkout@v4
+      - name: Export exact motion assets for local skeleton checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-motion-inputs
+          path: public/models/quaternius/*.glb
+          if-no-files-found: error
+          retention-days: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Export the verified production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: poly-fighter-motion-production
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
       - name: Start production preview
         run: |
           PORT=3000 npm start > /tmp/poly-fighter-kick-sequence.log 2>&1 &
@@ -113,3 +128,4 @@ jobs:
           path: artifacts/tps-kick-sequence
           if-no-files-found: error
           retention-days: 7
+

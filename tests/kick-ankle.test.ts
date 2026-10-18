@@ -6,6 +6,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createCombatMotionLibrary } from "../src/game/combat-motion-authoring";
 import { retargetMotionClips } from "../src/game/visual-quaternius-runtime";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
+import { authoredMotionEvents } from "../src/game/combat-motion-timeline";
 
 async function glb(name: string) {
   const bytes = await readFile(new URL(`../public/models/quaternius/${name}`, import.meta.url));
@@ -13,7 +14,7 @@ async function glb(name: string) {
 }
 
 for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", FIGHTER_DEFINITIONS.blue]] as const) {
-  test(`${body}: kicks preserve strike geometry with grounded support and continuous ankles`, async () => {
+  test(`${body}: kicks chamber, extend and retract with a planted support toe and continuous ankles`, async () => {
     const [target, base, kicks, air] = await Promise.all([
       glb(`ubc-superhero-${body}-flat.glb`), glb("ual-fight-core.glb"), glb("blender-kicks-core.glb"), glb("blender-airborne-core.glb"),
     ]);
@@ -46,24 +47,29 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
       const frames = [];
       let previous: ReturnType<typeof pose> | null = null;
       const corrected = library.get(name)!;
+      const { contact, contactExit } = authoredMotionEvents(name);
       for (let frame = 0; frame <= 60; frame++) {
         const u = frame / 60;
         const before = pose(source.get(name)!, u);
         const after = pose(corrected, u);
         assert.ok(Math.abs(after.points[`foot_${support}`].y - ready.points[`foot_${support}`].y) < .003, `${name}/${u}: support foot left the floor`);
         assert.ok(after.feet[support].soleTilt <= ready.feet[support].soleTilt + .05, `${name}/${u}: banked support sole ${after.feet[support].soleTilt}`);
+        assert.ok(after.points[`ball_${support}`].distanceTo(ready.points[`ball_${support}`]) < .003,
+          `${name}/${u}: support toe skated while the heel pivoted`);
+        for (const s of ["l", "r"]) {
+          for (const [a, b] of [[`thigh_${s}`, `calf_${s}`], [`calf_${s}`, `foot_${s}`]]) {
+            assert.ok(Math.abs(after.points[a].distanceTo(after.points[b]) - ready.points[a].distanceTo(ready.points[b])) < 1e-5,
+              `${name}/${u}: bone length changed at ${a}`);
+          }
+        }
         if (u >= .27 && u <= .73) {
           const expected = name === "BF_LowKick_L" ? [45, 75] : name === "BF_RisingKick_R" ? [65, 95] : [85, 115];
-          assert.ok(after.feet[strike].ankleDegrees >= expected[0] && after.feet[strike].ankleDegrees <= expected[1], `${name}/${u}: ankle ${after.feet[strike].ankleDegrees}`);
-          for (const n of [`thigh_${strike}`, `calf_${strike}`, `foot_${strike}`]) {
-            const original = before.points[n].clone().sub(before.points.pelvis);
-            const authored = after.points[n].clone().sub(after.points.pelvis);
-            assert.ok(original.distanceTo(authored) < .002, `${name}/${u}: reshaped strike ${n}`);
+          if (u >= contact - 1 / 60 && u <= contactExit + 1 / 60) {
+            assert.ok(after.feet[strike].ankleDegrees >= expected[0] && after.feet[strike].ankleDegrees <= expected[1], `${name}/${u}: contact ankle ${after.feet[strike].ankleDegrees}`);
           }
-          const knee = (p: typeof after.points) => p[`thigh_${strike}`].clone().sub(p[`calf_${strike}`]).angleTo(p[`foot_${strike}`].clone().sub(p[`calf_${strike}`]));
-          assert.ok(Math.abs(knee(before.points) - knee(after.points)) < .01, `${name}/${u}: changed strike knee angle`);
-          // Imported source-pelvis motion must not tunnel the entire fighter
-          // into the enemy. Strike limb geometry remains authoritative.
+          // New key poses deliberately replace the source leg trajectory. The
+          // physical invariants are finite reach, a stable planted toe and an
+          // actual chamber/retraction, not equality with the old imported pose.
           const pelvisDrift = Math.hypot(
             after.points.pelvis.x - ready.points.pelvis.x,
             after.points.pelvis.z - ready.points.pelvis.z,
@@ -79,6 +85,19 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
         previous = after;
         frames.push({ u, before: { strike: before.feet[strike].ankleDegrees, sole: before.feet[support].soleTilt }, after: { strike: after.feet[strike].ankleDegrees, sole: after.feet[support].soleTilt } });
       }
+      const contactPose = pose(corrected, contact);
+      const chamberPose = pose(corrected, contact * .60);
+      const recoilPose = pose(corrected, contactExit + (1 - contactExit) * .43);
+      const kneeAngle = (p: ReturnType<typeof pose>) => THREE.MathUtils.radToDeg(
+        p.points[`thigh_${strike}`].clone().sub(p.points[`calf_${strike}`]).angleTo(
+          p.points[`foot_${strike}`].clone().sub(p.points[`calf_${strike}`])),
+      );
+      assert.ok(kneeAngle(contactPose) > 120 && kneeAngle(contactPose) < 170,
+        `${name}: contact knee must extend without locking`);
+      assert.ok(contactPose.points[`thigh_${strike}`].z > contactPose.points[`thigh_${support}`].z + .015,
+        `${name}: the striking hip must drive forward, not wind away from its own kick`);
+      assert.ok(kneeAngle(chamberPose) < kneeAngle(contactPose) - 25, `${name}: knee did not chamber before contact`);
+      assert.ok(kneeAngle(recoilPose) < kneeAngle(contactPose) - 25, `${name}: leg did not retract after contact`);
       for (const u of [0, 1]) {
         const recovered = pose(corrected, u);
         for (const n of Object.keys(ready.points)) assert.ok(ready.points[n].distanceTo(recovered.points[n]) < .005, `${name}/${u}: entry or recovery pops at ${n}`);
@@ -90,3 +109,4 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
     mixer.stopAllAction(); mixer.uncacheRoot(target.scene);
   });
 }
+

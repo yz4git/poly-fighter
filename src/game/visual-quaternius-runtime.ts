@@ -8,6 +8,7 @@ import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
+import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import {
@@ -904,15 +905,13 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.quaterniusCounterMotionSource = blenderStrikeClips.has("BF_Counter_R")
       ? "KIMODO_OR_BLENDER_MOTION_FOUNDRY_STRIKE"
       : "PROCEDURAL_FALLBACK";
-    const kickSource = (name: string) => blenderKickClips.has(name)
-      ? "BLENDER_MOTION_FOUNDRY_V6_REFERENCE_KICKS"
+    const kickSource = (name: string) => combatClips.has(name)
+      ? REFERENCE_KICK_VERSION
       : "PROCEDURAL_FALLBACK";
     visual.root.userData.quaterniusFrontKickMotionSource = kickSource("BF_FrontKick_R");
     visual.root.userData.quaterniusLowKickMotionSource = kickSource("BF_LowKick_L");
     visual.root.userData.quaterniusRisingKickMotionSource = kickSource("BF_RisingKick_R");
-    visual.root.userData.quaterniusDashKickMotionSource = blenderAirborneClips.has("BF_DashKick_R")
-      ? "BLENDER_MOTION_FOUNDRY_GROUNDED_DASH"
-      : "PROCEDURAL_FALLBACK";
+    visual.root.userData.quaterniusDashKickMotionSource = kickSource("BF_DashKick_R");
     const reactionSource = (name: string) => blenderReactionClips.has(name)
       ? "BLENDER_MOTION_FOUNDRY_V2_REACTIONS"
       : "PROCEDURAL_FALLBACK";
@@ -1054,3 +1053,4 @@ export function disposeQuaterniusModelSkin(visual: FighterVisual): void {
   runtime.ownedMaterials.forEach((material) => material.dispose());
   runtimes.delete(visual.root);
 }
+

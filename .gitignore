@@ -39,5 +39,6 @@ next-env.d.ts
 /.wrangler/
 /.sites-runtime/
 /outputs/
+/artifacts/
 /work/
 *.tsbuildinfo

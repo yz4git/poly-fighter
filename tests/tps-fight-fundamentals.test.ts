@@ -31,7 +31,8 @@ test("fundamental striking game: hit, whiff, and sidestep have distinct spatial 
   assert.ok(strike("kick", 1.6).reach > strike("jab", 1.6).reach, "kick trades speed for spacing");
   assert.equal(strike("throw", moves.throw.reach + .19).connected, false, "throw must be point blank");
   assert.equal(strike("throw", moves.throw.reach + .10).connected, true);
-  assert.ok(strike("straight", 1.4, .82).connected, "a wider straight tolerates small lateral errors");
+  assert.equal(strike("straight", 1.4, .82).connected, false, "a straight loses to a real lateral escape");
+  assert.ok(strike("backfist", 1.4, .82).connected, "a sweeping backfist covers that same lateral lane");
 });
 
 test("attack windup is a small commitment, not an automatic pursuit system", () => {
@@ -91,7 +92,7 @@ test("CPU normal/light attacks begin promptly, heavy attacks remain readable", (
     minimumTpsEnemyTelegraphTicks("HARD", "jab"));
 });
 
-test("perfect evade timing is limited to the sidestep itself, not a stored automatic dodge", () => {
+test("evade tracking retains the incoming move identity without granting invulnerability", () => {
   const threatening = tpsReactiveStepThreat({
     sideWeight: 1, activeIncomingMove: moves.straight, pendingMove: null,
     pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,
@@ -99,6 +100,12 @@ test("perfect evade timing is limited to the sidestep itself, not a stored autom
   });
   assert.ok(threatening.ticks >= 9 && threatening.ticks <= 15);
   assert.equal(threatening.moveId, "straight");
+  const telegraphed = tpsReactiveStepThreat({
+    sideWeight: 1, activeIncomingMove: null, pendingMove: moves.straight,
+    pendingMoveId: "straight", pendingReaction: true, pendingTelegraphTicks: 12,
+    enemyMoveTick: 0, incomingDistance: 1.5, stepTicks: 9,
+  });
+  assert.ok(telegraphed.ticks > 12 + moves.straight.startup, "the cue's observation cannot expire before contact");
   assert.equal(tpsReactiveStepThreat({
     sideWeight: 0, activeIncomingMove: moves.straight, pendingMove: null,
     pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,

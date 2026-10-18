@@ -2,8 +2,9 @@ import * as THREE from "three";
 import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
 import { resolveContextAttack, type FighterDna } from "./fighter-dna";
-import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
+import { chooseTpsOpeningStrike, tpsOpeningRange, type TpsOpeningRange } from "./tps-fight-fundamentals";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
+import { tpsImpactHeightForMove } from "./tps-impact-resolution";
 import {
   chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
@@ -62,6 +63,8 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __comboRouteSeed?: number;
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
+  __openingStrikeRange?: TpsOpeningRange;
+  __queuedStepOpener?: { forward: boolean; back: boolean; lateral: boolean };
   __finalImpactSeconds?: number;
   __finalImpactContact?: THREE.Vector3;
 };
@@ -128,6 +131,11 @@ const prototype = TpsFightGame.prototype as unknown as {
 prototype.beginContextAttack = function beginContextAttack(): boolean {
   const game = extended(this as unknown as TpsFightGame);
   if (!game.p1.canAct()) return false;
+  const intent = game.__queuedStepOpener ?? {
+    forward: game.p1.input.up, back: game.p1.input.down,
+    lateral: game.p1.input.left || game.p1.input.right,
+  };
+  game.__queuedStepOpener = undefined;
   const distance = Math.hypot(
     game.p2.position.x - game.p1.position.x,
     game.p2.position.z - game.p1.position.z,
@@ -195,10 +203,11 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
 
   const opener = chooseTpsOpeningStrike({
     distance,
-    forward: game.p1.input.up,
-    back: game.p1.input.down,
-    lateral: game.p1.input.left || game.p1.input.right,
+    ...intent,
+    previousRange: game.__openingStrikeRange,
   });
+  game.p1.visual.root.userData.tpsOpeningRange = game.__openingStrikeRange;
+  game.p1.visual.root.userData.tpsOpeningIntent = intent;
   if (stage === 0 && !flank && !perfect) game.__comboRoute = opener.route;
   const moveId = stage === 0 && !flank && !perfect
     ? opener.moveId
@@ -244,6 +253,14 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   const beforeMoveId = game.p1.currentMove?.id ?? null;
   const rawAttackPressed = input.punch && !game.p1.input.punch;
   const activeMove = game.p1.currentMove;
+  game.__openingStrikeRange = tpsOpeningRange(
+    Math.hypot(game.p2.position.x - game.p1.position.x, game.p2.position.z - game.p1.position.z),
+    game.__openingStrikeRange,
+  );
+  if (rawAttackPressed && game.playerEvadeTicks > 0 && game.playerStepForwardWeight <= .45) {
+    game.__queuedStepOpener = { forward: input.up, back: input.down, lateral: input.left || input.right };
+  }
+  if (["HIT", "BLOCK_STUN", "KNOCKDOWN", "KO", "THROW"].includes(game.p1.state)) game.__queuedStepOpener = undefined;
 
   // Capture direction together with the ATTACK tap. Early taps are allowed to
   // buffer, but the continuation only fires inside the move's authored
@@ -519,7 +536,7 @@ prototype.resolveAttack = function resolveAttack(
   }
 
   const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
+  impactPosition.y = tpsImpactHeightForMove(move);
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,
@@ -594,6 +611,8 @@ prototype.resetRound = function resetRound(): void {
   game.__comboRouteSeed = 0;
   game.__comboLinkSerial = 0;
   game.__comboQueuedBranch = undefined;
+  game.__openingStrikeRange = undefined;
+  game.__queuedStepOpener = undefined;
   game.p1.visual.root.userData.tpsComboRoute = null;
   game.p1.visual.root.userData.tpsComboLinkSerial = 0;
   game.p1.visual.root.userData.tpsComboLinkState = null;

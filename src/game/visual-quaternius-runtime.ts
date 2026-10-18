@@ -537,7 +537,10 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
     };
     case "CROUCH": return { name: "CM_Crouch", loop: true, speed: 1 };
     case "GUARD": return { name: "CM_Guard", loop: true, speed: 1 };
-    case "BLOCK_STUN": return { name: "CM_Block", loop: false, speed: 1 };
+    case "BLOCK_STUN": {
+      const contactClip = fighter.visual.root.userData.tpsContactReactionClip;
+      return { name: typeof contactClip === "string" && runtime.clips.has(contactClip) ? contactClip : "CM_Block", loop: false, speed: 1 };
+    }
     case "SIDESTEP": {
       const direction = String(fighter.visual.root.userData.combatStepDirection ?? "R");
       return { name: `CM_Step_${direction}`, loop: false, speed: 1 };
@@ -547,6 +550,8 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
       const side = fighter.reactionSide === "LEFT" ? "L" : "R";
       if (!fighter.grounded && fighter.velocity.y > 2.5) return { name: "CM_Launch", loop: false, speed: 1 };
       if (fighter.reactionAtEdge) return { name: "BF_EdgeStagger", loop: false, speed: 1 };
+      const contactClip = fighter.visual.root.userData.tpsContactReactionClip;
+      if (typeof contactClip === "string" && runtime.clips.has(contactClip)) return { name: contactClip, loop: false, speed: 1 };
       if (fighter.reactionKind === "COUNTER") return { name: `BF_CounterHit_${side}`, loop: false, speed: 1 };
       if (fighter.reactionKind === "LIGHT") return { name: `BF_HitLight_${side}`, loop: false, speed: 1 };
       if (fighter.reactionKind === "MID") return { name: `BF_HitMid_${side}`, loop: false, speed: 1 };
@@ -936,7 +941,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   const stateChanged = runtime.lastState !== fighter.state;
   const restartedState = fighter.stateMachine.stateTicks < runtime.lastStateTicks;
   const restartingAttack = fighter.state === "ATTACK" && (stateChanged || fighter.moveTick < runtime.lastMoveTick);
-  const restartingReaction = fighter.state === "HIT" && fighter.reactionSerial !== runtime.lastReactionSerial;
+  const restartingReaction = (fighter.state === "HIT" || fighter.state === "BLOCK_STUN") && fighter.reactionSerial !== runtime.lastReactionSerial;
   if (stateChanged || restartedState || restartingReaction) {
     runtime.stateDuration = fighter.stateMachine.stateTicks + (fighter.state === "HIT" ? fighter.hitStun : fighter.blockStun);
     runtime.plantedFeet.l = null; runtime.plantedFeet.r = null;

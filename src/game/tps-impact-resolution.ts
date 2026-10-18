@@ -28,10 +28,10 @@ const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   backfist: 2.48,
   bodyBlow: 2.12,
   power: 2.35,
-  kick: 1.80,
+  kick: 2.28,
   lowKick: 0.92,
-  risingKick: 2.06,
-  dashKick: 1.98,
+  risingKick: 2.70,
+  dashKick: 2.70,
   throw: 1.75,
   counter: 2.66,
 });

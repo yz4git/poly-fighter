@@ -191,6 +191,7 @@ export function adaptTpsCpuDecision(
     adaptation: EnemyAdaptation;
     liveDistance: number;
     simulationTicks: number;
+    attackCount?: number;
   },
 ): CpuDecision {
   let decision = initialDecision;
@@ -246,5 +247,25 @@ export function adaptTpsCpuDecision(
     decision = { ...decision, intent: "SIDESTEP", reason: "adapt-directional-cut" };
   }
 
+  // A small repeated phrase makes the existing persona readable. Tactical
+  // counters/adaptation keep priority; only ordinary neutral attacks use it.
+  const ordinary = ["JAB", "STRAIGHT", "BACKFIST", "BODY_BLOW", "KICK", "LOW_KICK", "POWER"].includes(decision.intent);
+  if (context.attackCount !== undefined && context.adaptation === "NEUTRAL" && ordinary
+    && !/punish|counter|interrupt/.test(decision.reason)) {
+    const index = context.attackCount % 3;
+    const phrase: readonly CpuIntent[] = context.persona === "BRAWLER"
+      ? context.liveDistance <= 1.65 ? ["JAB", "STRAIGHT", "POWER"] : ["KICK", "KICK", "DASH_KICK"]
+      : context.liveDistance > 1.55 ? ["KICK", "LOW_KICK", "KICK"] : ["STRAIGHT", "BACKFIST", "BODY_BLOW"];
+    decision = { ...decision, intent: phrase[index], reason: `${decision.reason}-readable-${context.persona.toLowerCase()}-${index + 1}` };
+  }
   return decision;
+}
+
+export function tpsEnemyRecoveryHabit(persona: EnemyPersona, moveId: string | null): { intent: CpuIntent; ticks: number } {
+  if (persona === "SKIRMISHER") {
+    return { intent: "RETREAT", ticks: moveId?.toLowerCase().includes("kick") ? 12 : 7 };
+  }
+  return moveId === "power" || moveId === "dashKick"
+    ? { intent: "WAIT", ticks: 10 }
+    : { intent: "GUARD", ticks: 5 };
 }

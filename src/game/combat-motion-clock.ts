@@ -5,7 +5,7 @@ import {
   sampleCombatMotionAtEvent,
 } from "./combat-motion-timeline";
 
-export const COMBAT_MOTION_VERSION = "COMBAT_MOTION_V10_REFERENCE_KICKS";
+export const COMBAT_MOTION_VERSION = "COMBAT_MOTION_V11_CONTACT_REACTIONS";
 
 /** @deprecated Use AUTHORED_MOTION_EVENTS from combat-motion-timeline. */
 export const AUTHORED_CONTACT_PHASE: Readonly<Record<string, number>> = Object.freeze(

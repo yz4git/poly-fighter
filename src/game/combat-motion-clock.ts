@@ -5,7 +5,7 @@ import {
   sampleCombatMotionAtEvent,
 } from "./combat-motion-timeline";
 
-export const COMBAT_MOTION_VERSION = "COMBAT_MOTION_V9_CONTINUOUS_LOCOMOTION";
+export const COMBAT_MOTION_VERSION = "COMBAT_MOTION_V10_REFERENCE_KICKS";
 
 /** @deprecated Use AUTHORED_MOTION_EVENTS from combat-motion-timeline. */
 export const AUTHORED_CONTACT_PHASE: Readonly<Record<string, number>> = Object.freeze(
@@ -97,3 +97,4 @@ export function combatFootCycle(phase: number): { travel: number; lift: number; 
   const t = (u - stance) / (1 - stance);
   return { travel: -.5 + smoothMotion(t), lift: Math.sin(Math.PI * t) ** 2, planted: false, roll: -.10 * Math.sin(Math.PI * t) };
 }
+

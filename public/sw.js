@@ -1,4 +1,4 @@
-const CACHE_NAME = "poly-fighter-v22";
+const CACHE_NAME = "poly-fighter-v23-reference-kicks";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -34,3 +34,4 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(event.request).then((cached) => cached ?? caches.match("/"))),
   );
 });
+

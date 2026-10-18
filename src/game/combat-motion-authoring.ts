@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
-import { isKineticKick, sampleKickKineticChain } from "./combat-kinetic-chain";
 import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./combat-punch-kinetics";
 import type { FighterDefinition } from "./types";
+import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
+import { authoredMotionEvents } from "./combat-motion-timeline";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
 type Point = [number, number, number];
-type BodyPose = { drop?: number; forward?: number; yaw?: number; pitch?: number; roll?: number; chest?: number; leftFoot?: Point; rightFoot?: Point; leftHand?: Point; rightHand?: Point; highGuard?: number };
+type BodyPose = { side?: number; drop?: number; forward?: number; yaw?: number; pitch?: number; roll?: number; chest?: number; leftFoot?: Point; rightFoot?: Point; leftHand?: Point; rightHand?: Point; highGuard?: number };
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -71,7 +72,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -101,9 +102,6 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const flatForward = forward.clone().setY(0).normalize();
     return [suffix, { toeLocal, restPlane, flatForward }] as const;
   }));
-  // Visible boot continuity is solved in world space so imported calf roll
-  // cannot create a one-frame ankle twist on either UBC skeleton.
-  const ankleWorldContinuity = new Map<string, THREE.Quaternion>();
   const mixer = new THREE.AnimationMixer(rig);
   const idle = sourceClips.get("Idle_Loop");
   if (!idle) return new Map();
@@ -138,7 +136,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     restore(nodes, neutral);
     rig.updateMatrixWorld(true);
     const pelvis = nodes.get("pelvis")!;
-    const desired = pelvisStart.clone().add(new THREE.Vector3(0, height * (-.027 + (pose.drop ?? 0) + breath), height * (pose.forward ?? 0)));
+    const desired = pelvisStart.clone().add(new THREE.Vector3(height * (pose.side ?? 0) * handedness, height * (-.027 + (pose.drop ?? 0) + breath), height * (pose.forward ?? 0)));
     pelvis.position.copy(pelvis.parent!.worldToLocal(desired));
     rig.updateMatrixWorld(true);
     rotate("pelvis", Y, (.10 + (pose.yaw ?? 0)) * handedness);
@@ -169,6 +167,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   const readyPelvis = nodes.get("pelvis")!.getWorldPosition(new THREE.Vector3());
   const readyFeet = new Map(["l", "r"].map(suffix => [suffix, {
     position: nodes.get(`foot_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
+    ball: nodes.get(`ball_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
     rotation: nodes.get(`foot_${suffix}`)!.getWorldQuaternion(new THREE.Quaternion()),
     knee: nodes.get(`calf_${suffix}`)!.getWorldPosition(new THREE.Vector3()),
   }]));
@@ -275,201 +274,88 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rightHand: [.12 + release * .06, .756 - grip * .07, .125 + grip * .20] });
   }, 37);
 
-  function kickAnkles(name: string, u: number, futureShins?: ReadonlyMap<string, THREE.Vector3>): void {
-    const strike = name === "BF_LowKick_L" ? "l" : "r";
-    const airborne = name === "BF_DashKick_R";
-    if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
-    const weight = smoothMotion((u - .04) / .20);
+  const referenceAnkles = new Map<string, THREE.Quaternion>();
+  function placeReferenceKick(name: string, u: number) {
+    const pose = sampleReferenceKickChoreography(name, u, width)!;
+    const strike = pose.strike;
+    const support = strike === "l" ? "r" : "l";
+    const footTarget = [...pose.foot] as Point;
+    const rearHand = [...pose.rearHand] as Point;
+    const guardHand = [...pose.guardHand] as Point;
+    body({
+      side: pose.side, forward: pose.forward, drop: pose.drop, yaw: pose.yaw,
+      pitch: pose.pitch, roll: pose.roll, chest: pose.chest,
+      leftFoot: strike === "l" ? footTarget : undefined,
+      rightFoot: strike === "r" ? footTarget : undefined,
+      leftHand: strike === "l" ? rearHand : guardHand,
+      rightHand: strike === "r" ? rearHand : guardHand,
+    });
+    // Counterbalance comes from the pelvis and thorax together, while the face
+    // stays directed toward the opponent instead of spinning with the hips.
+    rotate("Head", Y, -pose.yaw * .40 * handedness);
     rig.updateMatrixWorld(true);
-    for (const suffix of ["l", "r"]) {
-      const foot = nodes.get(`foot_${suffix}`)!;
-      const frame = ankleFrames.get(suffix)!;
-      const ball = nodes.get(`ball_${suffix}`)!;
-      if (suffix === strike || airborne) {
-        const calf = nodes.get(`calf_${suffix}`)!;
-        const shin = foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
-        const isStrike = suffix === strike;
-        const centerDegrees = !isStrike ? 80 : name === "BF_LowKick_L" ? 60 : name === "BF_RisingKick_R" ? 80 : 100;
-        const minDegrees = !isStrike ? 50 : name === "BF_LowKick_L" ? 50 : name === "BF_RisingKick_R" ? 70 : 90;
-        const maxDegrees = !isStrike ? 110 : name === "BF_LowKick_L" ? 70 : name === "BF_RisingKick_R" ? 90 : 110;
-        const continuityKey = `${name}:${suffix}`;
-        if (u <= 1e-7) ankleWorldContinuity.delete(continuityKey);
-        const currentWorld = foot.getWorldQuaternion(new THREE.Quaternion());
-        const previousWorld = ankleWorldContinuity.get(continuityKey)?.clone() ?? currentWorld.clone();
-        const toeFor = (q: THREE.Quaternion) => frame.toeLocal.clone().applyQuaternion(q).normalize();
-        const ankleFor = (q: THREE.Quaternion) => THREE.MathUtils.radToDeg(shin.angleTo(toeFor(q)));
-        const coneToe = (axis: THREE.Vector3, sourceToe: THREE.Vector3, degrees: number) => {
-          const plane = sourceToe.clone().addScaledVector(axis, -sourceToe.dot(axis));
-          if (plane.lengthSq() < 1e-8) {
-            plane.copy(frame.restPlane).addScaledVector(axis, -frame.restPlane.dot(axis));
-            if (plane.lengthSq() < 1e-8) plane.crossVectors(axis, Math.abs(axis.y) < .9 ? Y : Z);
-          }
-          plane.normalize();
-          const radians = THREE.MathUtils.degToRad(degrees);
-          return axis.clone().multiplyScalar(Math.cos(radians)).addScaledVector(plane, Math.sin(radians)).normalize();
-        };
-        const previousToe = toeFor(previousWorld);
-        let targetWorld = previousWorld.clone();
-
-        // Before the contact audit begins, look several normalized frames ahead
-        // to absorb Rising's sharp shin turn. Once inside the audited window, use
-        // only the next frame so the boot never chases a distant future pose.
-        const futureShin = isStrike ? futureShins?.get(suffix) : undefined;
-        if (futureShin && u >= .18 && u <= .45) {
-          const futureToe = coneToe(futureShin, previousToe, centerDegrees);
-          const futureWorld = new THREE.Quaternion().setFromUnitVectors(previousToe, futureToe).multiply(previousWorld).normalize();
-          const anticipation = u < .27 ? .72 * smoothMotion((u - .18) / .09) : .34;
-          targetWorld.slerp(futureWorld, anticipation).normalize();
-        }
-
-        const targetAngle = ankleFor(targetWorld);
-        if (targetAngle < minDegrees || targetAngle > maxDegrees) {
-          const targetToe = toeFor(targetWorld);
-          const centerToe = coneToe(shin, targetToe, centerDegrees);
-          const exactWorld = new THREE.Quaternion().setFromUnitVectors(targetToe, centerToe).multiply(targetWorld).normalize();
-          let lo = 0, hi = 1;
-          for (let iteration = 0; iteration < 18; iteration++) {
-            const mid = (lo + hi) * .5;
-            const candidate = targetWorld.clone().slerp(exactWorld, mid).normalize();
-            const candidateAngle = ankleFor(candidate);
-            if (candidateAngle >= minDegrees && candidateAngle <= maxDegrees) hi = mid;
-            else lo = mid;
-          }
-          targetWorld = targetWorld.clone().slerp(exactWorld, hi).normalize();
-        }
-
-        const maxStep = THREE.MathUtils.degToRad(44);
-        const step = previousWorld.angleTo(targetWorld);
-        if (step > maxStep) targetWorld = previousWorld.clone().slerp(targetWorld, maxStep / step).normalize();
-        const correctedWorld = currentWorld.clone().slerp(targetWorld, weight).normalize();
-        worldRotation(foot, correctedWorld);
-        ankleWorldContinuity.set(continuityKey, foot.getWorldQuaternion(new THREE.Quaternion()));
-      } else {
-        const toe = nodes.get(`ball_leaf_${suffix}`)!;
-        const forward = toe.getWorldPosition(new THREE.Vector3()).sub(ball.getWorldPosition(new THREE.Vector3())).setY(0);
-        if (forward.lengthSq() > 1e-8) {
-          const yaw = new THREE.Quaternion().setFromUnitVectors(frame.flatForward, forward.normalize());
-          const desired = yaw.multiply(bindWorld.get(`foot_${suffix}`)!);
-          worldRotation(foot, foot.getWorldQuaternion(new THREE.Quaternion()).slerp(desired, weight));
-        }
-      }
-      ball.quaternion.slerp(bind.get(`ball_${suffix}`)!.rotation, weight);
-      rig.updateMatrixWorld(true);
+    const thigh = nodes.get(`thigh_${strike}`)!;
+    const calf = nodes.get(`calf_${strike}`)!;
+    const foot = nodes.get(`foot_${strike}`)!;
+    const hip = thigh.getWorldPosition(new THREE.Vector3());
+    const knee = calf.getWorldPosition(new THREE.Vector3());
+    const ankle = foot.getWorldPosition(new THREE.Vector3());
+    const neutralAnkle = foot.getWorldQuaternion(new THREE.Quaternion());
+    const length = hip.distanceTo(knee) + knee.distanceTo(ankle);
+    const target = point(footTarget);
+    const direction = target.clone().sub(hip);
+    // A visible, slightly bent contact knee. Limb lengths never change, and a
+    // high kick cannot use a nearly straight knee to conceal an unreachable goal.
+    if (direction.lengthSq() > 1e-10) {
+      const distance = THREE.MathUtils.lerp(direction.length(), length * .94, pose.extension);
+      target.copy(hip).add(direction.setLength(Math.min(length * .975, distance)));
     }
+    solveCombatLimb(thigh, calf, foot, target, point([...pose.knee] as Point));
+    rig.updateMatrixWorld(true);
+    return { pose, strike, support, foot, calf, neutralAnkle };
   }
 
-  /**
-   * Imported retarget clips sometimes contain a large planar pelvis travel
-   * (up to most of a fighter's body width). The gameplay root already moves
-   * through the arena, so retaining that extra clip translation drives the
-   * fighter torso into the opponent while the boot pierces through the target.
-   *
-   * Limit *only* pelvis planar translation relative to the common ready pose.
-   * Translating its whole hierarchy keeps authored hip/knee/ankle geometry and
-   * the strike's velocity ordering; planted stance is then re-solved below.
-   * Vertical take-off / fall motion is not altered here.
-   */
-  function constrainKickPelvisTravel(name: string, u: number): void {
-    if (!isKineticKick(name)) return;
-    const pelvis = nodes.get("pelvis")!;
-    rig.updateMatrixWorld(true);
-    const original = pelvis.getWorldPosition(new THREE.Vector3());
-    const lateral = original.clone().sub(readyPelvis);
-    lateral.y = 0;
-    const maximum = height * (name === "BF_DashKick_R" ? 0.18 : 0.14);
-    if (lateral.lengthSq() <= maximum * maximum) return;
-    const bounded = lateral.clone().setLength(maximum);
-    const reduction = smoothMotion(u / 0.16) * (1 - smoothMotion((u - 0.80) / 0.20));
-    const corrected = original.add(bounded.sub(lateral).multiplyScalar(reduction));
-    pelvis.position.copy(pelvis.parent!.worldToLocal(corrected));
-    rig.updateMatrixWorld(true);
-  }
-
-  /**
-   * A complete movement chain is baked after sampling the Blender source:
-   * support hip carries weight first, the thorax unwinds late, and the guard
-   * counter-rotates during recovery. No additive live mixer and no rewrites of
-   * the kick thigh/calf/ankle rotations.
-   */
-  function bakeKickKinetics(name: string, u: number): void {
-    if (!isKineticKick(name)) return;
-    const motion = sampleKickKineticChain(name, u);
-    if (u <= 0 || u >= 1) return;
-    const pelvis = nodes.get("pelvis")!;
-    rig.updateMatrixWorld(true);
-    const translation = new THREE.Vector3(
-      motion.comSide * height * handedness,
-      motion.comVertical * height,
-      motion.comForward * height,
-    );
-    if (translation.lengthSq() > 1e-12) {
-      const location = pelvis.getWorldPosition(new THREE.Vector3()).add(translation);
-      pelvis.position.copy(pelvis.parent!.worldToLocal(location));
-      rig.updateMatrixWorld(true);
+  function authorReferenceKick(name: string, u: number): void {
+    let desiredAnkle = referenceAnkles.get(name);
+    if (!desiredAnkle) {
+      const { strike, foot, calf } = placeReferenceKick(name, authoredMotionEvents(name).contact);
+      // Build a complete ankle frame, not just a shin/toe angle. A one-vector
+      // correction can satisfy that angle while rolling the boot onto its edge.
+      const shin = foot.getWorldPosition(new THREE.Vector3())
+        .sub(calf.getWorldPosition(new THREE.Vector3())).normalize();
+      const preferredToe = name === "BF_FrontKick_R" || name === "BF_DashKick_R" ? Y : Z;
+      const plane = preferredToe.clone().addScaledVector(shin, -preferredToe.dot(shin));
+      if (plane.lengthSq() < 1e-8) plane.copy(Z).addScaledVector(shin, -Z.dot(shin));
+      plane.normalize();
+      const degrees = name === "BF_LowKick_L" ? 60 : name === "BF_RisingKick_R" ? 80 : 100;
+      const angle = THREE.MathUtils.degToRad(degrees);
+      const toe = shin.clone().multiplyScalar(Math.cos(angle)).addScaledVector(plane, Math.sin(angle)).normalize();
+      const right = X.clone().addScaledVector(toe, -X.dot(toe)).normalize();
+      const up = new THREE.Vector3().crossVectors(toe, right).normalize();
+      const restToe = ankleFrames.get(strike)!.flatForward;
+      const restRight = new THREE.Vector3().crossVectors(Y, restToe).normalize();
+      const restFrame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(restRight, Y, restToe));
+      const contactFrame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, toe));
+      desiredAnkle = contactFrame.multiply(restFrame.invert()).multiply(bindWorld.get(`foot_${strike}`)!).normalize();
+      referenceAnkles.set(name, desiredAnkle);
     }
-    rotate("spine_02", Y, motion.torsoYaw * handedness * .60);
-    rotate("spine_03", Y, motion.torsoYaw * handedness * .40);
-    rotate("spine_02", X, motion.torsoPitch * .58);
-    rotate("spine_03", X, motion.torsoPitch * .42);
-    rotate("clavicle_l", Y, motion.shoulderYaw * handedness);
-    rotate("clavicle_r", Y, -motion.shoulderYaw * handedness);
-    rig.updateMatrixWorld(true);
-  }
+    // Calibrate on the contact pose once. Reconstructing a frame from the
+    // swinging shin every sample flips its bend plane as the folded leg passes
+    // vertical. Quaternion blending from the common guard avoids that singularity.
+    const { pose, support, foot, neutralAnkle } = placeReferenceKick(name, u);
+    worldRotation(foot, neutralAnkle.slerp(desiredAnkle, pose.extension));
 
-  function groundKickSupport(name: string, u: number): void {
-    if (!["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name)) return;
-    const suffix = name === "BF_LowKick_L" ? "r" : "l";
-    const reference = readyFeet.get(suffix)!;
-    const pelvis = nodes.get("pelvis")!;
-    rig.updateMatrixWorld(true);
-    if (name === "BF_DashKick_R") {
-      // Dash is a grounded drive in gameplay. Bake out the source jump once;
-      // retain the strike leg's local rotations instead of solving it again.
-      const position = pelvis.getWorldPosition(new THREE.Vector3());
-      position.y = Math.min(position.y, readyPelvis.y);
-      pelvis.position.copy(pelvis.parent!.worldToLocal(position));
-      rig.updateMatrixWorld(true);
-    }
-    const thigh = nodes.get(`thigh_${suffix}`)!;
-    const calf = nodes.get(`calf_${suffix}`)!;
-    const foot = nodes.get(`foot_${suffix}`)!;
-    const target = foot.getWorldPosition(new THREE.Vector3());
-    // Keep the authored pivot, with a bounded footprint and a level sole.
-    const planar = target.clone().sub(reference.position).setY(0);
-    planar.clampLength(0, height * .04);
-    target.copy(reference.position).add(planar);
-
-    // Support-first balance: when the source pelvis drive pulls the hip beyond
-    // the planted leg's anatomical reach, shift the WHOLE pelvis (and thus the
-    // authored striking leg) slightly toward support before solving the stance
-    // knee. Never stretch the support shin or re-pose the striking leg to hide a
-    // bad center-of-mass trajectory.
-    const hipWorld = thigh.getWorldPosition(new THREE.Vector3());
-    const kneeWorld = calf.getWorldPosition(new THREE.Vector3());
-    const ankleWorld = foot.getWorldPosition(new THREE.Vector3());
-    const upper = hipWorld.distanceTo(kneeWorld);
-    const lower = kneeWorld.distanceTo(ankleWorld);
-    const reach = target.clone().sub(hipWorld);
-    const maximumReach = (upper + lower) * .965;
-    if (upper > 1e-6 && lower > 1e-6 && reach.length() > maximumReach) {
-      const balance = reach.setLength(Math.min(reach.length() - maximumReach, height * .045));
-      const shifted = pelvis.getWorldPosition(new THREE.Vector3()).add(balance);
-      pelvis.position.copy(pelvis.parent!.worldToLocal(shifted));
-      rig.updateMatrixWorld(true);
-    }
-
-    // Blend the source knee's bend-plane with the neutral anatomical plane to
-    // avoid frame-to-frame IK pole flips as the pelvis twists through a kick.
-    const pole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
-    solveCombatLimb(thigh, calf, foot, target, pole);
-    // A planted foot can yaw on its sole during hip drive, but must never bank,
-    // rise, or abruptly change ankle bend. The same authored contact clock
-    // drives the support pivot and the upper-body kinetic sequence.
-    const pivot = sampleKickKineticChain(name, u).supportPivot;
-    const pivotWorld = new THREE.Quaternion()
-      .setFromAxisAngle(Y, pivot * handedness)
-      .multiply(reference.rotation);
-    worldRotation(foot, pivotWorld);
+    // Rotate about the ball of the planted foot, not the ankle: a turning heel
+    // is intentional, a skating toe is not. The unplanted leg remains free.
+    const reference = readyFeet.get(support)!;
+    const supportFoot = nodes.get(`foot_${support}`)!;
+    const pivot = new THREE.Quaternion().setFromAxisAngle(Y, pose.pivot * handedness);
+    const ballAnchor = reference.ball.clone();
+    const ankleOffset = reference.position.clone().sub(ballAnchor).applyQuaternion(pivot);
+    const supportThigh = nodes.get(`thigh_${support}`)!;
+    const supportKnee = nodes.get(`calf_${support}`)!;
+    solveCombatLimb(supportThigh, supportKnee, supportFoot, ballAnchor.add(ankleOffset), reference.knee);
+    worldRotation(supportFoot, pivot.multiply(reference.rotation));
     rig.updateMatrixWorld(true);
   }
 
@@ -560,31 +446,22 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     rig.updateMatrixWorld(true);
   }
 
-  // Existing mocap/Blender strike mechanics remain authoritative through contact.
-  // Common entry/exit poses remove arm drops and foot pops between libraries.
+  // Kicks use the whole-body target-skeleton choreography above. Existing
+  // Blender punches retain their contact paths and share the same guard endpoints.
   for (const [name, source] of sourceClips) {
     if (!name.startsWith("BF_")) continue;
     const sampler = mixer.clipAction(source);
     author(name, source.duration, u => {
+      if (isReferenceKick(name)) {
+        authorReferenceKick(name, u);
+        return;
+      }
       restore(nodes, bind);
       sampler.reset().play(); sampler.time = source.duration * u;
       mixer.update(0);
       const sampled = capture(nodes);
-      const futureShins = new Map<string, THREE.Vector3>();
-      if (["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) && u < 1) {
-        const lookAhead = u < .27 ? 4 / 60 : 1 / 60;
-        sampler.time = source.duration * Math.min(1, u + lookAhead);
-        mixer.update(0);
-        rig.updateMatrixWorld(true);
-        for (const suffix of ["l", "r"]) {
-          const calf = nodes.get(`calf_${suffix}`)!;
-          const foot = nodes.get(`foot_${suffix}`)!;
-          futureShins.set(suffix, foot.getWorldPosition(new THREE.Vector3()).sub(calf.getWorldPosition(new THREE.Vector3())).normalize());
-        }
-      }
       mixer.stopAllAction();
       restore(nodes, sampled);
-      kickAnkles(name, u, futureShins);
       const entry = 1 - smoothMotion(u / .24);
       const exit = smoothMotion((u - .75) / .25);
       const weight = Math.max(entry, exit);
@@ -593,9 +470,6 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         bone.quaternion.slerp(reference.rotation, weight);
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
-      constrainKickPelvisTravel(name, u);
-      bakeKickKinetics(name, u);
-      groundKickSupport(name, u);
       bakePunchKinetics(name, u);
     }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
@@ -633,3 +507,4 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   clipCache.set(key, result);
   return new Map(result);
 }
+

@@ -38,6 +38,7 @@ export function isCombatAttackClip(name: string): boolean {
 
 function isReactionClip(name: string): boolean {
   return name.startsWith("BF_Hit") || name.startsWith("BF_CounterHit")
+    || name.startsWith("CM_Hit_")
     || name === "BF_EdgeStagger" || name === "CM_Launch";
 }
 
@@ -72,7 +73,7 @@ export function planCombatMotionHandoff(
   if (isReactionClip(previous) && (nextState === "GUARD" || nextState === "IDLE" || nextState === "WALK")) {
     return { mode: "REACTION_RECOVERY", duration: .115, velocityCarry: .30 };
   }
-  if (previous === "CM_Block" && (nextState === "GUARD" || nextState === "IDLE" || nextState === "WALK")) {
+  if (previous.startsWith("CM_Block") && (nextState === "GUARD" || nextState === "IDLE" || nextState === "WALK")) {
     return { mode: "BLOCK_RECOVERY", duration: .086, velocityCarry: .32 };
   }
   if (nextState === "GUARD") {

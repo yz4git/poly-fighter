@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FighterAnimationController, type FighterRuntime } from "./fighter";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
+import { ownsContactReaction } from "./combat-contact-reaction";
 import { fighterBasis, fighterRootQuaternion, orientBoneForward, solveTwoBoneIK } from "./rig";
 import { finalizeQuaterniusModelPose, updateQuaterniusModelSkin } from "./visual-quaternius-runtime";
 
@@ -43,7 +44,7 @@ const TPS_HIT_RECOIL = {
 
 function applyTpsImpactReadability(fighter: FighterRuntime, opponent: FighterRuntime): void {
   const root = fighter.visual.root;
-  if (!root.userData.combatTps) return;
+  if (!root.userData.combatTps || ownsContactReaction(root.userData)) return;
 
   const blocked = fighter.state === "BLOCK_STUN";
   const hit = fighter.state === "HIT";

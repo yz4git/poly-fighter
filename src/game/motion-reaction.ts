@@ -1,4 +1,5 @@
 import type { FighterRuntime } from "./fighter";
+import { ownsContactReaction } from "./combat-contact-reaction";
 import { reactionKindForMove } from "./motion-profile";
 import { PresentationAnimationController } from "./presentation-animation";
 import { TpsHypeDirector } from "./tps-hype";
@@ -16,6 +17,7 @@ export type MotionReactionState = {
 
 type DamageAfterfeelState = {
   lastState: FighterRuntime["state"];
+  lastAuthored: boolean;
   until: number;
   side: -1 | 1;
   tier: 1 | 2 | 3;
@@ -117,6 +119,7 @@ function ensureDamageAfterfeel(fighter: FighterRuntime): DamageAfterfeelState {
   if (state) return state;
   state = {
     lastState: fighter.state,
+    lastAuthored: false,
     until: 0,
     side: 1,
     tier: 1,
@@ -511,15 +514,17 @@ PresentationAnimationController.prototype.update = function updateWithDamageAfte
 
   const combatTps = Boolean(fighter.visual.root.userData.combatTps);
   const settling = DAMAGE_AFTERFEEL_SETTLE_STATES.has(fighter.state);
-  if (combatTps && afterfeel.lastState === "HIT" && settling) {
+  const authored = ownsContactReaction(fighter.visual.root.userData);
+  if (combatTps && afterfeel.lastState === "HIT" && settling && !afterfeel.lastAuthored && !authored) {
     const reaction = ensure(fighter);
     afterfeel.until = timeSeconds + DAMAGE_AFTERFEEL_SECONDS;
     afterfeel.side = reaction.side;
     afterfeel.tier = reaction.tier;
-  } else if (!settling) {
+  } else if (!settling || authored || afterfeel.lastAuthored) {
     afterfeel.until = 0;
   }
   afterfeel.lastState = fighter.state;
+  afterfeel.lastAuthored = authored;
 
   if (combatTps) {
     beginComboMomentumCarry(fighter, comboCarry, timeSeconds);

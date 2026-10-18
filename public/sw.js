@@ -1,4 +1,4 @@
-const CACHE_NAME = "poly-fighter-v23-reference-kicks";
+const CACHE_NAME = "poly-fighter-v24-combat-feel";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

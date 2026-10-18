@@ -9,6 +9,7 @@ on:
       - app/**
       - src/game/**
       - scripts/capture-tps-kick-sequence-audit.mjs
+      - scripts/capture-tps-combat-feel-audit.mjs
       - scripts/capture-tps-kick-spam-audit.mjs
       - scripts/capture-tps-kick-link-audit.mjs
       - .github/workflows/tps-kick-sequence-audit.yml
@@ -19,6 +20,7 @@ on:
       - app/**
       - src/game/**
       - scripts/capture-tps-kick-sequence-audit.mjs
+      - scripts/capture-tps-combat-feel-audit.mjs
       - scripts/capture-tps-kick-spam-audit.mjs
       - scripts/capture-tps-kick-link-audit.mjs
       - .github/workflows/tps-kick-sequence-audit.yml
@@ -75,6 +77,7 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-sequence-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-spam-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-kick-link-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-kick-sequence" node scripts/capture-tps-combat-feel-audit.mjs
           for move in kick lowkick risingkick dashkick; do
             for stage in startup contact recovery; do
               image="artifacts/tps-kick-sequence/tps-kick-${move}-${stage}.png"

@@ -165,9 +165,10 @@ export function tpsReactiveStepThreat(input: {
   );
   return {
     ticks: reactiveSideStep
-      // The physical sidestep must occur near contact. A STEP triggered long
-      // before startup cannot bank an automatic perfect evade for the future.
-      ? Math.min(input.stepTicks + 6, Math.max(input.stepTicks, incomingFrames + 1))
+      // This is observation, never invulnerability. A REACT cue can precede
+      // startup: retain its identity until the active window actually arrives.
+      // resolveAttack still requires the body to be outside the committed lane.
+      ? Math.max(input.stepTicks, incomingFrames + 2)
       : 0,
     moveId: reactiveSideStep ? incomingMove?.id ?? null : null,
   };

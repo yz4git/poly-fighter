@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import { ownsContactReaction } from "./combat-contact-reaction";
 import { PresentationAnimationController } from "./presentation-animation";
 
 type ImpactFollowthroughState = {
@@ -289,7 +290,7 @@ function applyImpactFollowthrough(
     : 0;
   state.lastTimeSeconds = timeSeconds;
 
-  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready") {
+  if (!root.userData.combatTps || root.userData.quaterniusModelState !== "ready" || ownsContactReaction(root.userData)) {
     state.recoverySeconds = 0;
     state.recoveryDuration = 0;
     state.recoveryFactor = 0;

@@ -41,7 +41,7 @@ import {
 } from "./tps-gameplay-profile";
 import { computeTpsContactSpacing, type TpsContactSpacingMode } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
-import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo } from "./tps-fight-fundamentals";
+import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo, tpsStrikeTracking, type TpsStrikeGeometry } from "./tps-fight-fundamentals";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
   adaptTpsCpuDecision,
@@ -51,6 +51,7 @@ import {
   tpsCpuActorSnapshot,
   tpsCpuAttackMove,
   tpsEnemyReactionWindowTicks,
+  tpsEnemyRecoveryHabit,
   type EnemyAdaptation,
   type EnemyPersona,
   type EnemyTactic,
@@ -161,12 +162,13 @@ export class TpsFightGame {
   private playerComboStage = 0;
   private playerComboGraceTicks = 0;
   private playerAttackQueued = false;
-  private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
+  private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3; locked?: boolean }>();
   private playerFlankWindowTicks = 0;
   private playerFlankAttackTicks = 0;
   private playerPerfectEvadeTicks = 0;
   private playerStepThreatTicks = 0;
   private playerStepThreatMoveId: string | null = null;
+  private playerStepThreatPosition: THREE.Vector3 | null = null;
   private playerInterceptTicks = 0;
   private playerReversalTicks = 0;
   private combatBeatLabel: string | null = null;
@@ -195,6 +197,12 @@ export class TpsFightGame {
   private enemyDirectorTelegraphTicks = 0;
   private enemyDirectorTelegraphTotalTicks = 0;
   private enemyDirectorPendingMove: string | null = null;
+  private enemyTelegraphAim: THREE.Vector3 | null = null;
+  private enemyTelegraphAimMove: string | null = null;
+  private enemyAttackCount = 0;
+  private enemyLastMoveId: string | null = null;
+  private enemyPostAttackTicks = 0;
+  private enemyPostAttackIntent: CpuIntent = "WAIT";
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
     this.mount = mount;
@@ -405,8 +413,11 @@ export class TpsFightGame {
       attacker.visual.root.userData.tpsCommittedAttackForward = forward.toArray();
       return;
     }
-    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z);
-    current.forward.set(next.x, 0, next.z);
+    if (!current.locked && attacker.moveTick < attacker.currentMove.startup) {
+      const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z,
+        tpsStrikeTracking(attacker.currentMove.id));
+      current.forward.set(next.x, 0, next.z);
+    }
     current.lastTick = attacker.moveTick;
     attacker.visual.root.userData.tpsCommittedAttackForward = current.forward.toArray();
   }
@@ -630,6 +641,11 @@ export class TpsFightGame {
     });
     this.playerStepThreatTicks = stepThreat.ticks;
     this.playerStepThreatMoveId = stepThreat.moveId;
+    this.playerStepThreatPosition = stepThreat.ticks > 0 ? this.p1.position.clone() : null;
+    if (pendingReaction && (!this.enemyTelegraphAim || this.enemyTelegraphAimMove !== this.enemyDirectorPendingMove)) {
+      this.enemyTelegraphAim = horizontalDirection(this.p2.position, this.p1.position);
+      this.enemyTelegraphAimMove = this.enemyDirectorPendingMove;
+    }
   }
 
   private advancePlayerStep(
@@ -746,7 +762,17 @@ export class TpsFightGame {
     this.p2.setInput(EMPTY_INPUT);
     const liveDistance = horizontalDistance(this.p2.position, this.p1.position);
     this.enemyFunDirector.observe(this.enemySituation());
-    if (this.advanceLockedState(this.p2)) return;
+    const wasAttacking = this.p2.state === "ATTACK";
+    if (this.advanceLockedState(this.p2)) {
+      if (wasAttacking && this.p2.state !== "ATTACK") {
+        const habit = tpsEnemyRecoveryHabit(this.enemyPersona, this.enemyLastMoveId);
+        this.enemyPostAttackTicks = habit.ticks;
+        this.enemyPostAttackIntent = habit.intent;
+        this.enemyDirectorHoldTicks = 0;
+        this.enemyDirectorDecision = null;
+      }
+      return;
+    }
 
     this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
@@ -756,6 +782,18 @@ export class TpsFightGame {
     const towardPlayer = horizontalDirection(this.p2.position, this.p1.position);
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
 
+    if (this.enemyPostAttackTicks > 0) {
+      this.enemyPostAttackTicks -= 1;
+      const decision: CpuDecision = {
+        intent: this.enemyPostAttackIntent, holdTicks: 1, telegraphTicks: 0,
+        reason: this.enemyPersona === "SKIRMISHER" ? "readable-kick-then-reset" : "readable-heavy-then-open",
+        comebackMercy: 0, pressure: 0,
+      };
+      this.publishEnemyDecision(decision);
+      this.moveEnemy(decision.intent, towardPlayer, tangent);
+      this.p2.updatePhysics(FIXED_STEP);
+      return;
+    }
     if (this.advanceEnemyTelegraph(towardPlayer)) return;
     if (this.runEnemyOpeningGrace(liveDistance, towardPlayer, tangent)) return;
     if (this.runHeldEnemyDecision(towardPlayer, tangent)) return;
@@ -767,6 +805,7 @@ export class TpsFightGame {
         adaptation: this.enemyAdaptation,
         liveDistance,
         simulationTicks: this.simulationTicks,
+        attackCount: this.enemyAttackCount,
       },
     );
     this.enemyDirectorDecision = decision;
@@ -852,6 +891,11 @@ export class TpsFightGame {
       1,
     );
     const reactionWindow = tpsEnemyReactionWindowTicks(this.difficulty);
+    if (this.enemyDirectorTelegraphTicks <= reactionWindow
+      && (!this.enemyTelegraphAim || this.enemyTelegraphAimMove !== this.enemyDirectorPendingMove)) {
+      this.enemyTelegraphAim = horizontalDirection(this.p2.position, this.p1.position);
+      this.enemyTelegraphAimMove = this.enemyDirectorPendingMove;
+    }
     rootData.tpsEnemyTelegraphProgress = progress;
     rootData.tpsEnemyTelegraphMove = this.enemyDirectorPendingMove;
     rootData.tpsEnemyTelegraphPhase = this.enemyDirectorTelegraphTicks <= reactionWindow
@@ -950,6 +994,8 @@ export class TpsFightGame {
       minimumTpsEnemyTelegraphTicks(this.difficulty, moveId),
     );
     this.enemyDirectorPendingMove = moveId;
+    this.enemyTelegraphAim = null;
+    this.enemyTelegraphAimMove = null;
     this.enemyDirectorTelegraphTicks = telegraphTicks;
     this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
     rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;
@@ -1026,6 +1072,15 @@ export class TpsFightGame {
   ): boolean {
     const began = this.p2.beginMove(moveId);
     if (!began) return false;
+    if (this.enemyTelegraphAim && this.enemyTelegraphAimMove === moveId && this.p2.currentMove) {
+      this.attackCommitments.set(this.p2, {
+        move: this.p2.currentMove, lastTick: 0, forward: this.enemyTelegraphAim.clone(), locked: true,
+      });
+    }
+    this.enemyTelegraphAim = null;
+    this.enemyTelegraphAimMove = null;
+    this.enemyLastMoveId = moveId;
+    this.enemyAttackCount += 1;
 
     const rootData = this.p2.visual.root.userData;
     rootData.tpsCpuDirectorMove = moveId;
@@ -1059,6 +1114,12 @@ export class TpsFightGame {
       return true;
     }
     if (["HIT", "BLOCK_STUN", "KNOCKDOWN", "WAKEUP", "THROW", "KO", "RING_OUT"].includes(fighter.state)) {
+      if (fighter === this.p2) {
+        this.enemyDirectorPendingMove = null;
+        this.enemyTelegraphAim = null;
+        this.enemyTelegraphAimMove = null;
+        this.enemyPostAttackTicks = 0;
+      }
       fighter.updatePhysics(FIXED_STEP);
       return true;
     }
@@ -1093,7 +1154,7 @@ export class TpsFightGame {
     if (!geometry.connected) {
       // Dodge rewards now require the player to physically escape the strike
       // lane; simply pressing STEP during a telegraph is not invulnerability.
-      this.tryResolveTrackedSideEvade(attacker, defender, move);
+      this.tryResolveTrackedSideEvade(attacker, defender, move, geometry);
       return;
     }
 
@@ -1182,18 +1243,27 @@ export class TpsFightGame {
     attacker: FighterRuntime,
     defender: FighterRuntime,
     move: MoveDefinition,
+    geometry: TpsStrikeGeometry,
   ): boolean {
     const trackedSideEvade = defender === this.p1
       && attacker === this.p2
       && this.playerStepThreatTicks > 0
       && this.playerStepThreatMoveId === move.id
       && this.playerStepSideWeight > 0.45
+      && geometry.lateral > geometry.halfWidth
       && move.hitLevel !== "THROW";
     if (!trackedSideEvade) return false;
+    const origin = this.playerStepThreatPosition;
+    const aim = this.attackCommitments.get(attacker)?.forward;
+    if (!origin || !aim || !evaluateTpsStrikeGeometry({
+      move, attackerX: attacker.position.x, attackerZ: attacker.position.z,
+      defenderX: origin.x, defenderZ: origin.z, forwardX: aim.x, forwardZ: aim.z,
+    }).connected) return false;
 
     attacker.hitTargets.add(defender.id);
     this.playerStepThreatTicks = 0;
     this.playerStepThreatMoveId = null;
+    this.playerStepThreatPosition = null;
     this.playerFlankWindowTicks = Math.max(
       this.playerFlankWindowTicks,
       TPS_FLANK_WINDOW_TICKS,
@@ -1325,11 +1395,15 @@ export class TpsFightGame {
   private applyAttackStepIn(attacker: FighterRuntime, defender: FighterRuntime): void {
     const move = attacker.currentMove;
     if (attacker.state !== "ATTACK" || !move || attacker.moveTick > move.startup) return;
-    const distance = horizontalDistance(attacker.position, defender.position);
+    const commitment = this.attackCommitments.get(attacker);
+    const committed = commitment?.forward ?? horizontalDirection(attacker.position, defender.position);
+    // Continue a committed weight shift down its original lane. A lateral
+    // escape must not cancel that step or pull the attack diagonally after it.
+    const distance = commitment?.locked
+      ? (defender.position.x - attacker.position.x) * committed.x + (defender.position.z - attacker.position.z) * committed.z
+      : horizontalDistance(attacker.position, defender.position);
     const stepDistance = tpsAttackWindupAdvance(move, distance);
     if (stepDistance <= 0) return;
-    const committed = this.attackCommitments.get(attacker)?.forward
-      ?? horizontalDirection(attacker.position, defender.position);
     attacker.position.addScaledVector(committed, stepDistance);
   }
 
@@ -1621,6 +1695,7 @@ export class TpsFightGame {
     this.playerPerfectEvadeTicks = 0;
     this.playerStepThreatTicks = 0;
     this.playerStepThreatMoveId = null;
+    this.playerStepThreatPosition = null;
     this.playerInterceptTicks = 0;
     this.playerReversalTicks = 0;
 
@@ -1645,6 +1720,12 @@ export class TpsFightGame {
     this.enemyDirectorTelegraphTicks = 0;
     this.enemyDirectorTelegraphTotalTicks = 0;
     this.enemyDirectorPendingMove = null;
+    this.enemyTelegraphAim = null;
+    this.enemyTelegraphAimMove = null;
+    this.enemyAttackCount = 0;
+    this.enemyLastMoveId = null;
+    this.enemyPostAttackTicks = 0;
+    this.enemyPostAttackIntent = "WAIT";
 
     const rootData = this.p2.visual.root.userData;
     rootData.tpsEnemyTelegraphProgress = 0;

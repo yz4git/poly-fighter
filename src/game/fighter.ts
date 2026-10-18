@@ -228,6 +228,7 @@ export class FighterRuntime {
     knockdown: boolean,
     hitStop: number,
   ): void {
+    this.clearContactReaction();
     this.health = Math.max(0, this.health - damage);
     this.hitStop = Math.max(this.hitStop, hitStop);
     this.velocity.x = attackerFacing * knockback * 20;
@@ -247,6 +248,7 @@ export class FighterRuntime {
   }
 
   receiveBlock(guardDamage: number, stun: number, hitStop: number): void {
+    this.clearContactReaction();
     this.guardDamage = Math.min(100, this.guardDamage + guardDamage);
     this.blockStun = stun;
     this.hitStop = Math.max(this.hitStop, hitStop);
@@ -254,6 +256,7 @@ export class FighterRuntime {
   }
 
   receiveThrow(damage: number, knockback: number, attackerFacing: number, hitStop: number): void {
+    this.clearContactReaction();
     this.health = Math.max(0, this.health - damage);
     this.hitStop = Math.max(this.hitStop, hitStop);
     this.velocity.x = attackerFacing * knockback * 22;
@@ -266,6 +269,7 @@ export class FighterRuntime {
   }
 
   resetForRound(x: number, z: number, facing: number): void {
+    this.clearContactReaction();
     this.position.set(x, 0, z);
     this.velocity.set(0, 0, 0);
     this.grounded = true;
@@ -285,6 +289,11 @@ export class FighterRuntime {
     this.state = "IDLE";
     this.invariantError = null;
     releaseFootPlants(this.visual);
+  }
+
+  private clearContactReaction(): void {
+    delete this.visual.root.userData.tpsContactReactionVersion;
+    delete this.visual.root.userData.tpsContactReactionClip;
   }
 
   validateInvariants(): boolean {

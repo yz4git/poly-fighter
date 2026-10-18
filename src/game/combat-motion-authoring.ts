@@ -5,6 +5,7 @@ import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./comb
 import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
 import { authoredMotionEvents } from "./combat-motion-timeline";
+import { CONTACT_REACTION_VERSION, sampleContactReaction } from "./combat-contact-reaction";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
@@ -72,7 +73,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${CONTACT_REACTION_VERSION}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -235,6 +236,21 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     body({ pitch: -.07, drop: 0, leftFoot: [-width, .08 * fold, .13], rightFoot: [width, .12 * fold, -.09], leftHand: [-.12, .72, .13], rightHand: [.12, .76, .12] });
   });
   author("CM_Land", .22, u => body({ drop: -.057 * Math.sin(Math.PI * u), chest: .09 * Math.sin(Math.PI * u), highGuard: .2 }));
+
+  for (const region of ["HEAD", "BODY", "LEGS", "BLOCK"] as const) for (const side of ["L", "R"] as const) {
+    const name = region === "BLOCK" ? `CM_Block_${side}` : `CM_Hit_${region}_${side}`;
+    author(name, region === "BLOCK" ? .28 : .42, u => {
+      const p = sampleContactReaction(region, side, u);
+      body({ ...p,
+        leftHand: [-.088, .735 - p.handDrop, .172],
+        rightHand: [.083, .756 - p.handDrop, .125],
+        leftFoot: side === "L" ? [-width, p.footLift, .065 - p.rearStep] : stanceFeet.l,
+        rightFoot: side === "R" ? [width, p.footLift, -.070 - p.rearStep] : stanceFeet.r,
+      });
+      rotate("Head", X, p.headPitch);
+      rotate("Head", Y, p.headYaw * handedness);
+    }, 37);
+  }
 
   const downPose: BodyPose = { drop: -.39, forward: -.10, pitch: -1.46, chest: .08, yaw: -.10,
     leftFoot: [-.11, .005, .30], rightFoot: [.14, .005, .23], leftHand: [-.24, .025, -.25], rightHand: [.25, .025, -.23] };

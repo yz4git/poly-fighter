@@ -8,6 +8,21 @@ import type { MoveDefinition } from "./types";
 export const TPS_CONTACT_REACH_TOLERANCE = 0.20;
 export const TPS_ATTACK_LANE_PADDING = 0.23;
 export const TPS_ATTACK_AIM_TURN_PER_TICK = 0.028; // ~96 degrees/sec at 60Hz
+export type TpsOpeningRange = "CLOSE" | "FAR";
+
+/** A small dead band keeps touch movement near 1.65 m from changing the opener. */
+export function tpsOpeningRange(distance: number, previous?: TpsOpeningRange): TpsOpeningRange {
+  if (previous === "CLOSE") return distance > 1.78 ? "FAR" : "CLOSE";
+  if (previous === "FAR") return distance < 1.52 ? "CLOSE" : "FAR";
+  return distance > 1.65 ? "FAR" : "CLOSE";
+}
+
+/** Straight strikes lose to lateral movement; arcs cover more of that lane. */
+export function tpsStrikeTracking(moveId?: string): number {
+  return moveId === "backfist" || moveId === "lowKick" ? .038
+    : moveId === "jab" || moveId === "straight" || moveId === "kick" || moveId === "dashKick" ? .014
+      : TPS_ATTACK_AIM_TURN_PER_TICK;
+}
 
 export type TpsStrikeGeometry = Readonly<{
   connected: boolean;
@@ -18,7 +33,7 @@ export type TpsStrikeGeometry = Readonly<{
 }>;
 
 export function evaluateTpsStrikeGeometry(input: {
-  move: Pick<MoveDefinition, "reach" | "width" | "hitLevel">;
+  move: Pick<MoveDefinition, "reach" | "width" | "hitLevel"> & Partial<Pick<MoveDefinition, "id">>;
   attackerX: number;
   attackerZ: number;
   defenderX: number;
@@ -34,7 +49,11 @@ export function evaluateTpsStrikeGeometry(input: {
   const longitudinal = dx * fx + dz * fz;
   const lateral = Math.abs(dx * fz - dz * fx);
   const reach = input.move.reach + (input.move.hitLevel === "THROW" ? .16 : TPS_CONTACT_REACH_TOLERANCE);
-  const halfWidth = Math.max(.58, input.move.width + TPS_ATTACK_LANE_PADDING);
+  const straight = ["jab", "straight", "kick", "dashKick"].includes(input.move.id ?? "");
+  const sweeping = input.move.id === "backfist" || input.move.id === "lowKick";
+  const halfWidth = straight
+    ? Math.max(.38, Math.min(.64, input.move.width * .65 + .12))
+    : Math.max(.58, input.move.width + TPS_ATTACK_LANE_PADDING + (sweeping ? .08 : 0));
   return {
     connected: longitudinal >= .36 && longitudinal <= reach && lateral <= halfWidth,
     longitudinal, lateral, reach, halfWidth,
@@ -62,11 +81,12 @@ export function tpsAttackWindupAdvance(
  */
 export function turnTpsCommittedAttackAim(
   previousX: number, previousZ: number, targetX: number, targetZ: number,
+  turnLimit = TPS_ATTACK_AIM_TURN_PER_TICK,
 ): { x: number; z: number } {
   const origin = Math.atan2(previousX, previousZ);
   const target = Math.atan2(targetX, targetZ);
   const delta = Math.atan2(Math.sin(target - origin), Math.cos(target - origin));
-  const heading = origin + Math.max(-TPS_ATTACK_AIM_TURN_PER_TICK, Math.min(TPS_ATTACK_AIM_TURN_PER_TICK, delta));
+  const heading = origin + Math.max(-turnLimit, Math.min(turnLimit, delta));
   return { x: Math.sin(heading), z: Math.cos(heading) };
 }
 
@@ -88,8 +108,9 @@ export function chooseTpsOpeningStrike(input: {
   forward: boolean;
   back: boolean;
   lateral: boolean;
+  previousRange?: TpsOpeningRange;
 }): { moveId: "jab" | "straight" | "kick" | "lowKick" | "backfist" | "bodyBlow"; route: "CLOSE_A" | "CLOSE_B" | "FAR" } {
-  const far = input.distance > 1.65;
+  const far = tpsOpeningRange(input.distance, input.previousRange) === "FAR";
   if (far) {
     return { moveId: input.back || input.lateral ? "lowKick" : "kick", route: "FAR" };
   }

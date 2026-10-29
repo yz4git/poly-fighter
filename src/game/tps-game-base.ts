@@ -731,7 +731,7 @@ export class TpsFightGame {
       forwardAxis: axes.forwardAxis,
       sideAxis: axes.sideAxis,
       distance: fightDistance,
-      opponentAirborne: !this.p2.grounded && this.p2.position.y > .48,
+      opponentAirborne: !this.p2.grounded,
       airHits: this.airCombo?.hits ?? 0,
       hasJuggle: Boolean(this.airCombo),
       signaturePriority: Boolean(plan.choice.signature) && (!this.airCombo || plan.reversalStrike || plan.interceptStrike),

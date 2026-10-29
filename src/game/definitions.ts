@@ -1,5 +1,6 @@
 import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
+import { addCinematicTechniques } from "./cinematic-techniques";
 
 function move(
   definition: Partial<MoveDefinition> &
@@ -466,7 +467,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       handScale: 1.08,
       footScale: 1.14,
     },
-    moves: expandMoveSet(redMoves),
+    moves: addCinematicTechniques(expandMoveSet(redMoves), "KAIRO"),
   },
   blue: {
     id: "blue",
@@ -508,7 +509,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       footScale: 1.02,
       longPanels: true,
     },
-    moves: expandMoveSet(blueMoves),
+    moves: addCinematicTechniques(expandMoveSet(blueMoves), "SERA"),
   },
 };
 

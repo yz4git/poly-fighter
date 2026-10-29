@@ -1,6 +1,7 @@
 import { FIGHTER_DEFINITIONS } from "./definitions";
 import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
+import { addCinematicTechniques } from "./cinematic-techniques";
 
 export const VANTA_FIGHTER_ID = "violet" as const;
 
@@ -163,7 +164,7 @@ export const VANTA_FIGHTER_DEFINITION: FighterDefinition = Object.freeze({
     handScale: 1.0,
     footScale: 1.06,
   },
-  moves: expandMoveSet(vantaMoves),
+  moves: addCinematicTechniques(expandMoveSet(vantaMoves), "VANTA"),
 });
 
 export function registerVantaFighter(): FighterDefinition {

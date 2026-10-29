@@ -84,6 +84,15 @@ import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
 import { expandedContextMove } from "./move-expansion";
+import { chooseCinematicTechnique } from "./cinematic-techniques";
+import {
+  canCinematicStrikeAirborne,
+  maxTpsComboStage,
+  nextTpsAirCombo,
+  tickTpsAirCombo,
+  tpsAirComboDamage,
+  type TpsAirCombo,
+} from "./tps-air-combo";
 import { EMPTY_INPUT } from "./types";
 
 export interface TpsFightGameOptions {
@@ -162,6 +171,7 @@ export class TpsFightGame {
   private playerComboStage = 0;
   private playerComboGraceTicks = 0;
   private playerAttackQueued = false;
+  private airCombo: TpsAirCombo | null = null;
   private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
   private playerFlankWindowTicks = 0;
   private playerFlankAttackTicks = 0;
@@ -367,6 +377,7 @@ export class TpsFightGame {
     this.simulationTicks += 1;
     if (!this.options.training) this.timerTicks = Math.max(0, this.timerTicks - 1);
 
+    this.airCombo = tickTpsAirCombo(this.airCombo, this.p2.grounded, this.p2.health);
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
@@ -516,7 +527,8 @@ export class TpsFightGame {
 
     // ATTACK taps during recovery are buffered. Once the current move finishes,
     // the next context-sensitive strike starts immediately.
-    if (attackPressed && this.playerComboStage < 3) this.playerAttackQueued = true;
+    const comboLimit = maxTpsComboStage(this.airCombo);
+    if (attackPressed && this.playerComboStage < comboLimit) this.playerAttackQueued = true;
     // A repeated ATTACK only chains if the previous strike actually reached the target.
     const comboConfirmed = tpsCanConfirmCombo(
       this.p1.hitTargets.has(this.p2.id),
@@ -528,7 +540,7 @@ export class TpsFightGame {
     if (this.p1.state !== "ATTACK") {
       if (
         this.playerAttackQueued
-        && this.playerComboStage < 3
+        && this.playerComboStage < comboLimit
         && comboConfirmed
         && this.p1.canAct()
       ) {
@@ -536,7 +548,7 @@ export class TpsFightGame {
         this.beginContextAttack();
       } else {
         this.playerAttackQueued = false;
-        if (!comboConfirmed || this.playerComboStage >= 3) {
+        if (!comboConfirmed || this.playerComboStage >= comboLimit) {
           this.playerComboStage = 0;
           this.playerComboGraceTicks = 0;
         }
@@ -713,7 +725,18 @@ export class TpsFightGame {
     // Existing ATTACK selects additional techniques through stick direction
     // or a five-beat neutral cycle; special reversals preserve their signature.
     const axes = tpsInputAxes(this.p1.input);
-    const chosenId = expandedContextMove({
+    const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
+    const cinematic = chooseCinematicTechnique({
+      comboStage: this.playerComboStage,
+      forwardAxis: axes.forwardAxis,
+      sideAxis: axes.sideAxis,
+      distance: fightDistance,
+      opponentAirborne: !this.p2.grounded && this.p2.position.y > .48,
+      airHits: this.airCombo?.hits ?? 0,
+      hasJuggle: Boolean(this.airCombo),
+      signaturePriority: Boolean(plan.choice.signature),
+    });
+    const chosenId = cinematic ?? expandedContextMove({
       baseId: plan.choice.moveId,
       moveCount: Math.max(0, this.playerAttackSamples - 1),
       forwardAxis: axes.forwardAxis,
@@ -723,7 +746,7 @@ export class TpsFightGame {
     });
     if (!this.p1.beginMove(chosenId)) return false;
 
-    this.playerComboStage = plan.nextComboStage;
+    this.playerComboStage = cinematic ? Math.min(5, this.playerComboStage + 1) : plan.nextComboStage;
     this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
     this.p1.visual.root.userData.tpsFighterDna = this.p1Dna.id;
     this.p1.visual.root.userData.tpsContextMove = chosenId;
@@ -732,7 +755,7 @@ export class TpsFightGame {
     this.p1.visual.root.userData.tpsSignatureAction = plan.choice.signature;
     this.p1.visual.root.userData.tpsContextBeat = plan.choice.beat;
     if (plan.choice.beat) this.setCombatBeat(plan.choice.beat);
-    else if (chosenId !== plan.choice.moveId) this.setCombatBeat(this.p1.currentMove?.label ?? "", 17);
+    else if (chosenId !== plan.choice.moveId) this.setCombatBeat(this.p1.currentMove?.label ?? "", cinematic ? 30 : 17);
 
     if (plan.reversalStrike) {
       this.playerReversalSamples += 1;
@@ -1092,6 +1115,7 @@ export class TpsFightGame {
       || !attacker.isActive()
       || attacker.hitTargets.has(defender.id)
     ) return;
+    if (!canCinematicStrikeAirborne(move, this.airCombo, attacker.id, defender.id, defender.position.y)) return;
 
     const aim = this.attackCommitments.get(attacker)?.forward
       ?? horizontalDirection(attacker.position, defender.position);
@@ -1132,7 +1156,8 @@ export class TpsFightGame {
       simulationTicks: this.simulationTicks,
       attackerIsPlayer: attacker === this.p1,
     });
-    const { blocked, resolvedDamage, lethalImpact, reactionStrength } = resolution;
+    const { blocked, lethalImpact, reactionStrength } = resolution;
+    const resolvedDamage = blocked ? 0 : tpsAirComboDamage(resolution.resolvedDamage, move, this.airCombo);
     attacker.visual.root.userData.tpsCleanHitConfirmed = !blocked;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
@@ -1153,6 +1178,7 @@ export class TpsFightGame {
       defenderWasAttacking,
       blocked,
     );
+    if (!blocked) this.applyCinematicCombatHit(attacker, defender, move);
 
     applyTpsImpactPresentation({
       attacker,
@@ -1191,6 +1217,50 @@ export class TpsFightGame {
       interceptStrike,
       reversalStrike,
     );
+  }
+
+  /** True juggle: timed re-hits change the rival's real vertical velocity. */
+  private applyCinematicCombatHit(
+    attacker: FighterRuntime,
+    defender: FighterRuntime,
+    move: MoveDefinition,
+  ): void {
+    const role = move.cinematicRole;
+    if (!role) return;
+    if (role === "skyBreaker" && defender.health > 0) {
+      defender.state = "HIT";
+      defender.grounded = false;
+      defender.velocity.y = 7.2;
+      defender.hitStun = Math.max(defender.hitStun, 66);
+      defender.velocity.x *= .45;
+      defender.velocity.z *= .45;
+      this.airCombo = nextTpsAirCombo(move, this.airCombo, attacker.id, defender.id);
+      this.setCombatBeat("SKY BREAK!", 52);
+    } else if (role === "airChase" && this.airCombo && defender.health > 0) {
+      defender.state = "HIT";
+      defender.velocity.y = Math.max(3.8, defender.velocity.y);
+      defender.grounded = false;
+      defender.hitStun = Math.max(defender.hitStun, 52);
+      defender.velocity.x *= .55;
+      defender.velocity.z *= .55;
+      this.airCombo = nextTpsAirCombo(move, this.airCombo, attacker.id, defender.id);
+      this.setCombatBeat(`AIR COMBO × ${this.airCombo?.hits ?? 2}`, 46);
+    } else if (role === "meteorSlam" && this.airCombo) {
+      defender.velocity.y = -7.6;
+      defender.knockdownTicks = Math.max(defender.knockdownTicks, 78);
+      this.airCombo = null;
+      this.setCombatBeat("METEOR FINISH!", 68);
+    } else if (role === "cycloneSweep") {
+      this.setCombatBeat("SPIRAL SWEEP!", 30);
+    } else if (role === "powerRush") {
+      this.setCombatBeat("CRUSH IMPACT!", 42);
+    }
+    if (attacker === this.p1) {
+      attacker.visual.root.userData.tpsAirComboHits = this.airCombo?.hits ?? 0;
+      defender.visual.root.userData.tpsAirComboSuspended = Boolean(this.airCombo);
+      this.camera.userData.tpsAirComboHits = this.airCombo?.hits ?? 0;
+    }
+    this.cameraImpact = Math.max(this.cameraImpact, role === "meteorSlam" || role === "powerRush" ? .081 : .061);
   }
 
   private tryResolveTrackedSideEvade(
@@ -1453,7 +1523,7 @@ export class TpsFightGame {
       .lerp(this.cameraPairMidpoint, framing.closeTargetBlend);
     this.cameraTarget.copy(this.cameraFocus)
       .addScaledVector(right, framing.targetSideShift)
-      .add(new THREE.Vector3(0, framing.targetHeight, 0));
+      .add(new THREE.Vector3(0, framing.targetHeight + (this.airCombo ? Math.min(.85, this.p2.position.y * .30) : 0), 0));
   }
 
   private publishCameraFraming(
@@ -1485,7 +1555,7 @@ export class TpsFightGame {
     this.cameraDesired.copy(this.cameraAnchor)
       .addScaledVector(forward, -framing.backDistance)
       .addScaledVector(right, framing.desiredShoulderOffset)
-      .add(new THREE.Vector3(0, framing.cameraHeight, 0));
+      .add(new THREE.Vector3(0, framing.cameraHeight + (this.airCombo ? Math.min(.46, this.p2.position.y * .16) : 0), 0));
 
     // Keep distant navigation responsive, but add inertia as the fight closes.
     ease(this.camera.position, this.cameraDesired, framing.cameraPositionRate, delta);
@@ -1631,6 +1701,7 @@ export class TpsFightGame {
     this.playerComboStage = 0;
     this.playerComboGraceTicks = 0;
     this.playerAttackQueued = false;
+    this.airCombo = null;
     this.playerFlankWindowTicks = 0;
     this.playerFlankAttackTicks = 0;
     this.playerPerfectEvadeTicks = 0;

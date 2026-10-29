@@ -1,0 +1,59 @@
+name: POLY FIGHTER Signature Air Combo WebGL
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/game/**
+      - scripts/capture-tps-signature-combo-audit.mjs
+      - .github/workflows/tps-signature-combo-audit.yml
+  push:
+    branches: [main]
+    paths:
+      - src/game/**
+      - scripts/capture-tps-signature-combo-audit.mjs
+      - .github/workflows/tps-signature-combo-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start production preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-signature-combo.log 2>&1 &
+          for attempt in $(seq 1 55); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-signature-combo.log
+          exit 1
+      - name: Capture real TPS air combo physics and rendered ender
+        run: |
+          mkdir -p artifacts/tps-signature-combos
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-signature-combos" node scripts/capture-tps-signature-combo-audit.mjs
+          test -s artifacts/tps-signature-combos/signature-air-combo.json
+          file artifacts/tps-signature-combos/tps-signature-meteor.png | grep -q "PNG image data"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poly-fighter-signature-air-combo-audit
+          path: artifacts/tps-signature-combos
+          if-no-files-found: warn
+          retention-days: 7

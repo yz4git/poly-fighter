@@ -11,6 +11,7 @@ import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
+import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
 import {
   applyInertialTransition,
   beginInertialTransition,
@@ -758,6 +759,8 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
   runtime.host.userData.kimodoInertialActiveBones = inertial.activeBones;
   runtime.host.userData.kimodoInertialMaxLinearVelocity = inertial.maxLinearVelocity;
   runtime.host.userData.kimodoInertialMaxAngularVelocity = inertial.maxAngularVelocity;
+  runtime.host.userData.motionbricksGoalBridgeVersion = MOTIONBRICKS_GOAL_BRIDGE_VERSION;
+  runtime.host.userData.motionbricksGoalRejectedChannels = inertial.goalRejectedChannels;
   runtime.model.updateMatrixWorld(true);
 }
 
@@ -971,6 +974,11 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.kimodoInertialMinimumBoneScale = Number(
     runtime.host.userData.kimodoInertialMinimumBoneScale ?? 1,
   );
+  fighter.visual.root.userData.motionbricksGoalBridgeVersion = MOTIONBRICKS_GOAL_BRIDGE_VERSION;
+  fighter.visual.root.userData.motionbricksGoalRejectedChannels = Number(
+    runtime.host.userData.motionbricksGoalRejectedChannels ?? 0,
+  );
+  fighter.visual.root.userData.motionbricksContextFrames = runtime.poseHistory.get("pelvis")?.context?.length ?? 0;
   fighter.visual.root.userData.unimateReplacementMode =
     runtime.host.userData.unimateReplacementMode ?? "NONE";
   // Kimodo-inspired post conditioning is presentation-only: it smooths the

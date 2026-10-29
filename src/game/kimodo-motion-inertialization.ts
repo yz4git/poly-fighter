@@ -33,7 +33,6 @@ export type InertializationTelemetry = {
 
 const MAX_LOCAL_LINEAR_SPEED = 3.0;
 const MAX_LOCAL_ANGULAR_SPEED = 18.0;
-const MAX_ROTATION_PREDICTION = THREE.MathUtils.degToRad(24);
 
 function clampVectorLength(vector: THREE.Vector3, maximum: number): THREE.Vector3 {
   const length = vector.length();

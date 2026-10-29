@@ -734,7 +734,7 @@ export class TpsFightGame {
       opponentAirborne: !this.p2.grounded && this.p2.position.y > .48,
       airHits: this.airCombo?.hits ?? 0,
       hasJuggle: Boolean(this.airCombo),
-      signaturePriority: Boolean(plan.choice.signature),
+      signaturePriority: Boolean(plan.choice.signature) && (!this.airCombo || plan.reversalStrike || plan.interceptStrike),
     });
     const chosenId = cinematic ?? expandedContextMove({
       baseId: plan.choice.moveId,
@@ -1156,8 +1156,9 @@ export class TpsFightGame {
       simulationTicks: this.simulationTicks,
       attackerIsPlayer: attacker === this.p1,
     });
-    const { blocked, lethalImpact, reactionStrength } = resolution;
+    const { blocked, reactionStrength } = resolution;
     const resolvedDamage = blocked ? 0 : tpsAirComboDamage(resolution.resolvedDamage, move, this.airCombo);
+    const lethalImpact = !blocked && defender.health <= resolvedDamage;
     attacker.visual.root.userData.tpsCleanHitConfirmed = !blocked;
     const direction = horizontalDirection(attacker.position, defender.position);
     const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
@@ -1187,7 +1188,7 @@ export class TpsFightGame {
       moveId: move.id,
       contact: impactPosition,
       direction,
-      reactionType: resolution.reactionType,
+      reactionType: lethalImpact ? "FINISHER" : resolution.reactionType === "FINISHER" ? "HEAVY" : resolution.reactionType,
       reactionRegion: resolution.reactionRegion,
       reactionVariant: resolution.reactionVariant,
       reactionStrength,

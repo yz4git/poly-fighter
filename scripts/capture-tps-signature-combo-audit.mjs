@@ -94,9 +94,40 @@ try {
   for(const item of Object.values(results)) {
     if(item.error||!item.clip?.startsWith("FX_"))throw Error(`Cinematic clip not bound: ${JSON.stringify(results)}`);
   }
+  // Also test the real TPS two-button selector. The subclass overrides the
+  // core attack chooser: a direct move test alone cannot catch that mismatch.
+  const selection=await execute(session,`${lookup}
+    const g=findGame();
+    g.p1.resetForRound(0,.85,1);g.p2.resetForRound(0,-.58,-1);
+    g.playerComboStage=1;g.playerFlankWindowTicks=0;g.playerReversalTicks=0;
+    g.playerInterceptTicks=0;g.playerPerfectEvadeTicks=0;g.playerStepSideWeight=0;
+    g.airCombo=null;
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.setInput({...neutral,up:true,punch:true});
+    const launchStarted=g.beginContextAttack();
+    const launcher=g.p1.currentMove?.id??null;
+    g.p1.currentMove=null;g.p1.state="IDLE";
+    g.p2.grounded=false;g.p2.state="HIT";g.p2.position.y=1.3;
+    g.airCombo={attackerId:"p1",defenderId:"p2",hits:1,remainingTicks:90};
+    g.playerComboStage=2;
+    g.p1.setInput({...neutral,punch:true});
+    const chaseStarted=g.beginContextAttack();
+    const chase=g.p1.currentMove?.id??null;
+    g.p1.currentMove=null;g.p1.state="IDLE";
+    g.airCombo={attackerId:"p1",defenderId:"p2",hits:3,remainingTicks:90};
+    g.playerComboStage=4;
+    g.p1.setInput({...neutral,punch:true});
+    const finishStarted=g.beginContextAttack();
+    return {launchStarted,launcher,chaseStarted,chase,finishStarted,finisher:g.p1.currentMove?.id??null};
+  `);
+  if(!selection.launchStarted||selection.launcher!=="skyBreaker"
+    ||!selection.chaseStarted||selection.chase!=="airChase"
+    ||!selection.finishStarted||selection.finisher!=="meteorSlam"){
+    throw Error(`TPS input combo selector failed: ${JSON.stringify(selection)}`);
+  }
   await screenshot(session,`${output}/tps-signature-meteor.png`);
-  await writeFile(`${output}/signature-air-combo.json`,JSON.stringify(results,null,2));
-  console.log(JSON.stringify(results,null,2));
+  await writeFile(`${output}/signature-air-combo.json`,JSON.stringify({ ...results, selection },null,2));
+  console.log(JSON.stringify({ ...results, selection },null,2));
 }finally{
   if(session)await request(`/session/${session}`,"DELETE").catch(()=>undefined);
   proc.kill("SIGTERM");

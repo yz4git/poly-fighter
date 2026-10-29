@@ -1,4 +1,5 @@
 import type { MoveDefinition } from "./types";
+import { sourceOfExpandedClip } from "./expanded-motion-library";
 
 export type CombatMotionStage = "STARTUP" | "ACTIVE" | "RECOVERY";
 
@@ -67,7 +68,7 @@ function events(contact: number): AuthoredMotionEvents {
 }
 
 export function authoredMotionEvents(clipName: string): AuthoredMotionEvents {
-  return AUTHORED_MOTION_EVENTS[clipName] ?? events(0.5);
+  return AUTHORED_MOTION_EVENTS[sourceOfExpandedClip(clipName)] ?? events(0.5);
 }
 
 /**

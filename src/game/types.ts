@@ -82,6 +82,10 @@ export interface MoveDefinition {
   input: string;
   animation: AnimationName;
   motionId?: string;
+  /** Original authored move driving the animation of a variant. */
+  motionBase?: string;
+  /** Offline-generated pose variation used only for the rendered character. */
+  motionVariant?: "SNAP" | "DRIVE" | "PIVOT" | "CRUSH";
   reactionTarget?: ReactionTarget;
   startup: number;
   active: number;

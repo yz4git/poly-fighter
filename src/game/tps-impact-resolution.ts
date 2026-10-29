@@ -37,7 +37,12 @@ const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
 });
 
 export function tpsImpactHeightForMove(move: MoveDefinition): number {
-  return TPS_IMPACT_HEIGHTS[move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
+  const cinematic = {
+    skyBreaker: 2.48, airChase: 2.86, meteorSlam: 2.44,
+    cycloneSweep: 0.68, powerRush: 2.38,
+  } as const;
+  return move.cinematicRole ? cinematic[move.cinematicRole]
+    : TPS_IMPACT_HEIGHTS[move.motionBase ?? move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
 }
 
 export function computeTpsHitResolution(input: {

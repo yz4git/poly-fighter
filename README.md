@@ -21,7 +21,9 @@ future architecture.
 - Fixed 60 Hz combat simulation with input buffering and command parsing.
 - High / Mid / Low / Throw hit levels, guard, hit stun, block stun, throw
   escape, knockdown, wakeup, KO, and ring out.
-- Two original fighters: KAIRO (power) and SERA (speed), 11 moves each.
+- Four playable fighters: KAIRO, SERA, VANTA and AXION. Each now has **51 combat techniques** (11 original + 40 directional/tempo variants), **204 in total**. Different movement, timing, damage, guard pressure, reach and baked pose differences, not just alternate names.
+- TPS ATTACK still uses one attack button: neutral taps cycle styles, forward + ATTACK selects Drive, back + ATTACK selects Breaker, and sideways + ATTACK selects Angle. Evasive counter/signature attacks retain their priority. STEP is unchanged.
+- On-device animation uses authored Three.js clips baked into lightweight joint-pose variants; no new runtime AI dependency. See [Move expansion](docs/EXPANDED_MOVES.md).
 - State-based CPU with Easy, Normal, and Hard behavior.
 - Impact flash, polygon fragments, synthesized Web Audio, haptics, and camera
   shake.

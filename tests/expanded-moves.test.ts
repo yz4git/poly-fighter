@@ -20,13 +20,13 @@ import {
 import { authoredMotionEvents, sampleCombatMotionTimeline } from "../src/game/combat-motion-timeline";
 import { isCombatAttackClip, planCombatMotionHandoff } from "../src/game/combat-motion-handoff";
 
-test("all four characters have 51 unique available techniques and retain the original eleven", () => {
+test("all four characters have 56 unique available techniques and retain the original eleven", () => {
   const allIds = new Set<string>();
   assert.equal(PLAYABLE_FIGHTERS.length, 4);
   assert.equal(EXPANDED_MOVE_BASES.length, 10);
   for (const fighter of PLAYABLE_FIGHTERS) {
     const ids = Object.keys(fighter.moves);
-    assert.equal(ids.length, 51, `${fighter.name} must have 11 original + 40 expanded moves`);
+    assert.equal(ids.length, 56, `${fighter.name} must have 11 original + 40 expanded + 5 signature moves`);
     for (const base of [...EXPANDED_MOVE_BASES, "throw"]) assert.ok(fighter.moves[base], base);
     for (const base of EXPANDED_MOVE_BASES) {
       for (const variant of MOVE_VARIANTS) {

@@ -1,4 +1,5 @@
 import type { FighterState } from "./types";
+import { sourceOfExpandedClip } from "./expanded-motion-library";
 
 /**
  * Rendering-only handoffs. Combat startup, ACTIVE frames, recovery ticks and
@@ -28,6 +29,7 @@ export type CombatMotionHandoff = Readonly<{
 }>;
 
 export function isCombatAttackClip(name: string): boolean {
+  name = sourceOfExpandedClip(name);
   return name.startsWith("BF_Jab") || name.startsWith("BF_Cross")
     || name.startsWith("BF_BodyBlow") || name.startsWith("BF_Backfist")
     || name.startsWith("BF_Power") || name.startsWith("BF_FrontKick")

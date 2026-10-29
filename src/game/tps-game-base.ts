@@ -83,6 +83,7 @@ import { createTpsSceneSetup, tpsPixelRatioCap } from "./tps-scene-setup";
 import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
+import { expandedContextMove } from "./move-expansion";
 import { EMPTY_INPUT } from "./types";
 
 export interface TpsFightGameOptions {
@@ -709,15 +710,29 @@ export class TpsFightGame {
       selfHealth: this.p1.health,
       defenderHealth: this.p2.health,
     });
-    if (!this.p1.beginMove(plan.choice.moveId)) return false;
+    // Existing ATTACK selects additional techniques through stick direction
+    // or a five-beat neutral cycle; special reversals preserve their signature.
+    const axes = tpsInputAxes(this.p1.input);
+    const chosenId = expandedContextMove({
+      baseId: plan.choice.moveId,
+      moveCount: Math.max(0, this.playerAttackSamples - 1),
+      forwardAxis: axes.forwardAxis,
+      sideAxis: axes.sideAxis,
+      available: this.p1.definition.moves,
+      preserveSignature: Boolean(plan.choice.signature),
+    });
+    if (!this.p1.beginMove(chosenId)) return false;
 
     this.playerComboStage = plan.nextComboStage;
     this.playerComboGraceTicks = TPS_COMBO_GRACE_TICKS;
     this.p1.visual.root.userData.tpsFighterDna = this.p1Dna.id;
-    this.p1.visual.root.userData.tpsContextMove = plan.choice.moveId;
+    this.p1.visual.root.userData.tpsContextMove = chosenId;
+    this.p1.visual.root.userData.tpsExpandedMoveBase = plan.choice.moveId;
+    this.p1.visual.root.userData.tpsExpandedMoveVariant = this.p1.currentMove?.motionVariant ?? "BASE";
     this.p1.visual.root.userData.tpsSignatureAction = plan.choice.signature;
     this.p1.visual.root.userData.tpsContextBeat = plan.choice.beat;
     if (plan.choice.beat) this.setCombatBeat(plan.choice.beat);
+    else if (chosenId !== plan.choice.moveId) this.setCombatBeat(this.p1.currentMove?.label ?? "", 17);
 
     if (plan.reversalStrike) {
       this.playerReversalSamples += 1;

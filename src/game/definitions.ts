@@ -1,4 +1,5 @@
 import type { FighterDefinition, MoveDefinition } from "./types";
+import { expandMoveSet } from "./move-expansion";
 
 function move(
   definition: Partial<MoveDefinition> &
@@ -465,7 +466,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       handScale: 1.08,
       footScale: 1.14,
     },
-    moves: redMoves,
+    moves: expandMoveSet(redMoves),
   },
   blue: {
     id: "blue",
@@ -507,7 +508,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       footScale: 1.02,
       longPanels: true,
     },
-    moves: blueMoves,
+    moves: expandMoveSet(blueMoves),
   },
 };
 

@@ -12,6 +12,7 @@ import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
+import { buildExpandedMotionLibrary, selectExpandedClip, sourceOfExpandedClip, EXPANDED_MOTION_VERSION } from "./expanded-motion-library";
 import {
   applyInertialTransition,
   beginInertialTransition,
@@ -515,18 +516,20 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
-    if (move.id === "counter") {
+    const moveId = move.motionBase ?? move.id;
+    const chosen = (source: string) => selectExpandedClip(source, move.motionVariant, name => runtime.clips.has(name));
+    if (moveId === "counter") {
       const generatedCounter = move.visualContact !== "LEFT_FIST" && runtime.clips.has("BF_Counter_R");
       return {
-        name: generatedCounter ? "BF_Counter_R" : `CM_Counter_${move.visualContact === "LEFT_FIST" ? "L" : "R"}`,
+        name: chosen(generatedCounter ? "BF_Counter_R" : `CM_Counter_${move.visualContact === "LEFT_FIST" ? "L" : "R"}`),
         loop: false,
         speed: 1 / seconds,
       };
     }
-    if (move.id === "throw") return { name: "CM_Throw", loop: false, speed: 1 / seconds };
-    if (move.id === "backfist" && move.visualContact === "LEFT_FIST") return { name: "BF_Backfist_L", loop: false, speed: 1 / seconds };
-    if (move.id === "bodyBlow" && move.visualContact === "RIGHT_FIST") return { name: "BF_BodyBlow_R", loop: false, speed: 1 / seconds };
-    return { name: proceduralAttackClip(move.id) ?? "BF_Cross_R", loop: false, speed: 1 / seconds };
+    if (moveId === "throw") return { name: "CM_Throw", loop: false, speed: 1 / seconds };
+    if (moveId === "backfist" && move.visualContact === "LEFT_FIST") return { name: chosen("BF_Backfist_L"), loop: false, speed: 1 / seconds };
+    if (moveId === "bodyBlow" && move.visualContact === "RIGHT_FIST") return { name: chosen("BF_BodyBlow_R"), loop: false, speed: 1 / seconds };
+    return { name: chosen(proceduralAttackClip(moveId) ?? "BF_Cross_R"), loop: false, speed: 1 / seconds };
   }
   switch (fighter.state) {
     case "WALK": return {
@@ -579,7 +582,7 @@ const AUTHORED_ATTACK_CLIP_PREFIXES = [
 ] as const;
 
 function isAuthoredAttackClip(name: string): boolean {
-  return AUTHORED_ATTACK_CLIP_PREFIXES.some((prefix) => name.startsWith(prefix));
+  return AUTHORED_ATTACK_CLIP_PREFIXES.some((prefix) => sourceOfExpandedClip(name).startsWith(prefix));
 }
 
 function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false, nextState: FighterState = "IDLE"): void {
@@ -857,7 +860,11 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     }
     const combatClips = createCombatMotionLibrary(styled.model, retargetedClips, definition);
     for (const [name, clip] of combatClips) retargetedClips.set(name, clip);
-    visual.root.userData.combatMotionClipCount = combatClips.size;
+    const expandedClips = buildExpandedMotionLibrary(retargetedClips);
+    for (const [name, clip] of expandedClips) retargetedClips.set(name, clip);
+    visual.root.userData.expandedMotionVersion = EXPANDED_MOTION_VERSION;
+    visual.root.userData.expandedMotionClipCount = expandedClips.size;
+    visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size;
     visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
     const runtime: QuaterniusRuntime = {
       ...styled,

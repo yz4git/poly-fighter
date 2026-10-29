@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
+import { expandedClipName } from "../src/game/expanded-motion-library";
 import {
   AUTHORED_MOTION_EVENTS,
   authoredMotionEvents,
@@ -34,7 +35,10 @@ test("authored combat events are finite, ordered and unique to one timeline tabl
 test("all gameplay attacks share one monotonic tick-driven timeline", () => {
   for (const fighter of Object.values(FIGHTER_DEFINITIONS)) {
     for (const move of Object.values(fighter.moves)) {
-      const clip = CLIP_FOR_MOVE[move.id];
+      const originalClip = CLIP_FOR_MOVE[move.motionBase ?? move.id];
+      const clip = originalClip && move.motionVariant
+        ? expandedClipName(originalClip, move.motionVariant)
+        : originalClip;
       assert.ok(clip, `${fighter.name}/${move.id}: missing authoritative clip mapping in test`);
       const event = authoredMotionEvents(clip);
       const total = move.startup + move.active + move.recovery;

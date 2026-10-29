@@ -125,5 +125,5 @@ test("each generated clip inherits exact combat contact phases, remains attack-t
     assert.equal(sample.stage, "ACTIVE");
     assert.equal(sample.phase, authoredMotionEvents("BF_FrontKick_R").contact);
   }
-  assert.equal(isCombatAttackClip("VM_CM_Counter_L_PIVOT"), false, "CM clips preserve prior attack-classification policy");
+  assert.equal(isCombatAttackClip("VM_CM_Counter_L_PIVOT"), true, "counter clips are attack handoffs");
 });

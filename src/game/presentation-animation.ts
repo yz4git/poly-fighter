@@ -644,7 +644,7 @@ export class PresentationAnimationController extends FighterAnimationController 
 
     const authoredAttack = fighter.state === "ATTACK"
       && Boolean(fighter.currentMove)
-      && BLENDER_AUTHORED_ATTACKS.has(fighter.currentMove?.id ?? "");
+      && BLENDER_AUTHORED_ATTACKS.has(fighter.currentMove?.motionBase ?? fighter.currentMove?.id ?? "");
 
     if (fighter.visual.root.userData.quaterniusModelState === "ready") {
       // The imported down clip owns the fall. Do not rotate it a second time

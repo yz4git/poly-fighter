@@ -16,7 +16,8 @@ export function expandedClipName(source: string, variant: MoveVariant): string {
 }
 
 export function sourceOfExpandedClip(name: string): string {
-  const match = /^VM_(.+)_(SNAP|DRIVE|PIVOT|CRUSH)$/.exec(name);
+  const match = /^VM_(.+)_(SNAP|DRIVE|PIVOT|CRUSH)$/.exec(name)
+    ?? /^FX_(.+)_(LIFT|CHASE|METEOR|CYCLONE|RUSH)$/.exec(name);
   return match?.[1] ?? name;
 }
 

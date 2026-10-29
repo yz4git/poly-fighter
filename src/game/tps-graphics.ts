@@ -352,7 +352,9 @@ export class TpsGraphicsDirector {
   }
 
   hit(event: HitEvent, camera: THREE.Camera): void {
-    const tier = tpsImpactTier(event.move.id, event.move.power);
+    const cinematicImpact = event.move.cinematicRole === "meteorSlam"
+      || event.move.cinematicRole === "powerRush";
+    const tier = cinematicImpact ? 3 : tpsImpactTier(event.move.id, event.move.power);
     const visualTier: ImpactTier = event.blocked ? 1 : tier;
     const color = event.blocked ? 0x62e8ff : event.counter ? 0xffd85d : event.attacker === "p1" ? 0xff4f70 : 0x58d9ff;
     const tierBoost = visualTier === 3 ? 1.42 : visualTier === 2 ? 1.18 : 1;

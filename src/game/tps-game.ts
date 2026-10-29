@@ -3,6 +3,9 @@ import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
 import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
+import { chooseCinematicTechnique } from "./cinematic-techniques";
+import { expandedContextMove } from "./move-expansion";
+import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
   chooseTpsComboContinuationRoute,
@@ -43,6 +46,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   playerComboStage: number;
   playerComboGraceTicks: number;
   playerAttackQueued: boolean;
+  airCombo: TpsAirCombo | null;
   playerFlankWindowTicks: number;
   playerFlankAttackTicks: number;
   playerPerfectEvadeTicks: number;
@@ -183,6 +187,30 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     return true;
   }
 
+  // The TPS subclass owns the player action graph (the core method below is
+  // overridden). Select and play the new moves HERE, so iPhone ATTACK taps
+  // actually reach the launched/juggle chain instead of the old three hits.
+  const cinematic = chooseCinematicTechnique({
+    comboStage: game.playerComboStage,
+    forwardAxis: (game.p1.input.up ? 1 : 0) - (game.p1.input.down ? 1 : 0),
+    sideAxis: (game.p1.input.right ? 1 : 0) - (game.p1.input.left ? 1 : 0),
+    distance,
+    opponentAirborne: !game.p2.grounded,
+    airHits: game.airCombo?.hits ?? 0,
+    hasJuggle: Boolean(game.airCombo),
+    signaturePriority: false,
+  });
+  if (cinematic) {
+    if (!game.p1.beginMove(cinematic)) return false;
+    game.playerComboStage = Math.min(5, game.playerComboStage + 1);
+    game.playerComboGraceTicks = 34;
+    game.p1.visual.root.userData.tpsComboMove = cinematic;
+    game.p1.visual.root.userData.tpsContextMove = cinematic;
+    game.p1.visual.root.userData.tpsComboStage = game.playerComboStage;
+    game.p1.visual.root.userData.tpsSignatureTechnique = cinematic;
+    return true;
+  }
+
   if (stage === 0 || !game.__comboRoute) {
     game.__comboRouteSeed = (game.__comboRouteSeed ?? 0) + 1;
     game.__comboRoute = chooseTpsComboRoute({
@@ -203,7 +231,16 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   const moveId = stage === 0 && !flank && !perfect
     ? opener.moveId
     : tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
-  if (!game.p1.beginMove(moveId)) return false;
+  // Preserve the classic opener and audited route for responsive first-tap
+  // input. Linked hits gain the existing forty tempo/directional variants.
+  const enhancedMoveId = stage === 0 ? moveId : expandedContextMove({
+    baseId: moveId,
+    moveCount: game.__comboRouteSeed ?? 0,
+    forwardAxis: (game.p1.input.up ? 1 : 0) - (game.p1.input.down ? 1 : 0),
+    sideAxis: (game.p1.input.right ? 1 : 0) - (game.p1.input.left ? 1 : 0),
+    available: game.p1.definition.moves,
+  });
+  if (!game.p1.beginMove(enhancedMoveId)) return false;
 
   // A successful lateral PERFECT STEP creates a large side gap by design. The
   // first counter therefore gets a short authored pursuit lunge so the reward
@@ -228,7 +265,7 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   game.playerComboStage = stage + 1;
   game.playerComboGraceTicks = 34;
   game.p1.visual.root.userData.tpsComboRoute = game.__comboRoute;
-  game.p1.visual.root.userData.tpsComboMove = moveId;
+  game.p1.visual.root.userData.tpsComboMove = enhancedMoveId;
   game.p1.visual.root.userData.tpsComboStage = game.playerComboStage;
 
   if (flank) {
@@ -250,7 +287,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   // cancelWindow. This preserves a visible follow-through beat before the next
   // startup and makes direction-based branches deterministic even if the player
   // releases the stick before the link point arrives.
-  if (game.p1.state === "ATTACK" && rawAttackPressed && game.playerComboStage < 3) {
+  if (game.p1.state === "ATTACK" && rawAttackPressed && game.playerComboStage < maxTpsComboStage(game.airCombo)) {
     game.__comboQueuedBranch = input.up
       ? "FORWARD"
       : input.down
@@ -265,7 +302,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     && activeMove
     && game.p1.hitTargets.has(game.p2.id)
     && game.p1.visual.root.userData.tpsCleanHitConfirmed === true
-    && game.playerComboStage < 3
+    && game.playerComboStage < maxTpsComboStage(game.airCombo)
   ) {
     const linkWindow = tpsComboLinkWindow(activeMove);
     if (rawAttackPressed && game.p1.moveTick >= linkWindow.queueStart && game.p1.moveTick <= linkWindow.linkEnd) {
@@ -509,7 +546,12 @@ prototype.resolveAttack = function resolveAttack(
     const knockbackScale = tpsHypeKnockbackScaleForTier(tier);
     defender.velocity.x *= knockbackScale;
     defender.velocity.z *= knockbackScale;
-    if (move.launcher) {
+    if (move.cinematicRole === "meteorSlam") {
+      // Do not replace the true downward finishing impulse with the generic
+      // heavyweight knockdown pop-up. The defender must actually land.
+      defender.velocity.y = -7.6;
+      defender.grounded = false;
+    } else if (move.launcher) {
       defender.velocity.y = Math.max(defender.velocity.y, TPS_HYPE_PROFILE.launcherVerticalSpeed);
       defender.grounded = false;
     } else if (tier === 3 && defender.state !== "KO" && ["KNOCKDOWN", "THROW"].includes(defender.state)) {

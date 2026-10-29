@@ -1,12 +1,22 @@
 import * as THREE from "three";
+import { predictPoseTowardGoal } from "./motionbricks-goal-bridge";
 
 export const KIMODO_MOTION_INERTIALIZATION_VERSION = "KIMODO_INSPIRED_INERTIAL_V1";
+
+export type InertialContextFrame = {
+  position: THREE.Vector3;
+  rotation: THREE.Quaternion;
+  /** Time elapsed since the preceding frame. */
+  interval: number;
+};
 
 export type InertialPoseSample = {
   position: THREE.Vector3;
   rotation: THREE.Quaternion;
   linearVelocity: THREE.Vector3;
   angularVelocity: THREE.Vector3;
+  /** Four most recent displayed poses, never advanced during hitstop. */
+  context?: readonly InertialContextFrame[];
 };
 
 export type InertialTransitionSample = InertialPoseSample;
@@ -18,6 +28,7 @@ export type InertializationTelemetry = {
   activeBones: number;
   replacementPinnedBones: number;
   minimumBoneScale: number;
+  goalRejectedChannels: number;
 };
 
 const MAX_LOCAL_LINEAR_SPEED = 3.0;
@@ -48,13 +59,6 @@ function angularVelocity(
   return clampVectorLength(axis.multiplyScalar(angle / deltaSeconds), MAX_LOCAL_ANGULAR_SPEED);
 }
 
-function rotationFromAngularVelocity(velocity: THREE.Vector3, seconds: number): THREE.Quaternion {
-  const speed = velocity.length();
-  if (!(speed > 1e-6) || !(seconds > 0)) return new THREE.Quaternion();
-  const angle = Math.min(MAX_ROTATION_PREDICTION, speed * seconds);
-  return new THREE.Quaternion().setFromAxisAngle(velocity.clone().multiplyScalar(1 / speed), angle);
-}
-
 function transitionWeight(age: number, duration: number): number {
   if (!(duration > 1e-5)) return 0;
   const u = THREE.MathUtils.clamp(age / duration, 0, 1);
@@ -72,6 +76,11 @@ function predictionSeconds(age: number, duration: number): number {
   return tau * (1 - Math.exp(-age / tau));
 }
 
+/**
+ * Record the four displayed context poses used by our lightweight goal bridge.
+ * A rolling window suppresses jitter in velocity estimates caused by one
+ * retargeted frame, while giving the most recent movement the largest weight.
+ */
 export function recordInertialPose(
   bones: Map<string, THREE.Object3D>,
   history: Map<string, InertialPoseSample>,
@@ -83,30 +92,46 @@ export function recordInertialPose(
     const currentPosition = bone.position.clone();
     const currentRotation = bone.quaternion.clone().normalize();
     const previous = history.get(name);
-    const measuredLinear = previous && validDelta
-      ? clampVectorLength(
-        currentPosition.clone().sub(previous.position).multiplyScalar(1 / deltaSeconds),
-        MAX_LOCAL_LINEAR_SPEED,
-      )
-      : new THREE.Vector3();
-    const measuredAngular = previous && validDelta
-      ? angularVelocity(previous.rotation, currentRotation, deltaSeconds)
-      : new THREE.Vector3();
-
-    // Low-pass measured velocity rather than pose. This retains authored arcs
-    // while preventing one noisy retarget sample from contaminating a transition.
+    // Hitstop is not a new sample. Do not append duplicate poses at dt=0:
+    // they would destroy the velocity needed when the strike resumes.
+    const context: InertialContextFrame[] = previous && !validDelta
+      ? [...(previous.context ?? [])]
+      : [
+        ...(previous?.context ?? []).slice(-3),
+        { position: currentPosition.clone(), rotation: currentRotation.clone(), interval: previous ? deltaSeconds : 0 },
+      ];
+    let linear = new THREE.Vector3();
+    let angular = new THREE.Vector3();
+    let weightSum = 0;
+    if (validDelta) {
+      for (let i = 1; i < context.length; i += 1) {
+        const earlier = context[i - 1], later = context[i];
+        if (!(later.interval > 1e-5)) continue;
+        const importance = i; // Most recent motion has priority.
+        linear.addScaledVector(
+          clampVectorLength(later.position.clone().sub(earlier.position).divideScalar(later.interval), MAX_LOCAL_LINEAR_SPEED),
+          importance,
+        );
+        angular.addScaledVector(angularVelocity(earlier.rotation, later.rotation, later.interval), importance);
+        weightSum += importance;
+      }
+    }
+    if (weightSum > 0) {
+      linear.divideScalar(weightSum);
+      angular.divideScalar(weightSum);
+    } else if (previous && validDelta) {
+      linear.copy(clampVectorLength(currentPosition.clone().sub(previous.position).divideScalar(deltaSeconds), MAX_LOCAL_LINEAR_SPEED));
+      angular.copy(angularVelocity(previous.rotation, currentRotation, deltaSeconds));
+    }
     const linearVelocity = previous
-      ? (validDelta ? previous.linearVelocity.clone().lerp(measuredLinear, 0.62) : previous.linearVelocity.clone())
-      : measuredLinear;
-    const angular = previous
-      ? (validDelta ? previous.angularVelocity.clone().lerp(measuredAngular, 0.62) : previous.angularVelocity.clone())
-      : measuredAngular;
-
+      ? (validDelta ? previous.linearVelocity.clone().lerp(linear, 0.62) : previous.linearVelocity.clone())
+      : linear;
+    const angularMotion = previous
+      ? (validDelta ? previous.angularVelocity.clone().lerp(angular, 0.62) : previous.angularVelocity.clone())
+      : angular;
     history.set(name, {
-      position: currentPosition,
-      rotation: currentRotation,
-      linearVelocity,
-      angularVelocity: angular,
+      position: currentPosition, rotation: currentRotation,
+      linearVelocity, angularVelocity: angularMotion, context,
     });
   }
 }
@@ -149,6 +174,7 @@ export function applyInertialTransition(
       activeBones: 0,
       replacementPinnedBones: 0,
       minimumBoneScale: 1,
+      goalRejectedChannels: 0,
     };
   }
 
@@ -158,6 +184,7 @@ export function applyInertialTransition(
   let activeBones = 0;
   let replacementPinnedBones = 0;
   let minimumBoneScale = 1;
+  let goalRejectedChannels = 0;
 
   for (const [name, from] of transition) {
     const bone = bones.get(name);
@@ -168,10 +195,16 @@ export function applyInertialTransition(
     const destinationPosition = bone.position.clone();
     const destinationRotation = bone.quaternion.clone().normalize();
 
-    const predictedPosition = from.position.clone().addScaledVector(from.linearVelocity, predict);
-    const predictedRotation = from.rotation.clone()
-      .multiply(rotationFromAngularVelocity(from.angularVelocity, predict))
-      .normalize();
+    // Target-aware prediction: recent pose momentum may continue ONLY toward
+    // the incoming clip's actual sampled goal. Away-directed residual velocity
+    // is damped, stopping jab->guard overshoots without touching strike events.
+    const prediction = predictPoseTowardGoal(
+      from.position, from.rotation, from.linearVelocity, from.angularVelocity,
+      destinationPosition, destinationRotation, predict,
+    );
+    const predictedPosition = prediction.position;
+    const predictedRotation = prediction.rotation;
+    goalRejectedChannels += prediction.rejectedChannels;
 
     // UniMate-style replacement mask: scale 0 means the destination authored
     // joint is exact, scale 1 means full inertial carry. Intermediate values
@@ -195,5 +228,6 @@ export function applyInertialTransition(
     activeBones,
     replacementPinnedBones,
     minimumBoneScale,
+    goalRejectedChannels,
   };
 }

@@ -1,5 +1,6 @@
 import { FIGHTER_DEFINITIONS } from "./definitions";
 import type { FighterDefinition, MoveDefinition } from "./types";
+import { expandMoveSet } from "./move-expansion";
 
 export const AXION_FIGHTER_ID = "amber" as const;
 
@@ -190,7 +191,7 @@ export const AXION_FIGHTER_DEFINITION: FighterDefinition = Object.freeze({
     handScale: 1.12,
     footScale: 1.16,
   },
-  moves: axionMoves,
+  moves: expandMoveSet(axionMoves),
 });
 
 export function registerAxionFighter(): FighterDefinition {

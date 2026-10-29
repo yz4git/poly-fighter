@@ -12,6 +12,7 @@ import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
+import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
 import { buildExpandedMotionLibrary, selectExpandedClip, sourceOfExpandedClip, EXPANDED_MOTION_VERSION } from "./expanded-motion-library";
 import {
   applyInertialTransition,
@@ -517,6 +518,10 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
     const moveId = move.motionBase ?? move.id;
+    if (move.cinematicRole) {
+      const cinematic = cinematicClipName(move.cinematicRole);
+      if (runtime.clips.has(cinematic)) return { name: cinematic, loop: false, speed: 1 / seconds };
+    }
     const chosen = (source: string) => selectExpandedClip(source, move.motionVariant, name => runtime.clips.has(name));
     if (moveId === "counter") {
       const generatedCounter = move.visualContact !== "LEFT_FIST" && runtime.clips.has("BF_Counter_R");
@@ -862,9 +867,13 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     for (const [name, clip] of combatClips) retargetedClips.set(name, clip);
     const expandedClips = buildExpandedMotionLibrary(retargetedClips);
     for (const [name, clip] of expandedClips) retargetedClips.set(name, clip);
+    const cinematicClips = createCinematicMotionLibrary(retargetedClips);
+    for (const [name, clip] of cinematicClips) retargetedClips.set(name, clip);
+    visual.root.userData.cinematicMotionVersion = CINEMATIC_MOTION_VERSION;
+    visual.root.userData.cinematicMotionClipCount = cinematicClips.size;
     visual.root.userData.expandedMotionVersion = EXPANDED_MOTION_VERSION;
     visual.root.userData.expandedMotionClipCount = expandedClips.size;
-    visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size;
+    visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size + cinematicClips.size;
     visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
     const runtime: QuaterniusRuntime = {
       ...styled,

@@ -195,7 +195,7 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     forwardAxis: (game.p1.input.up ? 1 : 0) - (game.p1.input.down ? 1 : 0),
     sideAxis: (game.p1.input.right ? 1 : 0) - (game.p1.input.left ? 1 : 0),
     distance,
-    opponentAirborne: !game.p2.grounded && game.p2.position.y > .48,
+    opponentAirborne: !game.p2.grounded,
     airHits: game.airCombo?.hits ?? 0,
     hasJuggle: Boolean(game.airCombo),
     signaturePriority: false,

@@ -99,8 +99,8 @@ export function recordInertialPose(
         ...(previous?.context ?? []).slice(-3),
         { position: currentPosition.clone(), rotation: currentRotation.clone(), interval: previous ? deltaSeconds : 0 },
       ];
-    let linear = new THREE.Vector3();
-    let angular = new THREE.Vector3();
+    const linear = new THREE.Vector3();
+    const angular = new THREE.Vector3();
     let weightSum = 0;
     if (validDelta) {
       for (let i = 1; i < context.length; i += 1) {

@@ -104,7 +104,7 @@ export function chooseCinematicTechnique(input: {
   if (input.signaturePriority) return null;
   if (input.hasJuggle && input.opponentAirborne && input.distance <= 2.30) {
     // The finisher must be deliberate: at least one airborne re-hit landed.
-    return input.airHits >= 2 ? "meteorSlam" : "airChase";
+    return input.airHits >= 3 ? "meteorSlam" : "airChase";
   }
   if (input.comboStage >= 1 && input.forwardAxis > .5 && input.distance <= 1.95) return "skyBreaker";
   if (input.comboStage >= 2 && input.forwardAxis < -.5 && input.distance <= 1.94) return "powerRush";

@@ -343,13 +343,16 @@ try {
     game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 8);
     game.press('right', 'tps-v2-reversal-side');
     game.press('guard', 'tps-v2-reversal-step');
+    const evadeTrace=[];
     game.step();
+    evadeTrace.push({n:0,p1:[game.p1.position.x,game.p1.position.z],p2:[game.p2.position.x,game.p2.position.z],p1State:game.p1.state,p2State:game.p2.state,enemyTick:game.p2.moveTick,threatTicks:game.playerStepThreatTicks,evadeTicks:game.playerEvadeTicks});
     game.release('guard', 'tps-v2-reversal-step');
     game.release('right', 'tps-v2-reversal-side');
     let evadeSteps = 1;
     while (evadeSteps < 12 && game.playerReversalTicks <= 0) {
       game.renderTime += 1 / 60;
       game.step();
+      evadeTrace.push({n:evadeSteps,p1:[game.p1.position.x,game.p1.position.z],p2:[game.p2.position.x,game.p2.position.z],p1State:game.p1.state,p2State:game.p2.state,enemyTick:game.p2.moveTick,threatTicks:game.playerStepThreatTicks,evadeTicks:game.playerEvadeTicks,p1Health:game.p1.health,enemyHit:game.p2.hitTargets.has(game.p1.id),enemyActive:game.p2.isActive()});
       evadeSteps += 1;
     }
     const earnedWindow = game.playerReversalTicks;
@@ -383,6 +386,8 @@ try {
     game.renderer.render(game.scene, game.camera);
     return {
       earnedWindow,
+      evadeTrace,
+      p1Health:game.p1.health,
       bufferedDuringStep,
       didNotCancelStep,
       evadeSteps,

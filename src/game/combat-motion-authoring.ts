@@ -260,6 +260,80 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const kneel: BodyPose = { drop: -.15, forward: .025, pitch: .34, chest: .02, rightHand: [.20, .16, .13], leftHand: [-.07, .56, .16], leftFoot: [-width, 0, .10], rightFoot: [width, 0, -.13] };
     body(u < .3 ? interpolate(downPose, roll, smoothMotion(u / .3)) : u < .64 ? interpolate(roll, kneel, smoothMotion((u - .3) / .34)) : interpolate(kneel, {}, smoothMotion((u - .64) / .36)));
   }, 37);
+  // Authored, per-rig full-body recovery clips. All joint samples are baked
+  // once with the existing 2-bone IK and skeleton-keyframing pipeline.
+  // Hitboxes and fighter roots remain purely gameplay driven.
+  const ukemiCrouch: BodyPose = {
+    drop: -.16, forward: .025, pitch: .30, chest: .10,
+    leftFoot: [-width, 0, .10], rightFoot: [width, 0, -.13],
+    leftHand: [-.20, .14, .14], rightHand: [.16, .20, .15],
+    highGuard: .30,
+  };
+  const ukemiTuck: BodyPose = {
+    drop: -.30, forward: -.075, pitch: -.95, chest: .18,
+    leftFoot: [-.09, .045, .22], rightFoot: [.10, .06, .19],
+    leftHand: [-.18, .09, -.08], rightHand: [.17, .12, -.05],
+  };
+  for (const direction of ["L", "R", "B"] as const) {
+    author(`CM_TechRoll_${direction}`, .30, u => {
+      const tuck = u < .18
+        ? interpolate(downPose, ukemiTuck, smoothMotion(u / .18))
+        : u < .53
+          ? ukemiTuck
+          : interpolate(ukemiTuck, ukemiCrouch, smoothMotion((u - .53) / .47));
+      body(tuck);
+      // A genuine 360-degree whole-body roll, not just sliding a down pose.
+      // The motion never changes simulation rotation or collision geometry.
+      const wrapped = smoothMotion(Math.min(1, u / .59)) * Math.PI * 2;
+      if (direction === "B") rotate("pelvis", X, -wrapped);
+      else rotate("pelvis", Z, (direction === "L" ? 1 : -1) * wrapped);
+      rotate("spine_02", X, .12 * Math.sin(Math.PI * Math.min(1, u / .59)));
+    }, 49);
+  }
+  author("CM_TechRise", .36, u => {
+    const brace = u < .45
+      ? interpolate(ukemiCrouch, { ...ukemiCrouch, drop: -.10, pitch: .12, highGuard: .7 }, smoothMotion(u / .45))
+      : interpolate({ ...ukemiCrouch, drop: -.10, pitch: .12, highGuard: .7 },
+        { highGuard: .75, chest: .06, drop: -.01 }, smoothMotion((u - .45) / .55));
+    body(brace);
+  }, 37);
+
+  // Both fighters have independent hand/torso reactions at the same contact
+  // beat. The live combat engine supplies separation, hitstop and timing.
+  author("CM_ThrowTech_Defender", .30, u => {
+    const swat = Math.sin(Math.PI * Math.min(1, u / .66));
+    const recover = smoothMotion(Math.max(0, (u - .58) / .42));
+    body({
+      highGuard: .45 + .5 * recover,
+      drop: -.065 * swat,
+      side: -.035 * swat,
+      forward: -.038 * swat,
+      yaw: -.27 * swat,
+      pitch: -.10 * swat,
+      chest: .10 * swat,
+      leftFoot: [-width - .04 * swat, 0, .065 - .06 * swat],
+      rightFoot: [width + .055 * swat, .012 * swat, -.07 - .11 * swat],
+      leftHand: [-.14 - .09 * swat, .79 - .03 * swat, .23 + .09 * swat],
+      rightHand: [.12 + .12 * swat, .81 - .045 * swat, .22 + .12 * swat],
+    });
+  }, 37);
+  author("CM_ThrowTech_Attacker", .30, u => {
+    const loseGrip = Math.sin(Math.PI * Math.min(1, u / .73));
+    const brace = smoothMotion(Math.max(0, (u - .48) / .52));
+    body({
+      highGuard: .30 + .45 * brace,
+      drop: -.055 * loseGrip,
+      side: .033 * loseGrip,
+      forward: -.095 * loseGrip,
+      yaw: .32 * loseGrip,
+      pitch: -.14 * loseGrip,
+      chest: -.04 * loseGrip,
+      leftFoot: [-width - .055 * loseGrip, 0, .065 - .07 * loseGrip],
+      rightFoot: [width + .06 * loseGrip, .016 * loseGrip, -.07 - .08 * loseGrip],
+      leftHand: [-.15 - .05 * loseGrip, .74 - .14 * loseGrip, .19 - .17 * loseGrip],
+      rightHand: [.14 + .06 * loseGrip, .75 - .13 * loseGrip, .17 - .19 * loseGrip],
+    });
+  }, 37);
   for (const side of ["L", "R"] as const) author(`CM_Counter_${side}`, .55, u => {
     const sign = side === "L" ? -1 : 1;
     const drive = u < .5 ? smoothMotion(u / .5) : 1 - smoothMotion((u - .5) / .5);

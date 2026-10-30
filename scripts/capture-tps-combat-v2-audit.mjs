@@ -337,7 +337,10 @@ try {
     const game = findGame();
     ${resetSnippet}
     if (!game.p2.beginMove('power')) return { error: 'enemy-power-begin-failed' };
-    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 1);
+    // Start evasive footwork early enough to actually leave the heavy attack
+    // lane (not one frame before its hitbox turns on). A successful REVERSAL
+    // must follow a genuine whiff and an earned reaction window.
+    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 8);
     game.press('right', 'tps-v2-reversal-side');
     game.press('guard', 'tps-v2-reversal-step');
     game.step();

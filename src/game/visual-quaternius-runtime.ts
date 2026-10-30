@@ -724,8 +724,11 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
   const move = fighter.currentMove;
   if (runtime.currentClip.startsWith("CM_ThrowTech_")) {
     phase = tpsRecoveryClipPhase(Number(fighter.visual.root.userData.tpsThrowBreakPoseTicks ?? 0), TPS_THROW_BREAK_POSE_TICKS);
-  } else if (runtime.currentClip.startsWith("CM_TechRoll_")) {
-    phase = tpsRecoveryClipPhase(Number(fighter.visual.root.userData.tpsUkemiPoseTicks ?? 0), TPS_UKEMI_POSE_TICKS);
+  } else if (runtime.currentClip.startsWith("CM_TechRoll_") || runtime.currentClip === "CM_QuickRise") {
+    phase = tpsRecoveryClipPhase(
+      Number(fighter.visual.root.userData.tpsUkemiPoseTicks ?? 0),
+      Number(fighter.visual.root.userData.tpsUkemiPoseDuration ?? TPS_UKEMI_POSE_TICKS),
+    );
   } else if (fighter.state === "ATTACK" && move) {
     const sample = sampleCombatMotionTimeline(move, fighter.moveTick, runtime.currentClip);
     phase = sample.phase;

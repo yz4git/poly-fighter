@@ -96,6 +96,12 @@ import {
   tpsUkemiMovePerFrame,
   TPS_THROW_TECH_REACTION_TICKS,
   TPS_UKEMI_ROLL_TICKS,
+  TPS_UKEMI_POSE_TICKS,
+  TPS_THROW_BREAK_POSE_TICKS,
+  TPS_QUICK_RISE_POSE_TICKS,
+  TPS_QUICK_RISE_KNOCKDOWN_TICKS,
+  canStartTpsQuickRise,
+  tpsUkemiDirectionForAxes,
 } from "./tps-throw-ukemi";
 import {
   canCinematicStrikeAirborne,
@@ -188,6 +194,7 @@ export class TpsFightGame {
   private playerGuardCrouching = false;
   private playerThrowTechTicks = 0;
   private playerUkemiTicks = 0;
+  private playerUkemiPoseTicks = 0;
   private readonly playerUkemiDirection = new THREE.Vector3();
   private airCombo: TpsAirCombo | null = null;
   private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
@@ -396,6 +403,14 @@ export class TpsFightGame {
     if (!this.options.training) this.timerTicks = Math.max(0, this.timerTicks - 1);
 
     this.airCombo = tickTpsAirCombo(this.airCombo, this.p2.grounded, this.p2.health);
+    // Reaction clips advance in simulation time, not requestAnimationFrame time.
+    // Hitstop freezes the pose clocks just as it freezes attack recovery.
+    for (const fighter of [this.p1, this.p2]) {
+      const data = fighter.visual.root.userData;
+      const frames = Number(data.tpsThrowBreakPoseTicks ?? 0);
+      if (frames > 0 && fighter.hitStop <= 0) data.tpsThrowBreakPoseTicks = frames - 1;
+      if (Number(data.tpsThrowBreakPoseTicks ?? 0) <= 0) data.tpsThrowBreakRole = null;
+    }
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
@@ -511,9 +526,29 @@ export class TpsFightGame {
         Math.abs(sideAxis) > .45 ? towardSide : retreat,
       ).normalize();
       this.playerUkemiTicks = TPS_UKEMI_ROLL_TICKS;
+      this.playerUkemiPoseTicks = TPS_UKEMI_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiPoseTicks = TPS_UKEMI_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiPoseDuration = TPS_UKEMI_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiClip = `CM_TechRoll_${tpsUkemiDirectionForAxes(forwardAxis, sideAxis)}`;
+      this.p1.visual.root.userData.tpsUkemiWasRolled = true;
       this.p1.knockdownTicks = Math.min(this.p1.knockdownTicks, 18);
       this.p1.visual.root.userData.tpsUkemiDirection = this.playerUkemiDirection.toArray();
       this.setCombatBeat("TECH ROLL", 22);
+    } else if (canStartTpsQuickRise({
+      stepPressed, state: this.p1.state, grounded: this.p1.grounded,
+      knockdownTicks: this.p1.knockdownTicks, forwardAxis, sideAxis,
+      alreadyRecovering: this.playerUkemiPoseTicks > 0,
+    })) {
+      // Standing quickly trades the roll's lateral displacement for earlier
+      // guard availability. Both options remain vulnerable to ground pressure.
+      this.playerUkemiTicks = 0;
+      this.playerUkemiPoseTicks = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.knockdownTicks = Math.min(this.p1.knockdownTicks, TPS_QUICK_RISE_KNOCKDOWN_TICKS);
+      this.p1.visual.root.userData.tpsUkemiPoseTicks = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiPoseDuration = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiClip = "CM_QuickRise";
+      this.p1.visual.root.userData.tpsUkemiWasRolled = true;
+      this.setCombatBeat("QUICK RISE", 22);
     }
     if (canBufferTpsThrowTech({
       attackPressed, playerState: this.p1.state,
@@ -588,6 +623,12 @@ export class TpsFightGame {
     if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
     if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
     if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+    if (this.playerUkemiPoseTicks > 0 && this.p1.hitStop <= 0) this.playerUkemiPoseTicks -= 1;
+    if (this.p1.state !== "KNOCKDOWN" && this.p1.state !== "WAKEUP" && this.p1.state !== "THROW") {
+      if (this.playerUkemiPoseTicks > 0) this.playerUkemiPoseTicks = 0;
+      this.p1.visual.root.userData.tpsUkemiWasRolled = false;
+    }
+    this.p1.visual.root.userData.tpsUkemiPoseTicks = this.playerUkemiPoseTicks;
     if (this.playerThrowTechTicks > 0 && this.p1.hitStop <= 0) this.playerThrowTechTicks -= 1;
     if (this.playerThrowTechTicks <= 0) this.p1.visual.root.userData.tpsThrowTechBuffered = false;
     // Freeze the guard punish timing through hitstop, just like move recovery.
@@ -1249,6 +1290,18 @@ export class TpsFightGame {
       defender.visual.root.userData.tpsThrowTechBuffered = false;
       defender.visual.root.userData.tpsThrowTechSuccessTicks = 26;
       defender.visual.root.userData.tpsThrowTechSerial = Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0) + 1;
+      defender.visual.root.userData.tpsThrowBreakRole = "DEFENDER";
+      attacker.visual.root.userData.tpsThrowBreakRole = "ATTACKER";
+      defender.visual.root.userData.tpsThrowBreakPoseTicks = TPS_THROW_BREAK_POSE_TICKS;
+      attacker.visual.root.userData.tpsThrowBreakPoseTicks = TPS_THROW_BREAK_POSE_TICKS;
+      // Resolve the contested grab into a short mutual recoil rather than
+      // allowing a captured arm to continue its complete throwing swing.
+      attacker.currentMove = null;
+      attacker.moveTick = 0;
+      attacker.hitStun = Math.max(attacker.hitStun, TPS_THROW_BREAK_POSE_TICKS);
+      defender.hitStun = Math.max(defender.hitStun, TPS_THROW_BREAK_POSE_TICKS);
+      attacker.state = "HIT";
+      defender.state = "HIT";
       attacker.hitStop = Math.max(attacker.hitStop, 9);
       defender.hitStop = Math.max(defender.hitStop, 8);
       const away = horizontalDirection(attacker.position, defender.position);
@@ -1871,6 +1924,15 @@ export class TpsFightGame {
     this.playerGuardCrouching = false;
     this.playerThrowTechTicks = 0;
     this.playerUkemiTicks = 0;
+    this.playerUkemiPoseTicks = 0;
+    for (const fighter of [this.p1, this.p2]) {
+      fighter.visual.root.userData.tpsThrowBreakPoseTicks = 0;
+      fighter.visual.root.userData.tpsThrowBreakRole = null;
+      fighter.visual.root.userData.tpsUkemiPoseTicks = 0;
+      fighter.visual.root.userData.tpsUkemiPoseDuration = 0;
+      fighter.visual.root.userData.tpsUkemiWasRolled = false;
+      fighter.visual.root.userData.tpsUkemiClip = null;
+    }
     this.playerUkemiDirection.set(0, 0, 0);
     this.playerFlankWindowTicks = 0;
     this.playerFlankAttackTicks = 0;

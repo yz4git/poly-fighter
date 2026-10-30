@@ -126,3 +126,18 @@ test("heavy attacks cannot home through a lateral STEP while a jab stays respons
   assert.ok(light.x > heavy.x * 3,"light strike retains greater tracking");
   assert.ok(heavy.x < .06,"committed heavy barely turns during eight frames");
 });
+
+test("medium committed straights no longer home through sidesteps, but quick jabs may track", () => {
+  const jabTurn = tpsCommittedAimTurnLimit(moves.jab);
+  const straightTurn = tpsCommittedAimTurnLimit(moves.straight);
+  const powerTurn = tpsCommittedAimTurnLimit(moves.power);
+  assert.equal(jabTurn, TPS_ATTACK_AIM_TURN_PER_TICK);
+  assert.ok(straightTurn < jabTurn * .45, "a committed straight must be sidesteppable");
+  assert.ok(straightTurn > powerTurn, "a heavy power swing has the most committed lane");
+  assert.ok(powerTurn <= .004, "heavy swing cannot acquire the defender mid-sidestep");
+  let tracked = { x: 0, z: 1 };
+  for (let tick=0; tick<7; tick++) {
+    tracked = turnTpsCommittedAttackAim(tracked.x, tracked.z, 1, 0, straightTurn);
+  }
+  assert.ok(tracked.x < .09, "straight cannot rotate across the whole attack lane during 7 startup frames");
+});

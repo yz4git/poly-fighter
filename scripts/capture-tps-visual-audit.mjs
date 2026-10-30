@@ -767,11 +767,15 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { moves, p2Health: game.p2.health, comboStage: game.playerComboStage };
+    return { moves, baseMoves: moves.map(id => game.p1.definition.moves[id]?.motionBase ?? id), p2Health: game.p2.health, comboStage: game.playerComboStage };
   `);
-  const comboSequence = comboProbe.moves.join(',');
+  const comboSequence = comboProbe.baseMoves.join(',');
   const validCloseCombos = new Set(['jab,straight,power', 'jab,backfist,power']);
-  if (!validCloseCombos.has(comboSequence)) throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
+  // The actual TPS now selects SNAPPY/DRIVE/PIVOT/CRUSH variations from
+  // the 224-move library. Compare the combat family, not an old fixed ID.
+  if (!validCloseCombos.has(comboSequence) || comboProbe.p2Health >= 100 || comboProbe.comboStage !== 3) {
+    throw new Error(`TPS ATTACK combo sequence failed: ${JSON.stringify(comboProbe)}`);
+  }
   await screenshot(sessionId, `${outputDir}/tps-combo.png`);
 
   // Deterministically prove a real branch at the authored link window. Force the

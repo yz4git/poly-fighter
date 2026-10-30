@@ -296,7 +296,7 @@ try {
     g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
     g.playerFlankWindowTicks=0;g.playerInterceptTicks=0;g.playerReversalTicks=0;
     g.playerPerfectEvadeTicks=0;g.airCombo=null;g.__comboRoute=undefined;
-    g.__neutralMashAttackCount=0;g.__neutralMashLastBase=null;g.__mashBufferTicks=0;
+    g.__neutralMashAttackCount=0;g.__neutralMashPhrase=-1;g.__neutralMashLastBase=null;g.__mashBufferTicks=0;
     g.p1.visual.root.userData.tpsMashMoveSerial=0;
     const punches=[];let lastSerial=0;
     for(let frame=0;frame<1000&&punches.length<14;frame++){
@@ -328,7 +328,7 @@ try {
     g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
     g.playerFlankWindowTicks=0;g.playerInterceptTicks=0;g.playerReversalTicks=0;
     g.playerPerfectEvadeTicks=0;g.airCombo=null;g.__comboRoute=undefined;
-    g.__neutralMashAttackCount=0;g.__neutralMashLastBase=null;
+    g.__neutralMashAttackCount=0;g.__neutralMashPhrase=-1;g.__neutralMashLastBase=null;
     let now=performance.now()/1000;
     const clips=[];const names=[];
     for(let index=0;index<18;index++){

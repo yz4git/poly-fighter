@@ -252,6 +252,14 @@ try {
     game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
     game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
     const threatBefore = game.enemyThreatStatus();
+    // A step 12 telegraph ticks before even the enemy's startup is not a
+    // guaranteed evade. React near the actual strike instead (four windup
+    // frames before commitment) and require a real geometric whiff.
+    for (let i = 0; i < 8; i += 1) {
+      game.renderTime += 1 / 60;
+      game.step();
+    }
+    const threatAtStep = game.enemyThreatStatus();
     game.press('right', 'reactable-step-side');
     game.press('guard', 'reactable-step');
     game.step();
@@ -270,6 +278,7 @@ try {
     return {
       steps,
       threatBefore,
+      threatAtStep,
       trackedBeforeAttack,
       perfectEvades: game.trainingProgress.perfectEvades,
       p1Health: game.p1.health,

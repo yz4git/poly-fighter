@@ -84,6 +84,10 @@ import { createFighterVisual, disposeFighterVisual } from "./visual-entry";
 import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
 import { expandedContextMove } from "./move-expansion";
+import {
+  canTpsGuardThrow, resolveTpsGuard, shouldHoldTpsGuard,
+  tpsGuardFrameAdvantage, tpsPunishWindowTicks,
+} from "./tps-defense-triangle";
 import { chooseCinematicTechnique } from "./cinematic-techniques";
 import {
   canCinematicStrikeAirborne,
@@ -171,6 +175,9 @@ export class TpsFightGame {
   private playerComboStage = 0;
   private playerComboGraceTicks = 0;
   private playerAttackQueued = false;
+  private playerGuardPunishTicks = 0;
+  private playerGuardAdvantage = 0;
+  private playerGuardCrouching = false;
   private airCombo: TpsAirCombo | null = null;
   private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
   private playerFlankWindowTicks = 0;
@@ -476,6 +483,33 @@ export class TpsFightGame {
     }
     if (this.advancePlayerStep(attackPressed, toEnemy, moveSpeed)) return;
 
+    // STEP can be tapped to evade or held past the short evade to defend.
+    // This restores intentional guard/throw interactions on a two-button phone.
+    const holdGuard = shouldHoldTpsGuard({
+      heldStep: input.guard,
+      evadeTicks: this.playerEvadeTicks,
+      actionable: this.p1.canAct(),
+    });
+    if (holdGuard) {
+      this.playerGuardCrouching = forwardAxis < 0;
+      this.p1.visual.root.userData.tpsGuardLevel = this.playerGuardCrouching ? "LOW" : "STANDING";
+      if (canTpsGuardThrow({
+        guarding: true,
+        attackPressed,
+        distance: horizontalDistance(this.p1.position, this.p2.position),
+        opponentGrounded: this.p2.grounded,
+      }) && this.p1.beginMove("throw")) {
+        this.playerComboStage = 0;
+        this.playerGuardPunishTicks = 0;
+        this.setCombatBeat("THROW!", 18);
+      } else {
+        this.p1.state = "GUARD";
+      }
+      this.p1.updatePhysics(FIXED_STEP);
+      return;
+    }
+    this.playerGuardCrouching = false;
+    this.p1.visual.root.userData.tpsGuardLevel = null;
     this.applyPlayerLocomotion(move, moveSpeed, forwardAxis, sideAxis);
 
     if (attackPressed) {
@@ -500,6 +534,13 @@ export class TpsFightGame {
     if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
     if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
     if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+    // Freeze the guard punish timing through hitstop, just like move recovery.
+    if (this.playerGuardPunishTicks > 0 && this.p1.hitStop <= 0 && this.p2.hitStop <= 0) {
+      this.playerGuardPunishTicks -= 1;
+    }
+    if (this.p2.state !== "ATTACK") this.playerGuardPunishTicks = 0;
+    this.p1.visual.root.userData.tpsGuardPunishTicks = this.playerGuardPunishTicks;
+    this.p1.visual.root.userData.tpsGuardAdvantageFrames = this.playerGuardAdvantage;
   }
 
   private tryLegacyPlayerThrow(
@@ -1136,6 +1177,15 @@ export class TpsFightGame {
       return;
     }
 
+    const crouchGuard = defender === this.p1 && defender.state === "GUARD" && defender.input.down;
+    const guardOutcome = resolveTpsGuard(move.hitLevel, defenderGuarding, crouchGuard);
+    if (guardOutcome === "DUCK") {
+      // An intentionally crouched high-guard makes a high strike whiff.
+      attacker.hitTargets.add(defender.id);
+      attacker.visual.root.userData.tpsCleanHitConfirmed = false;
+      if (defender === this.p1) this.setCombatBeat("DUCKED HIGH!", 20);
+      return;
+    }
     attacker.hitTargets.add(defender.id);
     const defenderWasAttacking = defender.state === "ATTACK";
     const interceptStrike = attacker === this.p1
@@ -1149,6 +1199,7 @@ export class TpsFightGame {
       move,
       defenderHealth: defender.health,
       defenderGuarding,
+      defenderCrouching: crouchGuard,
       defenderWasAttacking,
       interceptStrike,
       reversalStrike,
@@ -1165,6 +1216,20 @@ export class TpsFightGame {
     impactPosition.y = tpsImpactHeightForMove(move);
 
     this.recordPlayerHitProgress(attacker, blocked, interceptStrike, reversalStrike);
+    if (blocked && defender === this.p1) {
+      const advantage = tpsGuardFrameAdvantage(move, attacker.moveTick);
+      this.playerGuardAdvantage = advantage;
+      this.playerGuardPunishTicks = tpsPunishWindowTicks(advantage);
+      this.p1.visual.root.userData.tpsLastGuardBlockedMove = move.id;
+      this.p1.visual.root.userData.tpsLastGuardBlockedLevel = move.hitLevel;
+      if (this.playerGuardPunishTicks > 0) this.setCombatBeat(`GUARD · PUNISH +${advantage}F`, 24);
+      else this.setCombatBeat("BLOCK!", 13);
+    } else if (attacker === this.p1 && !blocked && this.playerGuardPunishTicks > 0
+      && defenderWasAttacking) {
+      this.trainingProgress.punishes += 1;
+      this.setCombatBeat("GUARD PUNISH!", 24);
+      this.playerGuardPunishTicks = 0;
+    }
     this.applyResolvedDamage(
       defender,
       move,
@@ -1703,6 +1768,9 @@ export class TpsFightGame {
     this.playerComboGraceTicks = 0;
     this.playerAttackQueued = false;
     this.airCombo = null;
+    this.playerGuardPunishTicks = 0;
+    this.playerGuardAdvantage = 0;
+    this.playerGuardCrouching = false;
     this.playerFlankWindowTicks = 0;
     this.playerFlankAttackTicks = 0;
     this.playerPerfectEvadeTicks = 0;
@@ -1789,6 +1857,8 @@ export class TpsFightGame {
       playerStepSideWeight: this.playerStepSideWeight,
       playerFlankWindowTicks: this.playerFlankWindowTicks,
       playerComboStage: this.playerComboStage,
+      playerGuardPunishTicks: this.playerGuardPunishTicks,
+      playerGuardCrouching: this.playerGuardCrouching,
       combatBeatTicks: this.combatBeatTicks,
       combatBeatLabel: this.combatBeatLabel,
       enemyOpeningGraceTicks: this.enemyOpeningGraceTicks,

@@ -290,6 +290,17 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rotate("spine_02", X, .12 * Math.sin(Math.PI * Math.min(1, u / .59)));
     }, 49);
   }
+  author("CM_QuickRise", .20, u => {
+    // Fast stationary recovery: plant the palms, drive the rear knee under
+    // the chest, then lift to the same crouch as the rolling recovery.
+    const push = u < .38
+      ? interpolate(downPose, { ...ukemiTuck, pitch: -.43, drop: -.24,
+          leftHand: [-.19, .04, .09], rightHand: [.21, .05, .09] }, smoothMotion(u / .38))
+      : interpolate({ ...ukemiTuck, pitch: -.43, drop: -.24,
+          leftHand: [-.19, .04, .09], rightHand: [.21, .05, .09] },
+        ukemiCrouch, smoothMotion((u - .38) / .62));
+    body(push);
+  }, 33);
   author("CM_TechRise", .36, u => {
     const brace = u < .45
       ? interpolate(ukemiCrouch, { ...ukemiCrouch, drop: -.10, pitch: .12, highGuard: .7 }, smoothMotion(u / .45))

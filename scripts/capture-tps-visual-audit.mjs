@@ -855,6 +855,7 @@ try {
       linked,
       firstMove,
       secondMove,
+      secondBase: secondMove ? (game.p1.definition.moves[secondMove]?.motionBase ?? secondMove) : null,
       p2Health: game.p2.health,
       linkState: data.tpsComboLinkState ?? null,
       linkSerial: data.tpsComboLinkSerial ?? 0,
@@ -874,13 +875,14 @@ try {
       inertialMinBoneScale: Number(data.kimodoInertialMinimumBoneScale ?? 1),
       replacementMode: data.unimateReplacementMode ?? null,
       motionMove: data.motionExpansionCurrentMove ?? null,
+      motionBase: data.motionExpansionCurrentMove ? (game.p1.definition.moves[data.motionExpansionCurrentMove]?.motionBase ?? data.motionExpansionCurrentMove) : null,
       motionPhase: data.motionExpansionPhase ?? null,
       correctionPolicy: data.motionCorrectionPolicy ?? null,
     };
   `);
   if (!comboLinkProbe.linked
     || comboLinkProbe.firstMove !== 'jab'
-    || comboLinkProbe.secondMove !== 'backfist'
+    || comboLinkProbe.secondBase !== 'backfist'
     || comboLinkProbe.linkState !== 'LINKED'
     || comboLinkProbe.fromMove !== 'jab'
     || comboLinkProbe.routeFrom !== 'CLOSE_A'
@@ -897,7 +899,7 @@ try {
     || comboLinkProbe.replacementMode !== "ATTACK_GRAPH_PIN"
     || !(["RAW_CLIP_PLAYBACK", "AUTHORED_ATTACK_PRESERVE"].includes(comboLinkProbe.correctionPolicy)
       ? Math.abs(comboLinkProbe.appliedBlend) <= 0.0001 && comboLinkProbe.motionMove === null
-      : Math.abs(comboLinkProbe.appliedBlend - 0.075) <= 0.0001 && comboLinkProbe.motionMove === 'backfist')) {
+      : Math.abs(comboLinkProbe.appliedBlend - 0.075) <= 0.0001 && comboLinkProbe.motionBase === 'backfist')) {
     throw new Error(`TPS authored combo branch did not link cleanly: ${JSON.stringify(comboLinkProbe)}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-combo-link.png`);

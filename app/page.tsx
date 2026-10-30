@@ -579,7 +579,7 @@ export default function Home() {
           </div>
           <div className="tps-defense-guide" role="note">
             <b>NEW DEFENSE</b>
-            <span>STEP TAP = EVADE · HOLD = GUARD · BACK+HOLD = LOW GUARD · GUARD+ATTACK = THROW</span>
+            <span>STEP TAP = EVADE · HOLD = GUARD · BACK+HOLD = LOW GUARD · GUARD+ATTACK = THROW · ATTACK vs THROW = BREAK · DOWN+SIDE/BACK+STEP = TECH ROLL</span>
           </div>
           <div className="select-bottom">
             {matchMode === "CIRCUIT" ? (

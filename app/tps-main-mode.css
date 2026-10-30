@@ -282,3 +282,22 @@
   overflow-wrap: anywhere;
 }
 .tps-defense-guide b { color: #82d5ef; letter-spacing: .08em; }
+
+/* Compact landscape loadouts use a three-row grid, so ordinary guide flow
+   accidentally created a fourth row underneath TITLE/ENGAGE. Pin the hint
+   into the genuinely empty band above the fighter cards. */
+@media (orientation: landscape) and (max-height: 760px) {
+  .select-screen .tps-defense-guide {
+    position: absolute;
+    top: clamp(41px, 11vh, 63px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    width: max-content;
+    max-width: min(740px, calc(100% - 116px));
+    margin: 0;
+    padding: 5px 9px;
+    gap: 3px 8px;
+    font-size: clamp(9px, 1.5vh, 11px);
+  }
+}

@@ -138,7 +138,65 @@ try {
   const ukemiPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
   if(ukemiPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("ukemi not PNG");
   await writeFile(`${out}/tps-ukemi-roll.png`,ukemiPng);
-  console.log(JSON.stringify({...observations,...throwUkemi}));
+  // A second browser pass checks the *rendered* baked skeleton clips, not
+  // merely the physical x displacement or the player's recovery flags.
+  const throwVisual=await run(session,`${lookup}
+    const g=findGame();
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.resetForRound(0,.54,1);g.p2.resetForRound(0,-.54,-1);
+    g.p1.hitStop=0;g.p2.hitStop=0;g.playerThrowTechTicks=0;
+    g.p2.beginMove("throw");
+    g.p2.moveTick=Math.max(0,g.p2.currentMove.startup-3);
+    g.updatePlayer({...neutral,punch:true});
+    g.p2.moveTick=g.p2.currentMove.startup;
+    g.trackCommittedAttack(g.p2,g.p1);
+    g.resolveAttack(g.p2,g.p1,false);
+    let now=performance.now()/1000;
+    for(let n=0;n<3;n++){now+=1/60;g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.01);}
+    g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
+    return {playerClip:g.p1.visual.root.userData.combatMotionCurrentClip,
+      enemyClip:g.p2.visual.root.userData.combatMotionCurrentClip,
+      playerRole:g.p1.visual.root.userData.tpsThrowBreakRole,
+      enemyRole:g.p2.visual.root.userData.tpsThrowBreakRole,
+      playerPose:g.p1.visual.root.userData.tpsThrowBreakPoseTicks,
+      enemyPose:g.p2.visual.root.userData.tpsThrowBreakPoseTicks,
+      playerState:g.p1.state,enemyState:g.p2.state};
+  `);
+  if(throwVisual.playerClip!=="CM_ThrowTech_Defender"
+    ||throwVisual.enemyClip!=="CM_ThrowTech_Attacker"
+    ||throwVisual.playerRole!=="DEFENDER"||throwVisual.enemyRole!=="ATTACKER"
+    ||throwVisual.playerState!=="HIT"||throwVisual.enemyState!=="HIT"
+    ||throwVisual.playerPose<=0||throwVisual.enemyPose<=0)
+    throw Error("rendered two-sided throw-tech clip missing "+JSON.stringify(throwVisual));
+  const breakPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+  if(breakPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("throw-break not PNG");
+  await writeFile(`${out}/tps-throw-break-poses.png`,breakPng);
+
+  const ukemiVisual=await run(session,`${lookup}
+    const g=findGame();
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.resetForRound(0,.72,1);g.p2.resetForRound(0,-.72,-1);
+    g.p1.hitStop=0;g.p1.state="KNOCKDOWN";g.p1.grounded=true;g.p1.knockdownTicks=34;
+    g.p1.input={...neutral};g.p1.previousInput={...neutral};g.playerUkemiTicks=0;g.playerUkemiPoseTicks=0;
+    g.updatePlayer({...neutral,right:true,guard:true});
+    for(let n=0;n<3;n++)g.updatePlayer({...neutral,right:true,guard:true});
+    let now=performance.now()/1000;
+    for(let n=0;n<3;n++){now+=1/60;g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.01);}
+    g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
+    return {clip:g.p1.visual.root.userData.combatMotionCurrentClip,
+      ukemiClip:g.p1.visual.root.userData.tpsUkemiClip,
+      poseTicks:g.p1.visual.root.userData.tpsUkemiPoseTicks,
+      physicalTicks:g.playerUkemiTicks,
+      state:g.p1.state,grounded:g.p1.grounded};
+  `);
+  if(ukemiVisual.clip!=="CM_TechRoll_R"||ukemiVisual.poseTicks<=0
+    ||ukemiVisual.physicalTicks!==4||ukemiVisual.state!=="KNOCKDOWN"
+    ||!ukemiVisual.grounded)throw Error("rendered full-body ukemi absent "+JSON.stringify(ukemiVisual));
+  const rollingPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+  if(rollingPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("rolling PNG invalid");
+  await writeFile(`${out}/tps-ukemi-midroll.png`,rollingPng);
+  await writeFile(`${out}/recovery-motion-visual.json`,JSON.stringify({throwVisual,ukemiVisual},null,2));
+  console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual}));
 }finally{
   if(session)await api(`/session/${session}`,"DELETE").catch(()=>{});
   proc.kill("SIGTERM");

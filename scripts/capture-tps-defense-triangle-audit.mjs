@@ -96,7 +96,7 @@ try {
   const throwUkemi=await run(session,`${lookup}
     const g=findGame();
     const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
-    g.p1.resetForRound(0,.72,1);g.p2.resetForRound(0,-.72,-1);
+    g.p1.resetForRound(0,.54,1);g.p2.resetForRound(0,-.54,-1);
     g.p1.hitStop=0;g.p2.hitStop=0;g.playerThrowTechTicks=0;g.playerUkemiTicks=0;
     g.p2.beginMove("throw");
     g.p2.moveTick=Math.max(0,g.p2.currentMove.startup-3);

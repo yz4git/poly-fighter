@@ -1222,7 +1222,7 @@ export class TpsFightGame {
       this.playerGuardPunishTicks = tpsPunishWindowTicks(advantage);
       this.p1.visual.root.userData.tpsLastGuardBlockedMove = move.id;
       this.p1.visual.root.userData.tpsLastGuardBlockedLevel = move.hitLevel;
-      if (this.playerGuardPunishTicks > 0) this.setCombatBeat(`GUARD · PUNISH +${advantage}F`, 24);
+      if (this.playerGuardPunishTicks > 0) this.setCombatBeat(`GUARD · PUNISH +${advantage}F`, 8);
       else this.setCombatBeat("BLOCK!", 13);
     } else if (attacker === this.p1 && !blocked && this.playerGuardPunishTicks > 0
       && defenderWasAttacking) {

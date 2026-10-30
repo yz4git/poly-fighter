@@ -98,6 +98,9 @@ import {
   TPS_UKEMI_ROLL_TICKS,
   TPS_UKEMI_POSE_TICKS,
   TPS_THROW_BREAK_POSE_TICKS,
+  TPS_QUICK_RISE_POSE_TICKS,
+  TPS_QUICK_RISE_KNOCKDOWN_TICKS,
+  canStartTpsQuickRise,
   tpsUkemiDirectionForAxes,
 } from "./tps-throw-ukemi";
 import {
@@ -525,11 +528,27 @@ export class TpsFightGame {
       this.playerUkemiTicks = TPS_UKEMI_ROLL_TICKS;
       this.playerUkemiPoseTicks = TPS_UKEMI_POSE_TICKS;
       this.p1.visual.root.userData.tpsUkemiPoseTicks = TPS_UKEMI_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiPoseDuration = TPS_UKEMI_POSE_TICKS;
       this.p1.visual.root.userData.tpsUkemiClip = `CM_TechRoll_${tpsUkemiDirectionForAxes(forwardAxis, sideAxis)}`;
       this.p1.visual.root.userData.tpsUkemiWasRolled = true;
       this.p1.knockdownTicks = Math.min(this.p1.knockdownTicks, 18);
       this.p1.visual.root.userData.tpsUkemiDirection = this.playerUkemiDirection.toArray();
       this.setCombatBeat("TECH ROLL", 22);
+    } else if (canStartTpsQuickRise({
+      stepPressed, state: this.p1.state, grounded: this.p1.grounded,
+      knockdownTicks: this.p1.knockdownTicks, forwardAxis, sideAxis,
+      alreadyRecovering: this.playerUkemiPoseTicks > 0,
+    })) {
+      // Standing quickly trades the roll's lateral displacement for earlier
+      // guard availability. Both options remain vulnerable to ground pressure.
+      this.playerUkemiTicks = 0;
+      this.playerUkemiPoseTicks = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.knockdownTicks = Math.min(this.p1.knockdownTicks, TPS_QUICK_RISE_KNOCKDOWN_TICKS);
+      this.p1.visual.root.userData.tpsUkemiPoseTicks = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiPoseDuration = TPS_QUICK_RISE_POSE_TICKS;
+      this.p1.visual.root.userData.tpsUkemiClip = "CM_QuickRise";
+      this.p1.visual.root.userData.tpsUkemiWasRolled = true;
+      this.setCombatBeat("QUICK RISE", 22);
     }
     if (canBufferTpsThrowTech({
       attackPressed, playerState: this.p1.state,
@@ -1910,6 +1929,7 @@ export class TpsFightGame {
       fighter.visual.root.userData.tpsThrowBreakPoseTicks = 0;
       fighter.visual.root.userData.tpsThrowBreakRole = null;
       fighter.visual.root.userData.tpsUkemiPoseTicks = 0;
+      fighter.visual.root.userData.tpsUkemiPoseDuration = 0;
       fighter.visual.root.userData.tpsUkemiWasRolled = false;
       fighter.visual.root.userData.tpsUkemiClip = null;
     }

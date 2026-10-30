@@ -5,6 +5,7 @@ import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
 import { chooseCinematicTechnique } from "./cinematic-techniques";
 import { expandedContextMove } from "./move-expansion";
+import { chooseTpsNeutralMashMove, TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap } from "./tps-mash-variety";
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
@@ -64,6 +65,9 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __hypeDirector?: TpsHypeDirector;
   __comboRoute?: TpsComboRoute;
   __comboRouteSeed?: number;
+  __neutralMashAttackCount?: number;
+  __neutralMashLastBase?: string | null;
+  __mashBufferTicks?: number;
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
   __finalImpactSeconds?: number;
@@ -162,6 +166,7 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     || (flank && stage === 0);
   if (useSignatureContext) {
     if (!game.p1.beginMove(signatureChoice.moveId)) return false;
+    game.__mashBufferTicks = 0;
     game.__comboRoute = undefined;
     game.playerComboStage = 1;
     game.playerComboGraceTicks = 34;
@@ -202,6 +207,7 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   });
   if (cinematic) {
     if (!game.p1.beginMove(cinematic)) return false;
+    game.__mashBufferTicks = 0;
     game.playerComboStage = Math.min(5, game.playerComboStage + 1);
     game.playerComboGraceTicks = 34;
     game.p1.visual.root.userData.tpsComboMove = cinematic;
@@ -231,16 +237,42 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   const moveId = stage === 0 && !flank && !perfect
     ? opener.moveId
     : tpsComboMoveForRoute(game.__comboRoute, stage, game.p1.definition);
-  // Preserve the classic opener and audited route for responsive first-tap
-  // input. Linked hits gain the existing forty tempo/directional variants.
-  const enhancedMoveId = stage === 0 ? moveId : expandedContextMove({
+  // Keep directed attacks deliberate and preserve the very first classic
+  // three-hit route. Once neutral ATTACK has actually started several moves,
+  // cycle real strike families instead of replaying jab/straight/power forever.
+  const neutralMash = !game.p1.input.up && !game.p1.input.down
+    && !game.p1.input.left && !game.p1.input.right
+    && !flank && !perfect;
+  const mashChoice = neutralMash && (game.__neutralMashAttackCount ?? 0) >= 3
+    ? chooseTpsNeutralMashMove({
+        count: game.__neutralMashAttackCount ?? 0,
+        stage,
+        distance,
+        lastBase: game.__neutralMashLastBase,
+        available: game.p1.definition.moves,
+      })
+    : null;
+  const enhancedMoveId = mashChoice?.id ?? (stage === 0 ? moveId : expandedContextMove({
     baseId: moveId,
     moveCount: game.__comboRouteSeed ?? 0,
     forwardAxis: (game.p1.input.up ? 1 : 0) - (game.p1.input.down ? 1 : 0),
     sideAxis: (game.p1.input.right ? 1 : 0) - (game.p1.input.left ? 1 : 0),
     available: game.p1.definition.moves,
-  });
+  }));
+  if (mashChoice && stage === 0) {
+    game.__comboRoute = distance > 1.72 ? "FAR"
+      : ["kick","lowKick","risingKick","dashKick"].includes(mashChoice.base) ? "FAR"
+      : ["backfist","bodyBlow","counter"].includes(mashChoice.base) ? "CLOSE_B" : "CLOSE_A";
+  }
   if (!game.p1.beginMove(enhancedMoveId)) return false;
+  game.__mashBufferTicks = 0;
+  if (neutralMash) {
+    game.__neutralMashAttackCount = (game.__neutralMashAttackCount ?? 0) + 1;
+    game.__neutralMashLastBase = mashChoice?.base ?? moveId;
+  }
+  game.p1.visual.root.userData.tpsMashMoveSerial = game.__neutralMashAttackCount ?? 0;
+  game.p1.visual.root.userData.tpsMashPhrase = mashChoice?.phrase ?? 0;
+  game.p1.visual.root.userData.tpsMashSelectedMove = mashChoice?.id ?? null;
 
   // A successful lateral PERFECT STEP creates a large side gap by design. The
   // first counter therefore gets a short authored pursuit lunge so the reward
@@ -281,6 +313,21 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   const beforeMoveId = game.p1.currentMove?.id ?? null;
   const rawAttackPressed = input.punch && !game.p1.input.punch;
   const activeMove = game.p1.currentMove;
+
+  // An early ATTACK tap during a real move can queue the next strike. The
+  // authored link still requires CLEAN contact and its exact cancel window;
+  // a whiff only starts a *new* attack after full recovery. Repeated short
+  // iPhone taps no longer disappear simply because they arrived at startup.
+  if ((game.__mashBufferTicks ?? 0) > 0 && game.p1.hitStop <= 0) {
+    game.__mashBufferTicks = (game.__mashBufferTicks ?? 0) - 1;
+  }
+  if (beforeState === "ATTACK" && activeMove && rawAttackPressed
+    && tpsCanBufferMashTap(activeMove, game.p1.moveTick)) {
+    game.__mashBufferTicks = TPS_MASH_BUFFER_TICKS;
+    if (game.playerComboStage < maxTpsComboStage(game.airCombo)) {
+      game.playerAttackQueued = true;
+    }
+  }
 
   // Capture direction together with the ATTACK tap. Early taps are allowed to
   // buffer, but the continuation only fires inside the move's authored
@@ -370,6 +417,19 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   }
 
   coreUpdatePlayer.call(this, input);
+
+  // Only after the ENTIRE whiff/blocked strike has finished, accept a recent
+  // buffered mash tap as a fresh opener. No phantom contact, auto-cancel,
+  // invulnerable recovery or extra attack button is introduced.
+  if (beforeState === "ATTACK" && game.p1.state !== "ATTACK"
+    && (game.__mashBufferTicks ?? 0) > 0 && game.p1.canAct()) {
+    game.playerComboStage = 0;
+    game.__comboRoute = undefined;
+    game.playerAttackQueued = false;
+    if (prototype.beginContextAttack.call(this)) game.p1.updatePhysics(FIXED_STEP);
+    game.__mashBufferTicks = 0;
+  }
+  game.p1.visual.root.userData.tpsMashBufferTicks = game.__mashBufferTicks ?? 0;
 
   // STEP is a precise spacing action, not a full-arena escape. Keep its
   // original recovery/cooldown, but bound the extra travel so a dodge can end
@@ -636,7 +696,14 @@ prototype.resetRound = function resetRound(): void {
   const game = extended(this as unknown as TpsFightGame);
   game.__comboRoute = undefined;
   game.__comboRouteSeed = 0;
+  game.__neutralMashAttackCount = 0;
+  game.__neutralMashLastBase = null;
+  game.__mashBufferTicks = 0;
   game.__comboLinkSerial = 0;
+  game.p1.visual.root.userData.tpsMashMoveSerial = 0;
+  game.p1.visual.root.userData.tpsMashPhrase = 0;
+  game.p1.visual.root.userData.tpsMashSelectedMove = null;
+  game.p1.visual.root.userData.tpsMashBufferTicks = 0;
   game.__comboQueuedBranch = undefined;
   game.p1.visual.root.userData.tpsComboRoute = null;
   game.p1.visual.root.userData.tpsComboLinkSerial = 0;

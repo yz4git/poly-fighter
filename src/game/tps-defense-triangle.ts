@@ -50,3 +50,22 @@ export function tpsGuardFrameAdvantage(
 export function tpsPunishWindowTicks(advantage: number): number {
   return advantage >= 5 ? Math.min(24, advantage + 2) : 0;
 }
+
+/** CPU can only lower its guard against a visibly committed low attack.
+ * EASY never reads; NORMAL only sometimes reads slower lows; HARD needs
+ * at least eight visible windup ticks. No instant frame-zero input reading.
+ */
+export function tpsCpuReadLowGuard(input: {
+  defenderGuarding: boolean;
+  move: Pick<MoveDefinition, "hitLevel" | "startup"> | null;
+  attackTick: number;
+  difficulty: "EASY" | "NORMAL" | "HARD";
+  exchangeTick: number;
+}): boolean {
+  if (!input.defenderGuarding || input.move?.hitLevel !== "LOW") return false;
+  if (input.difficulty === "EASY") return false;
+  const visibleTicks = input.attackTick;
+  if (input.difficulty === "HARD") return visibleTicks >= Math.max(8, Math.ceil(input.move.startup * .75));
+  return (Math.floor(input.exchangeTick / 90) % 3 === 0)
+    && visibleTicks >= Math.max(10, input.move.startup - 1);
+}

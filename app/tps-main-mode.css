@@ -260,3 +260,44 @@
 .tps-badge.tps-face-safe-badge:not(.tps-combo-badge):not(.tps-ko-badge) {
   display: none;
 }
+
+/* Teach two-button guard/throw on the loadout instead of the fight viewport.
+   The live iPhone HUD deliberately retains no persistent text strip. */
+.tps-defense-guide {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 5px 9px;
+  max-width: 100%;
+  margin: 3px auto 4px;
+  padding: 5px 8px;
+  border: 1px solid rgba(99, 188, 226, 0.35);
+  border-radius: 6px;
+  color: #a9cde0;
+  background: rgba(9, 28, 49, 0.52);
+  font-size: clamp(9px, 1.5vh, 11px);
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.tps-defense-guide b { color: #82d5ef; letter-spacing: .08em; }
+
+/* Compact landscape loadouts use a three-row grid, so ordinary guide flow
+   accidentally created a fourth row underneath TITLE/ENGAGE. Pin the hint
+   into the genuinely empty band above the fighter cards. */
+@media (orientation: landscape) and (max-height: 760px) {
+  .select-screen .tps-defense-guide {
+    position: absolute;
+    top: clamp(41px, 11vh, 63px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    width: max-content;
+    max-width: min(740px, calc(100% - 116px));
+    margin: 0;
+    padding: 5px 9px;
+    gap: 3px 8px;
+    font-size: clamp(9px, 1.5vh, 11px);
+  }
+}

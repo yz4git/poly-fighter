@@ -461,6 +461,8 @@ export default function Home() {
   const tpsIncoming = hud?.tpsCue === "INCOMING";
   const tpsWindup = hud?.tpsCue === "WINDUP";
   const tpsPunish = hud?.tpsCue === "PUNISH";
+  const tpsGuarding = hud?.p1State === "GUARD";
+  const tpsLowGuarding = tpsGuarding && (hud?.message ?? "").startsWith("LOW GUARD");
   const tpsIntercept = hud?.tpsCue === "WINDUP";
   const tpsStrikeRange = hud?.tpsCue === "RANGE";
   const tpsComboMessage = (hud?.message ?? "").startsWith("COMBO ");
@@ -575,6 +577,10 @@ export default function Home() {
           <div style={{ color: "#7894ae", fontSize: 8, letterSpacing: ".12em", margin: "5px 0 2px" }}>
             {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : "POLY FIGHTER CUSTOM VISUAL"}
           </div>
+          <div className="tps-defense-guide" role="note">
+            <b>NEW DEFENSE</b>
+            <span>STEP TAP = EVADE · HOLD = GUARD · BACK+HOLD = LOW GUARD · GUARD+ATTACK = THROW</span>
+          </div>
           <div className="select-bottom">
             {matchMode === "CIRCUIT" ? (
               <div className="circuit-select-note">5 consecutive rivals. Win to install a Protocol and continue. One defeat ends the run.</div>
@@ -609,11 +615,11 @@ export default function Home() {
           <section className="touch-controls" aria-label="Touch controls">
             <VirtualPad gameRef={gameRef} paused={paused} />
             <div className="action-buttons tps-two-button-actions">
-              {pressableAction(gameRef, "guard", "Step", tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
+              {pressableAction(gameRef, "guard", "Step", tpsGuarding ? (tpsLowGuarding ? "LOW GUARD" : "GUARD") : tpsIncoming ? "STEP NOW" : tpsWindup ? "READY" : "STEP", "guard tps-step-action " + (tpsIncoming ? "tps-threat-action" : tpsWindup ? "tps-windup-action" : ""))}
               {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
-          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> <b>WINDUP</b> STEP OR INTERCEPT <span>•</span> <b>PERFECT STEP</b> → REVERSAL <span>•</span> FORWARD STEP → ATTACK = DASH</div>
+          <div className="input-hint tps-input-hint"><b>STEP</b> TAP DODGE / HOLD GUARD <span>•</span> <b>BACK+STEP</b> LOW GUARD <span>•</span> <b>GUARD+ATTACK</b> THROW <span>•</span> <b>BLOCK</b> → PUNISH</div>
           {screen === "TRAINING" && (
             <section className={`training-coach ${trainingStage === 5 ? "complete" : ""}`} aria-live="polite">
               <span>RIVAL CORE TRAINING // {Math.min(trainingStage + 1, 6)}/6</span>

@@ -12,6 +12,8 @@ export type TpsHudSnapshotInput = {
   playerStepSideWeight: number;
   playerFlankWindowTicks: number;
   playerComboStage: number;
+  playerGuardPunishTicks?: number;
+  playerGuardCrouching?: boolean;
   combatBeatTicks: number;
   combatBeatLabel: string | null;
   enemyOpeningGraceTicks: number;
@@ -31,7 +33,9 @@ export type TpsHudSnapshotInput = {
 export function buildTpsHudSnapshot(input: TpsHudSnapshotInput): HudSnapshot {
   const tpsCue: NonNullable<HudSnapshot["tpsCue"]> = input.finishPending || input.finished
     ? "NONE"
-    : input.enemyThreat.incoming
+    : input.playerGuardPunishTicks && input.playerGuardPunishTicks > 0 && input.p1State !== "BLOCK_STUN"
+      ? "PUNISH"
+      : input.enemyThreat.incoming
       ? "INCOMING"
       : input.playerReversalTicks > 0 || input.playerPerfectEvadeTicks > 0
         ? "PUNISH"
@@ -45,6 +49,10 @@ export function buildTpsHudSnapshot(input: TpsHudSnapshotInput): HudSnapshot {
       ? input.combatBeatLabel
       : input.finishPending
         ? "KO"
+        : input.p1State === "GUARD"
+          ? (input.playerGuardCrouching ? "LOW GUARD · MID VULNERABLE" : "GUARD · LOW VULNERABLE")
+          : input.playerGuardPunishTicks && input.playerGuardPunishTicks > 0 && input.p1State !== "BLOCK_STUN"
+            ? "PUNISH NOW!"
         : input.p1State === "ATTACK" && input.p1MoveId === "dashKick"
           ? "DASH ATTACK"
           : input.playerPerfectEvadeTicks > 0

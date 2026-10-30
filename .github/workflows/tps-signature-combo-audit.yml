@@ -6,12 +6,14 @@ on:
     paths:
       - src/game/**
       - scripts/capture-tps-signature-combo-audit.mjs
+      - scripts/capture-tps-defense-triangle-audit.mjs
       - .github/workflows/tps-signature-combo-audit.yml
   push:
     branches: [main]
     paths:
       - src/game/**
       - scripts/capture-tps-signature-combo-audit.mjs
+      - scripts/capture-tps-defense-triangle-audit.mjs
       - .github/workflows/tps-signature-combo-audit.yml
   workflow_dispatch:
 
@@ -50,6 +52,16 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-signature-combos" node scripts/capture-tps-signature-combo-audit.mjs
           test -s artifacts/tps-signature-combos/signature-air-combo.json
           file artifacts/tps-signature-combos/tps-signature-meteor.png | grep -q "PNG image data"
+      - name: Verify two-button stand/low guard, block punish, and close throw
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-signature-combos" node scripts/capture-tps-defense-triangle-audit.mjs
+          test -s artifacts/tps-signature-combos/defense-triangle.json
+          file artifacts/tps-signature-combos/tps-guard-throw.png | grep -q "PNG image data"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

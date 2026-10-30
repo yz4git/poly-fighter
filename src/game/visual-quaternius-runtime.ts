@@ -545,7 +545,7 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
       speed: 1,
     };
     case "CROUCH": return { name: "CM_Crouch", loop: true, speed: 1 };
-    case "GUARD": return { name: "CM_Guard", loop: true, speed: 1 };
+    case "GUARD": return { name: fighter.visual.root.userData.tpsGuardLevel === "LOW" ? "CM_Crouch" : "CM_Guard", loop: true, speed: 1 };
     case "BLOCK_STUN": return { name: "CM_Block", loop: false, speed: 1 };
     case "SIDESTEP": {
       const direction = String(fighter.visual.root.userData.combatStepDirection ?? "R");

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import {
-  canTpsGuardThrow, resolveTpsGuard, shouldHoldTpsGuard,
+  canTpsGuardThrow, resolveTpsGuard, shouldHoldTpsGuard, tpsCpuReadLowGuard,
   tpsGuardFrameAdvantage, tpsPunishWindowTicks,
 } from "../src/game/tps-defense-triangle";
 import { computeTpsHitResolution } from "../src/game/tps-impact-resolution";
@@ -83,4 +83,18 @@ test("HUD communicates defensive choice and punish cue without adding a button",
   const punish=buildTpsHudSnapshot({...base,p1State:"IDLE",playerGuardPunishTicks:11});
   assert.equal(punish.tpsCue,"PUNISH");
   assert.match(punish.message,/PUNISH NOW/);
+});
+
+test("CPU low-guard reads require visual windup and are limited by difficulty", () => {
+  const slowLow = FIGHTER_DEFINITIONS.red.moves.cycloneSweep;
+  const probe = (difficulty:"EASY"|"NORMAL"|"HARD",attackTick:number,exchangeTick=0) =>
+    tpsCpuReadLowGuard({defenderGuarding:true,move:slowLow,attackTick,difficulty,exchangeTick});
+  assert.equal(probe("EASY",slowLow.startup),false);
+  assert.equal(probe("HARD",0),false);
+  assert.equal(probe("HARD",slowLow.startup),true);
+  assert.equal(probe("NORMAL",0),false);
+  assert.equal(probe("NORMAL",slowLow.startup,0),true);
+  assert.equal(probe("NORMAL",slowLow.startup,90),false);
+  assert.equal(tpsCpuReadLowGuard({defenderGuarding:false,move:slowLow,attackTick:99,difficulty:"HARD",exchangeTick:0}),false);
+  assert.equal(tpsCpuReadLowGuard({defenderGuarding:true,move:FIGHTER_DEFINITIONS.red.moves.jab,attackTick:99,difficulty:"HARD",exchangeTick:0}),false);
 });

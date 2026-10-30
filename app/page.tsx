@@ -577,6 +577,10 @@ export default function Home() {
           <div style={{ color: "#7894ae", fontSize: 8, letterSpacing: ".12em", margin: "5px 0 2px" }}>
             {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : "POLY FIGHTER CUSTOM VISUAL"}
           </div>
+          <div className="tps-defense-guide" role="note">
+            <b>NEW DEFENSE</b>
+            <span>STEP TAP = EVADE · HOLD = GUARD · BACK+HOLD = LOW GUARD · GUARD+ATTACK = THROW</span>
+          </div>
           <div className="select-bottom">
             {matchMode === "CIRCUIT" ? (
               <div className="circuit-select-note">5 consecutive rivals. Win to install a Protocol and continue. One defeat ends the run.</div>

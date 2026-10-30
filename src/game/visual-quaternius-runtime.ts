@@ -7,6 +7,7 @@ import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition, FighterState } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
+import { VIDEO_CHOREOGRAPHY_VERSION, VIDEO_STRIKE_CLIPS } from "./video-demo-choreography";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
@@ -536,6 +537,19 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
       const cinematic = cinematicClipName(move.cinematicRole);
       if (runtime.clips.has(cinematic)) return { name: cinematic, loop: false, speed: 1 / seconds };
     }
+    // Reference video choreography replaces four *basic* authored actions.
+    // Existing expanded variants retain their different authored clips except
+    // the explicitly mapped pivot launcher. Hitbox and move stats are unchanged.
+    const videoClip = (
+      (moveId === "jab" && move.visualContact === "LEFT_FIST" && !move.motionVariant)
+      || (moveId === "backfist" && move.visualContact === "RIGHT_FIST" && !move.motionVariant)
+      || (moveId === "kick" && move.visualContact === "RIGHT_FOOT" && !move.motionVariant)
+      || (moveId === "risingKick" && move.visualContact === "RIGHT_FOOT"
+        && (!move.motionVariant || move.motionVariant === "PIVOT"))
+    ) ? VIDEO_STRIKE_CLIPS[moveId as keyof typeof VIDEO_STRIKE_CLIPS] : undefined;
+    if (videoClip && runtime.clips.has(videoClip)) {
+      return { name: videoClip, loop: false, speed: 1 / seconds };
+    }
     const chosen = (source: string) => selectExpandedClip(source, move.motionVariant, name => runtime.clips.has(name));
     if (moveId === "counter") {
       const generatedCounter = move.visualContact !== "LEFT_FIST" && runtime.clips.has("BF_Counter_R");
@@ -598,6 +612,7 @@ const AUTHORED_ATTACK_CLIP_PREFIXES = [
   "BF_RisingKick",
   "BF_DashKick",
   "BF_Counter_R",
+  "CM_Video_", // baked video-reference attacks use the same inertial handoff contract
 ] as const;
 
 function isAuthoredAttackClip(name: string): boolean {
@@ -896,6 +911,9 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.expandedMotionClipCount = expandedClips.size;
     visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size + cinematicClips.size;
     visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
+    visual.root.userData.videoChoreographyVersion = VIDEO_CHOREOGRAPHY_VERSION;
+    visual.root.userData.videoChoreographyClipCount = Object.values(VIDEO_STRIKE_CLIPS)
+      .filter(name => retargetedClips.has(name)).length;
     const runtime: QuaterniusRuntime = {
       ...styled,
       mixer: new THREE.AnimationMixer(styled.model),
@@ -1035,6 +1053,7 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   runtime.host.userData.quaterniusMotionCorrectionsEnabled = correctionsEnabled;
   runtime.host.userData.quaterniusMotionMode = correctionsEnabled ? "CORRECTED" : "RAW_CLIP_PLAYBACK";
   fighter.visual.root.userData.combatMotionCurrentClip = runtime.currentClip;
+  fighter.visual.root.userData.videoChoreographyActive = runtime.currentClip.startsWith("CM_Video_");
   fighter.visual.root.userData.combatMotionGaitPhase = runtime.gaitPhase;
   fighter.visual.root.userData.combatMotionSingleMixer = true;
   fighter.visual.root.userData.combatMotionTimelineVersion = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";

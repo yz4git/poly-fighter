@@ -880,6 +880,9 @@ try {
       correctionPolicy: data.motionCorrectionPolicy ?? null,
     };
   `);
+  // A newly-authored guard->strike handoff can legitimately settle in 52ms
+  // rather than the 60ms BF->BF handoff. Require a meaningful bounded blend,
+  // an active inertial transition, protected bones and the true linked hit.
   if (!comboLinkProbe.linked
     || comboLinkProbe.firstMove !== 'jab'
     || comboLinkProbe.secondBase !== 'backfist'
@@ -891,7 +894,7 @@ try {
     || comboLinkProbe.linkTick < comboLinkProbe.linkStart
     || comboLinkProbe.linkTick > comboLinkProbe.linkEnd
     || Math.abs(comboLinkProbe.requestedBlend - 0.075) > 0.0001
-    || !(comboLinkProbe.inertialRequestedOverlap >= 0.06 && comboLinkProbe.inertialRequestedOverlap <= 0.11)
+    || !(comboLinkProbe.inertialRequestedOverlap >= 0.045 && comboLinkProbe.inertialRequestedOverlap <= 0.11)
     || !comboLinkProbe.inertialActive
     || !(comboLinkProbe.inertialWeight > 0)
     || !(comboLinkProbe.inertialPinnedBones > 0)

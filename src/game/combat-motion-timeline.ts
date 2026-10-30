@@ -42,6 +42,13 @@ export const AUTHORED_MOTION_EVENTS: Readonly<Record<string, AuthoredMotionEvent
   CM_Counter_L: events(0.5),
   CM_Counter_R: events(0.5),
   CM_Throw: events(0.5),
+  // All four clips are reconstructed with a clear 0.50 contact key.
+  // This pins first-active hitboxes to the actual visual strike, not a
+  // separate clock or the arbitrary last keyframe.
+  CM_Video_Jab: events(.50),
+  CM_Video_Palm: events(.50),
+  CM_Video_SideKick: events(.50),
+  CM_Video_SpinKick: events(.50),
 };
 
 function clamp01(value: number): number {

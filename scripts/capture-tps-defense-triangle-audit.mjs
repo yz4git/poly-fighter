@@ -233,7 +233,58 @@ try {
   if(risePng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("rise PNG invalid");
   await writeFile(`${out}/tps-quick-rise.png`,risePng);
   await writeFile(`${out}/recovery-motion-visual.json`,JSON.stringify({throwVisual,ukemiVisual,quickRiseVisual},null,2));
-  console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual,quickRiseVisual}));
+  // Verify the four actual reference-video martial arts clips on a real
+  // rigged 3D fighter, not just that a TypeScript array contains the names.
+  const videoChoreography = {};
+  const videoClips = {
+    jab:"CM_Video_Jab",backfist:"CM_Video_Palm",
+    kick:"CM_Video_SideKick",risingKick:"CM_Video_SpinKick",
+  };
+  for (const [moveId,expectedClip] of Object.entries(videoClips)) {
+    const observation=await run(session,`${lookup}
+      const g=findGame();
+      g.input.clear();g.finished=false;g.finishPending=false;g.enemyOpeningGraceTicks=9999;
+      g.p1.resetForRound(0,.86,1);g.p2.resetForRound(0,-.54,-1);
+      g.p1.hitStop=0;g.p2.hitStop=0;
+      g.p1.velocity.set(0,0,0);g.p2.velocity.set(0,0,0);
+      if(!g.p1.beginMove(arguments[0]))return {error:"could not begin "+arguments[0]};
+      g.p1.moveTick=g.p1.currentMove.startup;
+      g.trackCommittedAttack(g.p1,g.p2);
+      // Live visual updates settle the outgoing inertial pose into its new
+      // kick/punch clip; the fighter itself does not teleport or auto-hit.
+      let t=g.renderTime+1/60;
+      for(let i=0;i<22;i++){
+        t+=1/60;
+        g.updateVisual(g.p1,g.p2,t);
+        g.updateVisual(g.p2,g.p1,t+.23);
+      }
+      g.renderTime=t;
+      g.updateCamera(1/60);g.updateLockOn();
+      g.renderer.render(g.scene,g.camera);
+      const d=g.p1.visual.root.userData;
+      const canvas=document.querySelector(".scene-host canvas");
+      return {
+        move:arguments[0],clip:d.combatMotionCurrentClip,
+        enabled:d.videoChoreographyActive,version:d.videoChoreographyVersion,
+        count:d.videoChoreographyClipCount,
+        state:g.p1.state,contact:g.p1.moveTick===g.p1.currentMove.startup,
+        width:canvas?.width??0,height:canvas?.height??0,
+        otherMove:g.p2.currentMove?.id??null,
+      };
+    `,[moveId]);
+    if(observation.clip!==expectedClip||observation.enabled!==true
+      ||observation.version!=="VIDEO_REFERENCE_CHOREOGRAPHY_V1"
+      ||observation.count!==4||observation.state!=="ATTACK"
+      ||!observation.contact||observation.width<100||observation.height<100)
+      throw Error("reference video clip not rendered "+JSON.stringify(observation));
+    videoChoreography[moveId]=observation;
+    const frame=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+    if(frame.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")
+      throw Error("reference video screen PNG invalid "+moveId);
+    await writeFile(`${out}/tps-video-motion-${moveId}.png`,frame);
+  }
+  await writeFile(`${out}/video-choreography.json`,JSON.stringify(videoChoreography,null,2));
+  console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual,quickRiseVisual,videoChoreography}));
 }finally{
   if(session)await api(`/session/${session}`,"DELETE").catch(()=>{});
   proc.kill("SIGTERM");

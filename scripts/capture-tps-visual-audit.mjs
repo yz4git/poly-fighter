@@ -757,6 +757,10 @@ try {
     game.playerComboStage = 0;
     game.playerComboGraceTicks = 0;
     game.playerAttackQueued = false;
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
+    game.__mashBufferTicks = 0;
     const moves = [];
     const tap = (owner) => { game.press('punch', owner); game.step(); game.release('punch', owner); };
     tap('tps-combo-1');
@@ -818,6 +822,10 @@ try {
     game.__comboRouteSeed = 0;
     game.__comboLinkSerial = 0;
     game.__comboQueuedBranch = undefined;
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
+    game.__mashBufferTicks = 0;
     game.p1.visual.root.userData.tpsComboLinkState = null;
     game.p1.visual.root.userData.tpsComboLinkSerial = 0;
 
@@ -939,15 +947,27 @@ try {
     game.playerComboStage = 0;
     game.playerComboGraceTicks = 0;
     game.playerAttackQueued = false;
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
+    game.__mashBufferTicks = 0;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
     game.press('punch', 'tps-whiff-1');
     game.step();
     game.release('punch', 'tps-whiff-1');
     const firstMove = game.p1.currentMove?.id ?? null;
+    const firstTotal = game.p1.currentMove
+      ? game.p1.currentMove.startup + game.p1.currentMove.active + game.p1.currentMove.recovery
+      : 0;
     let queued = false;
     let chainedMove = null;
+    let transitionStep = -1;
     for (let index = 0; index < 150; index += 1) {
-      if (!queued && game.p1.state === 'ATTACK' && game.p1.moveTick >= 4) {
+      // Tap in recovery, within the bounded 20-frame input buffer. One early
+      // tap at startup is not promised to persist across all 31 kick frames.
+      if (!queued && game.p1.state === 'ATTACK'
+        && game.p1.moveTick >= game.p1.currentMove.startup + game.p1.currentMove.active + 1) {
         game.press('punch', 'tps-whiff-2');
         game.step();
         game.release('punch', 'tps-whiff-2');
@@ -956,13 +976,22 @@ try {
         game.step();
       }
       const current = game.p1.currentMove?.id ?? null;
-      if (current && firstMove && current !== firstMove) { chainedMove = current; break; }
-      if (queued && game.p1.state !== 'ATTACK') break;
+      if (current && firstMove && current !== firstMove) {
+        chainedMove = current; transitionStep = index + 1; break;
+      }
     }
-    return { firstMove, chainedMove, comboStage: game.playerComboStage, p2Health: game.p2.health };
+    return { firstMove, chainedMove, firstTotal, transitionStep,
+      comboStage: game.playerComboStage, p2Health: game.p2.health,
+      linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null };
   `);
-  if (whiffComboProbe.chainedMove !== null || whiffComboProbe.comboStage !== 0 || whiffComboProbe.p2Health !== 100) {
-    throw new Error(`TPS whiff incorrectly continued ATTACK combo: ${JSON.stringify(whiffComboProbe)}`);
+  // On a true miss, the next tap is held until full recovery and starts a
+  // fresh opener, NOT a confirmed/canceled combo. This is the intended
+  // responsive no-hit ATTACK-only behaviour for iPhone mash play.
+  if (!whiffComboProbe.chainedMove || whiffComboProbe.chainedMove === whiffComboProbe.firstMove
+    || whiffComboProbe.transitionStep < whiffComboProbe.firstTotal - 2
+    || whiffComboProbe.comboStage !== 1 || whiffComboProbe.p2Health !== 100
+    || whiffComboProbe.linkState === 'LINKED') {
+    throw new Error(`TPS whiff buffer skipped recovery or invented a combo: ${JSON.stringify(whiffComboProbe)}`);
   }
 
   const dashAttackProbe = await execute(sessionId, `${gameLookup}

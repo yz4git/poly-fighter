@@ -5,6 +5,7 @@ import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./comb
 import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
 import { authoredMotionEvents } from "./combat-motion-timeline";
+import { sampleVideoChoreography, VIDEO_STRIKE_CLIPS, VIDEO_CHOREOGRAPHY_VERSION, type VideoStrike } from "./video-demo-choreography";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
@@ -72,7 +73,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -359,6 +360,35 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rightHand: [.12 + release * .06, .756 - grip * .07, .125 + grip * .20] });
   }, 37);
 
+  // Four real skeleton clips reconstructed from the user's supplied 10s
+  // martial-arts video. Each limb follows calibrated two-bone IK; the pelvis
+  // takes the weight shift, spine counterbalances, and the resting guard is
+  // explicitly re-established. No animation dictates simulation hitboxes.
+  const clipDurations: Record<VideoStrike, number> = {
+    jab: .36, backfist: .48, kick: .56, risingKick: .74,
+  };
+  for (const move of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
+    const clipName = VIDEO_STRIKE_CLIPS[move];
+    author(clipName, clipDurations[move], u => {
+      const pose = sampleVideoChoreography(move, u, width);
+      body(pose);
+      // The camera-facing fighter root and its committed strike direction
+      // remain unmodified. The spin lives only inside the visible skeleton.
+      if (Math.abs(pose.spin ?? 0) > 1e-5) {
+        rotate("pelvis", Y, pose.spin ?? 0);
+      }
+      if (move === "backfist") {
+        const openPalm = Math.max(0, 1 - Math.abs(u - .53) / .20);
+        rotate("hand_r", X, -.50 * openPalm);
+      }
+      if (move === "kick" || move === "risingKick") {
+        const extension = Math.max(0, 1 - Math.abs(u - .52) / .23);
+        rotate("foot_r", X, -.16 * extension);
+      }
+    }, move === "risingKick" ? 69 : 51);
+  }
+  // Stable source marker for runtime and WebGL audit. Clip cache key includes
+  // this version so any future choreography revisions invalidate cached clips.
   const referenceAnkles = new Map<string, THREE.Quaternion>();
   function placeReferenceKick(name: string, u: number) {
     const pose = sampleReferenceKickChoreography(name, u, width)!;

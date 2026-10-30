@@ -1401,6 +1401,16 @@ export class TpsFightGame {
       return;
     }
 
+    if (move.hitLevel === "THROW") {
+      // A grab should use the existing THROW state and true knockdown trajectory,
+      // not play a generic punch hurt pose with throw-like damage.
+      defender.receiveThrow(
+        resolvedDamage, move.knockback, direction.x >= 0 ? 1 : -1, move.hitStop,
+      );
+      defender.velocity.x = direction.x * move.knockback * 18 * reactionStrength;
+      defender.velocity.z = direction.z * move.knockback * 18 * reactionStrength;
+      return;
+    }
     defender.receiveDamage(
       resolvedDamage,
       move.hitStun,

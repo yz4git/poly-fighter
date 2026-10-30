@@ -1,4 +1,5 @@
 import type { FighterDna } from "./fighter-dna";
+import { resolveTpsGuard } from "./tps-defense-triangle";
 import type { MoveDefinition, ReactionTarget } from "./types";
 
 export type TpsReactionType =
@@ -49,6 +50,7 @@ export function computeTpsHitResolution(input: {
   move: MoveDefinition;
   defenderHealth: number;
   defenderGuarding: boolean;
+  defenderCrouching?: boolean;
   defenderWasAttacking: boolean;
   interceptStrike: boolean;
   reversalStrike: boolean;
@@ -60,6 +62,7 @@ export function computeTpsHitResolution(input: {
     move,
     defenderHealth,
     defenderGuarding,
+    defenderCrouching = false,
     defenderWasAttacking,
     interceptStrike,
     reversalStrike,
@@ -68,10 +71,8 @@ export function computeTpsHitResolution(input: {
     attackerIsPlayer,
   } = input;
 
-  const blocked = defenderGuarding
-    && move.hitLevel !== "THROW"
-    && !reversalStrike
-    && !interceptStrike;
+  const blocked = !reversalStrike && !interceptStrike
+    && resolveTpsGuard(move.hitLevel, defenderGuarding, defenderCrouching) === "BLOCK";
 
   const damageScale = interceptStrike
     ? 1.22 * playerDna.interceptDamageScale

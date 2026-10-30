@@ -8,6 +8,14 @@ import type { MoveDefinition } from "./types";
 export const TPS_CONTACT_REACH_TOLERANCE = 0.20;
 export const TPS_ATTACK_LANE_PADDING = 0.23;
 export const TPS_ATTACK_AIM_TURN_PER_TICK = 0.028; // ~96 degrees/sec at 60Hz
+/** Powerful strikes have a strongly committed lane. High tracking must be
+ * explicitly authored: merely having a broad hitbox cannot turn into homing.
+ */
+export function tpsCommittedAimTurnLimit(move: Pick<MoveDefinition, "power" | "tracking">): number {
+  const heavyCommit = Math.max(0, move.power - 1.5);
+  const trackingFactor = Math.max(0.12, 1 - heavyCommit * 1.5);
+  return TPS_ATTACK_AIM_TURN_PER_TICK * trackingFactor;
+}
 
 export type TpsStrikeGeometry = Readonly<{
   connected: boolean;
@@ -62,11 +70,13 @@ export function tpsAttackWindupAdvance(
  */
 export function turnTpsCommittedAttackAim(
   previousX: number, previousZ: number, targetX: number, targetZ: number,
+  maxTurnPerTick = TPS_ATTACK_AIM_TURN_PER_TICK,
 ): { x: number; z: number } {
   const origin = Math.atan2(previousX, previousZ);
   const target = Math.atan2(targetX, targetZ);
   const delta = Math.atan2(Math.sin(target - origin), Math.cos(target - origin));
-  const heading = origin + Math.max(-TPS_ATTACK_AIM_TURN_PER_TICK, Math.min(TPS_ATTACK_AIM_TURN_PER_TICK, delta));
+  const boundedRate = Math.max(0, Math.min(TPS_ATTACK_AIM_TURN_PER_TICK, maxTurnPerTick));
+  const heading = origin + Math.max(-boundedRate, Math.min(boundedRate, delta));
   return { x: Math.sin(heading), z: Math.cos(heading) };
 }
 

@@ -128,7 +128,7 @@ const axionMoves: Record<string, MoveDefinition> = {
   }),
   throw: tuned(red.moves.throw, {
     label: "Gravity Well",
-    startup: 6,
+    startup: 12,
     active: 3,
     recovery: 25,
     damage: 22,

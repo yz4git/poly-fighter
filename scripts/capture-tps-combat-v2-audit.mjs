@@ -252,6 +252,14 @@ try {
     game.p2.visual.root.userData.tpsEnemyTelegraphMove = 'jab';
     game.p2.visual.root.userData.tpsEnemyTelegraphPhase = 'REACT';
     const threatBefore = game.enemyThreatStatus();
+    // A step 12 telegraph ticks before even the enemy's startup is not a
+    // guaranteed evade. React near the actual strike instead (four windup
+    // frames before commitment) and require a real geometric whiff.
+    for (let i = 0; i < 8; i += 1) {
+      game.renderTime += 1 / 60;
+      game.step();
+    }
+    const threatAtStep = game.enemyThreatStatus();
     game.press('right', 'reactable-step-side');
     game.press('guard', 'reactable-step');
     game.step();
@@ -270,6 +278,7 @@ try {
     return {
       steps,
       threatBefore,
+      threatAtStep,
       trackedBeforeAttack,
       perfectEvades: game.trainingProgress.perfectEvades,
       p1Health: game.p1.health,
@@ -328,16 +337,22 @@ try {
     const game = findGame();
     ${resetSnippet}
     if (!game.p2.beginMove('power')) return { error: 'enemy-power-begin-failed' };
-    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 1);
+    // Start evasive footwork early enough to actually leave the heavy attack
+    // lane (not one frame before its hitbox turns on). A successful REVERSAL
+    // must follow a genuine whiff and an earned reaction window.
+    game.p2.moveTick = Math.max(0, game.p2.currentMove.startup - 8);
     game.press('right', 'tps-v2-reversal-side');
     game.press('guard', 'tps-v2-reversal-step');
+    const evadeTrace=[];
     game.step();
+    evadeTrace.push({n:0,p1:[game.p1.position.x,game.p1.position.z],p2:[game.p2.position.x,game.p2.position.z],p1State:game.p1.state,p2State:game.p2.state,enemyTick:game.p2.moveTick,threatTicks:game.playerStepThreatTicks,evadeTicks:game.playerEvadeTicks});
     game.release('guard', 'tps-v2-reversal-step');
     game.release('right', 'tps-v2-reversal-side');
     let evadeSteps = 1;
     while (evadeSteps < 12 && game.playerReversalTicks <= 0) {
       game.renderTime += 1 / 60;
       game.step();
+      evadeTrace.push({n:evadeSteps,p1:[game.p1.position.x,game.p1.position.z],p2:[game.p2.position.x,game.p2.position.z],p1State:game.p1.state,p2State:game.p2.state,enemyTick:game.p2.moveTick,threatTicks:game.playerStepThreatTicks,evadeTicks:game.playerEvadeTicks,p1Health:game.p1.health,enemyHit:game.p2.hitTargets.has(game.p1.id),enemyActive:game.p2.isActive()});
       evadeSteps += 1;
     }
     const earnedWindow = game.playerReversalTicks;
@@ -371,6 +386,8 @@ try {
     game.renderer.render(game.scene, game.camera);
     return {
       earnedWindow,
+      evadeTrace,
+      p1Health:game.p1.health,
       bufferedDuringStep,
       didNotCancelStep,
       evadeSteps,

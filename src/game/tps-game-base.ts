@@ -41,7 +41,7 @@ import {
 } from "./tps-gameplay-profile";
 import { computeTpsContactSpacing, type TpsContactSpacingMode } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
-import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo } from "./tps-fight-fundamentals";
+import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo, tpsCommittedAimTurnLimit } from "./tps-fight-fundamentals";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
   adaptTpsCpuDecision,
@@ -89,6 +89,14 @@ import {
   tpsGuardFrameAdvantage, tpsPunishWindowTicks,
 } from "./tps-defense-triangle";
 import { chooseCinematicTechnique } from "./cinematic-techniques";
+import {
+  canBufferTpsThrowTech,
+  canResolveTpsThrowTech,
+  canStartTpsUkemi,
+  tpsUkemiMovePerFrame,
+  TPS_THROW_TECH_REACTION_TICKS,
+  TPS_UKEMI_ROLL_TICKS,
+} from "./tps-throw-ukemi";
 import {
   canCinematicStrikeAirborne,
   maxTpsComboStage,
@@ -178,6 +186,9 @@ export class TpsFightGame {
   private playerGuardPunishTicks = 0;
   private playerGuardAdvantage = 0;
   private playerGuardCrouching = false;
+  private playerThrowTechTicks = 0;
+  private playerUkemiTicks = 0;
+  private readonly playerUkemiDirection = new THREE.Vector3();
   private airCombo: TpsAirCombo | null = null;
   private readonly attackCommitments = new WeakMap<FighterRuntime, { move: MoveDefinition; lastTick: number; forward: THREE.Vector3 }>();
   private playerFlankWindowTicks = 0;
@@ -439,7 +450,7 @@ export class TpsFightGame {
       attacker.visual.root.userData.tpsCommittedAttackForward = forward.toArray();
       return;
     }
-    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z);
+    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z, tpsCommittedAimTurnLimit(attacker.currentMove));
     current.forward.set(next.x, 0, next.z);
     current.lastTick = attacker.moveTick;
     attacker.visual.root.userData.tpsCommittedAttackForward = current.forward.toArray();
@@ -487,6 +498,34 @@ export class TpsFightGame {
       this.p1.definition.archetype,
       this.p1Dna.moveSpeedScale,
     );
+
+    if (canStartTpsUkemi({
+      stepPressed, state: this.p1.state, grounded: this.p1.grounded,
+      knockdownTicks: this.p1.knockdownTicks,
+      forwardAxis, sideAxis, alreadyRolling: this.playerUkemiTicks > 0,
+    })) {
+      // A roll is a physical relocation, not an invulnerability animation.
+      const retreat = toEnemy.clone().negate();
+      const towardSide = right.multiplyScalar(sideAxis);
+      this.playerUkemiDirection.copy(
+        Math.abs(sideAxis) > .45 ? towardSide : retreat,
+      ).normalize();
+      this.playerUkemiTicks = TPS_UKEMI_ROLL_TICKS;
+      this.p1.knockdownTicks = Math.min(this.p1.knockdownTicks, 18);
+      this.p1.visual.root.userData.tpsUkemiDirection = this.playerUkemiDirection.toArray();
+      this.setCombatBeat("TECH ROLL", 22);
+    }
+    if (canBufferTpsThrowTech({
+      attackPressed, playerState: this.p1.state,
+      enemyState: this.p2.state, enemyMove: this.p2.currentMove,
+      enemyMoveTick: this.p2.moveTick,
+      distance: horizontalDistance(this.p1.position, this.p2.position),
+    })) {
+      this.playerThrowTechTicks = TPS_THROW_TECH_REACTION_TICKS;
+      this.p1.visual.root.userData.tpsThrowTechBuffered = true;
+      this.p1.updatePhysics(FIXED_STEP);
+      return;
+    }
 
     if (this.tryLegacyPlayerThrow(input, stepPressed, legacyKickPressed)) return;
     if (this.advancePlayerAttack(attackPressed)) return;
@@ -549,6 +588,8 @@ export class TpsFightGame {
     if (this.playerStepThreatTicks > 0) this.playerStepThreatTicks -= 1;
     if (this.playerInterceptTicks > 0) this.playerInterceptTicks -= 1;
     if (this.playerReversalTicks > 0) this.playerReversalTicks -= 1;
+    if (this.playerThrowTechTicks > 0 && this.p1.hitStop <= 0) this.playerThrowTechTicks -= 1;
+    if (this.playerThrowTechTicks <= 0) this.p1.visual.root.userData.tpsThrowTechBuffered = false;
     // Freeze the guard punish timing through hitstop, just like move recovery.
     if (this.playerGuardPunishTicks > 0 && this.p1.hitStop <= 0 && this.p2.hitStop <= 0) {
       this.playerGuardPunishTicks -= 1;
@@ -614,6 +655,13 @@ export class TpsFightGame {
   }
 
   private recoverPlayerFromLockedState(): boolean {
+    if (this.playerUkemiTicks > 0) {
+      if (this.p1.state === "KNOCKDOWN" && this.p1.grounded && this.p1.hitStop <= 0) {
+        this.p1.position.addScaledVector(this.playerUkemiDirection, tpsUkemiMovePerFrame());
+        this.playerUkemiTicks -= 1;
+      } else if (this.p1.state !== "KNOCKDOWN") this.playerUkemiTicks = 0;
+      this.p1.visual.root.userData.tpsUkemiRemaining = this.playerUkemiTicks;
+    }
     if (!this.advanceLockedState(this.p1)) return false;
 
     this.playerEvadeTicks = 0;
@@ -1189,6 +1237,27 @@ export class TpsFightGame {
       // Dodge rewards now require the player to physically escape the strike
       // lane; simply pressing STEP during a telegraph is not invulnerability.
       this.tryResolveTrackedSideEvade(attacker, defender, move);
+      return;
+    }
+
+    if (defender === this.p1 && attacker === this.p2 && canResolveTpsThrowTech(
+      move, this.playerThrowTechTicks, defender.state,
+    )) {
+      attacker.hitTargets.add(defender.id);
+      attacker.visual.root.userData.tpsCleanHitConfirmed = false;
+      this.playerThrowTechTicks = 0;
+      defender.visual.root.userData.tpsThrowTechBuffered = false;
+      defender.visual.root.userData.tpsThrowTechSuccessTicks = 26;
+      defender.visual.root.userData.tpsThrowTechSerial = Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0) + 1;
+      attacker.hitStop = Math.max(attacker.hitStop, 9);
+      defender.hitStop = Math.max(defender.hitStop, 8);
+      const away = horizontalDirection(attacker.position, defender.position);
+      defender.velocity.x = away.x * 1.5;
+      defender.velocity.z = away.z * 1.5;
+      attacker.velocity.x = -away.x * 1.2;
+      attacker.velocity.z = -away.z * 1.2;
+      this.setCombatBeat("THROW BREAK!", 38);
+      this.cameraImpact = Math.max(this.cameraImpact, .046);
       return;
     }
 
@@ -1800,6 +1869,9 @@ export class TpsFightGame {
     this.playerGuardPunishTicks = 0;
     this.playerGuardAdvantage = 0;
     this.playerGuardCrouching = false;
+    this.playerThrowTechTicks = 0;
+    this.playerUkemiTicks = 0;
+    this.playerUkemiDirection.set(0, 0, 0);
     this.playerFlankWindowTicks = 0;
     this.playerFlankAttackTicks = 0;
     this.playerPerfectEvadeTicks = 0;

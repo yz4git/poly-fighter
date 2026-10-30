@@ -104,7 +104,7 @@ const vantaMoves: Record<string, MoveDefinition> = {
   }),
   throw: tuned(blue.moves.throw, {
     label: "Mirror Drop",
-    startup: 5,
+    startup: 10,
     recovery: 22,
     damage: 19,
     hitStun: 39,

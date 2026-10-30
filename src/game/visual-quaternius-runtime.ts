@@ -538,8 +538,8 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
       if (runtime.clips.has(cinematic)) return { name: cinematic, loop: false, speed: 1 / seconds };
     }
     // Reference video choreography replaces four *basic* authored actions.
-    // SNAP/PIVOT specials and the other 220+ attacks retain their existing
-    // separately authored clips unless explicitly mapped here.
+    // Existing expanded variants retain their different authored clips except
+    // the explicitly mapped pivot launcher. Hitbox and move stats are unchanged.
     const videoClip = (
       (moveId === "jab" && move.visualContact === "LEFT_FIST" && !move.motionVariant)
       || (moveId === "backfist" && move.visualContact === "RIGHT_FIST" && !move.motionVariant)

@@ -27,6 +27,14 @@ approaches real strike contact and requires a **true geometric miss** followed
 by an earned PERFECT STEP/REVERSAL. This is a test correction, not a reduction
 in the player's input requirement.
 
+The follow-on reversal test exposed an **actual heavy-hit homing issue**:
+a 1.435-unit lateral STEP was still hit because a high-power strike turned
+throughout its startup. The revised combat controller lowers aim correction
+for power-heavy strikes only (for example a power hit of 2.2 turns about
+0.00336 radians per simulation tick, versus 0.028 for a jab). Broad power
+moves remain dangerous if the player steps too late or into their hit lane.
+Neither step invulnerability nor automatic reversal was added.
+
 ## Test coverage
 
 - Pure behavior tests: timing/range/lockout for throw breaks; grounded,

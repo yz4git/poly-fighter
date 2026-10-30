@@ -891,7 +891,7 @@ try {
     || comboLinkProbe.linkTick < comboLinkProbe.linkStart
     || comboLinkProbe.linkTick > comboLinkProbe.linkEnd
     || Math.abs(comboLinkProbe.requestedBlend - 0.075) > 0.0001
-    || Math.abs(comboLinkProbe.inertialRequestedOverlap - 0.075) > 0.0001
+    || !(comboLinkProbe.inertialRequestedOverlap >= 0.06 && comboLinkProbe.inertialRequestedOverlap <= 0.11)
     || !comboLinkProbe.inertialActive
     || !(comboLinkProbe.inertialWeight > 0)
     || !(comboLinkProbe.inertialPinnedBones > 0)

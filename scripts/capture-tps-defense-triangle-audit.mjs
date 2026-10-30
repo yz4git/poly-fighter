@@ -92,7 +92,53 @@ try {
   const png=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
   if(png.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("not PNG");
   await writeFile(`${out}/tps-guard-throw.png`,png);
-  console.log(JSON.stringify(observations));
+  // Check actual bound two-button gameplay, not just pure input helpers.
+  const throwUkemi=await run(session,`${lookup}
+    const g=findGame();
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.resetForRound(0,.72,1);g.p2.resetForRound(0,-.72,-1);
+    g.p1.hitStop=0;g.p2.hitStop=0;g.playerThrowTechTicks=0;g.playerUkemiTicks=0;
+    g.p2.beginMove("throw");
+    g.p2.moveTick=Math.max(0,g.p2.currentMove.startup-3);
+    const beforeHp=g.p1.health;
+    g.updatePlayer({...neutral,punch:true});
+    const buffered=g.playerThrowTechTicks;
+    g.p2.moveTick=g.p2.currentMove.startup;
+    g.trackCommittedAttack(g.p2,g.p1);
+    g.resolveAttack(g.p2,g.p1,false);
+    const throwBreak={
+      buffered,health:g.p1.health,beforeHp,
+      beat:g.combatBeatLabel,
+      hasContact:g.p2.hitTargets.has(g.p1.id),
+      bufferedAfter:g.playerThrowTechTicks,
+    };
+    g.p1.resetForRound(0,.72,1);g.p2.resetForRound(0,-.72,-1);
+    g.p1.state="KNOCKDOWN";g.p1.knockdownTicks=34;
+    g.p1.grounded=true;g.p1.hitStop=0;
+    g.p1.input={...neutral};g.p1.previousInput={...neutral};
+    g.playerUkemiTicks=0;
+    const startX=g.p1.position.x;
+    g.updatePlayer({...neutral,right:true,guard:true});
+    const startTicks=g.playerUkemiTicks;
+    for(let n=0;n<7;n++)g.updatePlayer({...neutral,right:true,guard:true});
+    const ukemi={startTicks,endTicks:g.playerUkemiTicks,
+      traveled:g.p1.position.x-startX,knockdownTicks:g.p1.knockdownTicks,
+      state:g.p1.state,health:g.p1.health};
+    let now=performance.now()/1000;
+    for(let i=0;i<10;i++){now+=1/60;g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.01);}
+    g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
+    return {throwBreak,ukemi};
+  `);
+  if(throwUkemi.throwBreak.buffered<=0||throwUkemi.throwBreak.health!==throwUkemi.throwBreak.beforeHp
+    ||!throwUkemi.throwBreak.hasContact||throwUkemi.throwBreak.bufferedAfter!==0
+    ||throwUkemi.throwBreak.beat!=="THROW BREAK!")throw Error("timed throw break failed "+JSON.stringify(throwUkemi));
+  if(throwUkemi.ukemi.startTicks!==7||throwUkemi.ukemi.endTicks!==0
+    ||throwUkemi.ukemi.traveled<.42||throwUkemi.ukemi.health!==100)throw Error("directional wakeup roll failed "+JSON.stringify(throwUkemi));
+  await writeFile(`${out}/throw-break-ukemi.json`,JSON.stringify(throwUkemi,null,2));
+  const ukemiPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+  if(ukemiPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("ukemi not PNG");
+  await writeFile(`${out}/tps-ukemi-roll.png`,ukemiPng);
+  console.log(JSON.stringify({...observations,...throwUkemi}));
 }finally{
   if(session)await api(`/session/${session}`,"DELETE").catch(()=>{});
   proc.kill("SIGTERM");

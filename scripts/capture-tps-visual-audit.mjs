@@ -479,6 +479,13 @@ try {
     game.p1.position.set(0, 0, 0.76);
     game.p2.position.set(0, 0, -0.44);
     game.p2.state = 'GUARD';
+    // Isolate the canonical guard/block test from earlier mash repetitions.
+    // The normal game intentionally changes neutral ATTACK openers over time,
+    // but this check measures a fixed first-jab block and its physical spacing.
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
+    game.__mashBufferTicks = 0;
     game.updateEnemy = () => {
       game.p2.velocity.set(0, 0, 0);
       if (game.p2.state !== 'BLOCK_STUN') game.p2.state = 'GUARD';

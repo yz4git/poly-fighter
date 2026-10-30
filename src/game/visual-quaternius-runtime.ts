@@ -612,6 +612,7 @@ const AUTHORED_ATTACK_CLIP_PREFIXES = [
   "BF_RisingKick",
   "BF_DashKick",
   "BF_Counter_R",
+  "CM_Video_", // baked video-reference attacks use the same inertial handoff contract
 ] as const;
 
 function isAuthoredAttackClip(name: string): boolean {

@@ -284,7 +284,82 @@ try {
     await writeFile(`${out}/tps-video-motion-${moveId}.png`,frame);
   }
   await writeFile(`${out}/video-choreography.json`,JSON.stringify(videoChoreography,null,2));
-  console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual,quickRiseVisual,videoChoreography}));
+
+  // Real button event path: press/release ATTACK once every four fixed ticks.
+  // No contact resolver or synthetic hit registration: every recovery must
+  // finish honestly, yet none of the fast taps should be lost permanently.
+  const mashReplay=await run(session,`${lookup}
+    const g=findGame();
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.resetForRound(0,.62,1);g.p2.resetForRound(0,-.55,-1);
+    g.p1.input={...neutral};g.p1.previousInput={...neutral};
+    g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
+    g.playerFlankWindowTicks=0;g.playerInterceptTicks=0;g.playerReversalTicks=0;
+    g.playerPerfectEvadeTicks=0;g.airCombo=null;g.__comboRoute=undefined;
+    g.__neutralMashAttackCount=0;g.__neutralMashPhrase=-1;g.__neutralMashLastBase=null;g.__mashBufferTicks=0;
+    g.p1.visual.root.userData.tpsMashMoveSerial=0;
+    const punches=[];let lastSerial=0;
+    for(let frame=0;frame<1000&&punches.length<14;frame++){
+      g.updatePlayer({...neutral,punch:frame%4===0});
+      const serial=g.__neutralMashAttackCount??0;
+      if(serial>lastSerial){
+        punches.push({serial,move:g.p1.currentMove?.id??null,
+          base:g.p1.currentMove?.motionBase??g.p1.currentMove?.id??null,
+          phase:g.p1.state,frame,queued:g.__mashBufferTicks??0});
+        lastSerial=serial;
+      }
+    }
+    return {punches,distinct:[...new Set(punches.map(p=>p.base))],
+      serial:g.__neutralMashAttackCount,simulatedHitTargets:g.p1.hitTargets.size};
+  `);
+  if(mashReplay.punches.length<12||mashReplay.distinct.length<7
+    ||!mashReplay.distinct.includes("kick")||!mashReplay.distinct.includes("backfist")
+    ||!mashReplay.distinct.includes("risingKick")
+    ||mashReplay.punches.some(p=>p.phase!=="ATTACK"||!p.move))
+    throw Error("fast physical ATTACK taps did not rotate through grounded move families "+JSON.stringify(mashReplay));
+
+  // Confirm that the same selections install real, visible full-body 3D
+  // clips, not only names in a move table; compare video-based palm and kicks.
+  const mashRendered=await run(session,`${lookup}
+    const g=findGame();
+    const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    g.p1.resetForRound(0,.62,1);g.p2.resetForRound(0,-.55,-1);
+    g.p1.input={...neutral};g.p1.previousInput={...neutral};
+    g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
+    g.playerFlankWindowTicks=0;g.playerInterceptTicks=0;g.playerReversalTicks=0;
+    g.playerPerfectEvadeTicks=0;g.airCombo=null;g.__comboRoute=undefined;
+    g.__neutralMashAttackCount=0;g.__neutralMashPhrase=-1;g.__neutralMashLastBase=null;
+    let now=performance.now()/1000;
+    const clips=[];const names=[];
+    for(let index=0;index<18;index++){
+      g.p1.state="IDLE";g.p1.currentMove=null;g.p1.moveTick=0;
+      g.p1.hitTargets.clear();
+      g.playerComboStage=index%3;
+      g.p1.setInput({...neutral,punch:true});
+      if(!g.beginContextAttack())return {error:"attack failed at "+index,clips,names};
+      const m=g.p1.currentMove;
+      const expectedBase=m.motionBase??m.id;
+      g.p1.moveTick=m.startup;
+      now+=.19;
+      g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.01);
+      names.push(expectedBase);clips.push(g.p1.visual.root.userData.combatMotionCurrentClip);
+    }
+    g.renderTime=now;g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
+    return {clips,names,serial:g.__neutralMashAttackCount,
+      videoPalm:clips.includes("CM_Video_Palm"),
+      videoKick:clips.includes("CM_Video_SideKick"),
+      videoSpin:clips.includes("CM_Video_SpinKick")};
+  `);
+  if(mashRendered.error||mashRendered.serial!==18
+    ||new Set(mashRendered.names).size<9
+    ||!mashRendered.videoPalm||!mashRendered.videoKick||!mashRendered.videoSpin)
+    throw Error("neutral mash lacks visible distinct video-derived technique coverage "+JSON.stringify(mashRendered));
+  await writeFile(`${out}/mash-variety.json`,JSON.stringify({mashReplay,mashRendered},null,2));
+  const mashPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+  if(mashPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("mash variety PNG invalid");
+  await writeFile(`${out}/tps-mash-variety.png`,mashPng);
+  console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual,quickRiseVisual,videoChoreography,
+    mashReplay,mashRendered}));
 }finally{
   if(session)await api(`/session/${session}`,"DELETE").catch(()=>{});
   proc.kill("SIGTERM");

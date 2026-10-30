@@ -8,6 +8,7 @@ import {
   tpsCanConfirmCombo,
   chooseTpsOpeningStrike,
   TPS_ATTACK_AIM_TURN_PER_TICK,
+  tpsCommittedAimTurnLimit,
 } from "../src/game/tps-fight-fundamentals";
 import { minimumTpsEnemyTelegraphTicks } from "../src/game/tps-enemy-policy";
 import { tpsReactiveStepThreat } from "../src/game/tps-player-policy";
@@ -109,4 +110,19 @@ test("perfect evade timing is limited to the sidestep itself, not a stored autom
     pendingMoveId: null, pendingReaction: false, pendingTelegraphTicks: 0,
     enemyMoveTick: 0, incomingDistance: 1.5, stepTicks: 9,
   }).ticks, 0, "stepping without an incoming attack is just repositioning");
+});
+
+test("heavy attacks cannot home through a lateral STEP while a jab stays responsive", () => {
+  const lightTurn = tpsCommittedAimTurnLimit(moves.jab);
+  const heavyTurn = tpsCommittedAimTurnLimit(moves.power);
+  assert.equal(lightTurn, TPS_ATTACK_AIM_TURN_PER_TICK);
+  assert.ok(heavyTurn <= lightTurn * .25);
+  let light = { x: 0, z: 1 };
+  let heavy = { x: 0, z: 1 };
+  for (let frame = 0; frame < 8; frame += 1) {
+    light = turnTpsCommittedAttackAim(light.x,light.z,1,0,lightTurn);
+    heavy = turnTpsCommittedAttackAim(heavy.x,heavy.z,1,0,heavyTurn);
+  }
+  assert.ok(light.x > heavy.x * 3,"light strike retains greater tracking");
+  assert.ok(heavy.x < .06,"committed heavy barely turns during eight frames");
 });

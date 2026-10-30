@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { tpsRecoveryClipPhase, TPS_THROW_BREAK_POSE_TICKS, TPS_UKEMI_POSE_TICKS } from "./tps-throw-ukemi";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterRuntime } from "./fighter";
@@ -514,6 +515,19 @@ function observeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delt
 }
 
 function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { name: string; loop: boolean; speed: number } {
+  const recovery = fighter.visual.root.userData;
+  const breakRole = recovery.tpsThrowBreakRole;
+  if (fighter.state === "HIT" && Number(recovery.tpsThrowBreakPoseTicks ?? 0) > 0
+    && (breakRole === "DEFENDER" || breakRole === "ATTACKER")) {
+    return { name: `CM_ThrowTech_${breakRole === "DEFENDER" ? "Defender" : "Attacker"}`, loop: false, speed: 1 };
+  }
+  if (fighter.state === "KNOCKDOWN" && fighter.grounded
+    && Number(recovery.tpsUkemiPoseTicks ?? 0) > 0 && typeof recovery.tpsUkemiClip === "string") {
+    return { name: recovery.tpsUkemiClip, loop: false, speed: 1 };
+  }
+  if (fighter.state === "WAKEUP" && recovery.tpsUkemiWasRolled === true) {
+    return { name: "CM_TechRise", loop: false, speed: 1 };
+  }
   const move = fighter.currentMove;
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
@@ -708,7 +722,11 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
   const ticks = fighter.stateMachine.stateTicks;
   let phase: number | null = null;
   const move = fighter.currentMove;
-  if (fighter.state === "ATTACK" && move) {
+  if (runtime.currentClip.startsWith("CM_ThrowTech_")) {
+    phase = tpsRecoveryClipPhase(Number(fighter.visual.root.userData.tpsThrowBreakPoseTicks ?? 0), TPS_THROW_BREAK_POSE_TICKS);
+  } else if (runtime.currentClip.startsWith("CM_TechRoll_")) {
+    phase = tpsRecoveryClipPhase(Number(fighter.visual.root.userData.tpsUkemiPoseTicks ?? 0), TPS_UKEMI_POSE_TICKS);
+  } else if (fighter.state === "ATTACK" && move) {
     const sample = sampleCombatMotionTimeline(move, fighter.moveTick, runtime.currentClip);
     phase = sample.phase;
     runtime.host.userData.combatMotionTimelinePolicy = "GAMEPLAY_TICK_AUTHORED_EVENT_V1";

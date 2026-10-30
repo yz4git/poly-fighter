@@ -8,12 +8,16 @@ import type { MoveDefinition } from "./types";
 export const TPS_CONTACT_REACH_TOLERANCE = 0.20;
 export const TPS_ATTACK_LANE_PADDING = 0.23;
 export const TPS_ATTACK_AIM_TURN_PER_TICK = 0.028; // ~96 degrees/sec at 60Hz
-/** Powerful strikes have a strongly committed lane. High tracking must be
- * explicitly authored: merely having a broad hitbox cannot turn into homing.
+/** Light strikes can follow an opponent. A committed straight or heavy
+ * swing cannot silently rotate across the lateral STEP lane during startup.
+ * The source move's tracking attribute only increases authored high-tracking
+ * moves; it never makes every attack home in on a moving defender.
  */
 export function tpsCommittedAimTurnLimit(move: Pick<MoveDefinition, "power" | "tracking">): number {
-  const heavyCommit = Math.max(0, move.power - 1.5);
-  const trackingFactor = Math.max(0.12, 1 - heavyCommit * 1.5);
+  const committed = Math.max(0, Math.min(1, (move.power - .8) / .3));
+  const heavy = Math.max(0, Math.min(1, (move.power - 1.5) / .7));
+  const authoredTracking = Math.max(0, Math.min(1, (move.tracking - .6) / .4));
+  const trackingFactor = Math.max(.12, 1 - .68 * committed - .20 * heavy + .12 * authoredTracking);
   return TPS_ATTACK_AIM_TURN_PER_TICK * trackingFactor;
 }
 

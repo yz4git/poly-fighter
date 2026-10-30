@@ -66,6 +66,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __comboRoute?: TpsComboRoute;
   __comboRouteSeed?: number;
   __neutralMashAttackCount?: number;
+  __neutralMashPhrase?: number;
   __neutralMashLastBase?: string | null;
   __mashBufferTicks?: number;
   __comboLinkSerial?: number;
@@ -243,9 +244,15 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   const neutralMash = !game.p1.input.up && !game.p1.input.down
     && !game.p1.input.left && !game.p1.input.right
     && !flank && !perfect;
-  const mashChoice = neutralMash && (game.__neutralMashAttackCount ?? 0) >= 3
+  // A missed opener starts a different phrase after full recovery; a clean
+  // linked second/third hit stays in the same phrase. Thus rapid mash play
+  // varies immediately instead of needing three successful contacts first.
+  const nextMashPhrase = stage === 0
+    ? (game.__neutralMashPhrase ?? -1) + 1
+    : Math.max(0, game.__neutralMashPhrase ?? 0);
+  const mashChoice = neutralMash && nextMashPhrase > 0
     ? chooseTpsNeutralMashMove({
-        count: game.__neutralMashAttackCount ?? 0,
+        phrase: nextMashPhrase,
         stage,
         distance,
         lastBase: game.__neutralMashLastBase,
@@ -268,10 +275,11 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   game.__mashBufferTicks = 0;
   if (neutralMash) {
     game.__neutralMashAttackCount = (game.__neutralMashAttackCount ?? 0) + 1;
+    game.__neutralMashPhrase = nextMashPhrase;
     game.__neutralMashLastBase = mashChoice?.base ?? moveId;
   }
   game.p1.visual.root.userData.tpsMashMoveSerial = game.__neutralMashAttackCount ?? 0;
-  game.p1.visual.root.userData.tpsMashPhrase = mashChoice?.phrase ?? 0;
+  game.p1.visual.root.userData.tpsMashPhrase = game.__neutralMashPhrase ?? 0;
   game.p1.visual.root.userData.tpsMashSelectedMove = mashChoice?.id ?? null;
 
   // A successful lateral PERFECT STEP creates a large side gap by design. The
@@ -697,6 +705,7 @@ prototype.resetRound = function resetRound(): void {
   game.__comboRoute = undefined;
   game.__comboRouteSeed = 0;
   game.__neutralMashAttackCount = 0;
+  game.__neutralMashPhrase = -1;
   game.__neutralMashLastBase = null;
   game.__mashBufferTicks = 0;
   game.__comboLinkSerial = 0;

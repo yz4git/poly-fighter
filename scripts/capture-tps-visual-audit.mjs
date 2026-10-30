@@ -964,10 +964,10 @@ try {
     let chainedMove = null;
     let transitionStep = -1;
     for (let index = 0; index < 150; index += 1) {
-      // Tap within the new honest pre-buffer window: previously the probe
-      // pressed before the kick startup and that input was deliberately lost.
+      // Tap in recovery, within the bounded 20-frame input buffer. One early
+      // tap at startup is not promised to persist across all 31 kick frames.
       if (!queued && game.p1.state === 'ATTACK'
-        && game.p1.moveTick >= game.p1.currentMove.startup) {
+        && game.p1.moveTick >= game.p1.currentMove.startup + game.p1.currentMove.active + 1) {
         game.press('punch', 'tps-whiff-2');
         game.step();
         game.release('punch', 'tps-whiff-2');

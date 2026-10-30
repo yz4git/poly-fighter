@@ -270,12 +270,16 @@ try {
         ready: root.userData.combatMotionClipCount >= 27,
         clips: root.userData.combatMotionClipCount ?? 0,
         version: root.userData.combatMotionVersion ?? null,
+        timeline: root.userData.combatMotionTimelineVersion ?? null,
       };
     `);
     if (preload?.ready) break;
     await delay(100);
   }
-  const timelineRuntime = typeof preload?.version === "string" && preload.version.endsWith("_TIMELINE");
+  // The clip-library version describes source assets (V10_REFERENCE_KICKS).
+  // Verify the independently published authoritative gameplay-tick timeline,
+  // rather than assuming an obsolete suffix in an unrelated version string.
+  const timelineRuntime = preload?.timeline === "GAMEPLAY_TICK_AUTHORED_EVENT_V1";
   if (!preload?.ready || preload.clips < 27 || !timelineRuntime) {
     throw new Error(`Motion packs were not preloaded with unified timeline runtime: ${JSON.stringify(preload)}`);
   }

@@ -85,7 +85,7 @@ import type { FighterModelId } from "./model-skins";
 import type { FighterDefinition, HitEvent, HudSnapshot, InputAction, InputFrame, MoveDefinition } from "./types";
 import { expandedContextMove } from "./move-expansion";
 import {
-  canTpsGuardThrow, resolveTpsGuard, shouldHoldTpsGuard,
+  canTpsGuardThrow, resolveTpsGuard, shouldHoldTpsGuard, tpsCpuReadLowGuard,
   tpsGuardFrameAdvantage, tpsPunishWindowTicks,
 } from "./tps-defense-triangle";
 import { chooseCinematicTechnique } from "./cinematic-techniques";
@@ -388,6 +388,7 @@ export class TpsFightGame {
     const input = this.input.frame();
     this.updatePlayer(input);
     this.updateEnemy();
+    this.updateCpuGuardRead();
     // Commit strike heading as the attack starts, then turn only a few degrees
     // per simulation tick. Side-stepping a windup now creates an actual whiff.
     this.trackCommittedAttack(this.p1, this.p2);
@@ -408,6 +409,20 @@ export class TpsFightGame {
     this.updateVisual(this.p2, this.p1, this.renderTime + 0.23);
     this.checkFinish();
     this.publishHud(false);
+  }
+
+  private updateCpuGuardRead(): void {
+    // AI cannot perfectly block lows at frame zero. Recognize a committed low
+    // only after a visible windup, based on difficulty and exchange timing.
+    const crouch = tpsCpuReadLowGuard({
+      defenderGuarding: this.p2.state === "GUARD",
+      move: this.p1.state === "ATTACK" ? this.p1.currentMove : null,
+      attackTick: this.p1.moveTick,
+      difficulty: this.difficulty,
+      exchangeTick: this.simulationTicks,
+    });
+    this.p2.visual.root.userData.tpsGuardLevel = this.p2.state === "GUARD"
+      ? (crouch ? "LOW" : "STANDING") : null;
   }
 
   private trackCommittedAttack(attacker: FighterRuntime, defender: FighterRuntime): void {
@@ -1177,7 +1192,11 @@ export class TpsFightGame {
       return;
     }
 
-    const crouchGuard = defender === this.p1 && defender.state === "GUARD" && defender.input.down;
+    const crouchGuard = defender.state === "GUARD" && (
+      defender === this.p1
+        ? defender.input.down
+        : defender.visual.root.userData.tpsGuardLevel === "LOW"
+    );
     const guardOutcome = resolveTpsGuard(move.hitLevel, defenderGuarding, crouchGuard);
     if (guardOutcome === "DUCK") {
       // An intentionally crouched high-guard makes a high strike whiff.

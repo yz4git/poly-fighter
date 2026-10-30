@@ -3,7 +3,8 @@ import test from "node:test";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import {
   TPS_THROW_TECH_REACTION_TICKS, TPS_UKEMI_ROLL_TICKS,
-  TPS_UKEMI_TOTAL_DISTANCE, canBufferTpsThrowTech,
+  TPS_UKEMI_TOTAL_DISTANCE, TPS_UKEMI_POSE_TICKS, TPS_THROW_BREAK_POSE_TICKS,
+  tpsUkemiDirectionForAxes, tpsRecoveryClipPhase, canBufferTpsThrowTech,
   canResolveTpsThrowTech, canStartTpsUkemi, tpsUkemiMovePerFrame,
 } from "../src/game/tps-throw-ukemi";
 
@@ -43,4 +44,19 @@ test("ukemi uses grounded directional STEP after knockdown, never a free invulne
   assert.equal(check({stepPressed:false}),false);
   assert.equal(check({alreadyRolling:true}),false);
   assert.equal(TPS_UKEMI_ROLL_TICKS*tpsUkemiMovePerFrame(),TPS_UKEMI_TOTAL_DISTANCE);
+});
+
+test("recovery motion picks correct direction and samples 60Hz clock without animation-driven game physics", () => {
+  assert.equal(tpsUkemiDirectionForAxes(0,1),"R");
+  assert.equal(tpsUkemiDirectionForAxes(0,-1),"L");
+  assert.equal(tpsUkemiDirectionForAxes(-1,0),"B");
+  assert.equal(tpsUkemiDirectionForAxes(-1,1),"R");
+  assert.equal(TPS_UKEMI_POSE_TICKS,18);
+  assert.equal(TPS_THROW_BREAK_POSE_TICKS,18);
+  assert.equal(tpsRecoveryClipPhase(18,18),0);
+  assert.equal(tpsRecoveryClipPhase(9,18),.5);
+  assert.equal(tpsRecoveryClipPhase(0,18),1);
+  assert.equal(tpsRecoveryClipPhase(-5,18),1);
+  assert.equal(tpsRecoveryClipPhase(999,18),0);
+  assert.equal(tpsRecoveryClipPhase(7,0),0);
 });

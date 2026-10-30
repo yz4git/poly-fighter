@@ -14,7 +14,7 @@ for (const definition of Object.values(FIGHTER_DEFINITIONS)) {
     let previous: string | null = null;
     for (let count = 0; count < 24; count++) {
       const choice = chooseTpsNeutralMashMove({
-        count, stage: count % 3, distance: 1.15,
+        phrase: Math.floor(count / 3), stage: count % 3, distance: 1.15,
         lastBase: previous, available: definition.moves,
       });
       assert.ok(definition.moves[choice.id], `${count}: every attack exists`);
@@ -36,15 +36,31 @@ test("distance favors actual leg/driving strikes but does not invent hit detecti
   const available = FIGHTER_DEFINITIONS.red.moves;
   for (let count=0;count<36;count++) {
     const result=chooseTpsNeutralMashMove({
-      count,stage:count%3,distance:1.92,available,
+      phrase:count,stage:count%3,distance:1.92,available,
     });
     assert.ok(["kick","lowKick","dashKick","risingKick"].includes(result.base),`${count}: far strike`);
     assert.ok(available[result.id].reach < 3,"no infinite range even when mashing");
   }
   const fallback=chooseTpsNeutralMashMove({
-    count:15,stage:2,distance:1.15,available:{jab:available.jab},
+    phrase:5,stage:2,distance:1.15,available:{jab:available.jab},
   });
   assert.equal(fallback.id,"jab","small or custom move sets never select missing attacks");
+});
+
+test("a 4-frame rapid mash gets a new opener after each complete whiff, even without landing hits",()=>{
+  const available=FIGHTER_DEFINITIONS.red.moves;
+  const moves=[] as string[];
+  let previous: string | null = null;
+  for(let opener=0;opener<12;opener++){
+    const choice=chooseTpsNeutralMashMove({phrase:opener,stage:0,distance:1.15,lastBase:previous,available});
+    moves.push(choice.base);previous=choice.base;
+  }
+  assert.equal(moves[0],"jab");
+  assert.equal(moves[1],"backfist");
+  assert.equal(moves[2],"kick");
+  assert.ok(new Set(moves).size>=7, "visible variety even against evasive enemies");
+  assert.ok(moves.includes("risingKick"), "the video spinning kick appears in no-direction mash play");
+  assert.ok(moves.includes("dashKick"), "dash kick can appear without a direction button");
 });
 
 test("mash prebuffer helps fast iPhone taps but does not bypass cancel window or hit confirmation",()=>{

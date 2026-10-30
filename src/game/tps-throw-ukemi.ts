@@ -66,3 +66,23 @@ export function tpsRecoveryClipPhase(remainingTicks: number, totalTicks: number)
   if (!Number.isFinite(remainingTicks) || totalTicks <= 0) return 0;
   return Math.max(0, Math.min(1, (totalTicks - Math.max(0, remainingTicks)) / totalTicks));
 }
+
+/** Neutral STEP after landing is the fast but stationary wake-up alternative to
+ * the directional roll. Neither option confers invulnerability.
+ */
+export const TPS_QUICK_RISE_POSE_TICKS = 12;
+export const TPS_QUICK_RISE_KNOCKDOWN_TICKS = 13;
+export function canStartTpsQuickRise(input: {
+  stepPressed: boolean;
+  state: FighterState;
+  grounded: boolean;
+  knockdownTicks: number;
+  forwardAxis: number;
+  sideAxis: number;
+  alreadyRecovering: boolean;
+}): boolean {
+  return input.stepPressed && input.state === "KNOCKDOWN" && input.grounded
+    && input.knockdownTicks > 11 && input.knockdownTicks <= 54
+    && !input.alreadyRecovering && Math.abs(input.forwardAxis) <= .45
+    && Math.abs(input.sideAxis) <= .45;
+}

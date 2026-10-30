@@ -1248,6 +1248,7 @@ export class TpsFightGame {
       this.playerThrowTechTicks = 0;
       defender.visual.root.userData.tpsThrowTechBuffered = false;
       defender.visual.root.userData.tpsThrowTechSuccessTicks = 26;
+      defender.visual.root.userData.tpsThrowTechSerial = Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0) + 1;
       attacker.hitStop = Math.max(attacker.hitStop, 9);
       defender.hitStop = Math.max(defender.hitStop, 8);
       const away = horizontalDirection(attacker.position, defender.position);

@@ -41,7 +41,7 @@ import {
 } from "./tps-gameplay-profile";
 import { computeTpsContactSpacing, type TpsContactSpacingMode } from "./tps-contact-spacing";
 import { computeTpsHitResolution, tpsImpactHeightForMove } from "./tps-impact-resolution";
-import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo } from "./tps-fight-fundamentals";
+import { evaluateTpsStrikeGeometry, turnTpsCommittedAttackAim, tpsAttackWindupAdvance, tpsCanConfirmCombo, tpsCommittedAimTurnLimit } from "./tps-fight-fundamentals";
 import { applyTpsImpactPresentation } from "./tps-impact-presentation";
 import {
   adaptTpsCpuDecision,
@@ -450,7 +450,7 @@ export class TpsFightGame {
       attacker.visual.root.userData.tpsCommittedAttackForward = forward.toArray();
       return;
     }
-    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z);
+    const next = turnTpsCommittedAttackAim(current.forward.x, current.forward.z, toward.x, toward.z, tpsCommittedAimTurnLimit(attacker.currentMove));
     current.forward.set(next.x, 0, next.z);
     current.lastTick = attacker.moveTick;
     attacker.visual.root.userData.tpsCommittedAttackForward = current.forward.toArray();

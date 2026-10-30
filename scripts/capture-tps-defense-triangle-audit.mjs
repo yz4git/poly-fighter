@@ -144,15 +144,24 @@ try {
     const g=findGame();
     const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
     g.p1.resetForRound(0,.54,1);g.p2.resetForRound(0,-.54,-1);
-    g.p1.hitStop=0;g.p2.hitStop=0;g.playerThrowTechTicks=0;
+    g.p1.hitStop=0;g.p2.hitStop=0;g.playerThrowTechTicks=0;g.input.clear();
+    // Restore a genuine neutral visual pose before the event; the previous
+    // audit may have left the imported skeleton half-way through a ground roll.
+    g.renderTime=performance.now()/1000;
+    for(let n=0;n<24;n++){
+      g.renderTime+=1/60;
+      g.updateVisual(g.p1,g.p2,g.renderTime);
+      g.updateVisual(g.p2,g.p1,g.renderTime+.01);
+    }
     g.p2.beginMove("throw");
     g.p2.moveTick=Math.max(0,g.p2.currentMove.startup-3);
     g.updatePlayer({...neutral,punch:true});
     g.p2.moveTick=g.p2.currentMove.startup;
     g.trackCommittedAttack(g.p2,g.p1);
     g.resolveAttack(g.p2,g.p1,false);
-    let now=performance.now()/1000;
-    for(let n=0;n<3;n++){now+=1/60;g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.01);}
+    // Sample a real post-hitstop mid-reaction, not frame zero of the blend.
+    g.updateEnemy=()=>{g.p2.updatePhysics(1/60);};
+    for(let n=0;n<15;n++){g.renderTime+=1/60;g.step();}
     g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
     return {playerClip:g.p1.visual.root.userData.combatMotionCurrentClip,
       enemyClip:g.p2.visual.root.userData.combatMotionCurrentClip,

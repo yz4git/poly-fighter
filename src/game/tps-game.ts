@@ -517,11 +517,13 @@ prototype.resolveAttack = function resolveAttack(
   const beforeBlockStun = defender.blockStun;
   const beforeHitStop = defender.hitStop;
   const beforeState = defender.state;
+  const beforeTechSerial = Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0);
 
   // Register both runtimes before the shared effect callback records the hit.
   trackMotionFighter(attacker);
   trackMotionFighter(defender);
   coreResolveAttack.call(this, attacker, defender, defenderGuarding);
+  if (Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0) > beforeTechSerial) return;
   if (!move || alreadyResolved || !attacker.hitTargets.has(defender.id)) return;
 
   const blocked = defender.blockStun > beforeBlockStun || defender.state === "BLOCK_STUN";

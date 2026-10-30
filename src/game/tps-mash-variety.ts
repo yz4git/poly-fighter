@@ -2,8 +2,9 @@ import type { MoveDefinition } from "./types";
 import { expandedMoveId, type MoveVariant } from "./move-expansion";
 
 /**
- * A freeform ATTACK-only rhythm, not a random auto-combo. Every successful
- * button-driven strike advances the sequence; each three-move phrase changes
+ * A freeform ATTACK-only rhythm, not a random auto-combo. Every fresh
+ * neutral opener advances the phrase, even after a whiff; confirmed hits
+ * continue within the same three-move phrase. Each new phrase changes
  * the lead, body target and finish. Normal directed combos and the first
  * familiar jab → straight → power sequence remain untouched.
  *
@@ -16,8 +17,8 @@ const NEUTRAL_MASH_PHRASES = [
   ["bodyBlow", "lowKick", "backfist"],  // change levels and finish palm
   ["straight", "backfist", "power"],    // direct -> turning hand -> heavy
   ["lowKick", "kick", "risingKick"],    // low -> side kick -> high
-  ["jab", "counter", "dashKick"],      // quick hands -> counter -> drive
-  ["backfist", "kick", "power"],        // palm -> side kick -> impact
+  ["risingKick", "counter", "dashKick"],  // turning kick -> counter -> drive
+  ["dashKick", "kick", "power"],        // dash entry -> side kick -> impact
 ] as const;
 export const TPS_MASH_PHRASE_COUNT = NEUTRAL_MASH_PHRASES.length;
 export const TPS_MASH_BUFFER_TICKS = 20;
@@ -34,14 +35,13 @@ export function tpsCanBufferMashTap(move: Pick<MoveDefinition,"startup" | "activ
 }
 
 export function chooseTpsNeutralMashMove(input: {
-  count: number;
+  phrase: number;
   stage: number;
   distance: number;
   lastBase?: string | null;
   available: Readonly<Record<string, MoveDefinition>>;
 }): { id: string; base: string; phrase: number } {
-  const count = Math.max(0, Math.floor(input.count));
-  const phrase = Math.floor(count / 3) % NEUTRAL_MASH_PHRASES.length;
+  const phrase = Math.max(0, Math.floor(input.phrase)) % NEUTRAL_MASH_PHRASES.length;
   const stage = Math.max(0, Math.min(2, Math.floor(input.stage)));
   const group = NEUTRAL_MASH_PHRASES[phrase];
   let base: string = group[stage];

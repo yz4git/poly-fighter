@@ -613,7 +613,7 @@ export default function Home() {
               {pressableAction(gameRef, "punch", "Attack", tpsPunish ? "PUNISH" : tpsIntercept ? "INTERCEPT" : "ATTACK", "punch tps-attack-action " + (tpsPunish ? "tps-punish-action" : tpsIntercept ? "tps-intercept-action" : tpsStrikeRange ? "tps-ready-action" : ""))}
             </div>
           </section>
-          <div className="input-hint tps-input-hint"><b>ATTACK</b> AUTO PUNCH / KICK <span>•</span> <b>WINDUP</b> STEP OR INTERCEPT <span>•</span> <b>PERFECT STEP</b> → REVERSAL <span>•</span> FORWARD STEP → ATTACK = DASH</div>
+          <div className="input-hint tps-input-hint"><b>ATTACK</b> PUNCH / KICK <span>•</span> <b>TAP STEP</b> DODGE <span>•</span> <b>HOLD STEP</b> GUARD <span>•</span> <b>BACK + HOLD STEP</b> LOW GUARD <span>•</span> <b>GUARD + ATTACK</b> CLOSE THROW <span>•</span> <b>BLOCK</b> → PUNISH</div>
           {screen === "TRAINING" && (
             <section className={`training-coach ${trainingStage === 5 ? "complete" : ""}`} aria-live="polite">
               <span>RIVAL CORE TRAINING // {Math.min(trainingStage + 1, 6)}/6</span>

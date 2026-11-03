@@ -175,6 +175,8 @@ export class TpsGraphicsDirector {
   private quality: GraphicsQuality;
   private impactLightLife = 0;
   private impactExposure = 0;
+  private arenaShockStrength = 0;
+  private readonly arenaShockColor = new THREE.Color(0x38cfff);
   private pendingAttackerId: string | null = null;
   private pendingAttackerHitStop = 0;
   private latestP1: FighterRuntime | null = null;
@@ -404,6 +406,15 @@ export class TpsGraphicsDirector {
       event.blocked ? 0.025 : visualTier === 3 ? TPS_IMPACT_FEEL_PROFILE.heavyExposurePunch : visualTier === 2 ? 0.085 : 0.045,
     );
 
+    // The stadium responds to major contacts with a fast, low-opacity color
+    // surge. Reuse the arena's existing meshes: no bloom pass or new draw calls.
+    this.arenaShockStrength = Math.max(
+      this.arenaShockStrength,
+      event.blocked ? 0.12 : visualTier === 3 ? 1 : visualTier === 2 ? 0.57 : 0.25,
+    );
+    this.arenaShockColor.setHex(color);
+    this.group.userData.tpsArenaShockStrength = this.arenaShockStrength;
+
     // Throws already own a long launch/animation beat. Shared strike hitstop there
     // only delays the next action after the throw has visually finished, so reserve
     // the new attacker freeze for punches and kicks where contact needs extra weight.
@@ -471,10 +482,15 @@ export class TpsGraphicsDirector {
     this.previousP1Position.copy(p1.position);
     this.hasPreviousP1Position = true;
 
-    this.arenaGlowMaterial.opacity = 0.09 + Math.sin(time * 1.7) * 0.025;
-    this.centerGlowMaterial.opacity = 0.055 + Math.sin(time * 2.3 + 0.8) * 0.025;
-    this.floorAccentMaterial.opacity = (this.quality === "LOW" ? 0.095 : 0.17) + Math.sin(time * 1.35) * 0.035;
-    this.floorCoreMaterial.emissiveIntensity = 0.38 + Math.sin(time * 1.9) * 0.06;
+    const arenaShock = this.arenaShockStrength * this.arenaShockStrength;
+    this.arenaShockStrength = Math.max(0, this.arenaShockStrength - delta * 2.7);
+    this.arenaGlowMaterial.color.setHex(0x38cfff).lerp(this.arenaShockColor, arenaShock * 0.65);
+    this.centerGlowMaterial.color.setHex(0x4ddcff).lerp(this.arenaShockColor, arenaShock * 0.50);
+    this.arenaGlowMaterial.opacity = Math.min(0.28, 0.09 + Math.sin(time * 1.7) * 0.025 + arenaShock * 0.15);
+    this.centerGlowMaterial.opacity = Math.min(0.21, 0.055 + Math.sin(time * 2.3 + 0.8) * 0.025 + arenaShock * 0.10);
+    this.floorAccentMaterial.opacity = (this.quality === "LOW" ? 0.095 : 0.17) + Math.sin(time * 1.35) * 0.035 + arenaShock * 0.045;
+    this.floorCoreMaterial.emissiveIntensity = 0.38 + Math.sin(time * 1.9) * 0.06 + arenaShock * 0.18;
+    this.group.userData.tpsArenaShockStrength = this.arenaShockStrength;
     const arenaPulse = 1 + Math.sin(time * 1.55) * 0.0025;
     this.arenaGlow.scale.setScalar(arenaPulse);
     this.atmosphere.rotation.y = time * 0.012;
@@ -527,6 +543,11 @@ export class TpsGraphicsDirector {
   }
 
   reset(): void {
+    this.arenaShockStrength = 0;
+    this.arenaShockColor.setHex(0x38cfff);
+    this.arenaGlowMaterial.color.setHex(0x38cfff);
+    this.centerGlowMaterial.color.setHex(0x4ddcff);
+    this.group.userData.tpsArenaShockStrength = 0;
     this.impactLight.intensity = 0;
     this.impactLightLife = 0;
     this.impactExposure = 0;

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
 import type { HitEvent } from "./types";
+import { TpsCinematicImpactSpectacle } from "./tps-cinematic-impact-spectacle";
 
 export const TPS_HYPE_PROFILE = Object.freeze({
   lightSharedHitStopTicks: 3,
@@ -225,6 +226,10 @@ export class TpsHypeDirector {
   private readonly spokeGeometry = burstGeometry();
   private readonly rings: ShockRing[] = [];
   private readonly bursts: BurstSpokes[] = [];
+  private readonly cinematicSpectacle = new TpsCinematicImpactSpectacle(this.group);
+  private hitStreak = 0;
+  private hitStreakSeconds = 0;
+  private hitStreakAttacker: string | null = null;
   private fovOffset = 0;
   private cameraKick = 0;
   private cameraSide = 0;
@@ -326,7 +331,23 @@ export class TpsHypeDirector {
             : TPS_HYPE_PROFILE.lightImpactAimWeight;
     }
 
+    // A streak belongs to a single attacker and expires quickly. The
+    // crescendo changes visuals only; damage, move windows and combo rules are
+    // still owned by the fixed-tick combat engine.
+    if (event.blocked) {
+      this.hitStreak = 0;
+      this.hitStreakSeconds = 0;
+      this.hitStreakAttacker = null;
+    } else {
+      this.hitStreak = this.hitStreakSeconds > 0 && this.hitStreakAttacker === event.attacker
+        ? Math.min(6, this.hitStreak + 1)
+        : 1;
+      this.hitStreakAttacker = event.attacker;
+      this.hitStreakSeconds = 1.0;
+    }
     this.retirePreviousImpactFx();
+    this.cinematicSpectacle.hit(event, camera, tier, this.hitStreak);
+    this.group.userData.tpsCinematicHitStreak = this.hitStreak;
 
     for (let index = 0; index < ringCount; index += 1) {
       const ring = this.rings.find((entry) => entry.life <= 0) ?? this.rings[index % this.rings.length];
@@ -442,6 +463,8 @@ export class TpsHypeDirector {
 
   update(camera: THREE.PerspectiveCamera, delta: number): void {
     this.phase += delta;
+    this.hitStreakSeconds = Math.max(0, this.hitStreakSeconds - delta);
+    this.cinematicSpectacle.update(delta);
 
     for (const ring of this.rings) {
       if (ring.life <= 0) continue;
@@ -521,6 +544,11 @@ export class TpsHypeDirector {
     this.impactFocusLife = 0;
     this.impactFocusDuration = 0;
     this.impactAimWeight = 0;
+    this.hitStreak = 0;
+    this.hitStreakSeconds = 0;
+    this.hitStreakAttacker = null;
+    this.cinematicSpectacle.reset();
+    this.group.userData.tpsCinematicHitStreak = 0;
     const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     camera.fov = baseFov;
     camera.updateProjectionMatrix();
@@ -541,6 +569,7 @@ export class TpsHypeDirector {
   }
 
   dispose(): void {
+    this.cinematicSpectacle.dispose();
     this.ringGeometry.dispose();
     this.spokeGeometry.dispose();
     for (const ring of this.rings) ring.mesh.material.dispose();

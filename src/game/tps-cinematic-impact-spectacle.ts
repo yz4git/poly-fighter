@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { HitEvent } from "./types";
+import { tpsDecorativeHitLane } from "./tps-screen-readability";
 
 /**
  * Presentation-only, pooled spectacle. No combat timers, collision volumes or
@@ -149,6 +150,8 @@ export class TpsCinematicImpactSpectacle {
       : event.attacker === "p1" ? 0xff527a : 0x69dfff;
     const point = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
     const normal = camera.position.clone().sub(point).normalize();
+    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    const decorativeLane = tpsDecorativeHitLane(event);
     const viewRotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
 
     // Keep the next attack's silhouette readable rather than stacking
@@ -161,7 +164,9 @@ export class TpsCinematicImpactSpectacle {
       shard.duration = shard.life;
       shard.scale = style.scale * (index === 0 ? 1 : 1.30);
       shard.opacity = style.opacity * (index === 0 ? 1 : 0.53);
-      shard.mesh.position.copy(point).addScaledVector(normal, finishing ? -0.23 : -0.14);
+      shard.mesh.position.copy(point)
+        .addScaledVector(cameraRight, decorativeLane)
+        .addScaledVector(normal, finishing ? -0.23 : -0.14);
       shard.mesh.quaternion.copy(viewRotation);
       shard.mesh.rotateZ(index * 0.35 + (streak % 4) * 0.12);
       shard.mesh.scale.setScalar(shard.scale);
@@ -188,6 +193,7 @@ export class TpsCinematicImpactSpectacle {
     this.group.userData.tpsCinematicGroundWaves = style.groundWaves;
     this.group.userData.tpsCinematicFinishing = finishing;
     this.group.userData.tpsCinematicLastMove = event.move.id;
+    this.group.userData.tpsDecorativeImpactLane = decorativeLane;
   }
 
   update(delta: number): void {

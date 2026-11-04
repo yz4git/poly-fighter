@@ -82,12 +82,12 @@ export function addCinematicTechniques(
       launcher: false, knockdown: false, power: 1.30,
       visualContact: "RIGHT_FOOT",
     }),
-    airPivot: role(moves.backfist, "airPivot", labels.airPivot, {
+    airPivot: role(moves.risingKick, "airPivot", labels.airPivot, {
       startup: 7 + Math.max(-1, fast), active: 5, recovery: 11,
       damage: Math.round(8 * heavy), hitStun: 53, blockStun: 9,
       knockback: .08, reach: 2.08, width: .99, hitStop: 6,
       launcher: false, knockdown: false, power: 1.38,
-      visualContact: "LEFT_FIST",
+      visualContact: "RIGHT_FOOT",
     }),
     meteorSlam: role(moves.dashKick, "meteorSlam", labels.meteorSlam, {
       startup: 9 + fast, active: 6, recovery: 24,

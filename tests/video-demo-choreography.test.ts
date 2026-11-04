@@ -66,3 +66,34 @@ test("normalized source phase is bounded, height-safe and deterministic",()=>{
   assert.deepEqual(sampleVideoChoreography("jab",2,.09),sampleVideoChoreography("jab",1,.09));
   assert.deepEqual(sampleVideoChoreography("jab",NaN,.09),sampleVideoChoreography("jab",0,.09));
 });
+
+
+test("hero animations use more visible windup, longer strike extension and distinct per-fighter identity", () => {
+  const jabLoad = sampleVideoChoreography("jab", .20, .09);
+  const jabImpact = sampleVideoChoreography("jab", .5, .09);
+  const jabOver = sampleVideoChoreography("jab", .57, .09);
+  assert.ok(jabLoad.forward! < 0 && jabLoad.yaw! < -.30, "visible whole-body jab recoil");
+  assert.ok(jabImpact.forward! > .06 && jabImpact.leftHand![2] > .70);
+  assert.ok(jabOver.leftHand![2] > jabImpact.leftHand![2], "follows through after the hit");
+  const palmLoad = sampleVideoChoreography("backfist", .21, .09);
+  const palm = sampleVideoChoreography("backfist", .5, .09);
+  assert.ok(palmLoad.yaw! < -.70 && palm.yaw! > .9, "backfist rotates from deep opposite windup");
+  const kickLoad = sampleVideoChoreography("kick", .37, .09);
+  const kick = sampleVideoChoreography("kick", .5, .09);
+  assert.ok(kickLoad.rightFoot![1] >= .42 && kick.rightFoot![1] >= .60);
+  assert.ok(kick.rightFoot![2] >= .65 && kick.leftFoot![1] === 0);
+  const spin = sampleVideoChoreography("risingKick", .5, .09);
+  assert.ok(spin.rightFoot![1] > .8);
+  for (const [name, move] of [["KAIRO", "jab"], ["SERA", "kick"], ["VANTA", "backfist"], ["AXION", "risingKick"]] as const) {
+    const original = sampleVideoChoreography(move, .5, .09);
+    const hero = sampleHeroVideoChoreography(move, .5, .09, name);
+    assert.notDeepEqual(hero, original, name + " should possess their own contact silhouette");
+    assert.deepEqual(sampleHeroVideoChoreography(move, 0, .09, name), sampleVideoChoreography(move, 0, .09), "common guard entry");
+    assert.deepEqual(sampleHeroVideoChoreography(move, 1, .09, name), sampleVideoChoreography(move, 1, .09), "no return snap");
+    for (const u of [.15, .3, .5, .7, .9]) {
+      const pose = sampleHeroVideoChoreography(move, u, .09, name);
+      const values = [pose.side!, pose.forward!, pose.drop!, pose.yaw!, pose.pitch!, pose.roll!, ...pose.leftFoot!, ...pose.rightFoot!, ...pose.leftHand!, ...pose.rightHand!];
+      assert.ok(values.every(Number.isFinite), name + " nonfinite pose at phase " + u);
+    }
+  }
+});

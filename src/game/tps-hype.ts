@@ -4,6 +4,7 @@ import { PresentationAnimationController } from "./presentation-animation";
 import type { HitEvent } from "./types";
 import { TpsCinematicImpactSpectacle } from "./tps-cinematic-impact-spectacle";
 import { TpsSignatureMotionVfx } from "./tps-signature-motion-vfx";
+import { tpsDecorativeHitLane } from "./tps-screen-readability";
 
 /** A short orbital punctuation beat, never a persistent camera takeover. */
 export function tpsCinematicCameraShot(
@@ -340,7 +341,9 @@ export class TpsHypeDirector {
           : 0x4bdcff;
     const point = new THREE.Vector3(event.position.x, event.position.y, event.position.z);
     const facing = camera.position.clone().sub(point).normalize();
-    const visualPoint = point.clone().addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias);
+    const visualPoint = point.clone()
+      .addScaledVector(facing, -TPS_HYPE_PROFILE.impactDepthBias)
+      .addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), tpsDecorativeHitLane(event));
     const ringCount = event.blocked ? 1 : tier === 3 ? TPS_HYPE_PROFILE.heavyImpactRingCount : tier === 2 ? TPS_HYPE_PROFILE.mediumImpactRingCount : TPS_HYPE_PROFILE.lightImpactRingCount;
 
     if (!event.blocked) {

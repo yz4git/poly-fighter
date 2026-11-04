@@ -67,6 +67,7 @@ import {
   TPS_CAMERA_MAX_TRAVEL_SPEED,
   type TpsCameraFraming,
 } from "./tps-camera-profile";
+import { tpsComboCameraEnergy } from "./tps-screen-readability";
 import {
   composeTpsMoveVector,
   planTpsContextAttack,
@@ -1737,6 +1738,14 @@ export class TpsFightGame {
       dramaPhase: this.dramaPhase,
       dramaIntensity: this.dramaIntensity,
     });
+
+    // Linked, earned combos change the 3/4 composition just enough to show
+    // escalation without warping gameplay, the viewport, or movement controls.
+    const comboEnergy = tpsComboCameraEnergy(this.playerComboStage, framing.closeFactor);
+    framing.desiredShoulderOffset += comboEnergy.shoulder;
+    framing.backDistance += comboEnergy.back;
+    framing.targetHeight += comboEnergy.lift;
+    this.camera.userData.tpsComboCameraEnergy = comboEnergy.shoulder;
 
     this.configureCameraTargets(framing, right);
     this.publishCameraFraming(framing, attackMoveId);

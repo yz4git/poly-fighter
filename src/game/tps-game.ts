@@ -3,7 +3,7 @@ import { TpsFightGame as CoreTpsFightGame } from "./tps-game-base";
 import type { FighterRuntime } from "./fighter";
 import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
-import { chooseCinematicTechnique } from "./cinematic-techniques";
+import { chooseCinematicTechnique, cinematicAxesForBufferedTap } from "./cinematic-techniques";
 import { expandedContextMove } from "./move-expansion";
 import { chooseTpsNeutralMashMove, TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap } from "./tps-mash-variety";
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
@@ -36,7 +36,7 @@ const ENEMY_ORBIT_ACTIVE_TICKS = 28;
 const ENEMY_TACTIC_INTERVAL = 72;
 const ENEMY_ATTACK_ALIGNMENT = 0.82;
 const PERFECT_COUNTER_TARGET_DISTANCE = 1.08;
-const PERFECT_COUNTER_MAX_LUNGE = 0.78;
+const PERFECT_COUNTER_MAX_LUNGE = 0.94;
 const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 
 type ExtendedTpsRuntime = CoreTpsFightGame & {
@@ -71,6 +71,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __mashBufferTicks?: number;
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
+  __comboQueuedSideSign?: number;
   __finalImpactSeconds?: number;
   __finalImpactContact?: THREE.Vector3;
 };
@@ -196,10 +197,16 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   // The TPS subclass owns the player action graph (the core method below is
   // overridden). Select and play the new moves HERE, so iPhone ATTACK taps
   // actually reach the launched/juggle chain instead of the old three hits.
-  const cinematic = chooseCinematicTechnique({
-    comboStage: game.playerComboStage,
+  const directed = cinematicAxesForBufferedTap({
     forwardAxis: (game.p1.input.up ? 1 : 0) - (game.p1.input.down ? 1 : 0),
     sideAxis: (game.p1.input.right ? 1 : 0) - (game.p1.input.left ? 1 : 0),
+    queuedBranch: game.__comboQueuedBranch,
+    queuedSideSign: game.__comboQueuedSideSign,
+  });
+  const cinematic = chooseCinematicTechnique({
+    comboStage: game.playerComboStage,
+    forwardAxis: directed.forwardAxis,
+    sideAxis: directed.sideAxis,
     distance,
     opponentAirborne: !game.p2.grounded,
     airHits: game.airCombo?.hits ?? 0,
@@ -215,6 +222,8 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     game.p1.visual.root.userData.tpsContextMove = cinematic;
     game.p1.visual.root.userData.tpsComboStage = game.playerComboStage;
     game.p1.visual.root.userData.tpsSignatureTechnique = cinematic;
+    game.p1.visual.root.userData.tpsAirPivotSign = directed.sideAxis < 0 ? -1 : 1;
+    game.p1.visual.root.userData.tpsAirBranch = cinematic;
     return true;
   }
 
@@ -350,6 +359,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
         : input.left || input.right
           ? "SIDE"
           : "NEUTRAL";
+    game.__comboQueuedSideSign = input.left ? -1 : 1;
   }
 
   if (
@@ -404,8 +414,11 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
       game.p1.state = "IDLE";
       game.p1.hitTargets.clear();
       game.playerAttackQueued = false;
+      // Keep the earlier tap's direction through the branch selection itself.
+      const linked = prototype.beginContextAttack.call(this);
       game.__comboQueuedBranch = undefined;
-      if (prototype.beginContextAttack.call(this)) {
+      game.__comboQueuedSideSign = undefined;
+      if (linked) {
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);
@@ -416,6 +429,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     if (game.p1.moveTick > linkWindow.linkEnd) {
       game.playerAttackQueued = false;
       game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
       game.p1.visual.root.userData.tpsComboLinkState = "MISSED";
     } else if (game.playerAttackQueued) {
       game.p1.visual.root.userData.tpsComboLinkState = "BUFFERED";
@@ -590,7 +604,16 @@ prototype.resolveAttack = function resolveAttack(
   // Register both runtimes before the shared effect callback records the hit.
   trackMotionFighter(attacker);
   trackMotionFighter(defender);
+  const previousPerfectEvade = game.playerPerfectEvadeTicks;
   coreResolveAttack.call(this, attacker, defender, defenderGuarding);
+  if (attacker === game.p2 && defender === game.p1 && game.playerPerfectEvadeTicks > previousPerfectEvade) {
+    // Reward only a *verified spatial whiff* of a tracked incoming strike.
+    // No automatic dodge invincibility or unearned counter damage.
+    hype(game).step(game.p1, game.p2, true);
+    game.audio.rush(true);
+    game.camera.userData.tpsJustEvadeTick = game.simulationTicks;
+    game.setCombatBeat("JUST EVADE · COUNTER!", 34);
+  }
   if (Number(defender.visual.root.userData.tpsThrowTechSerial ?? 0) > beforeTechSerial) return;
   if (!move || alreadyResolved || !attacker.hitTargets.has(defender.id)) return;
 
@@ -714,6 +737,10 @@ prototype.resetRound = function resetRound(): void {
   game.p1.visual.root.userData.tpsMashSelectedMove = null;
   game.p1.visual.root.userData.tpsMashBufferTicks = 0;
   game.__comboQueuedBranch = undefined;
+  game.__comboQueuedSideSign = undefined;
+  game.p1.visual.root.userData.tpsAirPivotSign = 0;
+  game.p1.visual.root.userData.tpsAirBranch = null;
+  game.camera.userData.tpsJustEvadeTick = null;
   game.p1.visual.root.userData.tpsComboRoute = null;
   game.p1.visual.root.userData.tpsComboLinkSerial = 0;
   game.p1.visual.root.userData.tpsComboLinkState = null;

@@ -16,6 +16,8 @@ type MotionTrail = {
   lastMove: string | null;
   lastTick: number;
   release: number;
+  width: number;
+  color: number;
 };
 
 function makeTrailGeometry(): THREE.BufferGeometry {
@@ -141,6 +143,8 @@ export class TpsSignatureMotionVfx {
         lastMove: null,
         lastTick: -1,
         release: 0,
+        width: 0,
+        color: 0xffffff,
       });
     }
     for (let index = 0; index < 2; index += 1) {
@@ -254,12 +258,18 @@ export class TpsSignatureMotionVfx {
     if (move?.id !== trail.lastMove) {
       trail.lastMove = move?.id ?? null;
       trail.lastTick = -1;
-      trail.count = 0;
-      trail.release = 0;
+      // The last committed strike needs a real follow-through tail when it
+      // returns to idle; only a different new attack resets its history.
+      if (move) {
+        trail.count = 0;
+        trail.release = 0;
+      }
     }
     const active = Boolean(move && isSignatureMotionTrailWindow(move, fighter.moveTick));
     if (active && move && trail.lastTick !== fighter.moveTick && fighter.hitStop <= 0) {
       trail.lastTick = fighter.moveTick;
+      trail.width = signatureMotionTrailWidth(move.cinematicRole) * Math.min(1.2, fighter.visual.root.scale.x);
+      trail.color = tintFor(fighter, move.cinematicRole);
       this.appendSample(trail, getVisualContactPoint(fighter.visual, move.visualContact));
     }
     if (!active) trail.release = Math.max(0, trail.release - delta);
@@ -268,9 +278,8 @@ export class TpsSignatureMotionVfx {
       // frame instead of accumulating duplicate vertices.
       trail.release = Math.max(trail.release, .10);
     }
-    const width = signatureMotionTrailWidth(role) * Math.min(1.2, fighter.visual.root.scale.x);
     const opacity = Math.min(1, trail.release / .13);
-    this.setRibbon(trail, camera, width, opacity, tintFor(fighter, role));
+    this.setRibbon(trail, camera, trail.width, opacity, trail.color);
     this.group.userData["tpsTrailSamples" + index] = trail.count;
     this.group.userData["tpsTrailVisible" + index] = trail.meshes.some(mesh => mesh.visible);
   }
@@ -340,6 +349,8 @@ export class TpsSignatureMotionVfx {
     for (const trail of this.trails) {
       trail.count = 0;
       trail.release = 0;
+      trail.width = 0;
+      trail.color = 0xffffff;
       trail.lastMove = null;
       trail.lastTick = -1;
       for (const mesh of trail.meshes) {

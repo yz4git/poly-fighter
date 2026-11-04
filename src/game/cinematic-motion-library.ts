@@ -106,7 +106,7 @@ export function bakeCinematicClip(
     for (let index = 0; index < output.times.length; index += 1) {
       const strength = cinematicPoseEnvelope(output.times[index] / duration)
         * cinematicHeroWeight(fighterName, role, boneName);
-      if (strength <= 1e-7) continue;
+      if (Math.abs(strength) <= 1e-7) continue;
       const q = new THREE.Quaternion().fromArray(values, index * 4);
       q.multiply(new THREE.Quaternion().setFromEuler(
         new THREE.Euler(pose[0] * strength, pose[1] * strength, pose[2] * strength),

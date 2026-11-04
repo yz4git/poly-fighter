@@ -8,7 +8,7 @@ export const CINEMATIC_CLIP_SOURCES: Readonly<Record<CinematicTechnique, string>
   skyBreaker: "BF_RisingKick_R",
   airChase: "BF_FrontKick_R",
   airCarry: "BF_FrontKick_R",
-  airPivot: "BF_Backfist_L",
+  airPivot: "BF_RisingKick_R",
   meteorSlam: "BF_DashKick_R",
   cycloneSweep: "BF_LowKick_L",
   powerRush: "BF_Power_R",
@@ -36,8 +36,8 @@ const accent: Record<CinematicTechnique, Readonly<Record<string, readonly [numbe
     thigh_r: [-.24, .11, .18], calf_r: [-.16, .05, -.09], upperarm_l: [.17, -.12, .11],
   },
   airPivot: {
-    pelvis: [-.08, -.28, .11], spine_02: [.09, -.35, -.07], spine_03: [.15, -.38, .10],
-    thigh_l: [-.11, .09, .16], upperarm_l: [-.22, .13, -.30], lowerarm_l: [-.12, -.12, -.13],
+    pelvis: [-.08, -.38, .11], spine_02: [.09, -.32, -.07], spine_03: [.15, -.30, .10],
+    thigh_r: [-.23, .22, .19], calf_r: [.18, -.04, -.05], upperarm_l: [-.22, .13, -.30],
   },
   meteorSlam: {
     pelvis: [-.16, -.16, 0], spine_02: [.18, -.20, -.12], spine_03: [.30, -.25, -.16],

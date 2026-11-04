@@ -7,6 +7,7 @@ import { chooseCinematicTechnique, cinematicAxesForBufferedTap } from "./cinemat
 import { expandedContextMove } from "./move-expansion";
 import { chooseTpsNeutralMashMove, TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap } from "./tps-mash-variety";
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
+import { chooseTpsRangeAttack, isTpsRangeAttack, tpsRangeAdvance } from "./tps-range-attack";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
 import {
   chooseTpsComboContinuationRoute,
@@ -68,6 +69,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __neutralMashAttackCount?: number;
   __neutralMashPhrase?: number;
   __neutralMashLastBase?: string | null;
+  __rangeAttackSerial?: number;
   __mashBufferTicks?: number;
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
@@ -83,6 +85,48 @@ function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vect
 
 function extended(game: TpsFightGame): ExtendedTpsRuntime {
   return game as unknown as ExtendedTpsRuntime;
+}
+
+/**
+ * Visible movement is real 60Hz fighter-root travel along the heading locked
+ * on the ATTACK tap. A late sidestep breaks the lane: there is no homing,
+ * teleport or retroactively extended collision box.
+ */
+function advanceRangeAttack(game: ExtendedTpsRuntime): void {
+  const fighter = game.p1;
+  const move = fighter.currentMove;
+  const data = fighter.visual.root.userData;
+  if (fighter.state !== "ATTACK" || !move || !isTpsRangeAttack(move.id)) {
+    data.tpsRangeTravelFrame = 0;
+    return;
+  }
+  const aim = data.tpsRangeLockedForward;
+  if (!Array.isArray(aim) || aim.length < 3) return;
+  const fx = Number(aim[0]);
+  const fz = Number(aim[2]);
+  if (!Number.isFinite(fx) || !Number.isFinite(fz)) return;
+  const dx = game.p2.position.x - fighter.position.x;
+  const dz = game.p2.position.z - fighter.position.z;
+  const longitudinal = dx * fx + dz * fz;
+  const lateral = Math.abs(dx * fz - dz * fx);
+  const step = tpsRangeAdvance({
+    moveId: move.id,
+    moveTick: fighter.moveTick,
+    startup: move.startup,
+    distance: Math.hypot(dx, dz),
+    longitudinal,
+    lateral,
+    hitStop: fighter.hitStop,
+    connected: fighter.hitTargets.has(game.p2.id),
+  });
+  if (step > 0) {
+    fighter.position.x += fx * step;
+    fighter.position.z += fz * step;
+    data.tpsRangeTravelTotal = Number(data.tpsRangeTravelTotal ?? 0) + step;
+  }
+  data.tpsRangeTravelFrame = step;
+  data.tpsRangeRemaining = Math.hypot(game.p2.position.x - fighter.position.x, game.p2.position.z - fighter.position.z);
+  data.tpsRangeLaneOffset = lateral;
 }
 
 function hype(game: ExtendedTpsRuntime): TpsHypeDirector {
@@ -142,6 +186,39 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     game.p2.position.x - game.p1.position.x,
     game.p2.position.z - game.p1.position.z,
   );
+
+  // From outside even the longest regular punch/kick, ATTACK means an actual
+  // authored approach strike, automatically. No extra gesture or fake reach.
+  // An airborne juggle stays under its separate earned air-combo rules.
+  const range = chooseTpsRangeAttack({
+    distance,
+    attackerGrounded: game.p1.grounded,
+    defenderGrounded: game.p2.grounded,
+    sequence: game.__rangeAttackSerial ?? 0,
+  });
+  if (range) {
+    if (!game.p1.beginMove(range)) return false;
+    const direction = horizontalDirection(game.p1.position, game.p2.position);
+    const data = game.p1.visual.root.userData;
+    data.tpsRangeLockedForward = direction.toArray();
+    data.tpsRangeTravelTotal = 0;
+    data.tpsRangeTravelFrame = 0;
+    data.tpsAutoRangeMove = range;
+    data.tpsAutoRangeStartDistance = distance;
+    game.__rangeAttackSerial = (game.__rangeAttackSerial ?? 0) + 1;
+    game.__mashBufferTicks = 0;
+    game.playerAttackQueued = false;
+    game.__comboRoute = "FAR";
+    game.playerComboStage = 1;
+    game.playerComboGraceTicks = 34;
+    data.tpsComboRoute = "FAR";
+    data.tpsComboMove = range;
+    data.tpsComboStage = 1;
+    data.tpsContextMove = range;
+    game.setCombatBeat(game.p1.currentMove?.label ?? "DISTANCE STRIKE", 25);
+    return true;
+  }
+
   const stage = Math.min(2, game.playerComboStage);
   const flank = game.playerFlankWindowTicks > 0 && game.playerStepSideWeight > 0.45;
   const perfect = game.playerPerfectEvadeTicks > 0 && flank;
@@ -419,6 +496,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
       game.__comboQueuedBranch = undefined;
       game.__comboQueuedSideSign = undefined;
       if (linked) {
+        advanceRangeAttack(game);
         game.p1.updatePhysics(FIXED_STEP);
         hype(game).comboShift(game.playerComboStage);
         game.audio.comboShift(game.playerComboStage);
@@ -439,6 +517,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   }
 
   coreUpdatePlayer.call(this, input);
+  advanceRangeAttack(game);
 
   // Only after the ENTIRE whiff/blocked strike has finished, accept a recent
   // buffered mash tap as a fresh opener. No phantom contact, auto-cancel,
@@ -732,6 +811,12 @@ prototype.resetRound = function resetRound(): void {
   game.__neutralMashAttackCount = 0;
   game.__neutralMashPhrase = -1;
   game.__neutralMashLastBase = null;
+  game.__rangeAttackSerial = 0;
+  game.p1.visual.root.userData.tpsAutoRangeMove = null;
+  game.p1.visual.root.userData.tpsRangeLockedForward = null;
+  game.p1.visual.root.userData.tpsRangeTravelTotal = 0;
+  game.p1.visual.root.userData.tpsRangeTravelFrame = 0;
+  game.p1.visual.root.userData.tpsAutoRangeStartDistance = 0;
   game.__mashBufferTicks = 0;
   game.__comboLinkSerial = 0;
   game.p1.visual.root.userData.tpsMashMoveSerial = 0;

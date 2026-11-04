@@ -49,6 +49,10 @@ export const AUTHORED_MOTION_EVENTS: Readonly<Record<string, AuthoredMotionEvent
   CM_Video_Palm: events(.50),
   CM_Video_SideKick: events(.50),
   CM_Video_SpinKick: events(.50),
+  // Approach strike hitboxes become live only at the dedicated contact key.
+  CM_Range_rangeBlitz: events(.50),
+  CM_Range_rangeCrescent: events(.50),
+  CM_Range_rangeComet: events(.50),
 };
 
 function clamp01(value: number): number {

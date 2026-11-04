@@ -903,7 +903,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     for (const [name, clip] of combatClips) retargetedClips.set(name, clip);
     const expandedClips = buildExpandedMotionLibrary(retargetedClips);
     for (const [name, clip] of expandedClips) retargetedClips.set(name, clip);
-    const cinematicClips = createCinematicMotionLibrary(retargetedClips);
+    const cinematicClips = createCinematicMotionLibrary(retargetedClips, definition.name);
     for (const [name, clip] of cinematicClips) retargetedClips.set(name, clip);
     visual.root.userData.cinematicMotionVersion = CINEMATIC_MOTION_VERSION;
     visual.root.userData.cinematicMotionClipCount = cinematicClips.size;

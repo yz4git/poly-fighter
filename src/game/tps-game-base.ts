@@ -1443,15 +1443,31 @@ export class TpsFightGame {
       defender.velocity.z *= .45;
       this.airCombo = nextTpsAirCombo(move, this.airCombo, attacker.id, defender.id);
       this.setCombatBeat("SKY BREAK!", 52);
-    } else if (role === "airChase" && this.airCombo && defender.health > 0) {
+    } else if (["airChase", "airCarry", "airPivot"].includes(role) && this.airCombo && defender.health > 0) {
       defender.state = "HIT";
-      defender.velocity.y = Math.max(3.8, defender.velocity.y);
+      defender.velocity.y = Math.max(role === "airCarry" ? 3.4 : 3.8, defender.velocity.y);
       defender.grounded = false;
       defender.hitStun = Math.max(defender.hitStun, 52);
-      defender.velocity.x *= .55;
-      defender.velocity.z *= .55;
+      const away = horizontalDirection(attacker.position, defender.position);
+      if (role === "airCarry") {
+        // The rival travels toward the wall. The player still has to chase
+        // within real attack reach to score the next airborne hit.
+        defender.velocity.x = away.x * 2.25;
+        defender.velocity.z = away.z * 2.25;
+      } else if (role === "airPivot") {
+        // A lateral strike changes the attack lane rather than dealing a
+        // hidden damage bonus. Its side comes from the buffered stick tap.
+        const side = attacker.visual.root.userData.tpsAirPivotSign === -1 ? -1 : 1;
+        defender.velocity.x = away.x * .48 - away.z * 1.75 * side;
+        defender.velocity.z = away.z * .48 + away.x * 1.75 * side;
+      } else {
+        defender.velocity.x *= .55;
+        defender.velocity.z *= .55;
+      }
       this.airCombo = nextTpsAirCombo(move, this.airCombo, attacker.id, defender.id);
-      this.setCombatBeat(`AIR COMBO × ${this.airCombo?.hits ?? 2}`, 46);
+      this.setCombatBeat(role === "airCarry"
+        ? "WALL CARRY!" : role === "airPivot"
+          ? "AIR REDIRECT!" : `AIR COMBO × ${this.airCombo?.hits ?? 2}`, 46);
     } else if (role === "meteorSlam" && this.airCombo) {
       defender.velocity.y = -7.6;
       defender.knockdownTicks = Math.max(defender.knockdownTicks, 78);

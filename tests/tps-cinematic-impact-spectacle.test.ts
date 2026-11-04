@@ -82,3 +82,19 @@ test("pooled spectacle fades, resets and disposes without GPU allocations per hi
   spectacle.dispose();
   assert.equal(parent.children.length, 0);
 });
+
+import { tpsCinematicCameraShot } from "../src/game/tps-hype";
+
+test("directional juggle and counter hero shots are bounded and do not trigger on guard", () => {
+  assert.equal(tpsCinematicCameraShot("skyBreaker", false, true), null);
+  assert.equal(tpsCinematicCameraShot(undefined, false, false), null);
+  for (const role of ["skyBreaker", "airCarry", "airPivot", "meteorSlam", "powerRush"] as const) {
+    const shot = tpsCinematicCameraShot(role, false, false);
+    assert.ok(shot);
+    assert.ok(shot.seconds >= .2 && shot.seconds <= .4);
+    assert.ok(Math.abs(shot.lateral) <= .2);
+    assert.ok(Math.abs(shot.lift) <= .1);
+    assert.ok(shot.aim < .3);
+  }
+  assert.equal(tpsCinematicCameraShot(undefined, true, false)?.name, "COUNTER");
+});

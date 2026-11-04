@@ -1,23 +1,27 @@
 import type { MoveDefinition } from "./types";
 
-export const CINEMATIC_TECHNIQUES = ["skyBreaker", "airChase", "meteorSlam", "cycloneSweep", "powerRush"] as const;
+export const CINEMATIC_TECHNIQUES = ["skyBreaker", "airChase", "airCarry", "airPivot", "meteorSlam", "cycloneSweep", "powerRush"] as const;
 export type CinematicTechnique = typeof CINEMATIC_TECHNIQUES[number];
 
 const NAMES: Record<string, Record<CinematicTechnique, string>> = {
   KAIRO: {
     skyBreaker: "Crimson Skybreaker", airChase: "Forge Aerial Barrage",
+    airCarry: "Crimson Wall Drive", airPivot: "Forge Axis Break",
     meteorSlam: "Meteor Anvil", cycloneSweep: "Iron Cyclone", powerRush: "Terminal Overdrive",
   },
   SERA: {
     skyBreaker: "Prism Ascension", airChase: "Sonic Air Waltz",
+    airCarry: "Prism Pursuit", airPivot: "Sonic Sidewind",
     meteorSlam: "Azure Comet Drop", cycloneSweep: "Blue Ribbon Spiral", powerRush: "Photon Rush",
   },
   VANTA: {
     skyBreaker: "Void Uplift", airChase: "Shadow Cross Spiral",
+    airCarry: "Void Wall Chase", airPivot: "Eclipse Redirect",
     meteorSlam: "Null Gravity Crash", cycloneSweep: "Eclipse Scythe", powerRush: "Dark Matter Burst",
   },
   AXION: {
     skyBreaker: "Gravity Pillar", airChase: "Orbit Hammer",
+    airCarry: "Gravity Ram", airPivot: "Orbit Switch",
     meteorSlam: "Event Horizon Fall", cycloneSweep: "Tectonic Halo", powerRush: "Mass Driver",
   },
 };
@@ -34,7 +38,9 @@ function role(
     label: name,
     input: roleName === "skyBreaker" ? "COMBO + FORWARD + ATTACK"
       : roleName === "airChase" ? "AIRBORNE RIVAL + ATTACK"
-      : roleName === "meteorSlam" ? "AIR COMBO FINISH + ATTACK"
+      : roleName === "airCarry" ? "FORWARD + AIR ATTACK"
+      : roleName === "airPivot" ? "SIDE + AIR ATTACK"
+      : roleName === "meteorSlam" ? "BACK + AIR ATTACK / AIR COMBO FINISH"
       : roleName === "cycloneSweep" ? "SIDE + ATTACK"
       : "COMBO + BACK + ATTACK",
     motionBase: source.motionBase ?? source.id,
@@ -65,6 +71,22 @@ export function addCinematicTechniques(
       damage: Math.round(8 * heavy), hitStun: 52, blockStun: 9,
       knockback: .06, reach: 2.02, width: .90, hitStop: 5,
       launcher: false, knockdown: false, power: 1.22,
+      visualContact: "RIGHT_FOOT",
+    }),
+    // Same fixed-tick contact and real reach rules as regular strikes. These
+    // follow-ups earn different spatial outcomes, not guaranteed free hits.
+    airCarry: role(moves.kick, "airCarry", labels.airCarry, {
+      startup: 6 + Math.max(-1, fast), active: 5, recovery: 11,
+      damage: Math.round(8 * heavy), hitStun: 52, blockStun: 9,
+      knockback: .10, reach: 2.12, width: .90, hitStop: 5,
+      launcher: false, knockdown: false, power: 1.30,
+      visualContact: "RIGHT_FOOT",
+    }),
+    airPivot: role(moves.risingKick, "airPivot", labels.airPivot, {
+      startup: 7 + Math.max(-1, fast), active: 5, recovery: 11,
+      damage: Math.round(8 * heavy), hitStun: 53, blockStun: 9,
+      knockback: .08, reach: 2.08, width: .99, hitStop: 6,
+      launcher: false, knockdown: false, power: 1.38,
       visualContact: "RIGHT_FOOT",
     }),
     meteorSlam: role(moves.dashKick, "meteorSlam", labels.meteorSlam, {
@@ -104,10 +126,31 @@ export function chooseCinematicTechnique(input: {
   if (input.signaturePriority) return null;
   if (input.hasJuggle && input.opponentAirborne && input.distance <= 2.30) {
     // The finisher must be deliberate: at least one airborne re-hit landed.
-    return input.airHits >= 3 ? "meteorSlam" : "airChase";
+    // Neutral keeps the classic barrage. Forward carries toward the wall,
+    // lateral redirects the rival, and BACK chooses an early damage ender.
+    // A third confirmed airborne hit must end the chain to prevent loops.
+    if (input.airHits >= 3 || (input.airHits >= 2 && input.forwardAxis < -.5)) return "meteorSlam";
+    if (Math.abs(input.sideAxis) > .5) return "airPivot";
+    if (input.forwardAxis > .5) return "airCarry";
+    return "airChase";
   }
   if (input.comboStage >= 1 && input.forwardAxis > .5 && input.distance <= 1.95) return "skyBreaker";
   if (input.comboStage >= 2 && input.forwardAxis < -.5 && input.distance <= 1.94) return "powerRush";
   if (input.comboStage === 0 && Math.abs(input.sideAxis) > .5 && input.distance <= 1.85) return "cycloneSweep";
   return null;
+}
+
+/** A buffered touch tap preserves its directional intent even if the finger
+ * leaves the virtual stick before the authored cancel window opens. */
+export function cinematicAxesForBufferedTap(input: {
+  forwardAxis: number;
+  sideAxis: number;
+  queuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
+  queuedSideSign?: number;
+}): { forwardAxis: number; sideAxis: number } {
+  if (input.queuedBranch === "FORWARD") return { forwardAxis: 1, sideAxis: 0 };
+  if (input.queuedBranch === "BACK") return { forwardAxis: -1, sideAxis: 0 };
+  if (input.queuedBranch === "SIDE") return { forwardAxis: 0, sideAxis: input.queuedSideSign === -1 ? -1 : 1 };
+  if (input.queuedBranch === "NEUTRAL") return { forwardAxis: 0, sideAxis: 0 };
+  return { forwardAxis: input.forwardAxis, sideAxis: input.sideAxis };
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import * as THREE from "three";
 import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters";
 import {
-  CINEMATIC_TECHNIQUES, addCinematicTechniques, chooseCinematicTechnique,
+  CINEMATIC_TECHNIQUES, addCinematicTechniques, chooseCinematicTechnique, cinematicAxesForBufferedTap,
 } from "../src/game/cinematic-techniques";
 import {
   canCinematicStrikeAirborne,
@@ -22,11 +22,11 @@ import { isCombatAttackClip } from "../src/game/combat-motion-handoff";
 import { sourceOfExpandedClip } from "../src/game/expanded-motion-library";
 import { tpsImpactHeightForMove } from "../src/game/tps-impact-resolution";
 
-test("four fighters retain 51 regular techniques plus five distinct named specials", () => {
+test("four fighters retain 51 regular techniques plus seven distinct named specials", () => {
   assert.equal(PLAYABLE_FIGHTERS.length, 4);
   const allSpecials = new Set<string>();
   for (const fighter of PLAYABLE_FIGHTERS) {
-    assert.equal(Object.keys(fighter.moves).length, 56, fighter.name);
+    assert.equal(Object.keys(fighter.moves).length, 58, fighter.name);
     for (const id of CINEMATIC_TECHNIQUES) {
       const move = fighter.moves[id];
       assert.ok(move, `${fighter.name}: ${id}`);
@@ -42,7 +42,7 @@ test("four fighters retain 51 regular techniques plus five distinct named specia
     assert.equal(fighter.moves.cycloneSweep.knockdown, true);
     assert.equal(fighter.moves.meteorSlam.knockdown, true);
   }
-  assert.equal(allSpecials.size, 20);
+  assert.equal(allSpecials.size, 28);
   assert.equal(addCinematicTechniques({ ...PLAYABLE_FIGHTERS[0].moves }, "KAIRO").powerRush.id, "powerRush");
 });
 
@@ -62,7 +62,21 @@ test("manual direction, clean chain and actual height select launch / chase / sl
   assert.equal(c({ comboStage: 2, forwardAxis: 1, signaturePriority: true }), null);
   assert.equal(c({ comboStage: 2, opponentAirborne: true, hasJuggle: true, airHits: 1 }), "airChase");
   assert.equal(c({ comboStage: 3, opponentAirborne: true, hasJuggle: true, airHits: 2 }), "airChase");
+  assert.equal(c({ comboStage: 3, forwardAxis: 1, opponentAirborne: true, hasJuggle: true, airHits: 2 }), "airCarry");
+  assert.equal(c({ comboStage: 3, sideAxis: -1, opponentAirborne: true, hasJuggle: true, airHits: 2 }), "airPivot");
+  assert.equal(c({ comboStage: 3, forwardAxis: -1, opponentAirborne: true, hasJuggle: true, airHits: 2 }), "meteorSlam");
+  assert.equal(c({ comboStage: 2, forwardAxis: -1, opponentAirborne: true, hasJuggle: true, airHits: 1 }), "airChase");
   assert.equal(c({ comboStage: 4, opponentAirborne: true, hasJuggle: true, airHits: 3 }), "meteorSlam");
+});
+
+test("early iPhone taps preserve forward, back and signed side branches", () => {
+  const base = { forwardAxis: 0, sideAxis: 0 };
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "FORWARD" }), { forwardAxis: 1, sideAxis: 0 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "BACK" }), { forwardAxis: -1, sideAxis: 0 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "SIDE", queuedSideSign: -1 }), { forwardAxis: 0, sideAxis: -1 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "SIDE", queuedSideSign: 1 }), { forwardAxis: 0, sideAxis: 1 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ forwardAxis: 1, sideAxis: -1, queuedBranch: "NEUTRAL" }), base);
+  assert.deepEqual(cinematicAxesForBufferedTap({ forwardAxis: 1, sideAxis: -1 }), { forwardAxis: 1, sideAxis: -1 });
 });
 
 test("air chains require connected hits, have decay/limits and reject impossible high strikes", () => {
@@ -76,13 +90,17 @@ test("air chains require connected hits, have decay/limits and reject impossible
   assert.equal(canCinematicStrikeAirborne(moves.airChase, launched, "p1", "p2", 1.2), true);
   assert.equal(canCinematicStrikeAirborne(moves.airChase, launched, "p2", "p1", 1.2), false);
   assert.equal(canCinematicStrikeAirborne(moves.airChase, launched, "p1", "p2", 3.8), false);
+  assert.equal(canCinematicStrikeAirborne(moves.airCarry, launched, "p1", "p2", 1.2), true);
+  assert.equal(canCinematicStrikeAirborne(moves.airPivot, launched, "p1", "p2", 1.2), true);
   assert.equal(canCinematicStrikeAirborne(moves.meteorSlam, launched, "p1", "p2", 1.2), false);
   assert.equal(canCinematicStrikeAirborne(moves.meteorSlam, launched, "p1", "p2", 0), false);
   assert.equal(canCinematicStrikeAirborne(moves.airChase, null, "p1", "p2", 0), false);
   const second = nextTpsAirCombo(moves.airChase, launched, "p1", "p2")!;
-  const third = nextTpsAirCombo(moves.airChase, second, "p1", "p2")!;
+  assert.equal(canCinematicStrikeAirborne(moves.meteorSlam, second, "p1", "p2", 1.8), true);
+  const third = nextTpsAirCombo(moves.airPivot, second, "p1", "p2")!;
   assert.equal(third.hits, 3);
-  assert.ok(tpsAirComboDamage(8, moves.airChase, third) < tpsAirComboDamage(8, moves.airChase, launched));
+  assert.ok(tpsAirComboDamage(8, moves.airCarry, third) < tpsAirComboDamage(8, moves.airCarry, launched));
+  assert.equal(nextTpsAirCombo(moves.airCarry, launched, "p1", "p2")?.hits, 2);
   assert.equal(canCinematicStrikeAirborne(moves.meteorSlam, third, "p1", "p2", 1.8), true);
   assert.equal(canCinematicStrikeAirborne(moves.airChase, third, "p1", "p2", 1.8), false);
   assert.equal(nextTpsAirCombo(moves.meteorSlam, third, "p1", "p2"), null);
@@ -104,10 +122,10 @@ function poseClip(name: string): THREE.AnimationClip {
   ]);
 }
 
-test("all five signature choreographies visibly change midposes while retaining contacts and planted foot", () => {
+test("all seven signature choreographies visibly change midposes while retaining contacts and planted foot", () => {
   const originals = new Map(Object.values(CINEMATIC_CLIP_SOURCES).map(name => [name, poseClip(name)]));
   const generated = createCinematicMotionLibrary(originals);
-  assert.equal(generated.size, 5);
+  assert.equal(generated.size, 7);
   for (const role of CINEMATIC_TECHNIQUES) {
     const source = originals.get(CINEMATIC_CLIP_SOURCES[role])!;
     const clip = bakeCinematicClip(source, role);

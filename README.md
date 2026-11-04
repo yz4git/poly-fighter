@@ -12,7 +12,8 @@ future architecture.
 - Choose a fighter, opponent, visual model, and CPU difficulty.
 - Use the left 8-way pad for approach, retreat, and circular movement.
 - Use `ATTACK` for context-sensitive punch/kick strings and `STEP` for evasive movement.
-- Side-step incoming strikes to open flanks; forward step into ATTACK for dash pressure.
+- Side-step incoming strikes to open flanks; a verified perfect evade opens a short counter opportunity. Forward STEP + ATTACK gives dash pressure.
+- Earn a clean launcher with a forward ATTACK mid-combo. Against an airborne rival: neutral ATTACK juggles, forward ATTACK carries toward the wall, sideways ATTACK redirects the rival, and back ATTACK after one air re-hit chooses an early Meteor finish. Buffered taps remember the stick direction.
 
 ## Included systems
 
@@ -21,7 +22,7 @@ future architecture.
 - Fixed 60 Hz combat simulation with input buffering and command parsing.
 - High / Mid / Low / Throw hit levels, guard, hit stun, block stun, throw
   escape, knockdown, wakeup, KO, and ring out.
-- Four playable fighters: KAIRO, SERA, VANTA and AXION. Each now has **56 combat techniques** (11 originals + 40 directional/tempo variations + 5 signature moves), **224 in total**. Different movement, timing, damage, guard pressure, reach and baked pose differences, not just alternate names.
+- Four playable fighters: KAIRO, SERA, VANTA and AXION. Each now has **58 combat techniques** (11 originals + 40 directional/tempo variations + 7 signature moves), **232 in total**. Different movement, timing, damage, guard pressure, reach and baked pose differences, not just alternate names.
 - TPS ATTACK still uses one attack button: neutral taps cycle styles, forward + ATTACK selects Drive, back + ATTACK selects Breaker, and sideways + ATTACK selects Angle. Evasive counter/signature attacks retain their priority. STEP is unchanged.
 - On-device animation uses authored Three.js clips baked into lightweight joint-pose variants; no new runtime AI dependency. See [Move expansion](docs/EXPANDED_MOVES.md) and [Signature air combos](docs/SIGNATURE_AIR_COMBOS.md).
 - State-based CPU with Easy, Normal, and Hard behavior.

@@ -7,12 +7,14 @@ export const CINEMATIC_MOTION_VERSION = "SIGNATURE_KEYFRAME_CHOREOGRAPHY_V1";
 export const CINEMATIC_CLIP_SOURCES: Readonly<Record<CinematicTechnique, string>> = {
   skyBreaker: "BF_RisingKick_R",
   airChase: "BF_FrontKick_R",
+  airCarry: "BF_FrontKick_R",
+  airPivot: "BF_RisingKick_R",
   meteorSlam: "BF_DashKick_R",
   cycloneSweep: "BF_LowKick_L",
   powerRush: "BF_Power_R",
 };
 export const CINEMATIC_CLIP_TAGS: Readonly<Record<CinematicTechnique, string>> = {
-  skyBreaker: "LIFT", airChase: "CHASE", meteorSlam: "METEOR",
+  skyBreaker: "LIFT", airChase: "CHASE", airCarry: "CARRY", airPivot: "PIVOT", meteorSlam: "METEOR",
   cycloneSweep: "CYCLONE", powerRush: "RUSH",
 };
 
@@ -28,6 +30,14 @@ const accent: Record<CinematicTechnique, Readonly<Record<string, readonly [numbe
   airChase: {
     pelvis: [.06, .32, -.10], spine_02: [-.06, .24, .08], spine_03: [-.12, .27, .06],
     thigh_r: [-.16, -.12, .18], calf_r: [-.23, .06, -.06], upperarm_r: [.24, .10, .03],
+  },
+  airCarry: {
+    pelvis: [.10, .15, -.08], spine_02: [-.12, -.16, .09], spine_03: [-.20, -.19, .04],
+    thigh_r: [-.24, .11, .18], calf_r: [-.16, .05, -.09], upperarm_l: [.17, -.12, .11],
+  },
+  airPivot: {
+    pelvis: [-.08, -.38, .11], spine_02: [.09, -.32, -.07], spine_03: [.15, -.30, .10],
+    thigh_r: [-.23, .22, .19], calf_r: [.18, -.04, -.05], upperarm_l: [-.22, .13, -.30],
   },
   meteorSlam: {
     pelvis: [-.16, -.16, 0], spine_02: [.18, -.20, -.12], spine_03: [.30, -.25, -.16],
@@ -58,7 +68,7 @@ export function bakeCinematicClip(
   source: THREE.AnimationClip,
   role: CinematicTechnique,
 ): THREE.AnimationClip {
-  const variant = role === "airChase" || role === "cycloneSweep" ? "PIVOT"
+  const variant = role === "airChase" || role === "airPivot" || role === "cycloneSweep" ? "PIVOT"
     : role === "powerRush" ? "CRUSH" : "DRIVE";
   const stage = bakeExpandedMotionClip(source, variant);
   const duration = Math.max(1 / 60, stage.duration);

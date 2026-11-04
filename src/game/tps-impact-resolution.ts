@@ -39,7 +39,7 @@ const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
 
 export function tpsImpactHeightForMove(move: MoveDefinition): number {
   const cinematic = {
-    skyBreaker: 2.48, airChase: 2.86, meteorSlam: 2.44,
+    skyBreaker: 2.48, airChase: 2.86, airCarry: 2.80, airPivot: 2.70, meteorSlam: 2.44,
     cycloneSweep: 0.68, powerRush: 2.38,
   } as const;
   return move.cinematicRole ? cinematic[move.cinematicRole]

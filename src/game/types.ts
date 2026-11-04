@@ -87,7 +87,7 @@ export interface MoveDefinition {
   /** Offline-generated pose variation used only for the rendered character. */
   motionVariant?: "SNAP" | "DRIVE" | "PIVOT" | "CRUSH";
   /** A motion family and special hit contract for high-impact TPS attacks. */
-  cinematicRole?: "skyBreaker" | "airChase" | "meteorSlam" | "cycloneSweep" | "powerRush";
+  cinematicRole?: "skyBreaker" | "airChase" | "airCarry" | "airPivot" | "meteorSlam" | "cycloneSweep" | "powerRush";
   reactionTarget?: ReactionTarget;
   startup: number;
   active: number;

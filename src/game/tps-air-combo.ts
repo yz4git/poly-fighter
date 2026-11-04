@@ -22,12 +22,12 @@ export function canCinematicStrikeAirborne(
   defenderHeight: number,
 ): boolean {
   const aerial = defenderHeight > 0.48;
-  if (!aerial) return move.cinematicRole !== "airChase" && move.cinematicRole !== "meteorSlam";
+  if (!aerial) return !["airChase", "airCarry", "airPivot", "meteorSlam"].includes(move.cinematicRole ?? "");
   if (!airCombo || airCombo.remainingTicks <= 0
     || airCombo.attackerId !== attackerId || airCombo.defenderId !== defenderId) return false;
   if (defenderHeight > 3.5) return false;
-  if (move.cinematicRole === "airChase") return airCombo.hits >= 1 && airCombo.hits < 3;
-  if (move.cinematicRole === "meteorSlam") return airCombo.hits >= 3;
+  if (["airChase", "airCarry", "airPivot"].includes(move.cinematicRole ?? "")) return airCombo.hits >= 1 && airCombo.hits < 3;
+  if (move.cinematicRole === "meteorSlam") return airCombo.hits >= 2;
   return false;
 }
 
@@ -43,7 +43,7 @@ export function nextTpsAirCombo(
   }
   if (!existing || existing.attackerId !== attackerId || existing.defenderId !== defenderId) return null;
   if (move.cinematicRole === "meteorSlam") return null;
-  if (move.cinematicRole === "airChase") {
+  if (["airChase", "airCarry", "airPivot"].includes(move.cinematicRole ?? "")) {
     return { ...existing, hits: Math.min(TPS_AIR_COMBO_MAX_HITS, existing.hits + 1), remainingTicks: TPS_AIR_COMBO_DURATION_TICKS };
   }
   return existing;
@@ -64,7 +64,7 @@ export function tpsAirComboDamage(
   move: MoveDefinition,
   existing: TpsAirCombo | null,
 ): number {
-  if (move.cinematicRole !== "airChase" || !existing) return baseDamage;
+  if (!["airChase", "airCarry", "airPivot"].includes(move.cinematicRole ?? "") || !existing) return baseDamage;
   return Math.max(2, Math.round(baseDamage * (existing.hits === 1 ? .8 : .63)));
 }
 

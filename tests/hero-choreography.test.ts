@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { samplePunchKineticChain } from "../src/game/combat-punch-kinetics";
+import { authoredMotionEvents } from "../src/game/combat-motion-timeline";
 import { REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "../src/game/reference-kick-choreography";
 import { bakeCinematicClip, cinematicHeroWeight, cinematicPoseEnvelope } from "../src/game/cinematic-motion-library";
 import { CINEMATIC_TECHNIQUES } from "../src/game/cinematic-techniques";
@@ -72,8 +73,9 @@ test("kick choreography now has stronger chamber, full-body pivot and a separate
   for (const name of ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"]) {
     const ready = sampleReferenceKickChoreography(name, 0)!;
     const windup = sampleReferenceKickChoreography(name, .13)!;
-    const chamber = sampleReferenceKickChoreography(name, .30)!;
-    const impact = sampleReferenceKickChoreography(name, .5)!;
+    const contact = authoredMotionEvents(name).contact;
+    const chamber = sampleReferenceKickChoreography(name, contact * .64)!;
+    const impact = sampleReferenceKickChoreography(name, contact)!;
     const recovery = sampleReferenceKickChoreography(name, .82)!;
     const finish = sampleReferenceKickChoreography(name, 1)!;
     assert.ok(impact.extension >= .99, name + " needs a committed contact key");

@@ -12,6 +12,8 @@ export function tpsCinematicCameraShot(
   blocked: boolean,
 ): Readonly<{ name: string; seconds: number; lateral: number; lift: number; aim: number; fov: number }> | null {
   if (blocked) return null;
+  if (role === "airChase") return { name: "BARRAGE", seconds: .21, lateral: -.09, lift: .065, aim: .15, fov: -2.1 };
+  if (role === "cycloneSweep") return { name: "CYCLONE", seconds: .25, lateral: .17, lift: -.035, aim: .18, fov: -3.3 };
   if (role === "skyBreaker") return { name: "LAUNCH", seconds: .32, lateral: -.13, lift: .10, aim: .18, fov: -3.2 };
   if (role === "airCarry") return { name: "CARRY", seconds: .25, lateral: -.16, lift: .08, aim: .17, fov: -2.8 };
   if (role === "airPivot") return { name: "REDIRECT", seconds: .28, lateral: .19, lift: .06, aim: .22, fov: -3.1 };

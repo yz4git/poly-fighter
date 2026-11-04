@@ -2,6 +2,7 @@ import { FIGHTER_DEFINITIONS } from "./definitions";
 import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
 import { addCinematicTechniques } from "./cinematic-techniques";
+import { addTpsRangeTechniques } from "./tps-range-attack";
 
 export const VANTA_FIGHTER_ID = "violet" as const;
 
@@ -164,7 +165,7 @@ export const VANTA_FIGHTER_DEFINITION: FighterDefinition = Object.freeze({
     handScale: 1.0,
     footScale: 1.06,
   },
-  moves: addCinematicTechniques(expandMoveSet(vantaMoves), "VANTA"),
+  moves: addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(vantaMoves), "VANTA"), "VANTA"),
 });
 
 export function registerVantaFighter(): FighterDefinition {

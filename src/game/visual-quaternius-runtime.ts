@@ -15,6 +15,8 @@ import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
 import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
+import { isTpsRangeAttack } from "./tps-range-attack";
+import { createTpsRangeMotionLibrary, tpsRangeClipName, TPS_RANGE_CHOREOGRAPHY_VERSION } from "./tps-range-motion";
 import { buildExpandedMotionLibrary, selectExpandedClip, sourceOfExpandedClip, EXPANDED_MOTION_VERSION } from "./expanded-motion-library";
 import {
   applyInertialTransition,
@@ -533,6 +535,10 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
     const moveId = move.motionBase ?? move.id;
+    if (isTpsRangeAttack(move.id)) {
+      const ranged = tpsRangeClipName(move.id);
+      if (runtime.clips.has(ranged)) return { name: ranged, loop: false, speed: 1 / seconds };
+    }
     if (move.cinematicRole) {
       const cinematic = cinematicClipName(move.cinematicRole);
       if (runtime.clips.has(cinematic)) return { name: cinematic, loop: false, speed: 1 / seconds };
@@ -613,6 +619,7 @@ const AUTHORED_ATTACK_CLIP_PREFIXES = [
   "BF_DashKick",
   "BF_Counter_R",
   "CM_Video_", // baked video-reference attacks use the same inertial handoff contract
+  "CM_Range_", // dedicated physically travelling approach strike clips
 ] as const;
 
 function isAuthoredAttackClip(name: string): boolean {
@@ -905,11 +912,15 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     for (const [name, clip] of expandedClips) retargetedClips.set(name, clip);
     const cinematicClips = createCinematicMotionLibrary(retargetedClips, definition.name);
     for (const [name, clip] of cinematicClips) retargetedClips.set(name, clip);
+    const rangeClips = createTpsRangeMotionLibrary(retargetedClips, definition.name);
+    for (const [name, clip] of rangeClips) retargetedClips.set(name, clip);
+    visual.root.userData.tpsRangeMotionVersion = TPS_RANGE_CHOREOGRAPHY_VERSION;
+    visual.root.userData.tpsRangeMotionClipCount = rangeClips.size;
     visual.root.userData.cinematicMotionVersion = CINEMATIC_MOTION_VERSION;
     visual.root.userData.cinematicMotionClipCount = cinematicClips.size;
     visual.root.userData.expandedMotionVersion = EXPANDED_MOTION_VERSION;
     visual.root.userData.expandedMotionClipCount = expandedClips.size;
-    visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size + cinematicClips.size;
+    visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size + cinematicClips.size + rangeClips.size;
     visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
     visual.root.userData.videoChoreographyVersion = VIDEO_CHOREOGRAPHY_VERSION;
     visual.root.userData.videoChoreographyClipCount = Object.values(VIDEO_STRIKE_CLIPS)

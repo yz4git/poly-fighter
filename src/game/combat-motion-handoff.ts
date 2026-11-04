@@ -35,7 +35,8 @@ export function isCombatAttackClip(name: string): boolean {
     || name.startsWith("BF_Power") || name.startsWith("BF_FrontKick")
     || name.startsWith("BF_LowKick") || name.startsWith("BF_RisingKick")
     || name.startsWith("BF_DashKick") || name === "BF_Counter_R"
-    || name.startsWith("CM_Counter_");
+    || name.startsWith("CM_Counter_") || name.startsWith("CM_Video_")
+    || name.startsWith("CM_Range_");
 }
 
 function isReactionClip(name: string): boolean {

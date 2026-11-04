@@ -25,5 +25,6 @@ export function tpsComboCameraEnergy(
   const stage = Math.max(0, Math.min(1, (comboStage - 1) / 3));
   const close = Math.max(0, Math.min(1, closeFactor));
   const energy = stage * close;
+  if (energy === 0) return { shoulder: 0, back: 0, lift: 0 };
   return { shoulder: energy * .23, back: -energy * .17, lift: energy * .055 };
 }

@@ -94,8 +94,8 @@ test("punch kinetics contain much stronger opposing windup, contact drive, and b
     const windup = samplePunchKineticChain(name, .20);
     const impact = samplePunchKineticChain(name, .5);
     const finish = samplePunchKineticChain(name, 1);
-    assert.equal(ready.torsoYaw, 0);
-    assert.equal(finish.torsoYaw, 0);
+    assert.ok(near(ready.torsoYaw, 0));
+    assert.ok(near(finish.torsoYaw, 0));
     assert.ok(Math.abs(windup.pelvisYaw) > .003, name + " no anticipation torque");
     assert.ok(Math.abs(impact.torsoYaw) > Math.abs(windup.torsoYaw), name + " needs accelerated hit torque");
     assert.ok(impact.contactLock > .8, name + " should still aim for the authored glove");

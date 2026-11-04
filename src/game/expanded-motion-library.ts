@@ -106,7 +106,7 @@ export function bakeExpandedMotionClip(
     for (let i = 0; i < copy.times.length; i += 1) {
       const u = copy.times[i] / duration;
       const weight = smoothAccent(u);
-      if (weight < 1e-7) continue;
+      if (Math.abs(weight) < 1e-7) continue;
       if (isRotation && accent) {
         const q = new THREE.Quaternion().fromArray(values, i * 4);
         const delta = new THREE.Quaternion().setFromEuler(

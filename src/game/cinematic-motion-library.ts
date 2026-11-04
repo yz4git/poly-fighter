@@ -24,23 +24,23 @@ export function cinematicClipName(role: CinematicTechnique): string {
 
 const accent: Record<CinematicTechnique, Readonly<Record<string, readonly [number, number, number]>>> = {
   skyBreaker: {
-    pelvis: [-.12, -.10, .08], spine_02: [-.18, -.15, 0], spine_03: [-.30, -.12, .05],
-    thigh_r: [-.28, .16, .07], calf_r: [.30, 0, 0], upperarm_l: [.28, -.12, 0],
+    pelvis: [-.16, -.14, .10], spine_02: [-.24, -.17, .02], spine_03: [-.40, -.16, .07],
+    thigh_r: [-.38, .18, .09], calf_r: [.37, 0, 0], upperarm_l: [.31, -.14, 0],
   },
   airChase: {
     pelvis: [.06, .32, -.10], spine_02: [-.06, .24, .08], spine_03: [-.12, .27, .06],
     thigh_r: [-.16, -.12, .18], calf_r: [-.23, .06, -.06], upperarm_r: [.24, .10, .03],
   },
   airCarry: {
-    pelvis: [.10, .15, -.08], spine_02: [-.12, -.16, .09], spine_03: [-.20, -.19, .04],
+    pelvis: [.13, .20, -.09], spine_02: [-.16, -.19, .11], spine_03: [-.27, -.22, .05],
     thigh_r: [-.24, .11, .18], calf_r: [-.16, .05, -.09], upperarm_l: [.17, -.12, .11],
   },
   airPivot: {
-    pelvis: [-.08, -.38, .11], spine_02: [.09, -.32, -.07], spine_03: [.15, -.30, .10],
-    thigh_r: [-.23, .22, .19], calf_r: [.18, -.04, -.05], upperarm_l: [-.22, .13, -.30],
+    pelvis: [-.12, -.48, .13], spine_02: [.12, -.41, -.09], spine_03: [.18, -.39, .12],
+    thigh_r: [-.32, .29, .22], calf_r: [.22, -.06, -.06], upperarm_l: [-.26, .15, -.32],
   },
   meteorSlam: {
-    pelvis: [-.16, -.16, 0], spine_02: [.18, -.20, -.12], spine_03: [.30, -.25, -.16],
+    pelvis: [-.19, -.20, 0], spine_02: [.23, -.24, -.14], spine_03: [.39, -.30, -.19],
     thigh_r: [.25, -.08, -.18], calf_r: [-.25, 0, 0], upperarm_r: [-.28, .08, -.08],
   },
   cycloneSweep: {
@@ -48,7 +48,7 @@ const accent: Record<CinematicTechnique, Readonly<Record<string, readonly [numbe
     thigh_l: [.16, .36, -.12], calf_l: [-.18, .06, 0], upperarm_r: [-.08, .24, .28],
   },
   powerRush: {
-    pelvis: [-.19, .23, 0], spine_02: [-.25, .14, -.10], spine_03: [-.26, .28, -.18],
+    pelvis: [-.24, .26, 0], spine_02: [-.30, .19, -.14], spine_03: [-.36, .35, -.22],
     clavicle_r: [-.14, -.20, -.07], upperarm_r: [-.36, -.17, .16], lowerarm_r: [-.26, .12, .0],
   },
 };

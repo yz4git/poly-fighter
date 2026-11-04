@@ -4,6 +4,22 @@ import { PresentationAnimationController } from "./presentation-animation";
 import type { HitEvent } from "./types";
 import { TpsCinematicImpactSpectacle } from "./tps-cinematic-impact-spectacle";
 
+/** A short orbital punctuation beat, never a persistent camera takeover. */
+export function tpsCinematicCameraShot(
+  role: HitEvent["move"]["cinematicRole"],
+  counter: boolean,
+  blocked: boolean,
+): Readonly<{ name: string; seconds: number; lateral: number; lift: number; aim: number; fov: number }> | null {
+  if (blocked) return null;
+  if (role === "skyBreaker") return { name: "LAUNCH", seconds: .32, lateral: -.13, lift: .10, aim: .18, fov: -3.2 };
+  if (role === "airCarry") return { name: "CARRY", seconds: .25, lateral: -.16, lift: .08, aim: .17, fov: -2.8 };
+  if (role === "airPivot") return { name: "REDIRECT", seconds: .28, lateral: .19, lift: .06, aim: .22, fov: -3.1 };
+  if (role === "meteorSlam") return { name: "METEOR", seconds: .38, lateral: .19, lift: -.07, aim: .28, fov: -4.6 };
+  if (role === "powerRush") return { name: "RUSH", seconds: .28, lateral: -.16, lift: -.04, aim: .21, fov: -3.7 };
+  if (counter) return { name: "COUNTER", seconds: .29, lateral: .16, lift: .045, aim: .22, fov: -3.9 };
+  return null;
+}
+
 export const TPS_HYPE_PROFILE = Object.freeze({
   lightSharedHitStopTicks: 3,
   mediumSharedHitStopTicks: 5,
@@ -236,6 +252,11 @@ export class TpsHypeDirector {
   private cameraRoll = 0;
   private cameraShake = 0;
   private phase = 0;
+  private shotSeconds = 0;
+  private shotDuration = 0;
+  private shotSide = 0;
+  private shotLift = 0;
+  private shotAim = 0;
   private readonly impactFocus = new THREE.Vector3();
   private impactFocusLife = 0;
   private impactFocusDuration = 0;
@@ -348,6 +369,22 @@ export class TpsHypeDirector {
     this.retirePreviousImpactFx();
     this.cinematicSpectacle.hit(event, camera, tier, this.hitStreak);
     this.group.userData.tpsCinematicHitStreak = this.hitStreak;
+    const shot = tpsCinematicCameraShot(event.move.cinematicRole, event.counter, event.blocked);
+    if (shot) {
+      this.shotSeconds = shot.seconds;
+      this.shotDuration = shot.seconds;
+      this.shotSide = shot.lateral * (event.attacker === "p1" ? 1 : -1);
+      this.shotLift = shot.lift;
+      this.shotAim = shot.aim;
+      this.impactFocusDuration = Math.max(this.impactFocusDuration, shot.seconds);
+      this.impactFocusLife = Math.max(this.impactFocusLife, shot.seconds);
+      this.fovOffset = Math.min(this.fovOffset, shot.fov);
+      this.group.userData.tpsCameraShot = shot.name;
+      this.group.userData.tpsCameraShotSeconds = shot.seconds;
+    } else {
+      this.shotSeconds = 0;
+      this.group.userData.tpsCameraShot = null;
+    }
 
     for (let index = 0; index < ringCount; index += 1) {
       const ring = this.rings.find((entry) => entry.life <= 0) ?? this.rings[index % this.rings.length];
@@ -530,6 +567,23 @@ export class TpsHypeDirector {
       this.cameraShake *= Math.exp(-24 * delta);
     }
 
+    if (this.shotSeconds > 0 && this.shotDuration > 0) {
+      const remaining = THREE.MathUtils.clamp(this.shotSeconds / this.shotDuration, 0, 1);
+      const envelope = remaining * remaining * (3 - 2 * remaining);
+      // Small lateral dolly and vertical framing, without moving the logical
+      // camera rig, creating lights, changing input, or obscuring silhouettes.
+      camera.translateX(this.shotSide * envelope);
+      camera.translateY(this.shotLift * envelope);
+      const startingOrientation = camera.quaternion.clone();
+      camera.lookAt(this.impactFocus);
+      const intendedOrientation = camera.quaternion.clone();
+      camera.quaternion.copy(startingOrientation).slerp(intendedOrientation, this.shotAim * envelope);
+      this.shotSeconds = Math.max(0, this.shotSeconds - delta);
+      this.group.userData.tpsCameraShotProgress = 1 - this.shotSeconds / this.shotDuration;
+    } else {
+      this.group.userData.tpsCameraShotProgress = 1;
+    }
+
     if (this.impactFocusLife > 0) {
       this.impactFocusLife = Math.max(0, this.impactFocusLife - delta);
     }
@@ -547,6 +601,13 @@ export class TpsHypeDirector {
     this.hitStreak = 0;
     this.hitStreakSeconds = 0;
     this.hitStreakAttacker = null;
+    this.shotSeconds = 0;
+    this.shotDuration = 0;
+    this.shotSide = 0;
+    this.shotLift = 0;
+    this.shotAim = 0;
+    this.group.userData.tpsCameraShot = null;
+    this.group.userData.tpsCameraShotProgress = 0;
     this.cinematicSpectacle.reset();
     this.group.userData.tpsCinematicHitStreak = 0;
     const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;

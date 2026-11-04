@@ -89,7 +89,7 @@ function fakeClip(): THREE.AnimationClip {
 
 test("variant clips have real pose differences but keep identical neutral endpoints and support foot", () => {
   const source = fakeClip();
-  assert.equal(EXPANDED_MOTION_VERSION, "COMBAT_VARIANT_CLIPS_V1");
+  assert.equal(EXPANDED_MOTION_VERSION, "COMBAT_VARIANT_CLIPS_V2_HERO");
   for (const style of MOVE_VARIANTS) {
     const variant = bakeExpandedMotionClip(source, style);
     assert.equal(variant.name, expandedClipName(source.name, style));

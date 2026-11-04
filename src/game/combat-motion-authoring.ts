@@ -348,17 +348,50 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   }, 37);
   for (const side of ["L", "R"] as const) author(`CM_Counter_${side}`, .55, u => {
     const sign = side === "L" ? -1 : 1;
-    const drive = u < .5 ? smoothMotion(u / .5) : 1 - smoothMotion((u - .5) / .5);
-    const reach: Point = [sign * .065, .75, .16 + .27 * drive];
-    body({ drop: -.014 * Math.sin(Math.PI * u), forward: .017 * drive, yaw: -sign * .22 * drive, chest: .045, [side === "L" ? "leftHand" : "rightHand"]: reach });
-  }, 33);
+    // Deflect from a low, twisted load; drive the whole trunk through a single
+    // authored high-line strike, then visibly pull the fist and guard back.
+    const prep = smoothMotion(u / .20) * (1 - smoothMotion((u - .23) / .19));
+    const strike = smoothMotion((u - .25) / .25) * (1 - smoothMotion((u - .61) / .32));
+    const follow = smoothMotion((u - .53) / .07) * (1 - smoothMotion((u - .74) / .25));
+    const reach: Point = [
+      sign * (.067 + .06 * strike),
+      .75 + .08 * strike,
+      .16 + .47 * strike + .035 * follow - .055 * prep,
+    ];
+    const offGuard: Point = [-sign * (.09 + .07 * strike), .79 + .025 * strike, .14 - .075 * strike];
+    body({
+      drop: -.058 * prep - .04 * strike,
+      forward: -.031 * prep + .075 * strike,
+      side: sign * (-.02 * prep + .043 * strike),
+      yaw: sign * (.34 * prep - .74 * strike),
+      pitch: .11 * prep - .14 * strike,
+      roll: sign * .12 * strike,
+      chest: .05 + .09 * strike,
+      highGuard: .6,
+      [side === "L" ? "leftHand" : "rightHand"]: reach,
+      [side === "L" ? "rightHand" : "leftHand"]: offGuard,
+    });
+  }, 41);
   author("CM_Throw", .7, u => {
-    const grip = u < .5 ? smoothMotion(u / .5) : 1 - smoothMotion((u - .5) / .5);
-    const release = Math.sin(Math.PI * Math.max(0, (u - .42) / .58));
-    body({ drop: -.045 * grip, yaw: -.32 * release, pitch: .12 * grip,
-      leftHand: [-.13 + release * .06, .735 - grip * .08, .172 + grip * .15],
-      rightHand: [.12 + release * .06, .756 - grip * .07, .125 + grip * .20] });
-  }, 37);
+    // Real two-hand grip and hip turn, not a generic short forward lean.
+    // The throw interaction remains owned by the deterministic contact engine.
+    const prep = smoothMotion(u / .20) * (1 - smoothMotion((u - .26) / .19));
+    const grip = smoothMotion((u - .24) / .23) * (1 - smoothMotion((u - .62) / .30));
+    const release = smoothMotion((u - .43) / .15) * (1 - smoothMotion((u - .72) / .25));
+    body({
+      drop: -.08 * prep - .12 * grip,
+      side: -.035 * grip,
+      forward: -.02 * prep + .075 * grip,
+      yaw: -.22 * prep - .72 * release,
+      pitch: .19 * grip - .20 * release,
+      roll: -.12 * release,
+      chest: .075 + .09 * grip,
+      leftFoot: [-width - .018 * grip, 0, .065 + .035 * grip],
+      rightFoot: [width + .028 * grip, 0, -.07 - .025 * grip],
+      leftHand: [-.13 - .08 * grip + release * .13, .735 - grip * .13, .172 + grip * .22 - release * .06],
+      rightHand: [.12 + .07 * grip + release * .08, .756 - grip * .12, .125 + grip * .26 - release * .07],
+    });
+  }, 49);
 
   // Four real skeleton clips reconstructed from the user's supplied 10s
   // martial-arts video. Each limb follows calibrated two-bone IK; the pelvis

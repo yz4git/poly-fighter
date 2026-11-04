@@ -358,8 +358,81 @@ try {
   const mashPng=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
   if(mashPng.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("mash variety PNG invalid");
   await writeFile(`${out}/tps-mash-variety.png`,mashPng);
+
+  // The one-button distance action is a real in-game input route, not merely a
+  // pure helper. Verify that three authored ranges actually move the fighter
+  // through the simulation, stop before collision, and can be sidestepped.
+  const rangeShots = {};
+  for (const [label, distance, serial, expected, dodge] of [
+    ["blitz", 2.55, 0, "rangeBlitz", false],
+    ["crescent", 3.20, 1, "rangeCrescent", false],
+    ["comet", 4.85, 2, "rangeComet", false],
+    ["sidestep", 4.85, 3, "rangeComet", true],
+  ]) {
+    const state=await run(session,`${lookup}
+      const g=findGame();
+      const distance=arguments[0], serial=arguments[1], dodge=arguments[2];
+      const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+      g.input.clear();g.finished=false;g.finishPending=false;g.enemyOpeningGraceTicks=9999;
+      g.p1.resetForRound(0,distance/2,1);g.p2.resetForRound(0,-distance/2,-1);
+      g.p1.hitStop=0;g.p2.hitStop=0;
+      g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
+      g.playerFlankWindowTicks=0;g.playerInterceptTicks=0;g.playerReversalTicks=0;
+      g.playerPerfectEvadeTicks=0;g.airCombo=null;g.__comboRoute=undefined;
+      g.__rangeAttackSerial=serial;
+      g.p1.input={...neutral};g.p1.previousInput={...neutral};
+      const before=Math.hypot(g.p2.position.x-g.p1.position.x,g.p2.position.z-g.p1.position.z);
+      g.updatePlayer({...neutral,punch:true});
+      const move=g.p1.currentMove;
+      if(!move)return {error:"ATTACK did not start"};
+      let total=0, best=Infinity, hit=false, once=false;
+      let now=performance.now()/1000;
+      for(let tick=1;tick<=move.startup+move.active;tick++){
+        if(dodge && tick===6)g.p2.position.x+=1.55;
+        g.updatePlayer({...neutral,punch:false});
+        const advanced=Number(g.p1.visual.root.userData.tpsRangeTravelFrame??0);
+        total+=advanced;
+        if(advanced>.30||advanced<0)return {error:"invalid root travel",tick,advanced};
+        const current=Math.hypot(g.p2.position.x-g.p1.position.x,g.p2.position.z-g.p1.position.z);
+        best=Math.min(best,current);
+        if(g.p1.isActive()){
+          g.trackCommittedAttack(g.p1,g.p2);
+          g.resolveAttack(g.p1,g.p2,false);
+          if(g.p1.hitTargets.has(g.p2.id))hit=true;
+        }
+        now+=1/60;
+        g.updateVisual(g.p1,g.p2,now);
+        g.updateVisual(g.p2,g.p1,now+.23);
+        if(g.p1.hitStop>0){once=true;break;}
+      }
+      for(let frame=0;frame<4;frame++){
+        now+=1/60;g.updateVisual(g.p1,g.p2,now);g.updateVisual(g.p2,g.p1,now+.23);
+      }
+      g.renderTime=now;g.updateCamera(1/60);g.updateLockOn();
+      g.renderer.render(g.scene,g.camera);
+      return {before,after:Math.hypot(g.p2.position.x-g.p1.position.x,g.p2.position.z-g.p1.position.z),
+        name:move.id,clip:g.p1.visual.root.userData.combatMotionCurrentClip,
+        installed:g.p1.visual.root.userData.tpsRangeMotionClipCount,
+        declared:g.p1.visual.root.userData.tpsAutoRangeMove,
+        travelled:g.p1.visual.root.userData.tpsRangeTravelTotal,
+        best,hit,hitstop:once,dodge,health:g.p2.health};
+    `,[distance,serial,dodge]);
+    if(state.error||state.name!==expected||state.declared!==expected
+      ||state.clip!==`CM_Range_${expected}`||state.installed!==3
+      ||!(state.travelled>0.35)||!(state.best>=.92)
+      ||(!dodge && (!state.hit||state.health>=100))
+      ||(dodge && (state.hit||state.health<100)))
+      throw Error("one-button physical range attack failed "+JSON.stringify({label,state}));
+    rangeShots[label]=state;
+    const image=Buffer.from(await api(`/session/${session}/screenshot`),"base64");
+    if(image.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")
+      throw Error("range attack WebGL screenshot missing "+label);
+    await writeFile(`${out}/tps-range-${label}.png`,image);
+  }
+  await writeFile(`${out}/range-attack.json`,JSON.stringify(rangeShots,null,2));
+
   console.log(JSON.stringify({...observations,...throwUkemi,throwVisual,ukemiVisual,quickRiseVisual,videoChoreography,
-    mashReplay,mashRendered}));
+    mashReplay,mashRendered,rangeShots}));
 }finally{
   if(session)await api(`/session/${session}`,"DELETE").catch(()=>{});
   proc.kill("SIGTERM");

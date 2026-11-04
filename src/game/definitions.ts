@@ -1,6 +1,7 @@
 import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
 import { addCinematicTechniques } from "./cinematic-techniques";
+import { addTpsRangeTechniques } from "./tps-range-attack";
 
 function move(
   definition: Partial<MoveDefinition> &
@@ -467,7 +468,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       handScale: 1.08,
       footScale: 1.14,
     },
-    moves: addCinematicTechniques(expandMoveSet(redMoves), "KAIRO"),
+    moves: addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(redMoves), "KAIRO"), "KAIRO"),
   },
   blue: {
     id: "blue",
@@ -509,7 +510,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       footScale: 1.02,
       longPanels: true,
     },
-    moves: addCinematicTechniques(expandMoveSet(blueMoves), "SERA"),
+    moves: addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(blueMoves), "SERA"), "SERA"),
   },
 };
 

@@ -5,7 +5,7 @@ import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./comb
 import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
 import { authoredMotionEvents } from "./combat-motion-timeline";
-import { sampleVideoChoreography, VIDEO_STRIKE_CLIPS, VIDEO_CHOREOGRAPHY_VERSION, type VideoStrike } from "./video-demo-choreography";
+import { sampleHeroVideoChoreography, VIDEO_STRIKE_CLIPS, VIDEO_CHOREOGRAPHY_VERSION, type VideoStrike } from "./video-demo-choreography";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
@@ -73,7 +73,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${definition.name}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -370,7 +370,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   for (const move of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const clipName = VIDEO_STRIKE_CLIPS[move];
     author(clipName, clipDurations[move], u => {
-      const pose = sampleVideoChoreography(move, u, width);
+      const pose = sampleHeroVideoChoreography(move, u, width, definition.name);
       body(pose);
       // The camera-facing fighter root and its committed strike direction
       // remain unmodified. The spin lives only inside the visible skeleton.

@@ -4,12 +4,12 @@ import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { authoredMotionEvents, sampleCombatMotionTimeline } from "../src/game/combat-motion-timeline";
 import {
   VIDEO_CHOREOGRAPHY_VERSION, VIDEO_STRIKE_CLIPS,
-  sampleVideoChoreography,
+  sampleHeroVideoChoreography, sampleVideoChoreography,
   type VideoStrike,
 } from "../src/game/video-demo-choreography";
 
 test("reference video choreography: four distinguishable game-ready clips", () => {
-  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V1");
+  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V2");
   assert.equal(new Set(Object.values(VIDEO_STRIKE_CLIPS)).size,4);
   for (const name of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const start=sampleVideoChoreography(name,0,.09);

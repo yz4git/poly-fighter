@@ -139,3 +139,18 @@ export function chooseCinematicTechnique(input: {
   if (input.comboStage === 0 && Math.abs(input.sideAxis) > .5 && input.distance <= 1.85) return "cycloneSweep";
   return null;
 }
+
+/** A buffered touch tap preserves its directional intent even if the finger
+ * leaves the virtual stick before the authored cancel window opens. */
+export function cinematicAxesForBufferedTap(input: {
+  forwardAxis: number;
+  sideAxis: number;
+  queuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
+  queuedSideSign?: number;
+}): { forwardAxis: number; sideAxis: number } {
+  if (input.queuedBranch === "FORWARD") return { forwardAxis: 1, sideAxis: 0 };
+  if (input.queuedBranch === "BACK") return { forwardAxis: -1, sideAxis: 0 };
+  if (input.queuedBranch === "SIDE") return { forwardAxis: 0, sideAxis: input.queuedSideSign === -1 ? -1 : 1 };
+  if (input.queuedBranch === "NEUTRAL") return { forwardAxis: 0, sideAxis: 0 };
+  return { forwardAxis: input.forwardAxis, sideAxis: input.sideAxis };
+}

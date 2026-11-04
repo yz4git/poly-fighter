@@ -9,7 +9,7 @@ import { authoredMotionEvents } from "./combat-motion-timeline";
  *   and swing foot; release the stance only when the next step starts.
  * All distances below are fractions of the measured character height.
  */
-export const REFERENCE_KICK_VERSION = "REFERENCE_KICK_CHOREOGRAPHY_V1";
+export const REFERENCE_KICK_VERSION = "REFERENCE_KICK_CHOREOGRAPHY_V2";
 export type KickPoint = readonly [number, number, number];
 export type ReferenceKickPose = Readonly<{
   strike: "l" | "r";
@@ -42,24 +42,24 @@ type Profile = Readonly<{
 
 const PROFILES: Readonly<Record<string, Profile>> = {
   BF_FrontKick_R: {
-    strike: "r", side: -.040, forward: .070, drop: -.016,
-    yaw: -.50, lean: -.16, pivot: -.40,
-    chamber: [.075, .27, .16], contact: [.015, .60, .52], knee: [.06, .66, .34],
+    strike: "r", side: -.055, forward: .085, drop: -.027,
+    yaw: -.67, lean: -.22, pivot: -.52,
+    chamber: [.08, .33, .12], contact: [.015, .65, .59], knee: [.06, .67, .36],
   },
   BF_LowKick_L: {
-    strike: "l", side: .045, forward: .055, drop: -.065,
-    yaw: .72, lean: .045, pivot: .88,
-    chamber: [-.17, .20, .045], contact: [-.015, .17, .49], knee: [-.14, .38, .33],
+    strike: "l", side: .062, forward: .070, drop: -.083,
+    yaw: .92, lean: .075, pivot: 1.06,
+    chamber: [-.18, .23, .03], contact: [-.015, .19, .55], knee: [-.14, .39, .35],
   },
   BF_RisingKick_R: {
-    strike: "r", side: -.060, forward: .040, drop: -.045,
-    yaw: -1.10, lean: -.28, pivot: -1.36,
-    chamber: [.22, .36, -.025], contact: [-.035, .77, .36], knee: [.025, .72, .22],
+    strike: "r", side: -.085, forward: .055, drop: -.058,
+    yaw: -1.27, lean: -.36, pivot: -1.45,
+    chamber: [.24, .39, -.04], contact: [-.035, .81, .43], knee: [.025, .73, .24],
   },
   BF_DashKick_R: {
-    strike: "r", side: -.035, forward: .125, drop: -.012,
-    yaw: -.58, lean: -.20, pivot: -.60,
-    chamber: [.07, .31, .16], contact: [.015, .77, .44], knee: [.06, .74, .30],
+    strike: "r", side: -.051, forward: .145, drop: -.018,
+    yaw: -.75, lean: -.25, pivot: -.76,
+    chamber: [.07, .36, .13], contact: [.015, .81, .50], knee: [.06, .74, .32],
   },
 };
 
@@ -102,35 +102,35 @@ export function sampleReferenceKickChoreography(
     extension: 0,
   };
   const loaded: ReferenceKickPose = {
-    ...neutral, side: p.side * .45, forward: -.012, drop: -.024,
-    yaw: -p.yaw * .16, roll: sign * .025,
+    ...neutral, side: p.side * .50, forward: -.024, drop: -.055,
+    yaw: -p.yaw * .27, roll: sign * .038,
   };
   const chamber: ReferenceKickPose = {
-    ...neutral, side: p.side, forward: p.forward * .30, drop: p.drop - .018,
-    yaw: p.yaw * .48, pitch: p.lean * .22, roll: sign * .065,
-    chest: p.lean * .38, pivot: p.pivot * .46,
+    ...neutral, side: p.side, forward: p.forward * .28, drop: p.drop - .026,
+    yaw: p.yaw * .58, pitch: p.lean * .34, roll: sign * .095,
+    chest: p.lean * .54, pivot: p.pivot * .55,
     foot: p.chamber, knee: [sign * .13, .64, .28],
-    rearHand: [sign * .15, .71, .085], guardHand: [-sign * .08, .78, .18],
+    rearHand: [sign * .18, .69, .055], guardHand: [-sign * .10, .81, .16],
   };
   const strike: ReferenceKickPose = {
     ...chamber, forward: p.forward, drop: p.drop, yaw: p.yaw,
-    pitch: p.lean * .30, chest: p.lean * .70, roll: sign * .09,
+    pitch: p.lean * .43, chest: p.lean * .94, roll: sign * .14,
     pivot: p.pivot, foot: p.contact, knee: p.knee,
-    rearHand: [sign * .19, .61, -.035], guardHand: [-sign * .075, .78, .19],
+    rearHand: [sign * .25, .59, -.09], guardHand: [-sign * .11, .82, .17],
     extension: 1,
   };
   const follow: ReferenceKickPose = {
-    ...strike, yaw: strike.yaw * 1.04,
-    foot: [strike.foot[0], strike.foot[1], strike.foot[2] + .008],
+    ...strike, yaw: strike.yaw * 1.10, roll: strike.roll * 1.06,
+    foot: [strike.foot[0], strike.foot[1], strike.foot[2] + .035],
   };
   const retracted: ReferenceKickPose = {
-    ...chamber, side: p.side * .78, forward: p.forward * .23,
-    yaw: p.yaw * .30, pivot: p.pivot * .38,
+    ...chamber, side: p.side * .76, forward: p.forward * .18,
+    yaw: p.yaw * .24, pivot: p.pivot * .34,
     rearHand: point(chamber.rearHand, neutral.rearHand, .42),
   };
   const planted = blend(loaded, neutral, .68);
   const keys: readonly (readonly [number, ReferenceKickPose])[] = [
-    [0, neutral], [contact * .22, loaded], [contact * .60, chamber],
+    [0, neutral], [contact * .25, loaded], [contact * .64, chamber],
     [contact, strike], [contactExit, follow],
     [contactExit + (1 - contactExit) * .43, retracted],
     [contactExit + (1 - contactExit) * .78, planted], [1, neutral],

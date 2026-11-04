@@ -1,0 +1,86 @@
+/* Measured against 932x430 WebGL audit captures, not a mockup.
+   Previous AXION override put four characters in each half of the screen:
+   eight ~94px-wide buttons, 6px descriptions, and a large unused vertical gap.
+   This final cascade layer restores a readable 2x2 roster per side. */
+@media (orientation: landscape) and (max-height: 760px) {
+  .select-screen > .fighter-select-grid.v3-grid,
+  .select-screen > .fighter-select-grid.opponent-grid.v3-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: clamp(7px, 1.1vw, 12px);
+    width: 100%;
+    margin-top: 0;
+    min-width: 0;
+    align-self: center;
+  }
+
+  .select-screen .fighter-select-grid.v3-grid > .fighter-card {
+    min-height: clamp(75px, 18vh, 104px);
+    min-width: 0;
+    display: grid;
+    grid-template-columns: clamp(29px, 4.2vw, 40px) minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: clamp(8px, 1.1vw, 13px);
+    align-content: center;
+    padding: clamp(8px, 1.5vh, 12px) clamp(8px, 1.1vw, 13px);
+  }
+
+  .select-screen .fighter-select-grid.v3-grid .fighter-orb {
+    width: clamp(27px, 3.5vw, 35px);
+    height: clamp(39px, 10vh, 54px);
+    grid-row: 1 / span 3;
+  }
+
+  .select-screen .fighter-select-grid.v3-grid .fighter-card strong {
+    font-size: clamp(14px, 1.8vw, 19px);
+    line-height: 1.12;
+    white-space: nowrap;
+  }
+
+  .select-screen .fighter-select-grid.v3-grid .fighter-card small {
+    display: block;
+    font-size: clamp(8px, 1.2vh, 10px);
+    line-height: 1.25;
+    letter-spacing: .035em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .select-screen .fighter-select-grid.v3-grid .fighter-card em {
+    font-size: clamp(9px, 1.25vh, 11px);
+    line-height: 1.25;
+    letter-spacing: .015em;
+    white-space: nowrap;
+  }
+
+  .select-screen .difficulty span {
+    font-size: clamp(9px, 1.25vh, 11px);
+    letter-spacing: .11em;
+  }
+
+  .select-screen .difficulty button {
+    min-height: 30px;
+    font-size: clamp(10px, 1.35vh, 12px);
+    padding: 7px 9px;
+  }
+
+  .select-screen .primary-button.compact small {
+    font-size: 9px;
+  }
+}
+
+/* Combo information should reward successful play without covering either
+   character's upper body or the center round timer. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .tps-badge.tps-face-safe-badge.tps-combo-badge {
+    top: max(46px, calc(env(safe-area-inset-top) + 39px));
+    padding: 6px 12px;
+    background: rgba(8, 18, 34, .9);
+  }
+
+  .tps-badge.tps-face-safe-badge.tps-combo-badge strong {
+    font-size: clamp(11px, 2.8vh, 14px);
+    letter-spacing: .08em;
+  }
+}

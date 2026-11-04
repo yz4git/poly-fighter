@@ -144,3 +144,66 @@ export function sampleVideoChoreography(move: VideoStrike, phase: number, width:
   }
   return result;
 }
+
+/**
+ * Per-fighter performance accents are applied once while baking calibrated IK
+ * clips, not every animation frame. The first and last guard poses are exactly
+ * shared, while the actual contact key stays at phase .50 for every fighter.
+ * No additional strikes or combat-frame differences are generated.
+ */
+export function sampleHeroVideoChoreography(
+  move: VideoStrike,
+  phase: number,
+  width: number,
+  fighterName: string,
+): VideoBodyPose {
+  const original = sampleVideoChoreography(move, phase, width);
+  const u = Math.max(0, Math.min(1, Number.isFinite(phase) ? phase : 0));
+  const weight = Math.sin(Math.PI * u) ** 4;
+  if (weight < 1e-9) return original;
+
+  const hero = fighterName.toUpperCase();
+  if (hero === "KAIRO" && (move === "jab" || move === "backfist")) {
+    // Grounded heavy weight transfer, rear-hand counterweight and extra torque.
+    return {
+      ...original,
+      drop: (original.drop ?? 0) - weight * .027,
+      forward: (original.forward ?? 0) + weight * .027,
+      yaw: (original.yaw ?? 0) * (1 + weight * .19),
+      chest: (original.chest ?? 0) + weight * .058,
+    };
+  }
+  if (hero === "SERA" && (move === "kick" || move === "risingKick")) {
+    // Fast, high, flexible kicks: lift the active foot but never the support foot.
+    return {
+      ...original,
+      rightFoot: [
+        original.rightFoot![0] + weight * .025,
+        original.rightFoot![1] + weight * .045,
+        original.rightFoot![2] + weight * .027,
+      ],
+      side: (original.side ?? 0) - weight * .018,
+      roll: (original.roll ?? 0) - weight * .055,
+    };
+  }
+  if (hero === "VANTA" && (move === "backfist" || move === "jab")) {
+    // Deceptive lateral rotation, not KAIRO's forward-heavy shoulder drive.
+    return {
+      ...original,
+      side: (original.side ?? 0) - weight * .045,
+      yaw: (original.yaw ?? 0) + weight * .19,
+      roll: (original.roll ?? 0) - weight * .075,
+    };
+  }
+  if (hero === "AXION" && (move === "kick" || move === "risingKick")) {
+    // Massive braced rotation with a restrained high-foot position.
+    return {
+      ...original,
+      drop: (original.drop ?? 0) - weight * .032,
+      forward: (original.forward ?? 0) + weight * .045,
+      yaw: (original.yaw ?? 0) - weight * .13,
+      pitch: (original.pitch ?? 0) + weight * .07,
+    };
+  }
+  return original;
+}

@@ -83,23 +83,23 @@ export function samplePunchKineticChain(name: string, normalizedPhase: number): 
   const side = profile.side === "l" ? -1 : 1;
   const direction = profile.backfist ? -1 : 1;
   const torque = profile.torque;
-  const windup = -.034 * prep * torque;
-  const release = .074 * drive * torque;
-  const recoil = -.022 * recover * torque;
+  const windup = -.060 * prep * torque;
+  const release = .122 * drive * torque;
+  const recoil = -.036 * recover * torque;
   const rotation = (windup + release + recoil) * direction * side;
 
   return {
-    comSide: side * (-.0032 * prep + .0052 * drive - .0016 * recover) * torque,
-    comForward: profile.forward * (-.003 * prep + .009 * drive - .002 * recover),
+    comSide: side * (-.0054 * prep + .0080 * drive - .0022 * recover) * torque,
+    comForward: profile.forward * (-.005 * prep + .015 * drive - .003 * recover),
     comVertical: -profile.crouch * (.45 * prep + .80 * drive + .25 * recover),
     pelvisYaw: rotation * .30,
     torsoYaw: rotation * .70,
-    torsoPitch: profile.pitch * drive + .010 * prep - .010 * recover,
-    chestRoll: side * (.011 * prep - .022 * drive + .006 * recover) * torque,
-    strikeClavicleYaw: side * direction * (.015 * prep + .036 * drive - .014 * recover) * torque,
-    guardClavicleYaw: -side * direction * (.018 * prep + .032 * drive - .023 * recover) * torque,
+    torsoPitch: profile.pitch * 1.22 * drive + .025 * prep - .018 * recover,
+    chestRoll: side * (.020 * prep - .036 * drive + .014 * recover) * torque,
+    strikeClavicleYaw: side * direction * (.035 * prep + .056 * drive - .029 * recover) * torque,
+    guardClavicleYaw: -side * direction * (.029 * prep + .048 * drive - .030 * recover) * torque,
     headCounterYaw: -rotation * .43,
-    stancePivot: side * profile.pivot * drive,
+    stancePivot: side * profile.pivot * (prep * .2 + drive),
     guardRetention: .75 * drive + .30 * prep + .45 * recover,
     contactLock: .5 * prep + .90 * drive + .38 * recover,
     preparation: prep, drive, recovery: recover,

@@ -2,6 +2,7 @@ import { FIGHTER_DEFINITIONS } from "./definitions";
 import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
 import { addCinematicTechniques } from "./cinematic-techniques";
+import { addTpsRangeTechniques } from "./tps-range-attack";
 
 export const AXION_FIGHTER_ID = "amber" as const;
 
@@ -192,7 +193,7 @@ export const AXION_FIGHTER_DEFINITION: FighterDefinition = Object.freeze({
     handScale: 1.12,
     footScale: 1.16,
   },
-  moves: addCinematicTechniques(expandMoveSet(axionMoves), "AXION"),
+  moves: addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(axionMoves), "AXION"), "AXION"),
 });
 
 export function registerAxionFighter(): FighterDefinition {

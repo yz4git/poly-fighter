@@ -10,6 +10,7 @@ import "./rival-circuit.css";
 import "./rival-circuit-finish.css";
 import "./vanta-playable.css";
 import "./axion-playable.css";
+import "./screenshot-review.css";
 
 export const metadata: Metadata = {
   title: "POLY FIGHTER",

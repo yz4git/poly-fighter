@@ -3,7 +3,7 @@ import test from "node:test";
 import * as THREE from "three";
 import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters";
 import {
-  CINEMATIC_TECHNIQUES, addCinematicTechniques, chooseCinematicTechnique,
+  CINEMATIC_TECHNIQUES, addCinematicTechniques, chooseCinematicTechnique, cinematicAxesForBufferedTap,
 } from "../src/game/cinematic-techniques";
 import {
   canCinematicStrikeAirborne,
@@ -67,6 +67,16 @@ test("manual direction, clean chain and actual height select launch / chase / sl
   assert.equal(c({ comboStage: 3, forwardAxis: -1, opponentAirborne: true, hasJuggle: true, airHits: 2 }), "meteorSlam");
   assert.equal(c({ comboStage: 2, forwardAxis: -1, opponentAirborne: true, hasJuggle: true, airHits: 1 }), "airChase");
   assert.equal(c({ comboStage: 4, opponentAirborne: true, hasJuggle: true, airHits: 3 }), "meteorSlam");
+});
+
+test("early iPhone taps preserve forward, back and signed side branches", () => {
+  const base = { forwardAxis: 0, sideAxis: 0 };
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "FORWARD" }), { forwardAxis: 1, sideAxis: 0 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "BACK" }), { forwardAxis: -1, sideAxis: 0 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "SIDE", queuedSideSign: -1 }), { forwardAxis: 0, sideAxis: -1 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ ...base, queuedBranch: "SIDE", queuedSideSign: 1 }), { forwardAxis: 0, sideAxis: 1 });
+  assert.deepEqual(cinematicAxesForBufferedTap({ forwardAxis: 1, sideAxis: -1, queuedBranch: "NEUTRAL" }), base);
+  assert.deepEqual(cinematicAxesForBufferedTap({ forwardAxis: 1, sideAxis: -1 }), { forwardAxis: 1, sideAxis: -1 });
 });
 
 test("air chains require connected hits, have decay/limits and reject impossible high strikes", () => {

@@ -9,7 +9,7 @@ import { MOVE_VARIANTS, type MoveVariant } from "./move-expansion";
  * affect only the pelvis, and rotation accents keep the main striking path
  * recognizable while changing the shoulder/torso/strike-leg silhouette.
  */
-export const EXPANDED_MOTION_VERSION = "COMBAT_VARIANT_CLIPS_V1";
+export const EXPANDED_MOTION_VERSION = "COMBAT_VARIANT_CLIPS_V2_HERO";
 
 export function expandedClipName(source: string, variant: MoveVariant): string {
   return `VM_${source}_${variant}`;
@@ -40,36 +40,36 @@ function boneAccent(
   strikeSide: "l" | "r",
 ): Eulers | null {
   if (bone === "pelvis") {
-    if (variant === "PIVOT") return [0, .12, .035];
-    if (variant === "DRIVE") return [-.045, -.03, 0];
-    if (variant === "CRUSH") return [-.08, .035, 0];
-    return [.025, 0, 0];
+    if (variant === "PIVOT") return [0, .23, .075];
+    if (variant === "DRIVE") return [-.092, -.065, .025];
+    if (variant === "CRUSH") return [-.15, .07, -.045];
+    return [.052, 0, 0];
   }
   if (bone === "spine_02" || bone === "spine_03") {
     const scale = bone === "spine_03" ? 1 : .62;
-    if (variant === "PIVOT") return [0, .19 * scale, .055 * scale];
-    if (variant === "DRIVE") return [-.085 * scale, -.045 * scale, 0];
-    if (variant === "CRUSH") return [-.13 * scale, .025 * scale, -.04 * scale];
-    return [.06 * scale, -.03 * scale, 0];
+    if (variant === "PIVOT") return [0, .30 * scale, .105 * scale];
+    if (variant === "DRIVE") return [-.16 * scale, -.09 * scale, .05 * scale];
+    if (variant === "CRUSH") return [-.25 * scale, .05 * scale, -.095 * scale];
+    return [.095 * scale, -.035 * scale, 0];
   }
   if (bone === "Head") {
-    if (variant === "PIVOT") return [0, -.07, 0];
-    if (variant === "CRUSH") return [.04, 0, 0];
+    if (variant === "PIVOT") return [0, -.13, 0];
+    if (variant === "CRUSH") return [.085, 0, 0];
     return null;
   }
   const limb = isKick ? `thigh_${strikeSide}` : `upperarm_${strikeSide}`;
   const distal = isKick ? `calf_${strikeSide}` : `lowerarm_${strikeSide}`;
   if (bone === limb) {
-    if (variant === "SNAP") return [-.06, -.01, .04];
-    if (variant === "DRIVE") return [.09, .03, -.04];
-    if (variant === "PIVOT") return [.02, .10, .05];
-    return [.12, 0, -.05];
+    if (variant === "SNAP") return [-.11, -.02, .07];
+    if (variant === "DRIVE") return [.15, .07, -.07];
+    if (variant === "PIVOT") return [.04, .19, .13];
+    return [.21, 0, -.09];
   }
   if (bone === distal) {
-    if (variant === "SNAP") return [-.055, 0, 0];
-    if (variant === "DRIVE") return [.07, 0, 0];
-    if (variant === "PIVOT") return [0, .05, 0];
-    return [.075, 0, -.025];
+    if (variant === "SNAP") return [-.095, 0, 0];
+    if (variant === "DRIVE") return [.12, 0, 0];
+    if (variant === "PIVOT") return [0, .105, 0];
+    return [.14, 0, -.045];
   }
   // Off-side guard stays where the authored animator placed it.
   return null;
@@ -77,8 +77,14 @@ function boneAccent(
 
 function smoothAccent(u: number): number {
   const v = Math.max(0, Math.min(1, u));
-  // Original ready/entry/recovery frames remain identical for seamless handoff.
-  return Math.sin(Math.PI * v) ** 2;
+  // Hero-shaped three-beat arc: visible *opposite* winding during startup,
+  // full contact silhouette, then a restrained counter-swing into recovery.
+  // Every clip still matches the exact authored guard pose at t=0 and t=1.
+  const smooth = (x: number) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
+  const anticipation = smooth(v / .12) * (1 - smooth((v - .19) / .14));
+  const strike = smooth((v - .22) / .22) * (1 - smooth((v - .56) / .29));
+  const recoil = smooth((v - .68) / .09) * (1 - smooth((v - .85) / .13));
+  return strike - anticipation * .37 - recoil * .19;
 }
 
 export function bakeExpandedMotionClip(
@@ -100,7 +106,7 @@ export function bakeExpandedMotionClip(
     for (let i = 0; i < copy.times.length; i += 1) {
       const u = copy.times[i] / duration;
       const weight = smoothAccent(u);
-      if (weight < 1e-7) continue;
+      if (Math.abs(weight) < 1e-7) continue;
       if (isRotation && accent) {
         const q = new THREE.Quaternion().fromArray(values, i * 4);
         const delta = new THREE.Quaternion().setFromEuler(
@@ -108,8 +114,8 @@ export function bakeExpandedMotionClip(
         );
         q.multiply(delta).normalize().toArray(values, i * 4);
       } else if (isPelvis) {
-        const side = variant === "PIVOT" ? .010 : variant === "SNAP" ? -.004 : 0;
-        const forward = variant === "DRIVE" ? .014 : variant === "CRUSH" ? .007 : 0;
+        const side = variant === "PIVOT" ? .017 : variant === "SNAP" ? -.007 : 0;
+        const forward = variant === "DRIVE" ? .022 : variant === "CRUSH" ? .012 : 0;
         values[i * 3] += side * weight;
         values[i * 3 + 2] += forward * weight;
       }

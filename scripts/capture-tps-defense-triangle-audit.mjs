@@ -273,7 +273,7 @@ try {
       };
     `,[moveId]);
     if(observation.clip!==expectedClip||observation.enabled!==true
-      ||observation.version!=="VIDEO_REFERENCE_CHOREOGRAPHY_V1"
+      ||observation.version!=="VIDEO_REFERENCE_CHOREOGRAPHY_V2"
       ||observation.count!==4||observation.state!=="ATTACK"
       ||!observation.contact||observation.width<100||observation.height<100)
       throw Error("reference video clip not rendered "+JSON.stringify(observation));

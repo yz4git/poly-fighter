@@ -208,14 +208,17 @@ const expectedClips = {
 };
 
 const authoredExpectedClips = {
-  jab: "BF_Jab_L",
+  // The main TPS route has used baked video-reference choreography for these
+  // four basic moves since the clip-level attack override. Require the exact
+  // rendered clip, not the retired Blender source that produced the pre-V2 pose.
+  jab: "CM_Video_Jab",
   straight: "BF_Cross_R",
   bodyBlow: "BF_BodyBlow_L",
-  backfist: "BF_Backfist_R",
+  backfist: "CM_Video_Palm",
   power: "BF_Power_R",
-  kick: "BF_FrontKick_R",
+  kick: "CM_Video_SideKick",
   lowKick: "BF_LowKick_L",
-  risingKick: "BF_RisingKick_R",
+  risingKick: "CM_Video_SpinKick",
   dashKick: "BF_DashKick_R",
   counter: "CM_Counter_L",
   throw: "CM_Throw",

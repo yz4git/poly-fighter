@@ -702,7 +702,9 @@ prototype.updateVisual = function updateVisual(
 prototype.updateCamera = function updateCamera(delta: number): void {
   coreUpdateCamera.call(this, delta);
   const game = extended(this as unknown as TpsFightGame);
-  hype(game).update(game.camera, delta);
+  const director = hype(game);
+  director.choreography(game.p1, game.p2, game.camera, delta);
+  director.update(game.camera, delta);
   // Keep the iPhone shoulder view intimate without changing the audited orbit.
   // 49° is only a modest crop from the previous 52° compact-landscape lens,
   // while desktop remains at the established 47° framing.

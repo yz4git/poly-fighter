@@ -215,7 +215,7 @@ export function tpsComboLinkWindow(move: MoveDefinition): TpsComboLinkWindow {
   const recoveryTicks = Math.max(1, move.recovery);
   const usableRecovery = Math.max(1, recoveryTicks - 2);
   const authoredWindow = Math.max(1, Math.min(usableRecovery, move.cancelWindow));
-  const settleTicks = Math.max(1, Math.min(usableRecovery, Math.round(recoveryTicks * 0.22)));
+  const settleTicks = Math.max(1, Math.min(usableRecovery, Math.round(recoveryTicks * 0.17)));
   const linkStart = recoveryStart + settleTicks;
   const linkEnd = Math.min(recoveryStart + recoveryTicks - 1, linkStart + authoredWindow - 1);
   return {

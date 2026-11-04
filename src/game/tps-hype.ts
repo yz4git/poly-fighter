@@ -3,6 +3,7 @@ import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
 import type { HitEvent } from "./types";
 import { TpsCinematicImpactSpectacle } from "./tps-cinematic-impact-spectacle";
+import { TpsSignatureMotionVfx } from "./tps-signature-motion-vfx";
 
 /** A short orbital punctuation beat, never a persistent camera takeover. */
 export function tpsCinematicCameraShot(
@@ -243,6 +244,7 @@ export class TpsHypeDirector {
   private readonly rings: ShockRing[] = [];
   private readonly bursts: BurstSpokes[] = [];
   private readonly cinematicSpectacle = new TpsCinematicImpactSpectacle(this.group);
+  private readonly signatureMotion = new TpsSignatureMotionVfx(this.group);
   private hitStreak = 0;
   private hitStreakSeconds = 0;
   private hitStreakAttacker: string | null = null;
@@ -368,6 +370,7 @@ export class TpsHypeDirector {
     }
     this.retirePreviousImpactFx();
     this.cinematicSpectacle.hit(event, camera, tier, this.hitStreak);
+    this.signatureMotion.hit(event);
     this.group.userData.tpsCinematicHitStreak = this.hitStreak;
     const shot = tpsCinematicCameraShot(event.move.cinematicRole, event.counter, event.blocked);
     if (shot) {
@@ -463,6 +466,25 @@ export class TpsHypeDirector {
     this.group.userData.lastHypeCameraSide = this.cameraSide;
     this.group.userData.lastHypeFovOffset = this.fovOffset;
     this.group.userData.lastHypeImpactAimWeight = this.impactAimWeight;
+  }
+
+  choreography(
+    p1: FighterRuntime,
+    p2: FighterRuntime,
+    camera: THREE.PerspectiveCamera,
+    delta: number,
+  ): void {
+    if (this.signatureMotion.update(p1, p2, camera, delta)) {
+      // Ground contact, not the airborne hit event, drives this second beat.
+      // The existing final-KO hold remains the dominant camera treatment.
+      if (camera.userData.tpsFinalImpactStage !== "HOLD") {
+        this.cameraKick = Math.max(this.cameraKick, .14);
+        this.cameraShake = Math.max(this.cameraShake, .091);
+        this.fovOffset = Math.min(this.fovOffset, -2.4);
+      }
+      this.group.userData.tpsMeteorGroundBeat =
+        Number(this.group.userData.tpsMeteorGroundBeat ?? 0) + 1;
+    }
   }
 
   step(fighter: FighterRuntime, opponent: FighterRuntime, perfect: boolean): void {
@@ -609,6 +631,7 @@ export class TpsHypeDirector {
     this.group.userData.tpsCameraShot = null;
     this.group.userData.tpsCameraShotProgress = 0;
     this.cinematicSpectacle.reset();
+    this.signatureMotion.reset();
     this.group.userData.tpsCinematicHitStreak = 0;
     const baseFov = camera.aspect < 2.4 && camera.aspect > 1 ? 49 : 47;
     camera.fov = baseFov;
@@ -631,6 +654,7 @@ export class TpsHypeDirector {
 
   dispose(): void {
     this.cinematicSpectacle.dispose();
+    this.signatureMotion.dispose();
     this.ringGeometry.dispose();
     this.spokeGeometry.dispose();
     for (const ring of this.rings) ring.mesh.material.dispose();

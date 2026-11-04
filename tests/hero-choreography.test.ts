@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { samplePunchKineticChain } from "../src/game/combat-punch-kinetics";
+import { bakeExpandedMotionClip } from "../src/game/expanded-motion-library";
 import { authoredMotionEvents } from "../src/game/combat-motion-timeline";
 import { REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "../src/game/reference-kick-choreography";
 import { bakeCinematicClip, cinematicHeroWeight, cinematicPoseEnvelope } from "../src/game/cinematic-motion-library";
@@ -46,6 +47,7 @@ test("seven supers use a distinct three-beat full-body animation envelope", () =
     assert.deepEqual(first, [0, 0, 0, 1], role + " must start on shared guard");
     assert.deepEqual(last, [0, 0, 0, 1], role + " must end on shared guard");
     assert.notDeepEqual(middle, first, role + " must have an actual mid-strike pose");
+    assert.notDeepEqual([...torso.values.slice(4, 8)], first, role + " must visibly wind opposite the strike");
     for (const track of cinematic.tracks) {
       for (const x of track.values) assert.ok(Number.isFinite(x), role + " has a nonfinite keyframe");
     }
@@ -102,5 +104,20 @@ test("punch kinetics contain much stronger opposing windup, contact drive, and b
     for (const phase of [0, .1, .2, .4, .5, .65, .85, 1]) {
       for (const value of Object.values(samplePunchKineticChain(name, phase))) assert.ok(Number.isFinite(value));
     }
+  }
+});
+
+
+test("expanded combo variations retain a real opposite windup and a committed contact pose", () => {
+  const original = source("BF_Cross_R");
+  for (const variant of ["SNAP", "DRIVE", "PIVOT", "CRUSH"] as const) {
+    const clip = bakeExpandedMotionClip(original, variant);
+    const torso = clip.tracks.find(t => t.name === "spine_03.quaternion")!;
+    const early = new THREE.Quaternion().fromArray(torso.values, 4);
+    const contact = new THREE.Quaternion().fromArray(torso.values, 8);
+    assert.ok(early.angleTo(new THREE.Quaternion()) > .007, variant + " needs a true pre-strike counter-rotation");
+    assert.ok(contact.angleTo(new THREE.Quaternion()) > .045, variant + " needs full-body impact pose");
+    assert.ok(near(new THREE.Quaternion().fromArray(torso.values, 0).angleTo(new THREE.Quaternion()), 0));
+    assert.ok(near(new THREE.Quaternion().fromArray(torso.values, 16).angleTo(new THREE.Quaternion()), 0));
   }
 });

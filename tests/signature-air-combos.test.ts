@@ -22,11 +22,11 @@ import { isCombatAttackClip } from "../src/game/combat-motion-handoff";
 import { sourceOfExpandedClip } from "../src/game/expanded-motion-library";
 import { tpsImpactHeightForMove } from "../src/game/tps-impact-resolution";
 
-test("four fighters retain 51 regular techniques plus seven distinct named specials", () => {
+test("four fighters retain 51 regular, seven signature and three distance techniques", () => {
   assert.equal(PLAYABLE_FIGHTERS.length, 4);
   const allSpecials = new Set<string>();
   for (const fighter of PLAYABLE_FIGHTERS) {
-    assert.equal(Object.keys(fighter.moves).length, 58, fighter.name);
+    assert.equal(Object.keys(fighter.moves).length, 61, fighter.name);
     for (const id of CINEMATIC_TECHNIQUES) {
       const move = fighter.moves[id];
       assert.ok(move, `${fighter.name}: ${id}`);

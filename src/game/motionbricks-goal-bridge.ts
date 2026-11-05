@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { AuthoredMotionGoal } from "./motionbricks-authored-target-window";
 
 /**
  * Lightweight, deterministic MotionBricks-inspired pose-goal bridge.
@@ -9,7 +10,7 @@ import * as THREE from "three";
  * momentum is allowed to carry toward it, not kick the skeleton away from it.
  * No NVIDIA model, weights, sample motions or third-party runtime are bundled.
  */
-export const MOTIONBRICKS_GOAL_BRIDGE_VERSION = "GOAL_CONDITIONED_CONTEXT4_V1";
+export const MOTIONBRICKS_GOAL_BRIDGE_VERSION = "GOAL_CONDITIONED_CONTEXT4_TARGET2_V2";
 
 const MAX_PREDICTED_ROTATION = THREE.MathUtils.degToRad(24);
 const ROTATION_SLACK = THREE.MathUtils.degToRad(1.5);
@@ -19,6 +20,8 @@ export type GoalBridgePrediction = {
   rotation: THREE.Quaternion;
   /** Number of channels in which momentum away from the goal was suppressed. */
   rejectedChannels: number;
+  /** Channels using a future pose from the actual incoming authored clip. */
+  lookaheadChannels: number;
 };
 
 function shortestArc(from: THREE.Quaternion, to: THREE.Quaternion): { axis: THREE.Vector3; angle: number } {
@@ -46,10 +49,23 @@ export function predictPoseTowardGoal(
   destinationPosition: THREE.Vector3,
   destinationRotation: THREE.Quaternion,
   predictionSeconds: number,
+  futureGoal?: AuthoredMotionGoal,
 ): GoalBridgePrediction {
   const seconds = Number.isFinite(predictionSeconds) ? THREE.MathUtils.clamp(predictionSeconds, 0, 0.1) : 0;
   let rejectedChannels = 0;
+  let lookaheadChannels = 0;
   const goal = destinationPosition.clone().sub(sourcePosition);
+  // Treat the real incoming clip as a two-target path: current pose and a
+  // short lookahead. Use the latter only if it does not contradict the current
+  // target. In particular, a fast jab retracting into guard cannot anticipate
+  // the following punch by reversing the recovery pose.
+  if (futureGoal?.position) {
+    const future = futureGoal.position.clone().sub(sourcePosition);
+    if (future.lengthSq() > 1e-9 && (goal.lengthSq() < 1e-9 || goal.dot(future) > 0)) {
+      goal.lerp(future, goal.lengthSq() < 1e-9 ? 0.28 : 0.22);
+      lookaheadChannels += 1;
+    }
+  }
   const linearOffset = linearVelocity.clone().multiplyScalar(seconds);
   const goalDistance = goal.length();
   if (goalDistance > 1e-7) {
@@ -70,14 +86,24 @@ export function predictPoseTowardGoal(
   }
 
   const goalRotation = shortestArc(sourceRotation, destinationRotation);
+  const rotationalTarget = goalRotation.axis.clone().multiplyScalar(goalRotation.angle);
+  if (futureGoal?.rotation) {
+    const futureRotation = shortestArc(sourceRotation, futureGoal.rotation);
+    const future = futureRotation.axis.multiplyScalar(futureRotation.angle);
+    if (future.lengthSq() > 1e-9 && (rotationalTarget.lengthSq() < 1e-9 || rotationalTarget.dot(future) > 0)) {
+      rotationalTarget.lerp(future, rotationalTarget.lengthSq() < 1e-9 ? 0.28 : 0.22);
+      lookaheadChannels += 1;
+    }
+  }
   const angularOffset = angularVelocity.clone().multiplyScalar(seconds);
-  if (goalRotation.angle > 1e-7) {
-    const toward = angularOffset.dot(goalRotation.axis);
+  if (rotationalTarget.lengthSq() > 1e-14) {
+    const goalAxis = rotationalTarget.clone().normalize();
+    const toward = angularOffset.dot(goalAxis);
     if (toward < 0) {
-      angularOffset.addScaledVector(goalRotation.axis, -toward * 0.88);
+      angularOffset.addScaledVector(goalAxis, -toward * 0.88);
       rejectedChannels += 1;
     }
-    const maximum = Math.min(MAX_PREDICTED_ROTATION, goalRotation.angle * 0.48 + ROTATION_SLACK);
+    const maximum = Math.min(MAX_PREDICTED_ROTATION, rotationalTarget.length() * 0.48 + ROTATION_SLACK);
     if (angularOffset.length() > maximum) angularOffset.setLength(maximum);
   } else {
     angularOffset.multiplyScalar(0.12);
@@ -95,5 +121,6 @@ export function predictPoseTowardGoal(
     position: sourcePosition.clone().add(linearOffset),
     rotation: predictedRotation,
     rejectedChannels,
+    lookaheadChannels,
   };
 }

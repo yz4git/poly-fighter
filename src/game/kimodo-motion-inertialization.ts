@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { predictPoseTowardGoal } from "./motionbricks-goal-bridge";
+import type { AuthoredMotionGoal } from "./motionbricks-authored-target-window";
 
 export const KIMODO_MOTION_INERTIALIZATION_VERSION = "KIMODO_INSPIRED_INERTIAL_V1";
 
@@ -29,6 +30,7 @@ export type InertializationTelemetry = {
   replacementPinnedBones: number;
   minimumBoneScale: number;
   goalRejectedChannels: number;
+  goalWindowChannels: number;
 };
 
 const MAX_LOCAL_LINEAR_SPEED = 3.0;
@@ -162,6 +164,7 @@ export function applyInertialTransition(
   duration: number,
   weightScale = 1,
   boneWeightScales?: ReadonlyMap<string, number>,
+  futureGoals?: ReadonlyMap<string, AuthoredMotionGoal>,
 ): InertializationTelemetry {
   const weight = transitionWeight(age, duration) * THREE.MathUtils.clamp(weightScale, 0, 1);
   if (!(weight > 0) || transition.size === 0) {
@@ -174,6 +177,7 @@ export function applyInertialTransition(
       replacementPinnedBones: 0,
       minimumBoneScale: 1,
       goalRejectedChannels: 0,
+      goalWindowChannels: 0,
     };
   }
 
@@ -184,6 +188,7 @@ export function applyInertialTransition(
   let replacementPinnedBones = 0;
   let minimumBoneScale = 1;
   let goalRejectedChannels = 0;
+  let goalWindowChannels = 0;
 
   for (const [name, from] of transition) {
     const bone = bones.get(name);
@@ -199,11 +204,12 @@ export function applyInertialTransition(
     // is damped, stopping jab->guard overshoots without touching strike events.
     const prediction = predictPoseTowardGoal(
       from.position, from.rotation, from.linearVelocity, from.angularVelocity,
-      destinationPosition, destinationRotation, predict,
+      destinationPosition, destinationRotation, predict, futureGoals?.get(name),
     );
     const predictedPosition = prediction.position;
     const predictedRotation = prediction.rotation;
     goalRejectedChannels += prediction.rejectedChannels;
+    goalWindowChannels += prediction.lookaheadChannels;
 
     // UniMate-style replacement mask: scale 0 means the destination authored
     // joint is exact, scale 1 means full inertial carry. Intermediate values
@@ -228,5 +234,6 @@ export function applyInertialTransition(
     replacementPinnedBones,
     minimumBoneScale,
     goalRejectedChannels,
+    goalWindowChannels,
   };
 }

@@ -14,6 +14,7 @@ import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
+import { sampleAuthoredTargetWindow, TARGET_LOOKAHEAD_SECONDS } from "./motionbricks-authored-target-window";
 import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
 import { isTpsRangeAttack } from "./tps-range-attack";
 import { createTpsRangeMotionLibrary, tpsRangeClipName, TPS_RANGE_CHOREOGRAPHY_VERSION } from "./tps-range-motion";
@@ -789,6 +790,11 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
     contactWeight: authoredContactWeight,
     handoffMode: runtime.handoffMode,
   });
+  // The real destination clip provides a future target pose, without moving
+  // the mixer, input clock or authored active/contact frame.
+  const futureGoals = runtime.transitionPose.size > 0 && !continuousWalk && clip && action
+    ? sampleAuthoredTargetWindow(clip, runtime.bones, action.time)
+    : undefined;
   const inertial = applyInertialTransition(
     runtime.bones,
     runtime.transitionPose,
@@ -796,6 +802,7 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
     runtime.transitionDuration,
     inertialContactScale,
     uniMateProfile.scales,
+    futureGoals,
   );
   runtime.host.userData.unimateReplacementVersion = UNIMATE_MOTION_REPLACEMENT_VERSION;
   runtime.host.userData.unimateReplacementMode = uniMateProfile.mode;
@@ -812,6 +819,8 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
   runtime.host.userData.kimodoInertialMaxAngularVelocity = inertial.maxAngularVelocity;
   runtime.host.userData.motionbricksGoalBridgeVersion = MOTIONBRICKS_GOAL_BRIDGE_VERSION;
   runtime.host.userData.motionbricksGoalRejectedChannels = inertial.goalRejectedChannels;
+  runtime.host.userData.motionbricksGoalWindowChannels = inertial.goalWindowChannels;
+  runtime.host.userData.motionbricksGoalLookaheadSeconds = TARGET_LOOKAHEAD_SECONDS;
   runtime.model.updateMatrixWorld(true);
 }
 
@@ -1043,6 +1052,9 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   fighter.visual.root.userData.motionbricksGoalBridgeVersion = MOTIONBRICKS_GOAL_BRIDGE_VERSION;
   fighter.visual.root.userData.motionbricksGoalRejectedChannels = Number(
     runtime.host.userData.motionbricksGoalRejectedChannels ?? 0,
+  );
+  fighter.visual.root.userData.motionbricksGoalWindowChannels = Number(
+    runtime.host.userData.motionbricksGoalWindowChannels ?? 0,
   );
   fighter.visual.root.userData.motionbricksContextFrames = runtime.poseHistory.get("pelvis")?.context?.length ?? 0;
   fighter.visual.root.userData.unimateReplacementMode =

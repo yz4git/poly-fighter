@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION, predictPoseTowardGoal } from "../src/game/motionbricks-goal-bridge";
+import { sampleAuthoredTargetWindow, TARGET_LOOKAHEAD_SECONDS } from "../src/game/motionbricks-authored-target-window";
 import {
   applyInertialTransition,
   beginInertialTransition,
@@ -23,7 +24,7 @@ test("goal bridge uses the authored destination rather than extrapolating away f
     from, identity(), new THREE.Vector3(-2, 0, 0), new THREE.Vector3(),
     goal, identity(), .03,
   );
-  assert.equal(MOTIONBRICKS_GOAL_BRIDGE_VERSION, "GOAL_CONDITIONED_CONTEXT4_V1");
+  assert.equal(MOTIONBRICKS_GOAL_BRIDGE_VERSION, "GOAL_CONDITIONED_CONTEXT4_TARGET2_V2");
   assert.ok(toward.position.x > 0, "positive carry should still move toward the goal");
   assert.ok(away.position.x > -.009, "away-directed carry must be strongly attenuated");
   assert.ok(away.rejectedChannels > 0);
@@ -101,4 +102,68 @@ test("stationary goals cannot invent a stride and pathological velocities are bo
   assert.ok(output.position.length() <= .00300001);
   assert.ok(identity().angleTo(output.rotation) <= THREE.MathUtils.degToRad(1.5) + 1e-7);
   assert.ok(source.equals(new THREE.Vector3()), "source remains untouched");
+});
+
+test("two authored target poses preserve forward anticipation without inventing new motion", () => {
+  const from = new THREE.Vector3();
+  const futurePosition = new THREE.Vector3(.15, 0, 0);
+  const goal = { position: futurePosition };
+  const normal = predictPoseTowardGoal(from, identity(), new THREE.Vector3(2, 0, 0),
+    new THREE.Vector3(), from, identity(), .03);
+  const guided = predictPoseTowardGoal(from, identity(), new THREE.Vector3(2, 0, 0),
+    new THREE.Vector3(), from, identity(), .03, goal);
+  assert.ok(guided.position.x > normal.position.x + .01, "future authored direction may preserve forward momentum");
+  assert.equal(guided.lookaheadChannels, 1);
+  assert.equal(predictPoseTowardGoal(from, identity(), new THREE.Vector3(),
+    new THREE.Vector3(), from, identity(), .03, goal).position.x, 0,
+    "lookahead must never generate an attack or locomotion without actual motion");
+  assert.equal(futurePosition.x, .15, "sampling must not mutate clip-owned data");
+
+  const opposite = predictPoseTowardGoal(from, identity(), new THREE.Vector3(2, 0, 0),
+    new THREE.Vector3(), new THREE.Vector3(.12, 0, 0), identity(), .03,
+    { position: new THREE.Vector3(-.15, 0, 0) });
+  assert.equal(opposite.lookaheadChannels, 0, "a contradictory future pose must not reverse recovery");
+  assert.ok(opposite.position.x > 0);
+});
+
+test("authored target sampler reads future keyframes but never changes the live mixer", () => {
+  const pelvis = new THREE.Bone(); pelvis.name = "pelvis";
+  const bones = new Map<string, THREE.Object3D>([["pelvis", pelvis]]);
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .5);
+  const clip = new THREE.AnimationClip("strike", .2, [
+    new THREE.VectorKeyframeTrack("pelvis.position", [0, .2], [0, 0, 0, .2, 0, 0]),
+    new THREE.QuaternionKeyframeTrack("pelvis.quaternion", [0, .2], [0, 0, 0, 1, ...q.toArray()]),
+    new THREE.VectorKeyframeTrack("missing.position", [0, .2], [0, 0, 0, 9, 0, 0]),
+  ]);
+  const window = sampleAuthoredTargetWindow(clip, bones, 0);
+  const next = window.get("pelvis")!;
+  assert.equal(window.size, 1, "only bones in the runtime rig are sampled");
+  assert.ok(Math.abs(next.position!.x - TARGET_LOOKAHEAD_SECONDS) < .00001);
+  assert.ok(next.rotation!.angleTo(identity()) > .05);
+  assert.deepEqual(pelvis.position.toArray(), [0, 0, 0], "sampler cannot advance live rig");
+  assert.ok(pelvis.quaternion.equals(identity()));
+  assert.equal(sampleAuthoredTargetWindow(clip, bones, .2).size, 0);
+});
+
+test("future authored angular direction is bounded, with contact masks still exact", () => {
+  const future = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .5);
+  const prediction = predictPoseTowardGoal(new THREE.Vector3(), identity(), new THREE.Vector3(),
+    new THREE.Vector3(0, 8, 0), new THREE.Vector3(), identity(), .03, { rotation: future });
+  assert.equal(prediction.lookaheadChannels, 1);
+  assert.ok(prediction.rotation.angleTo(identity()) > THREE.MathUtils.degToRad(1.5));
+  assert.ok(prediction.rotation.angleTo(identity()) < THREE.MathUtils.degToRad(24) + .0001);
+  const hand = new THREE.Bone(); hand.name = "hand_r";
+  const bones = new Map<string, THREE.Object3D>([["hand_r", hand]]);
+  const history = new Map<string, InertialPoseSample>();
+  recordInertialPose(bones, history, 1 / 60);
+  hand.position.x = .05;
+  recordInertialPose(bones, history, 1 / 60);
+  const outgoing = new Map<string, InertialTransitionSample>();
+  beginInertialTransition(bones, history, outgoing);
+  hand.position.set(.1, 0, 0);
+  const telemetry = applyInertialTransition(bones, outgoing, .012, .07, 1,
+    new Map([["hand_r", 0]]), new Map([["hand_r", { position: new THREE.Vector3(.18, 0, 0) }]]));
+  assert.equal(hand.position.x, .1, "authoritative contact end effector remains exact");
+  assert.equal(telemetry.goalWindowChannels, 1);
+  assert.equal(telemetry.replacementPinnedBones, 1);
 });

@@ -1,0 +1,83 @@
+name: POLY FIGHTER MotionBricks handoff WebGL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/game/motionbricks-*.ts
+      - src/game/visual-quaternius-runtime.ts
+      - tests/motionbricks-*.ts
+      - scripts/capture-tps-recovery-handoff-audit.mjs
+      - scripts/capture-tps-attack-action-handoff-audit.mjs
+      - .github/workflows/motionbricks-handoff-webgl.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - src/game/motionbricks-*.ts
+      - src/game/visual-quaternius-runtime.ts
+      - tests/motionbricks-*.ts
+      - scripts/capture-tps-recovery-handoff-audit.mjs
+      - scripts/capture-tps-attack-action-handoff-audit.mjs
+      - .github/workflows/motionbricks-handoff-webgl.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: motionbricks-handoff-webgl-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate handoff math and combat contract
+        run: node --import tsx --test tests/motionbricks-*.test.ts tests/combat-motion-handoff.test.ts
+      - name: Build production WebGL preview
+        run: npm run build
+      - name: Start preview
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-motionbricks-server.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-motionbricks-server.log
+          exit 1
+      - name: Exercise real WebGL recovery and attack-to-action transitions
+        run: |
+          mkdir -p artifacts/motionbricks-handoff
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "${CHROMEWEBDRIVER:-}" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then
+            DRIVER="$CHROMEWEBDRIVER/chromedriver"
+          fi
+          test -n "$DRIVER"
+          export WEBDRIVER_BIN="$DRIVER"
+          export AUDIT_URL="http://127.0.0.1:3000/"
+          export TPS_AUDIT_DIR="artifacts/motionbricks-handoff"
+          node scripts/capture-tps-recovery-handoff-audit.mjs
+          node scripts/capture-tps-attack-action-handoff-audit.mjs
+          test -s artifacts/motionbricks-handoff/tps-recovery-handoff.json
+          test -s artifacts/motionbricks-handoff/tps-attack-action-handoff.json
+      - name: Preserve game server logs
+        if: always()
+        run: |
+          mkdir -p artifacts/motionbricks-handoff
+          if [ -f /tmp/poly-fighter-motionbricks-server.log ]; then
+            cp /tmp/poly-fighter-motionbricks-server.log artifacts/motionbricks-handoff/server.log
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motionbricks-handoff-webgl
+          path: artifacts/motionbricks-handoff
+          if-no-files-found: warn
+          retention-days: 14

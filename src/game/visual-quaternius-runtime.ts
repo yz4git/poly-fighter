@@ -14,6 +14,7 @@ import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
+import { planAdaptiveMotionHandoff, MOTIONBRICKS_ADAPTIVE_HANDOFF_VERSION } from "./motionbricks-adaptive-handoff";
 import { sampleAuthoredTargetWindow, TARGET_LOOKAHEAD_SECONDS } from "./motionbricks-authored-target-window";
 import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
 import { isTpsRangeAttack } from "./tps-range-attack";
@@ -102,6 +103,7 @@ type QuaterniusRuntime = {
   landingEnd: number;
   transitionAge: number;
   transitionDuration: number;
+  transitionAdaptivePending: boolean;
   handoffMode: CombatMotionHandoffMode;
   transitionPose: Map<string, InertialTransitionSample>;
   poseHistory: Map<string, InertialPoseSample>;
@@ -650,6 +652,7 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   }
   runtime.handoffMode = handoff.mode;
   runtime.transitionDuration = handoff.duration;
+  runtime.transitionAdaptivePending = runtime.transitionPose.size > 0;
   runtime.host.userData.combatMotionHandoffMode = handoff.mode;
   runtime.host.userData.combatMotionHandoffDuration = handoff.duration;
   runtime.host.userData.combatMotionHandoffVelocityCarry = handoff.velocityCarry;
@@ -777,6 +780,19 @@ function synchronizeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, 
     action.setEffectiveTimeScale(0);
     action.time = clip.duration * phase;
     runtime.mixer.update(0);
+  }
+  // Measure the actual destination pose after the current animation was
+  // sampled at its gameplay-authoritative tick. Change visual blending only.
+  if (runtime.transitionAdaptivePending) {
+    const planned = planAdaptiveMotionHandoff(
+      runtime.handoffMode, runtime.transitionDuration, runtime.transitionPose, runtime.bones,
+    );
+    runtime.transitionDuration = planned.duration;
+    runtime.transitionAdaptivePending = false;
+    runtime.host.userData.combatMotionHandoffDuration = planned.duration;
+    runtime.host.userData.motionbricksAdaptiveHandoffVersion = MOTIONBRICKS_ADAPTIVE_HANDOFF_VERSION;
+    runtime.host.userData.motionbricksAdaptiveSeverity = planned.severity;
+    runtime.host.userData.motionbricksAdaptiveEvaluatedBones = planned.evaluatedBones;
   }
   const authoredContactWeight = fighter.state === "ATTACK"
     ? Number(runtime.host.userData.combatMotionContactWeight ?? 0)
@@ -948,7 +964,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
       lastPosition: null, motionX: 0, motionZ: 1, gaitPhase: 0,
       lastYaw: null, turnRate: 0, lastState: "", lastStateTicks: 0,
       stateDuration: 1, clock: 0, landingEnd: 0,
-      transitionAge: 1, transitionDuration: .05, handoffMode: "GENERAL", transitionPose: new Map(), poseHistory: new Map(),
+      transitionAge: 1, transitionDuration: .05, transitionAdaptivePending: false, handoffMode: "GENERAL", transitionPose: new Map(), poseHistory: new Map(),
       plantedFeet: { l: null, r: null }, finalTime: -1,
       bodyType: resources.bodyType,
       modelUrl: resources.modelUrl,
@@ -1037,6 +1053,9 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   );
   fighter.visual.root.userData.combatMotionHandoffMode = runtime.handoffMode;
   fighter.visual.root.userData.combatMotionHandoffDuration = runtime.transitionDuration;
+  fighter.visual.root.userData.motionbricksAdaptiveHandoffVersion = MOTIONBRICKS_ADAPTIVE_HANDOFF_VERSION;
+  fighter.visual.root.userData.motionbricksAdaptiveSeverity = Number(runtime.host.userData.motionbricksAdaptiveSeverity ?? 0);
+  fighter.visual.root.userData.motionbricksAdaptiveEvaluatedBones = Number(runtime.host.userData.motionbricksAdaptiveEvaluatedBones ?? 0);
   fighter.visual.root.userData.kimodoInertialTransitionActive = Boolean(
     runtime.host.userData.kimodoInertialTransitionActive,
   );

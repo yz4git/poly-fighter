@@ -1083,7 +1083,12 @@ export function updateQuaterniusModelSkin(fighter: FighterRuntime, timeSeconds: 
   // leaving authored strike end-effectors and deterministic gameplay untouched.
   const correctionsEnabled = motionCorrectionsEnabled();
   if (correctionsEnabled) {
-    applyKimodoMotionConditioning({ model: runtime.model, bones: runtime.bones }, fighter, delta);
+    // Using the motion-clock delta (not wall/render delta) also freezes foot
+    // contacts and pelvis conditioning throughout authored hitstop.
+    applyKimodoMotionConditioning(
+      { model: runtime.model, bones: runtime.bones }, fighter, motionDelta,
+      fighter.state === "ATTACK" ? Number(runtime.host.userData.combatMotionContactWeight ?? 0) : 0,
+    );
   }
   // New clips already contain an anatomical guard. The legacy assistance toggle
   // remains meaningful only for an independently missing optional clip pack.

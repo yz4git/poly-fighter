@@ -48,6 +48,7 @@ export type TpsCameraFraming = {
   flankLaneShift: number;
   impactReadabilityFactor: number;
   authoredContactReadabilityFactor: number;
+  closePunchDollyFactor: number;
   kickContactReadabilityFactor: number;
   frontKickReadabilityFactor: number;
   lowKickReadabilityFactor: number;
@@ -82,6 +83,14 @@ export function computeTpsCameraFraming(input: TpsCameraFramingInput): TpsCamera
     0,
     1,
   );
+  // At point-blank range, a mild camera dolly separates both torso silhouettes
+  // in screen space without moving the visual mesh away from its hitbox/feet.
+  // 0.24 of the camera-to-target ray is the measured 90px jab threshold at
+  // 1536x706; choose a 0.34*closeFactor budget to preserve margin while the
+  // damped camera catches up. Never activate for distant attacks or kicks.
+  const closePunchDollyFactor = ["jab", "straight", "bodyBlow"].includes(input.attackMoveId ?? "")
+    ? Math.min(.34, authoredContactReadabilityFactor * .34)
+    : 0;
   const kickContactReadabilityFactor = authoredContactReadabilityFactor * (
     input.attackMoveId && ["kick", "lowKick", "risingKick", "dashKick"].includes(input.attackMoveId) ? 1 : 0
   );
@@ -139,6 +148,7 @@ export function computeTpsCameraFraming(input: TpsCameraFramingInput): TpsCamera
     flankLaneShift,
     impactReadabilityFactor,
     authoredContactReadabilityFactor,
+    closePunchDollyFactor,
     kickContactReadabilityFactor,
     frontKickReadabilityFactor,
     lowKickReadabilityFactor,

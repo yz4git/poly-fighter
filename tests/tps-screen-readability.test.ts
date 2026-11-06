@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { tpsComboCameraEnergy, tpsDecorativeHitLane } from "../src/game/tps-screen-readability";
 import { tpsClosePunchProfile, TPS_CLOSE_PUNCH_LANE_VERSION } from "../src/game/tps-close-punch-lane";
+import { computeTpsCameraFraming } from "../src/game/tps-camera-profile";
 import { TpsCinematicImpactSpectacle } from "../src/game/tps-cinematic-impact-spectacle";
 import type { HitEvent, MoveDefinition } from "../src/game/types";
 
@@ -69,4 +70,34 @@ test("near-contact punch silhouette uses bounded and distinct lead/rear screen l
     assert.ok(profile.yaw > 0 && profile.yaw < .10);
     assert.ok(profile.roll >= 0 && profile.roll <= .020);
   }
+});
+
+test("camera dolly opens close jab/straight/bodyblow only, without affecting kicks or neutral", () => {
+  const base = {
+    fightDistance: 1.14,
+    aspect: 1536 / 706,
+    playerPerfectEvadeTicks: 0,
+    playerFlankWindowTicks: 0,
+    playerFlankAttackTicks: 0,
+    flankWindowTicks: 32,
+    playerEvadeSign: 0,
+    maxHitStop: 0,
+    attackMoveId: "jab" as string | null,
+    authoredContactWeight: 1,
+    dramaPhase: "NORMAL",
+    dramaIntensity: 0,
+  };
+  const jab = computeTpsCameraFraming(base);
+  assert.ok(jab.closePunchDollyFactor > .25 && jab.closePunchDollyFactor <= .34);
+  for (const attackMoveId of ["straight", "bodyBlow"]) {
+    const plan = computeTpsCameraFraming({ ...base, attackMoveId });
+    assert.equal(plan.closePunchDollyFactor, jab.closePunchDollyFactor);
+  }
+  for (const attackMoveId of ["kick", "lowKick", "rangeComet", null]) {
+    assert.equal(computeTpsCameraFraming({ ...base, attackMoveId }).closePunchDollyFactor, 0);
+  }
+  assert.equal(computeTpsCameraFraming({ ...base, authoredContactWeight: 0 }).closePunchDollyFactor, 0);
+  assert.equal(computeTpsCameraFraming({ ...base, fightDistance: 3 }).closePunchDollyFactor, 0);
+  const half = computeTpsCameraFraming({ ...base, authoredContactWeight: .5 });
+  assert.ok(half.closePunchDollyFactor > 0 && half.closePunchDollyFactor < jab.closePunchDollyFactor);
 });

@@ -170,6 +170,7 @@ async function captureMove(sessionId, moveId) {
     return {
       moveId,
       cameraDollyProbes,
+      cameraDollyFactor: Number(game.camera.userData.tpsClosePunchDollyFactor ?? 0),
       factor: Number(data.tpsClosePunchLane ?? 0),
       laneX: Number(data.tpsClosePunchLaneX ?? 0),
       yaw: Number(data.tpsClosePunchLaneYaw ?? 0),
@@ -195,6 +196,7 @@ function assertMove(result, moveId) {
   if (result.moveId !== moveId || result.laneMove !== moveId || result.state !== 'ATTACK') throw new Error(`${moveId} did not stay on the audited attack frame: ${JSON.stringify(result)}`);
   if (!(result.factor > 0.20) || !(Math.abs(result.laneX) > 0.004) || !(Math.abs(result.yaw) > 0.008)) throw new Error(`${moveId} close punch lane did not open enough: ${JSON.stringify(result)}`);
   if (!(result.distance < 1.92)) throw new Error(`${moveId} was not tested at close range: ${JSON.stringify(result)}`);
+  if (!(result.cameraDollyFactor > .23 && result.cameraDollyFactor <= .34)) throw new Error(`${moveId} camera did not use a bounded contact dolly: ${JSON.stringify(result)}`);
   if (!(result.chestGapPx >= 90)) throw new Error(`${moveId} chest screen lanes still collapse below the 90px readability floor: ${JSON.stringify(result)}`);
   if (!(result.simulationDrift <= 1e-6)) throw new Error(`${moveId} presentation changed simulation position: ${JSON.stringify(result)}`);
   if (moveId === 'bodyBlow' && !(result.bodyBlowLevelChange > 0.1)) throw new Error(`bodyBlow lost its existing level-change layer: ${JSON.stringify(result)}`);

@@ -567,6 +567,10 @@ try {
   const torsoPostures = Object.fromEntries(
     Object.entries(results).map(([moveId, result]) => [moveId, torsoPosture(result.points, neutral.points)]),
   );
+  // Print every actual rendered skeletal ratio BEFORE the first strict
+  // assertion. One malformed move must never hide the other failure modes
+  // behind repeated multi-minute CI reruns. Do not relax the thresholds.
+  console.log("MOTION_TORSO_AUDIT=" + JSON.stringify(torsoPostures));
   for (const moveId of ["jab", "straight", "bodyBlow", "backfist", "power", "kick", "lowKick", "risingKick", "throw", "counter"]) {
     const posture = torsoPostures[moveId];
     if (!posture || posture.leanRatio > 0.52 || posture.chestLeanRatio > 0.42 || posture.neckLeanRatio > 0.48 || posture.heightRetention < 0.68) {

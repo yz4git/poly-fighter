@@ -938,6 +938,7 @@ try {
       fighter.knockdownTicks = 0;
       fighter.health = 100;
       fighter.state = 'IDLE';
+      fighter.grounded = true;
       const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
       fighter.input = { ...neutral };
       fighter.previousInput = { ...neutral };
@@ -951,7 +952,15 @@ try {
     game.__neutralMashAttackCount = 0;
     game.__neutralMashLastBase = null;
     game.__mashBufferTicks = 0;
+    game.__rangeAttackSerial = 0;
+    game.__comboRoute = undefined;
+    game.playerFlankWindowTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerInterceptTicks = 0;
+    game.playerReversalTicks = 0;
+    game.airCombo = null;
     game.p1.visual.root.userData.tpsComboLinkState = null;
+    game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); game.p2.state = 'IDLE'; };
     game.press('punch', 'tps-whiff-1');
     game.step();
@@ -963,11 +972,31 @@ try {
     let queued = false;
     let chainedMove = null;
     let transitionStep = -1;
+    let sidestepFrames = 0;
+    let firstMoveConnected = false;
+    // The next opener resets tpsRangeTravelTotal. Track the previous move's
+    // maximum while it is still active, not after the branch switches.
+    let firstMoveTravel = Number(game.p1.visual.root.userData.tpsRangeTravelTotal ?? 0);
+    const firstStartup = game.p1.currentMove?.startup ?? 0;
+    const firstRecovery = game.p1.currentMove?.recovery ?? 0;
+    // A recovery tap must fit within the 20-frame prebuffer. A rangeComet has
+    // 29 recovery frames, so pressing on recovery frame 1 would EXPIRE before
+    // the fighter can legally act. Eight frames from the end is unambiguous.
+    const tapTick = firstTotal - Math.min(8, Math.max(3, firstRecovery - 2));
     for (let index = 0; index < 150; index += 1) {
-      // Tap in recovery, within the bounded 20-frame input buffer. One early
-      // tap at startup is not promised to persist across all 31 kick frames.
+      // The committed rangeComet starts aimed at the stationary opponent.
+      // Then a genuine fixed-tick lateral STEP moves the defender off that
+      // already locked lane during startup. No teleport, fake contact, or
+      // visual-only avoidance: the same collision geometry decides the miss.
+      if (game.p1.state === 'ATTACK' && game.p1.currentMove?.id === firstMove
+        && game.p1.moveTick >= Math.max(1, firstStartup - 17)
+        && game.p1.moveTick < firstStartup && sidestepFrames < 16) {
+        game.p2.position.x += .11;
+        sidestepFrames += 1;
+      }
       if (!queued && game.p1.state === 'ATTACK'
-        && game.p1.moveTick >= game.p1.currentMove.startup + game.p1.currentMove.active + 1) {
+        && game.p1.currentMove?.id === firstMove
+        && game.p1.moveTick >= tapTick) {
         game.press('punch', 'tps-whiff-2');
         game.step();
         game.release('punch', 'tps-whiff-2');
@@ -975,19 +1004,31 @@ try {
       } else {
         game.step();
       }
+      if (game.p1.currentMove?.id === firstMove) {
+        firstMoveTravel = Math.max(firstMoveTravel,
+          Number(game.p1.visual.root.userData.tpsRangeTravelTotal ?? 0));
+        if (game.p1.hitTargets.has(game.p2.id)) firstMoveConnected = true;
+      }
       const current = game.p1.currentMove?.id ?? null;
       if (current && firstMove && current !== firstMove) {
         chainedMove = current; transitionStep = index + 1; break;
       }
     }
     return { firstMove, chainedMove, firstTotal, transitionStep,
+      tapTick, sidestepFrames, sidestepDistance: game.p2.position.x,
+      firstMoveConnected, travel: firstMoveTravel,
       comboStage: game.playerComboStage, p2Health: game.p2.health,
       linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null };
   `);
   // On a true miss, the next tap is held until full recovery and starts a
   // fresh opener, NOT a confirmed/canceled combo. This is the intended
   // responsive no-hit ATTACK-only behaviour for iPhone mash play.
-  if (!whiffComboProbe.chainedMove || whiffComboProbe.chainedMove === whiffComboProbe.firstMove
+  if (whiffComboProbe.firstMove !== 'rangeComet'
+    || whiffComboProbe.sidestepFrames !== 16
+    || !(whiffComboProbe.sidestepDistance > 1.7)
+    || !(whiffComboProbe.travel > 0.5)
+    || whiffComboProbe.firstMoveConnected
+    || !whiffComboProbe.chainedMove || whiffComboProbe.chainedMove === whiffComboProbe.firstMove
     || whiffComboProbe.transitionStep < whiffComboProbe.firstTotal - 2
     || whiffComboProbe.comboStage !== 1 || whiffComboProbe.p2Health !== 100
     || whiffComboProbe.linkState === 'LINKED') {

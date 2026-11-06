@@ -974,6 +974,9 @@ try {
     let transitionStep = -1;
     let sidestepFrames = 0;
     let firstMoveConnected = false;
+    // The next opener resets tpsRangeTravelTotal. Track the previous move's
+    // maximum while it is still active, not after the branch switches.
+    let firstMoveTravel = Number(game.p1.visual.root.userData.tpsRangeTravelTotal ?? 0);
     const firstStartup = game.p1.currentMove?.startup ?? 0;
     const firstRecovery = game.p1.currentMove?.recovery ?? 0;
     // A recovery tap must fit within the 20-frame prebuffer. A rangeComet has
@@ -1001,8 +1004,11 @@ try {
       } else {
         game.step();
       }
-      if (game.p1.currentMove?.id === firstMove
-        && game.p1.hitTargets.has(game.p2.id)) firstMoveConnected = true;
+      if (game.p1.currentMove?.id === firstMove) {
+        firstMoveTravel = Math.max(firstMoveTravel,
+          Number(game.p1.visual.root.userData.tpsRangeTravelTotal ?? 0));
+        if (game.p1.hitTargets.has(game.p2.id)) firstMoveConnected = true;
+      }
       const current = game.p1.currentMove?.id ?? null;
       if (current && firstMove && current !== firstMove) {
         chainedMove = current; transitionStep = index + 1; break;
@@ -1010,7 +1016,7 @@ try {
     }
     return { firstMove, chainedMove, firstTotal, transitionStep,
       tapTick, sidestepFrames, sidestepDistance: game.p2.position.x,
-      firstMoveConnected, travel: game.p1.visual.root.userData.tpsRangeTravelTotal ?? 0,
+      firstMoveConnected, travel: firstMoveTravel,
       comboStage: game.playerComboStage, p2Health: game.p2.health,
       linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null };
   `);

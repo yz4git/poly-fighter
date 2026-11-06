@@ -97,6 +97,13 @@ async function captureMove(sessionId, moveId) {
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); if (game.p2.state !== 'HIT') game.p2.state = 'IDLE'; };
     const simulationBefore = game.p1.position.clone();
 
+    // The audit positions both fighters at point-blank range instantaneously.
+    // This is a *teleport*, unlike actual combat footwork. Let the production
+    // shoulder camera settle on this close matchup BEFORE measuring a jab.
+    // Preserve the 90px contract at the authored contact frame, not an
+    // unrelated transitional camera frame inherited from the prior round.
+    for (let frame = 0; frame < 54; frame += 1) game.updateCamera(1 / 60);
+
     if (!game.p1.beginMove(moveId)) return { error: 'begin-move-failed', moveId };
     const move = game.p1.currentMove;
     game.p1.moveTick = move.startup;

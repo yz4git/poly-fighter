@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { tpsComboCameraEnergy, tpsDecorativeHitLane } from "../src/game/tps-screen-readability";
+import { tpsClosePunchProfile, TPS_CLOSE_PUNCH_LANE_VERSION } from "../src/game/tps-close-punch-lane";
 import { TpsCinematicImpactSpectacle } from "../src/game/tps-cinematic-impact-spectacle";
 import type { HitEvent, MoveDefinition } from "../src/game/types";
 
@@ -50,4 +51,22 @@ test("camera escalation occurs only at close range after an earned linked combo"
   assert.ok(late.back < early.back && late.back >= -.17);
   assert.ok(late.lift > early.lift && late.lift <= .055);
   for (const x of Object.values(tpsComboCameraEnergy(99, 99))) assert.ok(Number.isFinite(x));
+});
+
+
+test("near-contact punch silhouette uses bounded and distinct lead/rear screen lanes", () => {
+  assert.equal(TPS_CLOSE_PUNCH_LANE_VERSION, "SHOULDER_CONTACT_LANE_V2");
+  const jab = tpsClosePunchProfile("jab");
+  const cross = tpsClosePunchProfile("straight");
+  const low = tpsClosePunchProfile("bodyBlow");
+  assert.ok(jab.lane >= .045 && jab.lane <= .055, "jab gets readable separation without excessive model drift");
+  assert.ok(cross.lane >= .045 && cross.lane <= .055);
+  assert.ok(low.lane <= .05);
+  assert.equal(jab.direction, 1);
+  assert.equal(cross.direction, -1, "cross uses opposite screen lane from lead-hand jab");
+  assert.equal(low.direction, 1);
+  for (const profile of [jab, cross, low]) {
+    assert.ok(profile.yaw > 0 && profile.yaw < .10);
+    assert.ok(profile.roll >= 0 && profile.roll <= .020);
+  }
 });

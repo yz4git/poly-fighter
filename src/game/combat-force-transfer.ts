@@ -16,10 +16,10 @@ export function stylePunchKinetics(
   return {
     ...pose,
     comSide: pose.comSide * dna.lateral,
-    comForward: pose.comForward * dna.hipLead,
+    comForward: pose.comForward * dna.hipLead - pose.recovery * (dna.recoil - 1) * .0015,
     comVertical: pose.comVertical * (0.82 + dna.hipLead * .18),
     pelvisYaw: pose.pelvisYaw * dna.hipLead,
-    torsoYaw: pose.torsoYaw * dna.chestFollow,
+    torsoYaw: pose.torsoYaw * dna.chestFollow - pose.recovery * (dna.recoil - 1) * .009,
     torsoPitch: pose.torsoPitch * (.72 + dna.chestFollow * .28),
     chestRoll: pose.chestRoll * dna.lateral,
     strikeClavicleYaw: pose.strikeClavicleYaw * dna.chestFollow,

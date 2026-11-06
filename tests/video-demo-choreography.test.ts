@@ -139,3 +139,22 @@ test("side kick's grounded shoulder counterbalance does not pitch head first at 
     assert.ok(Math.abs(first.roll! - second.roll!) < .035, "kick roll changes smoothly");
   }
 });
+
+test("turning high kick preserves a full revolution and apex foot while keeping chest upright", () => {
+  const rising = sampleVideoChoreography("risingKick", .5, .09);
+  const side = sampleVideoChoreography("kick", .5, .09);
+  assert.ok(rising.rightFoot![1] > .8 && rising.rightFoot![1] > side.rightFoot![1] + .15);
+  assert.equal(rising.spin, -Math.PI*2, "full turn remains exactly one revolution");
+  assert.ok(rising.pitch! <= .11 && Math.abs(rising.roll!) <= .12);
+  for (const fighter of ["KAIRO", "SERA", "VANTA", "AXION"]) {
+    const hero = sampleHeroVideoChoreography("risingKick", .5, .09, fighter);
+    assert.ok(hero.rightFoot![1] >= .82, fighter+" still strikes high");
+    assert.equal(hero.spin, -Math.PI*2, fighter+" spin timing is unchanged");
+    for (const u of [.3,.42,.5,.58,.68]) {
+      const a = sampleHeroVideoChoreography("risingKick", u, .09, fighter);
+      const b = sampleHeroVideoChoreography("risingKick", u + .01, .09, fighter);
+      assert.ok(Math.abs(a.pitch! - b.pitch!) < .03, "spin pitch interpolation remains smooth");
+      assert.ok(Math.abs(a.roll! - b.roll!) < .04, "spin roll interpolation remains smooth");
+    }
+  }
+});

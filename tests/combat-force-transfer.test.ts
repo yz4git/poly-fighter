@@ -141,6 +141,19 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
     assert.ok(kick.foot_l.position.distanceTo(ready.foot_l.position) < height*.10,
       `${body} sidekick lost the support foot`);
 
+    const spinning = pose("CM_Video_SpinKick", .50);
+    const spinPelvis = spinning.pelvis.position;
+    const spinLean = (item: THREE.Vector3) => Math.hypot(item.x - spinPelvis.x, item.z - spinPelvis.z)
+      / Math.max(1e-6, Math.abs(item.y - spinPelvis.y));
+    assert.ok(spinLean(spinning.spine_03.position) <= .42,
+      `${body} spinning kick chest exceeded the torso cone: ${spinLean(spinning.spine_03.position).toFixed(4)}`);
+    assert.ok(spinLean(spinning.neck_01.position) <= .48,
+      `${body} spinning kick neck exceeded the torso cone: ${spinLean(spinning.neck_01.position).toFixed(4)}`);
+    assert.ok(spinning.foot_r.position.y > ready.foot_r.position.y + height * .45,
+      `${body} spinning kick failed to raise the striking boot`);
+    assert.ok(spinning.foot_l.position.distanceTo(ready.foot_l.position) < height * .10,
+      `${body} spinning kick detached the supporting foot`);
+
     for (const clipName of ["BF_Jab_L", "BF_Cross_R", "BF_BodyBlow_L", "BF_Backfist_R", "BF_FrontKick_R", "BF_LowKick_L"]) {
       let previous = pose(clipName, 0);
       for (let frame = 1; frame <= 60; frame++) {

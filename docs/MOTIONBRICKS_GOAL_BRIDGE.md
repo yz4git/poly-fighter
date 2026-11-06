@@ -1,4 +1,4 @@
-# MotionBricks-inspired goal bridge v4 (iPhone-safe)
+# MotionBricks-inspired goal bridge v5 (iPhone-safe)
 
 Reference: https://github.com/NVlabs/motionbricks
 
@@ -14,6 +14,13 @@ treats the exact sampled incoming authored clip as the target pose.
   short (1/30 second) future pose. It reads cached Three.js track interpolants
   without seeking the mixer, downloading weights, altering the move clock or
   advancing hitstop. Opposing future directions are rejected.
+- **Ground-up force transfer is baked into both fighters' imported motion clips**.
+  Punches now use their distinct KAIRO/SERA Motion DNA for hip load, torso
+  follow-through, lateral balance and guard retention. Kicks finally apply their
+  existing authored torso/shoulder impulse *after* the pelvis and legs are solved,
+  protecting the striking boot and the planted foot. Punch rear-foot pivots
+  rotate around the ball of the foot rather than sliding the toe around the ankle.
+  No extra render-frame solver, neural inference or changes to the hit clock.
 - A **support-foot-aware contact policy** uses the authored striking limb to anchor
   only the opposite planted foot during grounded attack windup. It releases the
   anchor before the exact contact window, does not counteract committed gap
@@ -42,7 +49,7 @@ treats the exact sampled incoming authored clip as the target pose.
   `motionbricksAdaptiveHandoffVersion`, `motionbricksAdaptiveSeverity`,
   `motionbricksAdaptiveEvaluatedBones`, `motionbricksContactPolicyVersion`,
   `motionbricksContactMode`, `motionbricksSupportFoot`,
-  `motionbricksFootPelvisCorrection`.
+  `motionbricksFootPelvisCorrection`, `motionbricksFullBodyForceVersion`.
 
 ## Scope / limitations
 

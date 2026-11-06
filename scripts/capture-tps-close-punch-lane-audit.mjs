@@ -145,8 +145,31 @@ async function captureMove(sessionId, moveId) {
       host.position.x = original;
       host.updateMatrixWorld(true);
     }
+    // Evaluate camera-only ways to open silhouettes. This diagnostic uses
+    // actual perspective projection at the same hit frame and restores the
+    // camera before writing screenshots or changing gameplay.
+    const cameraDollyProbes = [];
+    if (chest && enemyChest && game.cameraLookTarget) {
+      const originalPosition = game.camera.position.clone();
+      const originalRotation = game.camera.quaternion.clone();
+      const gaze = game.cameraLookTarget.clone();
+      for (const fraction of [0, .10, .18, .24, .30, .36]) {
+        game.camera.position.copy(originalPosition).lerp(gaze, fraction);
+        game.camera.lookAt(gaze);
+        game.camera.updateMatrixWorld(true);
+        cameraDollyProbes.push({
+          fraction,
+          chestGapPx: Math.abs(project(chest).x - project(enemyChest).x),
+          chestY: project(chest).y,
+        });
+      }
+      game.camera.position.copy(originalPosition);
+      game.camera.quaternion.copy(originalRotation);
+      game.camera.updateMatrixWorld(true);
+    }
     return {
       moveId,
+      cameraDollyProbes,
       factor: Number(data.tpsClosePunchLane ?? 0),
       laneX: Number(data.tpsClosePunchLaneX ?? 0),
       yaw: Number(data.tpsClosePunchLaneYaw ?? 0),

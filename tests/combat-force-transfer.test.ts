@@ -128,6 +128,19 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
         `${body} palm lost its two-foot base`);
     }
 
+    const kick = pose("CM_Video_SideKick", .50);
+    const kickPelvis = kick.pelvis.position;
+    const kickLean = (item: THREE.Vector3) => Math.hypot(item.x - kickPelvis.x, item.z - kickPelvis.z)
+      / Math.max(1e-6, Math.abs(item.y - kickPelvis.y));
+    assert.ok(kickLean(kick.spine_03.position) <= .42,
+      `${body} sidekick chest exceeded the torso cone: ${kickLean(kick.spine_03.position).toFixed(4)}`);
+    assert.ok(kickLean(kick.neck_01.position) <= .48,
+      `${body} sidekick neck exceeded the torso cone: ${kickLean(kick.neck_01.position).toFixed(4)}`);
+    assert.ok(kick.foot_r.position.y > ready.foot_r.position.y + height*.30,
+      `${body} sidekick lost its real extended raised boot`);
+    assert.ok(kick.foot_l.position.distanceTo(ready.foot_l.position) < height*.10,
+      `${body} sidekick lost the support foot`);
+
     for (const clipName of ["BF_Jab_L", "BF_Cross_R", "BF_BodyBlow_L", "BF_Backfist_R", "BF_FrontKick_R", "BF_LowKick_L"]) {
       let previous = pose(clipName, 0);
       for (let frame = 1; frame <= 60; frame++) {

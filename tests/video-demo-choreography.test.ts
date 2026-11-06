@@ -121,3 +121,21 @@ test("backfist contact keeps an upright torso without flattening the striking ha
   assert.deepEqual(sampleHeroVideoChoreography("backfist", 0, .09, "KAIRO"), neutral);
   assert.deepEqual(sampleHeroVideoChoreography("backfist", 1, .09, "KAIRO"), sampleVideoChoreography("backfist", 1, .09));
 });
+
+test("side kick's grounded shoulder counterbalance does not pitch head first at target", () => {
+  const base = sampleVideoChoreography("kick", .5, .09);
+  const sera = sampleHeroVideoChoreography("kick", .5, .09, "SERA");
+  assert.ok(base.yaw! < -1.0, "rotated planted hip still powers the kick");
+  assert.ok(base.pitch! <= .12 && base.chest! <= .08, "raised leg must not force chest into a forward fold");
+  assert.ok(Math.abs(base.roll!) <= .12, "kick support hip must not take upper body into a side dive");
+  assert.deepEqual(base.rightFoot, [.16,.61,.68], "the heel contact target stays exactly authored");
+  assert.deepEqual(base.leftFoot, [-.10,0,.05], "the planted support leg retains its target");
+  assert.ok(sera.rightFoot![1] > base.rightFoot![1], "SERA still earns a higher, agile kick");
+  assert.ok(sera.roll! < base.roll!, "SERA retains its lateral accent");
+  for (const t of [.28,.39,.50,.58,.70,.81]) {
+    const first = sampleVideoChoreography("kick", t, .09);
+    const second = sampleVideoChoreography("kick", t+.01, .09);
+    assert.ok(Math.abs(first.pitch! - second.pitch!) < .032, "kick pitch changes smoothly");
+    assert.ok(Math.abs(first.roll! - second.roll!) < .035, "kick roll changes smoothly");
+  }
+});

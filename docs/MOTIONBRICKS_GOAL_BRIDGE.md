@@ -1,4 +1,4 @@
-# MotionBricks-inspired goal bridge v3 (iPhone-safe)
+# MotionBricks-inspired goal bridge v4 (iPhone-safe)
 
 Reference: https://github.com/NVlabs/motionbricks
 
@@ -14,6 +14,11 @@ treats the exact sampled incoming authored clip as the target pose.
   short (1/30 second) future pose. It reads cached Three.js track interpolants
   without seeking the mixer, downloading weights, altering the move clock or
   advancing hitstop. Opposing future directions are rejected.
+- A **support-foot-aware contact policy** uses the authored striking limb to anchor
+  only the opposite planted foot during grounded attack windup. It releases the
+  anchor before the exact contact window, does not counteract committed gap
+  closer travel, and defers all WALK contact planting to the existing gait IK.
+  Hitstop passes zero motion time so post-conditioning cannot animate a freeze.
 - An **adaptive transition budget** measures the pelvis, torso and limb-pose
   difference at the exact incoming sampled frame. Close poses blend faster;
   larger changes blend slightly longer. Hit/block/landing interruption timings
@@ -35,7 +40,9 @@ treats the exact sampled incoming authored clip as the target pose.
   `motionbricksGoalRejectedChannels`, `motionbricksContextFrames`,
   `motionbricksGoalWindowChannels`, `motionbricksGoalLookaheadSeconds`,
   `motionbricksAdaptiveHandoffVersion`, `motionbricksAdaptiveSeverity`,
-  `motionbricksAdaptiveEvaluatedBones`.
+  `motionbricksAdaptiveEvaluatedBones`, `motionbricksContactPolicyVersion`,
+  `motionbricksContactMode`, `motionbricksSupportFoot`,
+  `motionbricksFootPelvisCorrection`.
 
 ## Scope / limitations
 

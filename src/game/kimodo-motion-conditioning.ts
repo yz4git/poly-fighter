@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import { planMotionContactPolicy, MOTIONBRICKS_CONTACT_POLICY_VERSION } from "./motionbricks-contact-policy";
 
 /**
  * Lightweight runtime conditioning inspired by NVIDIA Kimodo's public motion
@@ -95,6 +96,7 @@ export function applyKimodoMotionConditioning(
   rig: KimodoConditioningRig,
   fighter: FighterRuntime,
   deltaSeconds: number,
+  authoredContactWeight = 0,
 ): void {
   const root = fighter.visual.root;
   const pelvis = rig.bones.get("pelvis");
@@ -129,10 +131,13 @@ export function applyKimodoMotionConditioning(
     return;
   }
 
-  const airborneVisualMove = moveId === "dashKick";
-  const canGround = fighter.grounded
-    && !airborneVisualMove
-    && !["JUMP", "KNOCKDOWN", "THROW", "KO", "RING_OUT"].includes(fighter.state);
+  const policy = planMotionContactPolicy({
+    state: fighter.state,
+    moveId,
+    visualContact: fighter.currentMove?.visualContact,
+    contactWeight: authoredContactWeight,
+    grounded: fighter.grounded,
+  });
   const floor = Math.min(footWorld.l.y, footWorld.r.y);
 
   const driftCorrection = new THREE.Vector3();
@@ -144,7 +149,10 @@ export function applyKimodoMotionConditioning(
     const horizontalSpeed = previous
       ? Math.hypot(current.x - previous.x, current.z - previous.z) / Math.max(1e-4, deltaSeconds)
       : Number.POSITIVE_INFINITY;
-    foot.contact = canGround ? contactWeight(current.y - floor, horizontalSpeed, scale) : 0;
+    // The punch/kick support foot is known from the authored contact limb.
+    // During committed forward travel and exact ACTIVE contact both weights
+    // drop to zero; the corrective pelvis translation cannot fight the clip.
+    foot.contact = contactWeight(current.y - floor, horizontalSpeed, scale) * (side === "l" ? policy.left : policy.right);
 
     if (foot.contact >= 0.72) {
       if (!foot.anchor || foot.anchor.distanceTo(current) > 0.095 * scale) foot.anchor = current.clone();
@@ -179,7 +187,7 @@ export function applyKimodoMotionConditioning(
 
   // Foot cleanup is allowed during grounded attacks, but at reduced strength so
   // support-foot skating is suppressed without flattening authored hip drive.
-  const footStrength = fighter.state === "ATTACK" ? 0.55 : fighter.state === "WALK" ? 0.82 : 0.95;
+  const footStrength = fighter.state === "ATTACK" ? 0.75 : 0.95;
   boundedHorizontal(driftCorrection, 0.032 * scale).multiplyScalar(footStrength);
   const combined = rootCorrection.add(driftCorrection);
   boundedHorizontal(combined, 0.036 * scale);
@@ -209,6 +217,10 @@ export function applyKimodoMotionConditioning(
     state.bodyRotations.clear();
   }
 
+  root.userData.motionbricksContactPolicyVersion = MOTIONBRICKS_CONTACT_POLICY_VERSION;
+  root.userData.motionbricksContactMode = policy.mode;
+  root.userData.motionbricksSupportFoot = policy.support ?? "NONE";
+  root.userData.motionbricksFootPelvisCorrection = driftCorrection.length();
   root.userData.kimodoConditioningVersion = KIMODO_MOTION_CONDITIONING_VERSION;
   root.userData.kimodoConditioningMode = "ROOT_BODY_FOOT_CONTACT";
   root.userData.kimodoRootCorrection = combined.length();

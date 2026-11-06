@@ -9,7 +9,7 @@
  * 5.3-7.3 pivot / rotating high kick; 7.5-8.5 finish punch and reset.
  * Preserve one attack per actual game move: never auto-hit through an animation.
  */
-export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V2" as const;
+export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V3" as const;
 export const VIDEO_STRIKE_CLIPS = {
   jab: "CM_Video_Jab",
   backfist: "CM_Video_Palm",
@@ -53,9 +53,14 @@ const KEYS: Record<VideoStrike, readonly VideoKey[]> = {
       leftHand: [-.08,.81,.14], rightHand: [.14,.72,.06], highGuard: 1 } },
     { t: .39, pose: { drop: -.05, side: -.045, forward: .035, yaw: .28, roll: -.11,
       rightHand: [.10,.76,.28], leftHand: [-.085,.82,.14] } },
-    { t: .50, pose: { forward: .105, drop: -.04, yaw: .99, roll: -.25,
-      chest: .21, rightHand: [.34,.79,.64], leftHand: [-.16,.84,.045], highGuard: .80 } },
-    { t: .58, pose: { forward: .11, drop: -.045, yaw: 1.02, roll: -.24,
+    // Preserve the 3D palm strike's hand extension and large hip turn, but
+    // prevent simultaneous forward chest fold + lateral waist roll at contact.
+    // The former combination placed the neck beyond the approved torso cone
+    // in the real TPS WebGL skeleton audit. Hip turn supplies the power; the
+    // thorax stays tall enough to distinguish a palm from a diving tackle.
+    { t: .50, pose: { forward: .105, drop: -.04, yaw: .99, roll: -.15,
+      chest: .105, rightHand: [.34,.79,.64], leftHand: [-.16,.84,.045], highGuard: .80 } },
+    { t: .58, pose: { forward: .11, drop: -.045, yaw: 1.02, roll: -.14,
       rightHand: [.40,.76,.60], leftHand: [-.16,.84,.05], highGuard: .75 } },
     { t: .70, pose: { forward: .063, yaw: .68, roll: -.16, rightHand: [.31,.76,.45],
       leftHand: [-.10,.79,.12] } },
@@ -170,7 +175,10 @@ export function sampleHeroVideoChoreography(
       drop: (original.drop ?? 0) - weight * .027,
       forward: (original.forward ?? 0) + weight * .027,
       yaw: (original.yaw ?? 0) * (1 + weight * .19),
-      chest: (original.chest ?? 0) + weight * .058,
+      // Keep KAIRO's heavy hip/ground drive, but a backfist is not a
+      // head-first body blow. Limit its extra thoracic hinge, leaving its
+      // authored fist positions and pelvis rotation entirely unchanged.
+      chest: (original.chest ?? 0) + weight * (move === "backfist" ? .022 : .058),
     };
   }
   if (hero === "SERA" && (move === "kick" || move === "risingKick")) {

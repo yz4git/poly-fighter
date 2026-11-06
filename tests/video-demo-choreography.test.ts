@@ -9,7 +9,7 @@ import {
 } from "../src/game/video-demo-choreography";
 
 test("reference video choreography: four distinguishable game-ready clips", () => {
-  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V2");
+  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V3");
   assert.equal(new Set(Object.values(VIDEO_STRIKE_CLIPS)).size,4);
   for (const name of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const start=sampleVideoChoreography(name,0,.09);
@@ -96,4 +96,28 @@ test("hero animations use more visible windup, longer strike extension and disti
       assert.ok(values.every(Number.isFinite), name + " nonfinite pose at phase " + u);
     }
   }
+});
+
+
+test("backfist contact keeps an upright torso without flattening the striking hand or hip turn", () => {
+  const neutral = sampleVideoChoreography("backfist", 0, .09);
+  const impact = sampleVideoChoreography("backfist", .50, .09);
+  const follow = sampleVideoChoreography("backfist", .58, .09);
+  const kairo = sampleHeroVideoChoreography("backfist", .50, .09, "KAIRO");
+  assert.ok(impact.yaw! >= .95, "distinct rotated palm strike retains its hip drive");
+  assert.ok(impact.chest! <= .12, "thorax is no longer bent into the fist path");
+  assert.ok(Math.abs(impact.roll!) <= .16, "pelvis no longer dives sideways at contact");
+  assert.ok(kairo.chest! < .14, "POWER fighter receives heavy impact without extra neck fold");
+  assert.ok(kairo.forward! > impact.forward!, "KAIRO retains a genuine forward weight shift");
+  assert.deepEqual(kairo.rightHand, impact.rightHand, "the authored glove path must never be relaxed");
+  assert.ok(impact.rightHand![2] > neutral.rightHand![2] + .45, "the actual palm reaches forward");
+  assert.ok(follow.rightHand![0] > impact.rightHand![0], "palm follows through across center");
+  for (const phase of [.40,.45,.50,.55,.58,.65]) {
+    const a = sampleHeroVideoChoreography("backfist", phase, .09, "KAIRO");
+    const b = sampleHeroVideoChoreography("backfist", phase + .01, .09, "KAIRO");
+    assert.ok(Math.abs(a.chest! - b.chest!) < .027, "torso pitch interpolation must remain smooth");
+    assert.ok(Math.abs(a.roll! - b.roll!) < .035, "waist return must remain smooth");
+  }
+  assert.deepEqual(sampleHeroVideoChoreography("backfist", 0, .09, "KAIRO"), neutral);
+  assert.deepEqual(sampleHeroVideoChoreography("backfist", 1, .09, "KAIRO"), sampleVideoChoreography("backfist", 1, .09));
 });

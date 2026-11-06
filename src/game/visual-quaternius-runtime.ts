@@ -14,6 +14,7 @@ import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
 import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
+import { MOTIONBRICKS_FULLBODY_FORCE_VERSION } from "./combat-force-transfer";
 import { planAdaptiveMotionHandoff, MOTIONBRICKS_ADAPTIVE_HANDOFF_VERSION } from "./motionbricks-adaptive-handoff";
 import { sampleAuthoredTargetWindow, TARGET_LOOKAHEAD_SECONDS } from "./motionbricks-authored-target-window";
 import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
@@ -947,6 +948,7 @@ export function installQuaterniusModelSkin(visual: FighterVisual, definition: Fi
     visual.root.userData.expandedMotionClipCount = expandedClips.size;
     visual.root.userData.combatMotionClipCount = combatClips.size + expandedClips.size + cinematicClips.size + rangeClips.size;
     visual.root.userData.combatMotionVersion = COMBAT_MOTION_VERSION;
+    visual.root.userData.motionbricksFullBodyForceVersion = MOTIONBRICKS_FULLBODY_FORCE_VERSION;
     visual.root.userData.videoChoreographyVersion = VIDEO_CHOREOGRAPHY_VERSION;
     visual.root.userData.videoChoreographyClipCount = Object.values(VIDEO_STRIKE_CLIPS)
       .filter(name => retargetedClips.has(name)).length;

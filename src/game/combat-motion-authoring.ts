@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } from "./combat-motion-clock";
 import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./combat-punch-kinetics";
+import { sampleKickKineticChain } from "./combat-kinetic-chain";
+import { motionDnaForFighter } from "./motion-profile";
+import { ballAnchoredStancePivot, stylePunchKinetics, styleKickUpperBody, MOTIONBRICKS_FULLBODY_FORCE_VERSION } from "./combat-force-transfer";
 import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
 import { authoredMotionEvents } from "./combat-motion-timeline";
@@ -73,7 +76,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${definition.name}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -119,6 +122,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   const handedness = -Math.sign(footStart.l.x - footStart.r.x) || 1;
   const centerZ = (footStart.l.z + footStart.r.z) / 2;
   const speed = definition.archetype === "SPEED";
+  const motionDna = motionDnaForFighter(definition);
   const width = speed ? .084 : .103;
   mixer.stopAllAction();
 
@@ -504,6 +508,18 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const supportKnee = nodes.get(`calf_${support}`)!;
     solveCombatLimb(supportThigh, supportKnee, supportFoot, ballAnchor.add(ankleOffset), reference.knee);
     worldRotation(supportFoot, pivot.multiply(reference.rotation));
+    // The kick's existing trajectory and two-bone leg contacts are now fixed.
+    // Add its pre-authored, contact-clocked torso impulse only ABOVE the hips,
+    // so the ball-anchored support ankle and striking boot remain untouched.
+    const force = styleKickUpperBody(sampleKickKineticChain(name, u), motionDna);
+    rotate("spine_02", Y, force.torsoYaw * handedness * .44);
+    rotate("spine_03", Y, force.torsoYaw * handedness * .56);
+    rotate("spine_02", X, force.torsoPitch * .42);
+    rotate("spine_03", X, force.torsoPitch * .58);
+    rotate("spine_03", Z, force.chestRoll * handedness);
+    rotate("clavicle_l", Y, force.shoulderYaw * handedness);
+    rotate("clavicle_r", Y, -force.shoulderYaw * handedness * .72);
+    rotate("Head", Y, force.headCounterYaw * handedness);
     rig.updateMatrixWorld(true);
   }
 
@@ -519,7 +535,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
    */
   function bakePunchKinetics(name: string, u: number): void {
     if (!isKineticPunch(name) || u <= 0 || u >= 1) return;
-    const motion = samplePunchKineticChain(name, u);
+    const motion = stylePunchKinetics(samplePunchKineticChain(name, u), motionDna);
     const striking = punchStrikeSide(name)!;
     const guarding = striking === "l" ? "r" : "l";
     rig.updateMatrixWorld(true);
@@ -565,15 +581,20 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       const thigh = nodes.get(`thigh_${suffix}`)!;
       const calf = nodes.get(`calf_${suffix}`)!;
       const foot = nodes.get(`foot_${suffix}`)!;
-      const target = foot.getWorldPosition(new THREE.Vector3());
-      const slide = target.clone().sub(reference.position).setY(0).clampLength(0, height * .035);
-      target.copy(reference.position).add(slide);
-      const kneePole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
-      solveCombatLimb(thigh, calf, foot, target, kneePole);
+      // Keep any animator-intended foot repositioning small and release it
+      // toward contact. The planted ball stays nearly fixed while the rear
+      // heel turns under hip torque: no ankle-centred toe skating.
+      const observed = foot.getWorldPosition(new THREE.Vector3());
+      const slide = observed.sub(reference.position).setY(0)
+        .clampLength(0, height * .012)
+        .multiplyScalar(1 - motion.drive * .75);
       const pivot = suffix === striking ? motion.stancePivot : -motion.stancePivot * .14;
-      worldRotation(foot, new THREE.Quaternion()
-        .setFromAxisAngle(Y, pivot * handedness)
-        .multiply(reference.rotation));
+      const plant = ballAnchoredStancePivot(
+        reference.position, reference.ball, reference.rotation, pivot * handedness, slide,
+      );
+      const kneePole = calf.getWorldPosition(new THREE.Vector3()).lerp(reference.knee, .30);
+      solveCombatLimb(thigh, calf, foot, plant.ankle, kneePole);
+      worldRotation(foot, plant.rotation);
     }
     rig.updateMatrixWorld(true);
 

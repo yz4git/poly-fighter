@@ -123,6 +123,21 @@ async function captureMove(sessionId, moveId) {
     const chestScreen = project(chest);
     const enemyChestScreen = project(enemyChest);
     const chestGapPx = chestScreen && enemyChestScreen ? Math.abs(chestScreen.x - enemyChestScreen.x) : 0;
+    const chestLocalOffsets = [];
+    if (chest && enemyChest && host) {
+      const original = host.position.x;
+      for (const offset of [-.25, -.15, -.08, 0, .08, .15, .25]) {
+        host.position.x = original + offset;
+        host.updateMatrixWorld(true);
+        chestLocalOffsets.push({
+          offset,
+          chestGapPx: Math.abs(project(chest).x - project(enemyChest).x),
+          chestX: project(chest).x,
+        });
+      }
+      host.position.x = original;
+      host.updateMatrixWorld(true);
+    }
     return {
       moveId,
       factor: Number(data.tpsClosePunchLane ?? 0),
@@ -133,6 +148,10 @@ async function captureMove(sessionId, moveId) {
       distance: Number(data.tpsClosePunchLaneDistance ?? 0),
       bodyBlowLevelChange: Number(data.tpsBodyBlowLevelChange ?? 0),
       chestGapPx,
+      chestScreen,
+      enemyChestScreen,
+      chestLocalOffsets,
+      cameraPosition: game.camera.position.toArray(),
       simulationDrift: game.p1.position.distanceTo(simulationBefore),
       state: game.p1.state,
       moveTick: game.p1.moveTick,
@@ -186,11 +205,12 @@ try {
   const results = {};
   for (const moveId of ['jab', 'straight', 'bodyBlow']) {
     const result = await captureMove(sessionId, moveId);
-    assertMove(result, moveId);
     results[moveId] = result;
     await screenshot(sessionId, `${outputDir}/tps-close-punch-${moveId.toLowerCase()}.png`);
   }
   await writeFile(`${outputDir}/tps-close-punch-lane.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
+  console.log('CLOSE_PUNCH_SCREEN_PROBES=' + JSON.stringify(results));
+  for (const [moveId, result] of Object.entries(results)) assertMove(result, moveId);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, 'DELETE').catch(() => {});
   driverProcess.kill('SIGTERM');

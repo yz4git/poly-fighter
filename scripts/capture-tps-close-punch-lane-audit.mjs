@@ -97,6 +97,13 @@ async function captureMove(sessionId, moveId) {
     game.updateEnemy = () => { game.p2.velocity.set(0, 0, 0); if (game.p2.state !== 'HIT') game.p2.state = 'IDLE'; };
     const simulationBefore = game.p1.position.clone();
 
+    // The audit positions both fighters at point-blank range instantaneously.
+    // This is a *teleport*, unlike actual combat footwork. Let the production
+    // shoulder camera settle on this close matchup BEFORE measuring a jab.
+    // Preserve the 90px contract at the authored contact frame, not an
+    // unrelated transitional camera frame inherited from the prior round.
+    for (let frame = 0; frame < 54; frame += 1) game.updateCamera(1 / 60);
+
     if (!game.p1.beginMove(moveId)) return { error: 'begin-move-failed', moveId };
     const move = game.p1.currentMove;
     game.p1.moveTick = move.startup;
@@ -123,8 +130,47 @@ async function captureMove(sessionId, moveId) {
     const chestScreen = project(chest);
     const enemyChestScreen = project(enemyChest);
     const chestGapPx = chestScreen && enemyChestScreen ? Math.abs(chestScreen.x - enemyChestScreen.x) : 0;
+    const chestLocalOffsets = [];
+    if (chest && enemyChest && host) {
+      const original = host.position.x;
+      for (const offset of [-.25, -.15, -.08, 0, .08, .15, .25]) {
+        host.position.x = original + offset;
+        host.updateMatrixWorld(true);
+        chestLocalOffsets.push({
+          offset,
+          chestGapPx: Math.abs(project(chest).x - project(enemyChest).x),
+          chestX: project(chest).x,
+        });
+      }
+      host.position.x = original;
+      host.updateMatrixWorld(true);
+    }
+    // Evaluate camera-only ways to open silhouettes. This diagnostic uses
+    // actual perspective projection at the same hit frame and restores the
+    // camera before writing screenshots or changing gameplay.
+    const cameraDollyProbes = [];
+    if (chest && enemyChest && game.cameraLookTarget) {
+      const originalPosition = game.camera.position.clone();
+      const originalRotation = game.camera.quaternion.clone();
+      const gaze = game.cameraLookTarget.clone();
+      for (const fraction of [0, .10, .18, .24, .30, .36]) {
+        game.camera.position.copy(originalPosition).lerp(gaze, fraction);
+        game.camera.lookAt(gaze);
+        game.camera.updateMatrixWorld(true);
+        cameraDollyProbes.push({
+          fraction,
+          chestGapPx: Math.abs(project(chest).x - project(enemyChest).x),
+          chestY: project(chest).y,
+        });
+      }
+      game.camera.position.copy(originalPosition);
+      game.camera.quaternion.copy(originalRotation);
+      game.camera.updateMatrixWorld(true);
+    }
     return {
       moveId,
+      cameraDollyProbes,
+      cameraDollyFactor: Number(game.camera.userData.tpsClosePunchDollyFactor ?? 0),
       factor: Number(data.tpsClosePunchLane ?? 0),
       laneX: Number(data.tpsClosePunchLaneX ?? 0),
       yaw: Number(data.tpsClosePunchLaneYaw ?? 0),
@@ -133,6 +179,10 @@ async function captureMove(sessionId, moveId) {
       distance: Number(data.tpsClosePunchLaneDistance ?? 0),
       bodyBlowLevelChange: Number(data.tpsBodyBlowLevelChange ?? 0),
       chestGapPx,
+      chestScreen,
+      enemyChestScreen,
+      chestLocalOffsets,
+      cameraPosition: game.camera.position.toArray(),
       simulationDrift: game.p1.position.distanceTo(simulationBefore),
       state: game.p1.state,
       moveTick: game.p1.moveTick,
@@ -146,6 +196,7 @@ function assertMove(result, moveId) {
   if (result.moveId !== moveId || result.laneMove !== moveId || result.state !== 'ATTACK') throw new Error(`${moveId} did not stay on the audited attack frame: ${JSON.stringify(result)}`);
   if (!(result.factor > 0.20) || !(Math.abs(result.laneX) > 0.004) || !(Math.abs(result.yaw) > 0.008)) throw new Error(`${moveId} close punch lane did not open enough: ${JSON.stringify(result)}`);
   if (!(result.distance < 1.92)) throw new Error(`${moveId} was not tested at close range: ${JSON.stringify(result)}`);
+  if (!(result.cameraDollyFactor > .23 && result.cameraDollyFactor <= .34)) throw new Error(`${moveId} camera did not use a bounded contact dolly: ${JSON.stringify(result)}`);
   if (!(result.chestGapPx >= 90)) throw new Error(`${moveId} chest screen lanes still collapse below the 90px readability floor: ${JSON.stringify(result)}`);
   if (!(result.simulationDrift <= 1e-6)) throw new Error(`${moveId} presentation changed simulation position: ${JSON.stringify(result)}`);
   if (moveId === 'bodyBlow' && !(result.bodyBlowLevelChange > 0.1)) throw new Error(`bodyBlow lost its existing level-change layer: ${JSON.stringify(result)}`);
@@ -186,11 +237,12 @@ try {
   const results = {};
   for (const moveId of ['jab', 'straight', 'bodyBlow']) {
     const result = await captureMove(sessionId, moveId);
-    assertMove(result, moveId);
     results[moveId] = result;
     await screenshot(sessionId, `${outputDir}/tps-close-punch-${moveId.toLowerCase()}.png`);
   }
   await writeFile(`${outputDir}/tps-close-punch-lane.json`, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
+  console.log('CLOSE_PUNCH_SCREEN_PROBES=' + JSON.stringify(results));
+  for (const [moveId, result] of Object.entries(results)) assertMove(result, moveId);
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, 'DELETE').catch(() => {});
   driverProcess.kill('SIGTERM');

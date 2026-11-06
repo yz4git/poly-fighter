@@ -51,13 +51,18 @@ function removeClosePunchLane(fighter: FighterRuntime, state: ClosePunchLaneStat
   fighter.visual.root.userData.tpsClosePunchLane = 0;
 }
 
-function moveProfile(moveId: string): ClosePunchProfile {
-  if (moveId === "bodyBlow") return { lane: 0.044, yaw: 0.090, roll: 0.020, direction: 1 };
-  // The rear-hand cross rotates through the target line in the opposite screen
-  // direction from the lead-hand punches. Mirror the host lane for this move;
-  // merely increasing the lead-hand sign makes the two chests overlap more.
-  if (moveId === "straight") return { lane: 0.044, yaw: 0.085, roll: 0.012, direction: -1 };
-  return { lane: 0.032, yaw: 0.062, roll: 0.010, direction: 1 };
+export const TPS_CLOSE_PUNCH_LANE_VERSION = "SHOULDER_CONTACT_LANE_V2";
+
+/**
+ * The closer lead jab must expose both torsos without detaching its glove from
+ * the authored Blender path. A bounded contact-time shoulder opening, not a
+ * camera snap or an arena-root displacement, provides the extra silhouette.
+ */
+export function tpsClosePunchProfile(moveId: string): ClosePunchProfile {
+  if (moveId === "bodyBlow") return { lane: .044, yaw: .090, roll: .020, direction: 1 };
+  // The rear-hand cross enters from the opposite screen side.
+  if (moveId === "straight") return { lane: .050, yaw: .092, roll: .012, direction: -1 };
+  return { lane: .050, yaw: .078, roll: .012, direction: 1 };
 }
 
 function applyClosePunchLane(
@@ -101,12 +106,12 @@ function applyClosePunchLane(
   if (!host) return;
 
   const side = contactSide(move.visualContact);
-  const profile = moveProfile(move.id);
+  const profile = tpsClosePunchProfile(move.id);
   const scale = root.scale.x;
   const screenDirection = profile.direction;
 
   // Keep the authored fist/elbow path authoritative. Move only the imported
-  // presentation host a few centimetres across the target line and open the
+  // presentation host a bounded distance across the target line and open the
   // torso slightly away from the striking side. From the shoulder camera this
   // leaves a readable strip of background between the two chests while the fist
   // still crosses that strip into contact. Runtime position, reach, hitboxes and
@@ -120,6 +125,7 @@ function applyClosePunchLane(
   host.rotation.y += state.rotationY;
   host.rotation.z += state.rotationZ;
 
+  root.userData.tpsClosePunchLaneVersion = TPS_CLOSE_PUNCH_LANE_VERSION;
   root.userData.tpsClosePunchLane = factor;
   root.userData.tpsClosePunchLaneMove = move.id;
   root.userData.tpsClosePunchLaneDistance = distance;

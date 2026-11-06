@@ -1775,6 +1775,7 @@ export class TpsFightGame {
     const data = this.camera.userData;
     data.tpsCloseReadabilityFactor = framing.closeFactor;
     data.tpsAuthoredContactReadabilityFactor = framing.authoredContactReadabilityFactor;
+    data.tpsClosePunchDollyFactor = framing.closePunchDollyFactor;
     data.tpsKickContactReadabilityFactor = framing.kickContactReadabilityFactor;
     data.tpsFrontKickReadabilityFactor = framing.frontKickReadabilityFactor;
     data.tpsLowKickReadabilityFactor = framing.lowKickReadabilityFactor;
@@ -1798,6 +1799,14 @@ export class TpsFightGame {
       .addScaledVector(forward, -framing.backDistance)
       .addScaledVector(right, framing.desiredShoulderOffset)
       .add(new THREE.Vector3(0, framing.cameraHeight + (this.airCombo ? Math.min(.46, this.p2.position.y * .16) : 0), 0));
+
+    // Contact-only dolly: advance the *desired camera* along its own sightline,
+    // then use the normal critically damped position smoothing and per-frame
+    // travel clamp. This enlarges the face/torso silhouette without separating
+    // the fighter model from planted feet, damage geometry, or arena markers.
+    if (framing.closePunchDollyFactor > 0) {
+      this.cameraDesired.lerp(this.cameraTarget, framing.closePunchDollyFactor);
+    }
 
     // Keep distant navigation responsive, but add inertia as the fight closes.
     ease(this.camera.position, this.cameraDesired, framing.cameraPositionRate, delta);

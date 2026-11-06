@@ -8,6 +8,8 @@ import {
   TPS_AUTO_RANGE_THRESHOLD, TPS_LONG_RANGE_THRESHOLD, TPS_RANGE_ATTACK_IDS,
   TPS_RANGE_STOP_DISTANCE, chooseTpsRangeAttack, isTpsRangeAttack, tpsRangeAdvance,
 } from "../src/game/tps-range-attack";
+import { evaluateTpsStrikeGeometry, tpsCanConfirmCombo } from "../src/game/tps-fight-fundamentals";
+import { TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap } from "../src/game/tps-mash-variety";
 import {
   TPS_RANGE_CHOREOGRAPHY_VERSION, TPS_RANGE_CLIP_SOURCES,
   tpsRangeClipName, bakeTpsRangeClip, createTpsRangeMotionLibrary,
@@ -130,4 +132,46 @@ test("each range strike plays a real authored three-beat full-body animation", (
     assert.equal(sampled.stage, "ACTIVE");
     assert.equal(sampled.phase, .5, "contact is timed to the actual attack window");
   }
+});
+
+
+test("rangeComet whiff requires real lateral departure before active contact; a late tap remains buffered until full recovery", () => {
+  const move = PLAYABLE_FIGHTERS[0].moves.rangeComet;
+  const total = move.startup + move.active + move.recovery;
+  const tapTick = total - Math.min(8, Math.max(3, move.recovery - 2));
+  assert.ok(move.recovery > TPS_MASH_BUFFER_TICKS,
+    "early recovery taps cannot be expected to survive the entire long comet recovery");
+  assert.ok(total - tapTick < TPS_MASH_BUFFER_TICKS,
+    "late recovery tap must remain valid until the first strike actually ends");
+  assert.equal(tpsCanBufferMashTap(move, tapTick), true);
+  assert.equal(tpsCanConfirmCombo(false, false), false);
+
+  const opponent = { x: 0, z: -2.1 };
+  const attacker = { x: 0, z: 3.1 };
+  let sideSteps = 0;
+  let travel = 0;
+  for (let tick = 0; tick < move.startup; tick += 1) {
+    if (tick >= Math.max(1, move.startup - 17) && sideSteps < 16) {
+      opponent.x += .11;
+      sideSteps++;
+    }
+    const dx = opponent.x - attacker.x, dz = opponent.z - attacker.z;
+    const advance = tpsRangeAdvance({
+      moveId: move.id, moveTick: tick, startup: move.startup,
+      distance: Math.hypot(dx,dz), longitudinal: -dz, lateral: Math.abs(dx),
+      hitStop: 0, connected: false,
+    });
+    attacker.z -= advance;
+    travel += advance;
+  }
+  const geometry = evaluateTpsStrikeGeometry({
+    move, attackerX: attacker.x, attackerZ: attacker.z,
+    defenderX: opponent.x, defenderZ: opponent.z, forwardX: 0, forwardZ: -1,
+  });
+  assert.equal(sideSteps, 16);
+  assert.ok(travel > .5, "range attack actually advances before the sidestep");
+  assert.ok(geometry.lateral > geometry.halfWidth, "defender has physically left the committed strike lane");
+  assert.equal(geometry.connected, false, "a late sidestep makes the real range attack whiff");
+  assert.ok(Math.hypot(opponent.x - attacker.x, opponent.z - attacker.z) > TPS_AUTO_RANGE_THRESHOLD,
+    "a new, different gap-closing opener is available after full recovery");
 });

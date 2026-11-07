@@ -147,7 +147,8 @@ test("telegraph intent pose transitions remain smoothly sampled and bounded at 6
     const cue=tpsTelegraphPoseCue({phase:"REACT",moveId:"power",plannedFeint:true,
       telegraphProgress:tick/19,orbitSign:1,feintReadTicks:0});
     assert.ok(cue.intensity>=prev-1e-6,"feint should load smoothly until actual side exit");
-    assert.ok(Math.abs(cue.roll)<.12 && Math.abs(cue.yaw)<.17);
+    assert.ok(Math.abs(cue.roll)<.207 && Math.abs(cue.yaw)<.31,
+      "stronger iPhone-readable body tell remains within natural joint limits");
     prev=cue.intensity;
   }
 });

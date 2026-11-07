@@ -59,14 +59,14 @@ export function tpsTelegraphPoseCue(input: {
     if (release <= 1e-4) return empty;
     return {
       ...empty, phase: "FEINT_EXIT", intensity: release,
-      anticipation: release, hostX: side * .044 * release,
-      hostY: -.012 * release, hostZ: -.010 * release,
-      pitch: .012 * release, yaw: side * .168 * release,
-      roll: -side * .137 * release,
-      spinePitch: .052 * release, spineYaw: side * .108 * release,
-      leftArmPitch: .050 * release, rightArmPitch: -.034 * release,
-      leftThighRoll: -side * .078 * release,
-      rightThighRoll: side * .085 * release,
+      anticipation: release, hostX: side * .064 * release,
+      hostY: -.012 * release, hostZ: -.020 * release,
+      pitch: .022 * release, yaw: side * .240 * release,
+      roll: -side * .195 * release,
+      spinePitch: .085 * release, spineYaw: side * .160 * release,
+      leftArmPitch: .095 * release, rightArmPitch: -.095 * release,
+      leftThighRoll: -side * .125 * release,
+      rightThighRoll: side * .138 * release,
     };
   }
   const windup = (input.phase === "LOAD" || input.phase === "REACT")
@@ -98,17 +98,17 @@ export function tpsTelegraphPoseCue(input: {
     anticipation,
     side,
     // Local-space body offsets only, applied to the imported 3D rig.
-    hostX: side * (feint ? .039 * split : .003 * split),
+    hostX: side * (feint ? .070 * split : .003 * split),
     hostY: -.014 * shared - (feint ? .006 : .003) * split,
-    hostZ: feint ? -.012 * split : .024 * split,
-    pitch: -.035 * shared + (feint ? .050 : -.090) * split,
-    yaw: side * (.026 * shared + (feint ? .135 : .014) * split),
-    roll: -side * (feint ? .116 : .010) * split,
-    spinePitch: -.025 * shared + (feint ? .078 : -.070) * split,
-    spineYaw: side * (feint ? .112 : .025) * split,
-    leftArmPitch: -.025 * shared + (feint ? .053 : -.064) * split,
-    rightArmPitch: -.025 * shared + (feint ? -.042 : -.112) * split,
-    leftThighRoll: feint ? -side * .080 * split : .010 * split,
-    rightThighRoll: feint ? side * .087 * split : -.010 * split,
+    hostZ: feint ? -.020 * split : .043 * split,
+    pitch: -.035 * shared + (feint ? .070 : -.135) * split,
+    yaw: side * (.026 * shared + (feint ? .275 : .014) * split),
+    roll: -side * (feint ? .205 : .010) * split,
+    spinePitch: -.025 * shared + (feint ? .115 : -.115) * split,
+    spineYaw: side * (feint ? .195 : .025) * split,
+    leftArmPitch: -.025 * shared + (feint ? .120 : -.090) * split,
+    rightArmPitch: -.025 * shared + (feint ? -.120 : -.185) * split,
+    leftThighRoll: feint ? -side * .140 * split : .015 * split,
+    rightThighRoll: feint ? side * .160 * split : -.015 * split,
   };
 }

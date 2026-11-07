@@ -1172,6 +1172,176 @@ try {
   if (!(flankProbe.screenSeparation >= 75)) throw new Error(`TPS flank camera still lets the player obscure the target: ${JSON.stringify(flankProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-flank.png`);
 
+  // A real blocked jab must change the next *neutral* opener's attack level,
+  // not chain through blockstun or pretend the guard was a clean hit.
+  const reactiveGuardProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      fighter.grounded = true;
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.91);
+    game.p2.position.set(0, 0, -0.61);
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
+    game.playerAttackQueued = false;
+    game.__comboRoute = undefined;
+    game.__comboQueuedBranch = undefined;
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
+    game.__neutralMashLastOutcome = undefined;
+    game.__mashBufferTicks = 0;
+    game.playerFlankWindowTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerInterceptTicks = 0;
+    game.playerReversalTicks = 0;
+    game.airCombo = null;
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (!['KO', 'KNOCKDOWN', 'HIT', 'BLOCK_STUN'].includes(game.p2.state)) game.p2.state = 'GUARD';
+      game.p2.updatePhysics(1 / 60);
+    };
+    game.p2.state = 'GUARD';
+    game.press('punch', 'tps-adaptive-guard-first');
+    game.step();
+    const first = game.p1.currentMove?.id ?? null;
+    game.release('punch', 'tps-adaptive-guard-first');
+    let blockedObserved = false;
+    let firstCompletedAt = -1;
+    for (let frame=0; frame < 130; frame++) {
+      game.step();
+      if (game.p1.hitTargets.has(game.p2.id) && game.p1.visual.root.userData.tpsCleanHitConfirmed !== true)
+        blockedObserved = true;
+      if (game.p1.state !== 'ATTACK' && !game.p1.currentMove) { firstCompletedAt = frame; break; }
+    }
+    const lastOutcome = game.__neutralMashLastOutcome ?? null;
+    const noDamage = game.p2.health === 100;
+    game.press('punch', 'tps-adaptive-guard-response');
+    game.step();
+    const second = game.p1.currentMove?.id ?? null;
+    const response = game.p1.visual.root.userData.tpsMashPressureResponse ?? null;
+    const stage = game.playerComboStage;
+    const cue = game.combatBeat ?? null;
+    game.release('punch', 'tps-adaptive-guard-response');
+    game.updateCamera(1/60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    return { first, blockedObserved, firstCompletedAt, lastOutcome, noDamage,
+      second, response, stage, linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null,
+      cue };
+  `);
+  if (reactiveGuardProbe.first !== 'jab' || !reactiveGuardProbe.blockedObserved
+    || reactiveGuardProbe.firstCompletedAt < 0 || !reactiveGuardProbe.noDamage
+    || reactiveGuardProbe.lastOutcome !== 'BLOCK'
+    || reactiveGuardProbe.second !== 'lowKick'
+    || reactiveGuardProbe.response !== 'LOW_SWITCH'
+    || reactiveGuardProbe.stage !== 1
+    || reactiveGuardProbe.linkState === 'LINKED') {
+    throw new Error(`TPS one-button reactive guard mix-up failed: ${JSON.stringify(reactiveGuardProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-reactive-guard-mixup.png`);
+
+  // Tap ATTACK+SIDE *before* the authored cancel point, then release the thumb.
+  // Even after multiple neutral mash phrases, the buffered SIDE must win over
+  // neutral phrase selection and route through the actual B branch on contact.
+  const bufferedDirectionProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    for (const fighter of [game.p1, game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0, 0, 0);
+      fighter.hitTargets.clear();
+      fighter.hitStop = 0;
+      fighter.hitStun = 0;
+      fighter.blockStun = 0;
+      fighter.knockdownTicks = 0;
+      fighter.health = 100;
+      fighter.state = 'IDLE';
+      fighter.grounded = true;
+      const neutral = { left: false, right: false, up: false, down: false, punch: false, kick: false, guard: false };
+      fighter.input = { ...neutral };
+      fighter.previousInput = { ...neutral };
+    }
+    game.p1.position.set(0, 0, 0.91);
+    game.p2.position.set(0, 0, -0.61);
+    game.playerComboStage = 1;
+    game.playerComboGraceTicks = 34;
+    game.playerAttackQueued = false;
+    game.__comboRoute = 'CLOSE_A';
+    game.__comboQueuedBranch = undefined;
+    game.__neutralMashPhrase = 2;
+    game.__neutralMashAttackCount = 7;
+    game.__neutralMashLastBase = 'jab';
+    game.__neutralMashLastOutcome = undefined;
+    game.__mashBufferTicks = 0;
+    game.playerFlankWindowTicks = 0;
+    game.playerPerfectEvadeTicks = 0;
+    game.playerInterceptTicks = 0;
+    game.playerReversalTicks = 0;
+    game.airCombo = null;
+    game.updateEnemy = () => { game.p2.velocity.set(0,0,0); game.p2.updatePhysics(1/60); };
+    game.p1.beginMove('jab');
+    const move = game.p1.currentMove;
+    game.p1.moveTick = move.startup;
+    game.resolveAttack(game.p1, game.p2, false);
+    const actualHit = game.p2.health < 100 && game.p1.hitTargets.has(game.p2.id);
+    game.p1.hitStop = 0;
+    game.p2.hitStop = 0;
+    const recoveryStart = move.startup + move.active;
+    const queueStart = Math.max(move.startup, recoveryStart - 2);
+    game.p1.moveTick = queueStart;
+    game.press('right', 'tps-buffered-side');
+    game.press('punch', 'tps-buffered-attack');
+    game.step();
+    const queuedAtTap = game.__comboQueuedBranch ?? null;
+    game.release('punch', 'tps-buffered-attack');
+    game.release('right', 'tps-buffered-side');
+    let nextMove = null;
+    let linkFrame = -1;
+    for (let frame=0; frame < 45; frame++) {
+      game.p1.hitStop = 0;
+      game.p2.hitStop = 0;
+      game.step();
+      const moveNow = game.p1.currentMove?.id ?? null;
+      if (moveNow && moveNow !== 'jab') { nextMove = moveNow; linkFrame = frame; break; }
+    }
+    game.updateCamera(1/60);
+    game.updateLockOn();
+    game.renderer.render(game.scene,game.camera);
+    return { actualHit, queuedAtTap, nextMove, nextBase: nextMove
+      ? game.p1.definition.moves[nextMove]?.motionBase ?? nextMove : null,
+      linkFrame, route: game.p1.visual.root.userData.tpsComboRoute ?? null,
+      linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null,
+      selectedMash: game.p1.visual.root.userData.tpsMashSelectedMove ?? null };
+  `);
+  if (!bufferedDirectionProbe.actualHit
+    || bufferedDirectionProbe.queuedAtTap !== 'SIDE'
+    || bufferedDirectionProbe.nextBase !== 'backfist'
+    || bufferedDirectionProbe.route !== 'CLOSE_B'
+    || bufferedDirectionProbe.linkState !== 'LINKED'
+    || bufferedDirectionProbe.selectedMash !== null
+    || bufferedDirectionProbe.linkFrame < 0) {
+    throw new Error(`TPS buffered side branch was stolen by neutral mashing: ${JSON.stringify(bufferedDirectionProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-buffered-side-branch.png`);
+
   await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -1192,7 +1362,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

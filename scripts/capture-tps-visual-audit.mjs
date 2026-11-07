@@ -1713,6 +1713,11 @@ try {
     g.enemyDirectorPendingMove=null;g.enemyDirectorDecision=null;
     g.enemyDirectorHoldTicks=0;g.enemyDirectorTelegraphTicks=0;
     g.enemyWhiffPunishCooldownTicks=0;g.enemyFeintPending=false;
+    // The prior V12 FEINT_EXIT replay leaves an honest 36-frame plant. The
+    // next, independent whiff scenario starts a fresh neutral exchange.
+    g.enemyFeintReadTicks=0;
+    g.p2.visual.root.userData.tpsCpuFeintReadTicks=0;
+    g.p2.visual.root.userData.tpsEnemyTelegraphFeintPlanned=false;
     g.p2.visual.root.userData.tpsCpuWhiffPunishSerial=0;
     // The initial attack commitment is aimed at the original centerline.
     g.updateEnemy=()=>{g.p2.state='IDLE';g.p2.velocity.set(0,0,0);g.p2.updatePhysics(1/60);};

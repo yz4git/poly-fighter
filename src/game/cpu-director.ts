@@ -1,4 +1,5 @@
-import type { InputFrame, FighterState } from "./types";
+import type { InputFrame, FighterState, HitLevel } from "./types";
+import { TpsCpuStrikeReader, type TpsCpuStrikeReadout } from "./tps-cpu-strike-read";
 import { EMPTY_INPUT, cloneInput } from "./types";
 
 export type CpuDifficulty = "EASY" | "NORMAL" | "HARD";
@@ -28,6 +29,9 @@ export interface CpuActorSnapshot {
   state: FighterState;
   moveId: string | null;
   movePower: number;
+  /** Rendered/current move evidence; absent in older shared CPU tests. */
+  moveTick?: number;
+  hitLevel?: HitLevel | null;
   isActive: boolean;
   grounded: boolean;
   x: number;
@@ -222,6 +226,11 @@ export class CpuFunDirector {
   private retaliation = 0;
   private pressure = 0;
   private recentAttacks: CpuIntent[] = [];
+  private readonly strikeReader = new TpsCpuStrikeReader();
+
+  getStrikeRead(): TpsCpuStrikeReadout {
+    return this.strikeReader.readout();
+  }
 
   constructor(private readonly difficulty: CpuDifficulty = "NORMAL", seed = 17) {
     this.profile = PROFILES[difficulty];
@@ -235,6 +244,12 @@ export class CpuFunDirector {
 
   observe(situation: CpuSituation): void {
     const { self, opponent, distance } = situation;
+    this.strikeReader.observe({
+      state: opponent.state,
+      moveId: opponent.moveId,
+      moveTick: opponent.moveTick,
+      hitLevel: opponent.hitLevel,
+    });
     const decay = 0.985;
     this.playerAttackHabit = clamp01(this.playerAttackHabit * decay + (opponent.state === "ATTACK" ? 0.025 : 0));
     this.playerGuardHabit = clamp01(this.playerGuardHabit * decay + (opponent.state === "GUARD" ? 0.030 : 0));
@@ -329,6 +344,11 @@ export class CpuFunDirector {
     const comebackMercy = clamp01(cpuLead * 0.78 + playerCritical);
     const threat = opponent.state === "ATTACK" && opponent.isActive && distance < 2.55;
     const playerRecovering = RECOVERY_STATES.has(opponent.state);
+    const observedRead = this.getStrikeRead();
+    const lowRead = observedRead.mode === "LOW_PATTERN"
+      ? observedRead.confidence * this.profile.adaptation : 0;
+    const upperRead = observedRead.mode === "UPPER_PATTERN"
+      ? observedRead.confidence * this.profile.adaptation : 0;
 
     if (!self.grounded && self.state !== "JUMP") {
       return this.decision("WAIT", "airborne-stability", comebackMercy);
@@ -349,8 +369,11 @@ export class CpuFunDirector {
     if (threat) {
       const reactionChance = this.profile.reaction * (1 - comebackMercy * 0.42);
       if (this.random() < reactionChance) {
-        const counterChance = (0.08 + this.playerAttackHabit * 0.30) * this.profile.adaptation;
-        const evadeChance = 0.20 + this.playerAdvanceHabit * 0.18;
+        // More evasion against previously SEEN low pressure, more possible
+        // counter-guards against repeated punches. Still a probability check
+        // AFTER the original difficulty-dependent reaction chance.
+        const counterChance = (0.08 + this.playerAttackHabit * 0.30) * this.profile.adaptation + upperRead * .10;
+        const evadeChance = 0.20 + this.playerAdvanceHabit * 0.18 + lowRead * .26;
         const roll = this.random();
         if (roll < counterChance && this.difficulty !== "EASY") {
           return this.decision("COUNTER", "read-player-attack", comebackMercy);
@@ -404,12 +427,12 @@ export class CpuFunDirector {
       ["LOW_KICK", (0.72 + this.playerAdvanceHabit * 0.42) * pressureBrake],
       ["RISING_KICK", (0.24 + crouchRead * 1.35 + cpuBehind * 0.28) * mercyAttackScale],
       ["THROW", (0.20 + guardRead * 1.70) * mercyAttackScale],
-      ["COUNTER", (0.18 + attackRead * 1.20 + this.retaliation * 0.42) * (1 - comebackMercy * 0.40)],
+      ["COUNTER", (0.18 + attackRead * 1.20 + upperRead * .82 + this.retaliation * 0.42) * (1 - comebackMercy * 0.40)],
       ["POWER", (0.24 + cpuBehind * 0.95 + this.retaliation * 0.55) * mercyAttackScale],
       ["WAIT", 0.42 + comebackMercy * 1.10 + (this.pressure >= 3 ? 0.75 : 0)],
-      ["RETREAT", 0.22 + comebackMercy * 0.72 + (this.pressure >= 3 ? 0.50 : 0)],
-      ["GUARD", 0.34 + attackRead * 0.48],
-      ["SIDESTEP", 0.22 + this.playerAdvanceHabit * 0.42],
+      ["RETREAT", 0.22 + comebackMercy * 0.72 + (this.pressure >= 3 ? 0.50 : 0) + lowRead * .52],
+      ["GUARD", 0.34 + attackRead * 0.48 + upperRead * 1.75],
+      ["SIDESTEP", 0.22 + this.playerAdvanceHabit * 0.42 + lowRead * 1.75],
     ];
 
     const intent = this.chooseWeighted(candidates.map(([candidate, weight]) => [
@@ -419,6 +442,8 @@ export class CpuFunDirector {
 
     let reason = "varied-close-range-exchange";
     if (comebackMercy > 0.45 && !isAttackIntent(intent)) reason = "player-comeback-window";
+    else if (lowRead > .25 && ["SIDESTEP","RETREAT"].includes(intent)) reason = "read-visible-low-pressure";
+    else if (upperRead > .25 && ["GUARD","COUNTER"].includes(intent)) reason = "read-visible-punch-pressure";
     else if ((intent === "THROW" || intent === "BODY_BLOW") && guardRead > 0.35) reason = "adapt-to-guard-without-spam";
     else if (intent === "RISING_KICK" && crouchRead > 0.35) reason = "adapt-to-crouch";
     else if (intent === "COUNTER" && attackRead > 0.35) reason = "adapt-to-attack-habit";

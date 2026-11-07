@@ -98,3 +98,34 @@ test("CPU low-guard reads require visual windup and are limited by difficulty", 
   assert.equal(tpsCpuReadLowGuard({defenderGuarding:false,move:slowLow,attackTick:99,difficulty:"HARD",exchangeTick:0}),false);
   assert.equal(tpsCpuReadLowGuard({defenderGuarding:true,move:FIGHTER_DEFINITIONS.red.moves.jab,attackTick:99,difficulty:"HARD",exchangeTick:0}),false);
 });
+
+
+test("learned low guard reads are earned by previous visible lows, not frame-zero input", () => {
+  const slowLow = FIGHTER_DEFINITIONS.red.moves.lowKick;
+  for (const difficulty of ["EASY","NORMAL","HARD"] as const) {
+    assert.equal(tpsCpuReadLowGuard({
+      defenderGuarding: true, move: slowLow, attackTick: 0,
+      difficulty, exchangeTick: 0, learnedLowRate: 1, learnedSamples: 8,
+    }), false, `${difficulty} must not know a fresh move at frame zero`);
+  }
+  for (const exchangeTick of [0,90,180]) {
+    const base = tpsCpuReadLowGuard({
+      defenderGuarding:true,move:slowLow,attackTick:8,
+      difficulty:"NORMAL",exchangeTick,
+    });
+    const adapted = tpsCpuReadLowGuard({
+      defenderGuarding:true,move:slowLow,attackTick:8,
+      difficulty:"NORMAL",exchangeTick,learnedLowRate:.75,learnedSamples:8,
+    });
+    assert.equal(base, false, "untrained normal guard still needs longer visual startup");
+    assert.equal(adapted, exchangeTick !== 180, "learned low pattern upgrades only two visible lanes");
+  }
+  assert.equal(tpsCpuReadLowGuard({
+    defenderGuarding:true,move:FIGHTER_DEFINITIONS.red.moves.straight,attackTick:40,
+    difficulty:"NORMAL",exchangeTick:0,learnedLowRate:1,learnedSamples:8,
+  }),false,"a learned low habit cannot duck a middle strike on its own");
+  assert.equal(tpsCpuReadLowGuard({
+    defenderGuarding:true,move:slowLow,attackTick:8,
+    difficulty:"EASY",exchangeTick:0,learnedLowRate:1,learnedSamples:8,
+  }),false, "easy CPU never acquires a cheat block");
+});

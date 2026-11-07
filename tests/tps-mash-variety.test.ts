@@ -4,6 +4,7 @@ import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import {
   chooseTpsNeutralMashMove, TPS_MASH_BUFFER_TICKS,
   TPS_MASH_PHRASE_COUNT, tpsCanBufferMashTap,
+  tpsBufferedMashDirection, tpsMashContactOutcome,
 } from "../src/game/tps-mash-variety";
 import { tpsComboLinkWindow } from "../src/game/motion-profile";
 
@@ -73,4 +74,53 @@ test("mash prebuffer helps fast iPhone taps but does not bypass cancel window or
   assert.equal(tpsCanBufferMashTap(move,link.queueStart),true);
   assert.equal(tpsCanBufferMashTap(move,link.linkStart),true);
   assert.equal(tpsCanBufferMashTap(move,move.startup+move.active+move.recovery),false);
+});
+
+
+test("neutral pressure reads actual block/whiff; clean hits preserve the authored phrase", () => {
+  const available = FIGHTER_DEFINITIONS.red.moves;
+  assert.equal(tpsMashContactOutcome(false, false), "WHIFF");
+  assert.equal(tpsMashContactOutcome(false, true), "WHIFF", "no fabricated hit confirm");
+  assert.equal(tpsMashContactOutcome(true, false), "BLOCK");
+  assert.equal(tpsMashContactOutcome(true, true), "CLEAN");
+
+  const base = { phrase: 1, stage: 0, distance: 1.25, lastBase: "jab", available };
+  const guardRead = chooseTpsNeutralMashMove({ ...base, lastOutcome: "BLOCK" });
+  assert.equal(guardRead.base, "lowKick", "a guarded high changes hit level to a sweep");
+  assert.equal(guardRead.response, "LOW_SWITCH");
+  assert.equal(available[guardRead.id].hitLevel, "LOW");
+  const lowGuardRead = chooseTpsNeutralMashMove({ ...base, lastBase: "lowKick", lastOutcome: "BLOCK" });
+  assert.equal(lowGuardRead.base, "bodyBlow", "repeated low guard calls for a mid-body strike");
+  assert.equal(lowGuardRead.response, "BODY_SWITCH");
+
+  const closeWhiff = chooseTpsNeutralMashMove({ ...base, lastOutcome: "WHIFF" });
+  assert.equal(closeWhiff.base, "backfist", "close sidestep whiff keeps full phrase variety");
+  assert.equal(closeWhiff.response, "PHRASE");
+  const mediumWhiff = chooseTpsNeutralMashMove({ ...base, distance: 1.53, lastOutcome: "WHIFF" });
+  assert.equal(mediumWhiff.base, "kick", "previous miss gets an authored longer attack");
+  assert.equal(mediumWhiff.response, "REACH_SWITCH");
+
+  const cleanHit = chooseTpsNeutralMashMove({ ...base, lastOutcome: "CLEAN" });
+  assert.equal(cleanHit.base, "backfist");
+  assert.equal(cleanHit.response, "PHRASE");
+  const chained = chooseTpsNeutralMashMove({ ...base, stage: 1, lastOutcome: "BLOCK" });
+  assert.equal(chained.base, "bodyBlow", "clean linked stage isn't overwritten by guard read");
+  assert.equal(chained.response, "PHRASE");
+  const classic = chooseTpsNeutralMashMove({ ...base, phrase: 0, lastOutcome: "BLOCK" });
+  assert.equal(classic.base, "jab", "first familiar 3-hit phrase remains unchanged");
+});
+
+test("neutral mash cannot steal a direction buffered at an earlier ATTACK tap", () => {
+  const basic = { forward: false, back: false, left: false, right: false };
+  assert.deepEqual(tpsBufferedMashDirection(basic), { forward: false, back: false, lateral: false });
+  assert.deepEqual(tpsBufferedMashDirection({ ...basic, queuedBranch: "SIDE" }),
+    { forward: false, back: false, lateral: true }, "stored side tap survives released thumb");
+  assert.deepEqual(tpsBufferedMashDirection({ ...basic, queuedBranch: "FORWARD" }),
+    { forward: true, back: false, lateral: false });
+  assert.deepEqual(tpsBufferedMashDirection({ ...basic, queuedBranch: "BACK" }),
+    { forward: false, back: true, lateral: false });
+  assert.deepEqual(tpsBufferedMashDirection({ ...basic, forward: true, queuedBranch: "NEUTRAL" }),
+    { forward: false, back: false, lateral: false }, "queued tap, not later movement, chooses branch");
+  assert.deepEqual(tpsBufferedMashDirection({ ...basic, left: true }),
+    { forward: false, back: false, lateral: true });
 });

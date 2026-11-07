@@ -1274,6 +1274,7 @@ try {
     const game = findGame();
     game.finished = false;
     game.input.clear();
+    game.effects.update(2);
     for (const fighter of [game.p1, game.p2]) {
       fighter.currentMove = null;
       fighter.moveTick = 0;
@@ -1290,59 +1291,80 @@ try {
       fighter.input = { ...neutral };
       fighter.previousInput = { ...neutral };
     }
-    game.p1.position.set(0, 0, 0.91);
-    game.p2.position.set(0, 0, -0.61);
-    game.playerComboStage = 1;
-    game.playerComboGraceTicks = 34;
+    // Use the exact same real-hit replay used by the long-standing
+    // successful SIDE-branch audit above, then enable phrase 3 *only after*
+    // the first actual contact. That isolates the neutral-mash override bug.
+    game.p1.position.set(0, 0, .78);
+    game.p2.position.set(0, 0, -.42);
+    game.playerComboStage = 0;
+    game.playerComboGraceTicks = 0;
     game.playerAttackQueued = false;
-    game.__comboRoute = 'CLOSE_A';
+    game.__comboRoute = undefined;
+    game.__comboRouteSeed = 0;
     game.__comboQueuedBranch = undefined;
-    game.__neutralMashPhrase = 2;
-    game.__neutralMashAttackCount = 7;
-    game.__neutralMashLastBase = 'jab';
+    game.__neutralMashPhrase = -1;
+    game.__neutralMashAttackCount = 0;
+    game.__neutralMashLastBase = null;
     game.__neutralMashLastOutcome = undefined;
     game.__mashBufferTicks = 0;
-    game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
-    game.p1.visual.root.userData.tpsComboLinkState = null;
-    // Flank-evade audit before this probe leaves an earned GUARD-BYPASS
-    // counter buff. Reset both temporary flank windows to ordinary neutral
-    // before checking standing guard against a real ATTACK button tap.
     game.playerFlankWindowTicks = 0;
     game.playerFlankAttackTicks = 0;
     game.playerPerfectEvadeTicks = 0;
     game.playerInterceptTicks = 0;
     game.playerReversalTicks = 0;
     game.airCombo = null;
-    game.updateEnemy = () => { game.p2.velocity.set(0,0,0); game.p2.updatePhysics(1/60); };
-    game.p1.beginMove('jab');
-    const move = game.p1.currentMove;
-    game.p1.moveTick = move.startup;
-    game.resolveAttack(game.p1, game.p2, false);
-    const actualHit = game.p2.health < 100 && game.p1.hitTargets.has(game.p2.id);
-    game.p1.hitStop = 0;
-    game.p2.hitStop = 0;
-    const recoveryStart = move.startup + move.active;
-    const queueStart = Math.max(move.startup, recoveryStart - 2);
-    game.p1.moveTick = queueStart;
+    game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
+    game.updateEnemy = () => {
+      game.p2.velocity.set(0, 0, 0);
+      if (game.p2.state === 'HIT') game.p2.updatePhysics(1 / 60);
+      else game.p2.state = 'IDLE';
+    };
+
+    game.press('punch', 'tps-buffered-real-open');
+    game.renderTime += 1 / 60;
+    game.step();
+    const firstMove = game.p1.currentMove?.id ?? null;
+    game.release('punch', 'tps-buffered-real-open');
+    game.__comboRoute = 'CLOSE_A';
+    let settle = 0;
+    while (settle < 45 && (game.p2.health === 100 || game.p1.moveTick < 6)) {
+      game.renderTime += 1 / 60;
+      game.step();
+      settle++;
+    }
+    const actualHit = firstMove === 'jab' && game.p2.health < 100
+      && game.p1.hitTargets.has(game.p2.id)
+      && game.p1.visual.root.userData.tpsCleanHitConfirmed === true;
+
+    // Later ATTACK-only phrases must not steal the SIDE intent. The user taps
+    // SIDE+ATTACK at the original queue-start tick and then releases both.
+    game.__neutralMashPhrase = 2;
+    game.__neutralMashAttackCount = 7;
+    game.__neutralMashLastBase = 'jab';
     game.press('right', 'tps-buffered-side');
     game.press('punch', 'tps-buffered-attack');
+    game.renderTime += 1 / 60;
     game.step();
-    const queuedAtTap = game.__comboQueuedBranch ?? null;
+    const queuedAtTap = game.__comboQueuedBranch
+      ?? game.p1.visual.root.userData.tpsComboLinkBranch ?? null;
     game.release('punch', 'tps-buffered-attack');
     game.release('right', 'tps-buffered-side');
     let nextMove = null;
     let linkFrame = -1;
-    for (let frame=0; frame < 45; frame++) {
-      game.p1.hitStop = 0;
-      game.p2.hitStop = 0;
+    for (let frame=0; frame < 40; frame++) {
+      if (game.p1.currentMove?.id && game.p1.currentMove.id !== firstMove) {
+        nextMove = game.p1.currentMove.id;
+        linkFrame = frame;
+        break;
+      }
+      game.renderTime += 1 / 60;
       game.step();
-      const moveNow = game.p1.currentMove?.id ?? null;
-      if (moveNow && moveNow !== 'jab') { nextMove = moveNow; linkFrame = frame; break; }
     }
     game.updateCamera(1/60);
     game.updateLockOn();
     game.renderer.render(game.scene,game.camera);
-    return { actualHit, queuedAtTap, nextMove, nextBase: nextMove
+    return { actualHit, firstMove, queuedAtTap, nextMove, nextBase: nextMove
       ? game.p1.definition.moves[nextMove]?.motionBase ?? nextMove : null,
       linkFrame, route: game.p1.visual.root.userData.tpsComboRoute ?? null,
       linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null,

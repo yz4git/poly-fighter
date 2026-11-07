@@ -1462,6 +1462,128 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/tps-cpu-observed-pattern.png`);
 
+  // Exercise both v10 mindgames in the real headless WebGL fight runtime.
+  // First, the previous real 8-jab replay has taught this CPU UPPER_PATTERN.
+  // Reuse that earned history: queue a BAIT telegraph and watch it cancel
+  // *before beginMove*, physically step sideways and leave health intact.
+  const feintProbe = await execute(sessionId, `${gameLookup}
+    const g=findGame(), neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    for(const fighter of [g.p1,g.p2]){
+      fighter.currentMove=null;fighter.moveTick=0;fighter.state='IDLE';
+      fighter.velocity.set(0,0,0);fighter.hitTargets.clear();
+      fighter.hitStop=0;fighter.hitStun=0;fighter.blockStun=0;
+      fighter.knockdownTicks=0;fighter.health=100;fighter.grounded=true;
+      fighter.input={...neutral};fighter.previousInput={...neutral};
+    }
+    g.input.clear();g.p1.position.set(0,0,.8);g.p2.position.set(0,0,-.8);
+    g.enemyOpeningGraceTicks=0;g.enemyTactic='BAIT';g.enemyTacticTicks=999;
+    g.enemyDirectorPendingMove=null;g.enemyDirectorDecision=null;
+    g.enemyDirectorTelegraphTicks=0;g.enemyDirectorHoldTicks=0;
+    g.enemyFeintPending=false;g.enemyFeintCandidateSerial=3;
+    g.enemyLastFeintTick=-1000;g.enemyWhiffPunishCooldownTicks=0;
+    g.p2.visual.root.userData.tpsCpuFeintSerial=0;
+    const learned=g.enemyFunDirector.getStrikeRead();
+    delete g.updateEnemy;
+    const decision={intent:'POWER',holdTicks:1,telegraphTicks:0,reason:'earned-visible-bait',comebackMercy:0,pressure:0};
+    g.enemyDirectorDecision=decision;
+    const queued=g.queueEnemyAttackDecision(decision);
+    const initial=g.p2.position.clone();
+    let loadFrames=0,feintSeen=false,feintMove=null,healthAtFeint=-1,neverAttacked=true;
+    for(let i=0;i<40;i++){
+      g.step();loadFrames++;
+      if(g.p2.currentMove||g.p2.state==='ATTACK')neverAttacked=false;
+      if(Number(g.p2.visual.root.userData.tpsCpuFeintSerial??0)>0){
+        feintSeen=true;
+        feintMove=g.p2.visual.root.userData.tpsCpuFeintMove??null;
+        healthAtFeint=g.p1.health;
+        break;
+      }
+    }
+    for(let i=0;i<8;i++)g.step();
+    const dx=g.p2.position.x-initial.x, dz=g.p2.position.z-initial.z;
+    g.updateCamera(1/60);g.updateLockOn();g.renderer.render(g.scene,g.camera);
+    return {learned,queued,loadFrames,feintSeen,feintMove,
+      healthAtFeint,neverAttacked,dx,dz,phase:g.p2.visual.root.userData.tpsEnemyTelegraphPhase,
+      serial:g.p2.visual.root.userData.tpsCpuFeintSerial??0,p1Health:g.p1.health};
+  `);
+  if(feintProbe.learned.mode!=='UPPER_PATTERN'
+    ||!feintProbe.queued||!feintProbe.feintSeen||!feintProbe.neverAttacked
+    ||feintProbe.feintMove!=='power'
+    ||feintProbe.healthAtFeint!==100||feintProbe.p1Health!==100
+    ||Math.hypot(feintProbe.dx,feintProbe.dz)<.14
+    ||feintProbe.serial!==1
+    ||feintProbe.loadFrames<5||feintProbe.loadFrames>25)
+    throw new Error(`TPS earned feint did not visibly cancel and sidestep: ${JSON.stringify(feintProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-cpu-feint.png`);
+
+  // A miss is real only if the *actual* attack's active frames ended with
+  // no defender collision. Slide the opponent across the committed lane
+  // during the startup, then let the production CPU detect recovery by itself.
+  const whiffPunishProbe = await execute(sessionId, `${gameLookup}
+    const g=findGame(),neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+    for(const fighter of [g.p1,g.p2]){
+      fighter.currentMove=null;fighter.moveTick=0;fighter.state='IDLE';
+      fighter.velocity.set(0,0,0);fighter.hitTargets.clear();
+      fighter.hitStop=0;fighter.hitStun=0;fighter.blockStun=0;
+      fighter.knockdownTicks=0;fighter.health=100;fighter.grounded=true;
+      fighter.input={...neutral};fighter.previousInput={...neutral};
+    }
+    g.input.clear();
+    g.p1.position.set(0,0,.8);g.p2.position.set(0,0,-.45);
+    g.playerComboStage=0;g.playerComboGraceTicks=0;g.playerAttackQueued=false;
+    g.playerFlankWindowTicks=0;g.playerFlankAttackTicks=0;
+    g.playerInterceptTicks=0;g.playerReversalTicks=0;
+    g.enemyFunDirector=new g.enemyFunDirector.constructor('HARD',47);
+    g.difficulty='HARD';
+    g.enemyOpeningGraceTicks=0;g.enemyTactic='ORBIT';g.enemyTacticTicks=999;
+    g.enemyDirectorPendingMove=null;g.enemyDirectorDecision=null;
+    g.enemyDirectorHoldTicks=0;g.enemyDirectorTelegraphTicks=0;
+    g.enemyWhiffPunishCooldownTicks=0;g.enemyFeintPending=false;
+    g.p2.visual.root.userData.tpsCpuWhiffPunishSerial=0;
+    // The initial attack commitment is aimed at the original centerline.
+    g.updateEnemy=()=>{g.p2.state='IDLE';g.p2.velocity.set(0,0,0);g.p2.updatePhysics(1/60);};
+    g.p1.beginMove('power');
+    const move=g.p1.currentMove, activeEnd=move.startup+move.active;
+    let sidesteps=0,firstHit=false;
+    for(let i=0;i<activeEnd+3;i++){
+      if(g.p1.moveTick>=2&&sidesteps<17){
+        g.p2.position.x+=.078;
+        g.p2.position.z+=.035;
+        sidesteps++;
+      }
+      g.step();
+      if(g.p1.hitTargets.has(g.p2.id))firstHit=true;
+    }
+    const missed=!firstHit&&!g.p1.hitTargets.has(g.p2.id);
+    const distanceAtWhiff=Math.hypot(g.p1.position.x-g.p2.position.x,g.p1.position.z-g.p2.position.z);
+    delete g.updateEnemy;
+    let selected=null,replied=false,replyMove=null;
+    let reactionTicks=0;
+    for(let i=0;i<28;i++){
+      g.step();reactionTicks++;
+      const serial=Number(g.p2.visual.root.userData.tpsCpuWhiffPunishSerial??0);
+      if(serial>0){replied=true;selected=g.p2.visual.root.userData.tpsCpuWhiffPunishMove??null;break;}
+    }
+    // Let real strike preview/startup proceed; cannot be a frame-zero hit.
+    for(let i=0;i<15;i++)g.step();
+    replyMove=g.p2.currentMove?.id??null;
+    g.updateCamera(1/60);g.updateLockOn();g.renderer.render(g.scene,g.camera);
+    return {sidesteps,missed,firstHit,move:move.id,activeEnd,
+      distanceAtWhiff,replied,selected,reactionTicks,replyMove,
+      cpuSerial:g.p2.visual.root.userData.tpsCpuWhiffPunishSerial??0,
+      playerHealth:g.p1.health,enemyHealth:g.p2.health,
+      cooldown:g.enemyWhiffPunishCooldownTicks};
+  `);
+  if(whiffPunishProbe.move!=='power'
+    ||whiffPunishProbe.sidesteps!==17
+    ||!whiffPunishProbe.missed
+    ||!whiffPunishProbe.replied
+    ||!['jab','straight'].includes(whiffPunishProbe.selected)
+    ||whiffPunishProbe.cpuSerial!==1
+    ||whiffPunishProbe.distanceAtWhiff>1.62)
+    throw new Error(`TPS real-spatial whiff punish failed or cheated: ${JSON.stringify(whiffPunishProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-cpu-whiff-punish.png`);
+
   await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -1482,7 +1604,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, feintProbe, whiffPunishProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

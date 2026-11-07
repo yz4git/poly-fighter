@@ -1516,6 +1516,64 @@ try {
     throw new Error(`TPS earned feint did not visibly cancel and sidestep: ${JSON.stringify(feintProbe)}`);
   await screenshot(sessionId, `${outputDir}/tps-cpu-feint.png`);
 
+  // The player now gets a real chance to CALL the cancelled CPU windup using
+  // the same ATTACK button as every other move. No forced opponent health edit,
+  // simulated hit registration or manual hitbox changes are permitted.
+  const playerFeintReadProbe = await execute(sessionId, `${gameLookup}
+    const g=findGame();
+    const readBefore=g.enemyFeintReadTicks;
+    const rangeBefore=Math.hypot(g.p2.position.x-g.p1.position.x,g.p2.position.z-g.p1.position.z);
+    const priorHealth=g.p2.health;
+    const priorPunishes=g.trainingProgress.punishes;
+    const priorSerial=Number(g.p1.visual.root.userData.tpsFeintPunishHitSerial??0);
+    g.playerComboStage=0;g.playerComboGraceTicks=0;
+    g.playerAttackQueued=false;g.__comboRoute=undefined;
+    g.playerInterceptTicks=0;g.playerReversalTicks=0;
+    g.playerPerfectEvadeTicks=0;g.playerFlankWindowTicks=0;
+    g.playerFlankAttackTicks=0;g.__comboQueuedBranch=undefined;
+    g.p1.input.punch=false;g.p1.previousInput.punch=false;
+    g.press('punch','tps-player-feint-read');
+    g.step();
+    const selected=g.p1.currentMove?.id??null;
+    const armed=g.p1.visual.root.userData.tpsFeintPunishArmed===true;
+    const lockedLane=g.p1.visual.root.userData.tpsFeintPunishLane??null;
+    g.release('punch','tps-player-feint-read');
+    let contactFrame=-1,firstHitHealth=null,feintReadAfter=null;
+    const stepTravel=[];
+    for(let tick=0;tick<25;tick++){
+      g.step();
+      stepTravel.push(Number(g.p1.visual.root.userData.tpsFeintPunishTravel??0));
+      const serial=Number(g.p1.visual.root.userData.tpsFeintPunishHitSerial??0);
+      if(serial>priorSerial){
+        contactFrame=tick;
+        firstHitHealth=g.p2.health;
+        feintReadAfter=g.enemyFeintReadTicks;
+        break;
+      }
+    }
+    g.updateCamera(1/60);g.updateLockOn();
+    g.renderer.render(g.scene,g.camera);
+    return {readBefore,rangeBefore,selected,armed,lockedLane,contactFrame,
+      firstHitHealth,feintReadAfter,priorHealth,priorPunishes,
+      punishCount:g.trainingProgress.punishes,priorSerial,
+      serial:Number(g.p1.visual.root.userData.tpsFeintPunishHitSerial??0),
+      stepTravel,enemyState:g.p2.state,beat:g.combatBeatLabel};
+  `);
+  if (playerFeintReadProbe.readBefore<11
+    ||playerFeintReadProbe.rangeBefore>1.92
+    ||playerFeintReadProbe.selected!=='straight'
+    ||!playerFeintReadProbe.armed
+    ||!Array.isArray(playerFeintReadProbe.lockedLane)
+    ||playerFeintReadProbe.contactFrame<0
+    ||!(playerFeintReadProbe.firstHitHealth<playerFeintReadProbe.priorHealth)
+    ||playerFeintReadProbe.serial!==playerFeintReadProbe.priorSerial+1
+    ||playerFeintReadProbe.punishCount!==playerFeintReadProbe.priorPunishes+1
+    ||playerFeintReadProbe.feintReadAfter!==0
+    ||Math.max(...playerFeintReadProbe.stepTravel)>.34001) {
+    throw new Error(`TPS player's real ATTACK failed to read and punish CPU feint: ${JSON.stringify(playerFeintReadProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-player-feint-punish.png`);
+
   // A miss is real only if the *actual* attack's active frames ended with
   // no defender collision. Slide the opponent across the committed lane
   // during the startup, then let the production CPU detect recovery by itself.
@@ -1604,7 +1662,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, feintProbe, whiffPunishProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, feintProbe, playerFeintReadProbe, whiffPunishProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

@@ -1,5 +1,7 @@
+import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
+import { tpsTelegraphPoseCue, type TpsTelegraphPoseCue } from "./tps-telegraph-pose-cue";
 
 type TelegraphKind = "PUNCH" | "KICK" | "HEAVY" | "SWEEP";
 
@@ -143,6 +145,145 @@ function applyTelegraphHandoff(fighter: FighterRuntime, state: TelegraphHandoffS
   root.updateMatrixWorld(true);
 }
 
+// These deltas are applied only to the displayed Quaternius rig (not the
+// legacy hidden proxy). All deltas are removed before the next animation mixer
+// sample so they cannot accumulate or contaminate the authored animations.
+type ImportedBoneDelta = { bone: THREE.Object3D; x: number; y: number; z: number };
+type TelegraphIntentState = {
+  host: THREE.Object3D | null;
+  hostX: number; hostY: number; hostZ: number;
+  pitch: number; yaw: number; roll: number;
+  bones: ImportedBoneDelta[];
+};
+const intentStates = new WeakMap<FighterRuntime, TelegraphIntentState>();
+const importedBoneCache = new WeakMap<THREE.Object3D, {
+  spine: THREE.Object3D | null;
+  leftArm: THREE.Object3D | null; rightArm: THREE.Object3D | null;
+  leftThigh: THREE.Object3D | null; rightThigh: THREE.Object3D | null;
+}>();
+
+function intentState(fighter: FighterRuntime): TelegraphIntentState {
+  let state = intentStates.get(fighter);
+  if (!state) {
+    state = { host: null, hostX: 0, hostY: 0, hostZ: 0,
+      pitch: 0, yaw: 0, roll: 0, bones: [] };
+    intentStates.set(fighter, state);
+  }
+  return state;
+}
+
+function findImportedBone(host: THREE.Object3D, aliases: string[]): THREE.Object3D | null {
+  let match: THREE.Object3D | null = null;
+  host.traverse(object => {
+    if (match || !(object as THREE.Bone).isBone) return;
+    const name = object.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (aliases.some(alias => name === alias || name.endsWith(alias))) match = object;
+  });
+  return match;
+}
+
+function importedIntentBones(host: THREE.Object3D) {
+  let bones = importedBoneCache.get(host);
+  if (!bones) {
+    bones = {
+      spine: findImportedBone(host, ["spine02", "spine2", "chest", "spine01", "spine"]),
+      leftArm: findImportedBone(host, ["upperarml", "leftarm", "lupperarm"]),
+      rightArm: findImportedBone(host, ["upperarmr", "rightarm", "rupperarm"]),
+      leftThigh: findImportedBone(host, ["thighl", "leftupleg", "leftthigh"]),
+      rightThigh: findImportedBone(host, ["thighr", "rightupleg", "rightthigh"]),
+    };
+    importedBoneCache.set(host, bones);
+  }
+  return bones;
+}
+
+function resetIntentPose(fighter: FighterRuntime, state: TelegraphIntentState): void {
+  if (state.host) {
+    state.host.position.x -= state.hostX;
+    state.host.position.y -= state.hostY;
+    state.host.position.z -= state.hostZ;
+    state.host.rotation.x -= state.pitch;
+    state.host.rotation.y -= state.yaw;
+    state.host.rotation.z -= state.roll;
+  }
+  for (const delta of state.bones) {
+    delta.bone.rotation.x -= delta.x;
+    delta.bone.rotation.y -= delta.y;
+    delta.bone.rotation.z -= delta.z;
+  }
+  state.host = null;
+  state.hostX = 0; state.hostY = 0; state.hostZ = 0;
+  state.pitch = 0; state.yaw = 0; state.roll = 0;
+  state.bones.length = 0;
+  const data = fighter.visual.root.userData;
+  data.tpsEnemyTelegraphPoseKind = "NONE";
+  data.tpsEnemyTelegraphPoseIntensity = 0;
+  data.tpsEnemyTelegraphPoseShoulder = 0;
+  data.tpsEnemyTelegraphPoseHip = 0;
+  data.tpsEnemyTelegraphPoseHostYaw = 0;
+}
+
+function addIntentBone(
+  state: TelegraphIntentState,
+  bone: THREE.Object3D | null,
+  x: number,
+  y: number,
+  z: number,
+): void {
+  if (!bone || Math.abs(x) + Math.abs(y) + Math.abs(z) <= 1e-7) return;
+  bone.rotation.x += x;
+  bone.rotation.y += y;
+  bone.rotation.z += z;
+  state.bones.push({ bone, x, y, z });
+}
+
+function applyTelegraphIntent(
+  fighter: FighterRuntime,
+  state: TelegraphIntentState,
+): void {
+  const data = fighter.visual.root.userData;
+  if (!data.combatTps || data.quaterniusModelState !== "ready") return;
+  // A stun or real ATTACK is never overridden by the trick silhouette.
+  // Once a real strike begins, the existing authored motion/handoff owns it.
+  if (!["IDLE", "GUARD", "WALK"].includes(fighter.state)) return;
+  const cue: TpsTelegraphPoseCue = tpsTelegraphPoseCue({
+    phase: String(data.tpsEnemyTelegraphPhase ?? "NONE"),
+    telegraphProgress: Number(data.tpsEnemyTelegraphProgress ?? 0),
+    plannedFeint: data.tpsEnemyTelegraphFeintPlanned === true,
+    moveId: typeof data.tpsEnemyTelegraphMove === "string" ? data.tpsEnemyTelegraphMove : null,
+    orbitSign: Number(data.tpsEnemyTelegraphOrbitSign ?? 1),
+    feintReadTicks: Number(data.tpsCpuFeintReadTicks ?? 0),
+  });
+  if (cue.phase === "NONE") return;
+  const host = importedRuntimeHost(fighter);
+  if (!host) return;
+  const scale = fighter.visual.root.scale.x;
+  state.host = host;
+  state.hostX = cue.hostX * scale;
+  state.hostY = cue.hostY * scale;
+  state.hostZ = cue.hostZ * scale;
+  state.pitch = cue.pitch; state.yaw = cue.yaw; state.roll = cue.roll;
+  host.position.x += state.hostX;
+  host.position.y += state.hostY;
+  host.position.z += state.hostZ;
+  host.rotation.x += state.pitch;
+  host.rotation.y += state.yaw;
+  host.rotation.z += state.roll;
+  const bones = importedIntentBones(host);
+  addIntentBone(state, bones.spine, cue.spinePitch, cue.spineYaw, 0);
+  addIntentBone(state, bones.leftArm, cue.leftArmPitch, 0, 0);
+  addIntentBone(state, bones.rightArm, cue.rightArmPitch, 0, 0);
+  addIntentBone(state, bones.leftThigh, 0, 0, cue.leftThighRoll);
+  addIntentBone(state, bones.rightThigh, 0, 0, cue.rightThighRoll);
+  data.tpsEnemyTelegraphPoseKind = cue.phase;
+  data.tpsEnemyTelegraphPoseIntensity = cue.intensity;
+  data.tpsEnemyTelegraphPoseShoulder = cue.leftArmPitch - cue.rightArmPitch;
+  data.tpsEnemyTelegraphPoseHip = cue.leftThighRoll - cue.rightThighRoll;
+  data.tpsEnemyTelegraphPoseHostYaw = state.yaw;
+  data.tpsEnemyTelegraphPoseImportedBoneCount = state.bones.length;
+  fighter.visual.root.updateMatrixWorld(true);
+}
+
 export function installTpsTelegraphHandoffPresentation(): void {
   if (installed) return;
   installed = true;
@@ -154,8 +295,11 @@ export function installTpsTelegraphHandoffPresentation(): void {
     timeSeconds: number,
   ): void {
     const state = ensureState(fighter);
+    const pose = intentState(fighter);
     removeHandoffTransform(fighter, state);
+    resetIntentPose(fighter, pose);
     baseUpdate.call(this, fighter, opponent, timeSeconds);
     applyTelegraphHandoff(fighter, state);
+    applyTelegraphIntent(fighter, pose);
   };
 }

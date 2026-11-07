@@ -102,3 +102,52 @@ test("player can read a real feint using the existing neutral ATTACK key only", 
     {longitudinal:1.25},
   ]) assert.equal(tpsFeintPunishAdvance({...move,...change}),0,JSON.stringify(change));
 });
+
+
+test("real strike and feint have a shared early coil, then readable distinct shoulder/hip poses", async () => {
+  const { tpsTelegraphPoseCue } = await import("../src/game/tps-telegraph-pose-cue");
+  const input = {phase:"LOAD",moveId:"power",telegraphProgress:.18,
+    plannedFeint:false,orbitSign:1,feintReadTicks:0};
+  const earlyReal=tpsTelegraphPoseCue(input);
+  const earlyFake=tpsTelegraphPoseCue({...input,plannedFeint:true});
+  assert.deepEqual(earlyReal,earlyFake,"no frame-zero tell and no leaked CPU decision before windup");
+  assert.equal(earlyReal.phase,"COIL");
+  const real=tpsTelegraphPoseCue({...input,phase:"REACT",telegraphProgress:.42});
+  const fake=tpsTelegraphPoseCue({...input,phase:"REACT",telegraphProgress:.42,plannedFeint:true});
+  assert.equal(real.phase,"STRIKE_PREP");
+  assert.equal(fake.phase,"FEINT_PREP");
+  assert.ok(real.pitch < -.055 && fake.pitch > -.025,"real strike plants toward rival, feint unloads");
+  assert.ok(Math.abs(fake.yaw) > Math.abs(real.yaw)+.05,"lateral hip turn anticipates a side exit");
+  assert.ok(Math.abs(fake.roll) > Math.abs(real.roll)+.055,"body lean reads from shoulder TPS camera");
+  assert.ok(Math.abs(fake.leftThighRoll-fake.rightThighRoll) > .065,"feint shifts both actual thigh bones");
+  assert.ok(Math.abs(real.leftArmPitch-real.rightArmPitch)>.02,"strike winds the right hand");
+  assert.ok(Math.abs(fake.leftArmPitch-fake.rightArmPitch)>.02,"fake retracts shoulder in contrasting direction");
+  const left=tpsTelegraphPoseCue({...input,telegraphProgress:.42,plannedFeint:true,orbitSign:-1});
+  assert.equal(left.phase,"FEINT_PREP");
+  assert.ok(left.yaw<0 && left.roll>0 && left.hostX<0,
+    "feint weight transfer points toward actual chosen exit lane");
+  const exiting=tpsTelegraphPoseCue({...input,phase:"FEINT",moveId:null,telegraphProgress:0,
+    plannedFeint:false,feintReadTicks:35});
+  assert.equal(exiting.phase,"FEINT_EXIT");
+  assert.ok(exiting.yaw>.10 && exiting.hostX>.025);
+  const settling=tpsTelegraphPoseCue({...input,phase:"FEINT",moveId:null,
+    feintReadTicks:1,plannedFeint:false});
+  assert.equal(settling.phase,"NONE","visual deltas decay rather than persist forever");
+  for (const phase of ["ATTACK","STRIKE","NONE","INTERRUPTED","HIT"]) {
+    const out=tpsTelegraphPoseCue({...input,phase,telegraphProgress:.99,plannedFeint:true});
+    assert.equal(out.phase,"NONE",`animation must not override ${phase}`);
+    assert.equal(out.yaw,0);
+  }
+});
+
+test("telegraph intent pose transitions remain smoothly sampled and bounded at 60Hz", async () => {
+  const { tpsTelegraphPoseCue } = await import("../src/game/tps-telegraph-pose-cue");
+  let prev=0;
+  for(let tick=1;tick<=10;tick++){
+    const cue=tpsTelegraphPoseCue({phase:"REACT",moveId:"power",plannedFeint:true,
+      telegraphProgress:tick/19,orbitSign:1,feintReadTicks:0});
+    assert.ok(cue.intensity>=prev-1e-6,"feint should load smoothly until actual side exit");
+    assert.ok(Math.abs(cue.roll)<.12 && Math.abs(cue.yaw)<.17);
+    prev=cue.intensity;
+  }
+});

@@ -1126,6 +1126,7 @@ export class TpsFightGame {
     // A real sidestep, not invisible dodge i-frames. There is NO beginMove
     // call, no active hitbox, no damage, and no instant counterattack.
     rootData.tpsEnemyTelegraphPhase = "FEINT";
+    rootData.tpsEnemyTelegraphFeintPlanned = false;
     rootData.tpsEnemyTelegraphMove = null;
     rootData.tpsEnemyTelegraphProgress = 0;
     rootData.tpsCpuDirectorTelegraphTicks = 0;
@@ -1180,6 +1181,7 @@ export class TpsFightGame {
     const intent = this.enemyDirectorDecision?.intent ?? "JAB";
     this.enemyDirectorPendingMove = null;
     this.enemyFeintPending = false;
+    this.p2.visual.root.userData.tpsEnemyTelegraphFeintPlanned = false;
     if (!this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) return false;
     this.p2.updatePhysics(FIXED_STEP);
     return true;
@@ -1278,6 +1280,8 @@ export class TpsFightGame {
     this.enemyDirectorPendingMove = moveId;
     this.enemyDirectorTelegraphTicks = telegraphTicks;
     this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
+    rootData.tpsEnemyTelegraphFeintPlanned = this.enemyFeintPending;
+    rootData.tpsEnemyTelegraphOrbitSign = this.enemyOrbitSign;
     rootData.tpsCpuDirectorTelegraphTicks = telegraphTicks;
     rootData.tpsEnemyTelegraphProgress = 0;
     rootData.tpsEnemyTelegraphMove = moveId;
@@ -1751,8 +1755,10 @@ export class TpsFightGame {
     if (interceptStrike) {
       this.playerInterceptTicks = 0;
       this.enemyDirectorPendingMove = null;
+      this.enemyFeintPending = false;
       this.enemyDirectorTelegraphTicks = 0;
       this.enemyDirectorTelegraphTotalTicks = 0;
+      this.p2.visual.root.userData.tpsEnemyTelegraphFeintPlanned = false;
       this.p2.visual.root.userData.tpsEnemyTelegraphProgress = 0;
       this.p2.visual.root.userData.tpsEnemyTelegraphMove = null;
       this.p2.visual.root.userData.tpsEnemyTelegraphPhase = "INTERRUPTED";
@@ -2168,6 +2174,13 @@ export class TpsFightGame {
     rootData.tpsEnemyTelegraphProgress = 0;
     rootData.tpsEnemyTelegraphMove = null;
     rootData.tpsEnemyTelegraphPhase = "NONE";
+    rootData.tpsEnemyTelegraphFeintPlanned = false;
+    rootData.tpsEnemyTelegraphOrbitSign = 1;
+    rootData.tpsEnemyTelegraphPoseKind = "NONE";
+    rootData.tpsEnemyTelegraphPoseIntensity = 0;
+    rootData.tpsEnemyTelegraphPoseShoulder = 0;
+    rootData.tpsEnemyTelegraphPoseHip = 0;
+    rootData.tpsEnemyTelegraphPoseHostYaw = 0;
     rootData.tpsCpuStrikeReadMode = "UNSEEN";
     rootData.tpsCpuStrikeReadSamples = 0;
     rootData.tpsCpuStrikeLowRatio = 0;

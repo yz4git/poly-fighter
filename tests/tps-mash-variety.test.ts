@@ -94,8 +94,8 @@ test("neutral pressure reads actual block/whiff; clean hits preserve the authore
   assert.equal(lowGuardRead.response, "BODY_SWITCH");
 
   const closeWhiff = chooseTpsNeutralMashMove({ ...base, lastOutcome: "WHIFF" });
-  assert.equal(closeWhiff.base, "straight");
-  assert.equal(closeWhiff.response, "REACH_SWITCH");
+  assert.equal(closeWhiff.base, "backfist", "close sidestep whiff keeps full phrase variety");
+  assert.equal(closeWhiff.response, "PHRASE");
   const mediumWhiff = chooseTpsNeutralMashMove({ ...base, distance: 1.53, lastOutcome: "WHIFF" });
   assert.equal(mediumWhiff.base, "kick", "previous miss gets an authored longer attack");
   assert.equal(mediumWhiff.response, "REACH_SWITCH");

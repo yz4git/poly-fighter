@@ -86,9 +86,13 @@ export function chooseTpsNeutralMashMove(input: {
         base = candidate;
         response = candidate === "lowKick" ? "LOW_SWITCH" : "BODY_SWITCH";
       }
-    } else if (input.lastOutcome === "WHIFF") {
-      const candidate = input.distance >= 1.34 ? "kick" : "straight";
-      const fallback = candidate === "kick" ? "lowKick" : "bodyBlow";
+    } else if (input.lastOutcome === "WHIFF" && input.distance >= 1.34) {
+      // At true point-blank range a miss likely came from a lateral STEP,
+      // not lack of reach. Preserve the full eight-phrase vocabulary instead
+      // of collapsing 4-frame mash play into two repeated punches.
+      // Only a *spaced* miss warrants selecting an existing longer kick.
+      const candidate = "kick";
+      const fallback = "lowKick";
       const selected = candidate !== input.lastBase && input.available[candidate]
         ? candidate : fallback !== input.lastBase && input.available[fallback] ? fallback : null;
       if (selected) {

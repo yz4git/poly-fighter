@@ -38,7 +38,13 @@ const whiff = {
 
 test("whiff punish respects contact evidence, visible active frames, recovery and real reach", () => {
   assert.equal(chooseTpsCpuWhiffPunish(whiff),"JAB");
-  assert.equal(chooseTpsCpuWhiffPunish({...whiff,distance:1.47}),"STRAIGHT");
+  assert.equal(chooseTpsCpuWhiffPunish({...whiff,distance:1.47}),null,
+    "NORMAL must decline a straight when 12f telegraph + 8f startup exceeds 20f recovery");
+  assert.equal(chooseTpsCpuWhiffPunish({...whiff,difficulty:"HARD",distance:1.47,
+    opponentMoveTick:attacks.power.startup + attacks.power.active + 3,
+    jabTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","jab"),
+    straightTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","straight")}),"STRAIGHT",
+    "HARD can spend its shorter 9f telegraph and still strike within the same honest recovery");
   for (const option of [
     {difficulty:"EASY" as const}, {opponentState:"IDLE"},
     {opponentHitCpu:true}, {opponentHitStop:3}, {cpuActionable:false},
@@ -49,7 +55,11 @@ test("whiff punish respects contact evidence, visible active frames, recovery an
   assert.equal(chooseTpsCpuWhiffPunish({...whiff,opponentMove:attacks.jab,
     opponentMoveTick:attacks.jab.startup+attacks.jab.active+5}),null,
     "short-recovery punches do not grant unearned instant punishment");
-  assert.equal(chooseTpsCpuWhiffPunish({...whiff,distance:1.47,cpuStraight:null}),null,
+  assert.equal(chooseTpsCpuWhiffPunish({...whiff,difficulty:"HARD",distance:1.47,
+    opponentMoveTick:attacks.power.startup + attacks.power.active + 3,
+    jabTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","jab"),
+    straightTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","straight"),
+    cpuStraight:null}),null,
     "no fallback to invisible reach or a teleport");
 });
 

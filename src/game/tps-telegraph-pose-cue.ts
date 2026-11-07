@@ -79,6 +79,19 @@ export function tpsTelegraphPoseCue(input: {
   const split = smooth((progress - .24) / .27);
   const feint = input.plannedFeint;
   const anticipation = split;
+  if (split === 0) {
+    // Strictly identical local-bone values (including +0 / -0) during the
+    // shared coil: no misleading frame-zero clue from the model or telemetry.
+    return {
+      ...empty, phase: "COIL", intensity: shared * .32, anticipation: 0,
+      hostY: -.014 * shared,
+      pitch: -.035 * shared,
+      yaw: side * .026 * shared,
+      spinePitch: -.025 * shared,
+      leftArmPitch: -.025 * shared,
+      rightArmPitch: -.025 * shared,
+    };
+  }
   return {
     phase: split < 1e-4 ? "COIL" : feint ? "FEINT_PREP" : "STRIKE_PREP",
     intensity: Math.max(shared * .32, anticipation),

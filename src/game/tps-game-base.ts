@@ -232,6 +232,7 @@ export class TpsFightGame {
   private enemyDirectorTelegraphTicks = 0;
   private enemyDirectorTelegraphTotalTicks = 0;
   private enemyDirectorPendingMove: string | null = null;
+  private enemyLastStrikeReadMode = "UNSEEN";
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
     this.mount = mount;
@@ -441,13 +442,20 @@ export class TpsFightGame {
   private updateCpuGuardRead(): void {
     // AI cannot perfectly block lows at frame zero. Recognize a committed low
     // only after a visible windup, based on difficulty and exchange timing.
+    const read = this.enemyFunDirector.getStrikeRead();
     const crouch = tpsCpuReadLowGuard({
       defenderGuarding: this.p2.state === "GUARD",
       move: this.p1.state === "ATTACK" ? this.p1.currentMove : null,
       attackTick: this.p1.moveTick,
       difficulty: this.difficulty,
       exchangeTick: this.simulationTicks,
+      learnedSamples: read.samples,
+      learnedLowRate: read.mode === "LOW_PATTERN" ? read.lowRatio : 0,
     });
+    this.p2.visual.root.userData.tpsCpuStrikeReadMode = read.mode;
+    this.p2.visual.root.userData.tpsCpuStrikeReadSamples = read.samples;
+    this.p2.visual.root.userData.tpsCpuStrikeLowRatio = read.lowRatio;
+    this.p2.visual.root.userData.tpsCpuLearnedLowGuard = crouch && read.mode === "LOW_PATTERN";
     this.p2.visual.root.userData.tpsGuardLevel = this.p2.state === "GUARD"
       ? (crouch ? "LOW" : "STANDING") : null;
   }
@@ -930,6 +938,15 @@ export class TpsFightGame {
     this.p2.setInput(EMPTY_INPUT);
     const liveDistance = horizontalDistance(this.p2.position, this.p1.position);
     this.enemyFunDirector.observe(this.enemySituation());
+    const observedRead = this.enemyFunDirector.getStrikeRead();
+    if (observedRead.mode !== this.enemyLastStrikeReadMode) {
+      if (this.difficulty !== "EASY" && observedRead.mode === "LOW_PATTERN") {
+        this.setCombatBeat("RIVAL READ · LOWS", 22);
+      } else if (this.difficulty !== "EASY" && observedRead.mode === "UPPER_PATTERN") {
+        this.setCombatBeat("RIVAL READ · PUNCHES", 22);
+      }
+      this.enemyLastStrikeReadMode = observedRead.mode;
+    }
     if (this.advanceLockedState(this.p2)) return;
 
     this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
@@ -1157,6 +1174,10 @@ export class TpsFightGame {
     rootData.tpsCpuDirectorReason = decision.reason;
     rootData.tpsCpuDirectorComebackMercy = decision.comebackMercy;
     rootData.tpsCpuDirectorPressure = decision.pressure;
+    const read = this.enemyFunDirector.getStrikeRead();
+    rootData.tpsCpuStrikeReadMode = read.mode;
+    rootData.tpsCpuStrikeReadSamples = read.samples;
+    rootData.tpsCpuStrikeLowRatio = read.lowRatio;
     rootData.tpsCpuDirectorTelegraphTicks = this.enemyDirectorTelegraphTicks;
     rootData.tpsCpuDirectorMove = moveId;
     rootData.tpsCpuPersona = this.enemyPersona;
@@ -1992,6 +2013,7 @@ export class TpsFightGame {
     this.enemyTacticTicks = 0;
     this.enemyOrbitSign = 1;
     this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
+    this.enemyLastStrikeReadMode = "UNSEEN";
     this.enemyDirectorDecision = null;
     this.enemyDirectorHoldTicks = 0;
     this.enemyDirectorTelegraphTicks = 0;
@@ -2002,6 +2024,10 @@ export class TpsFightGame {
     rootData.tpsEnemyTelegraphProgress = 0;
     rootData.tpsEnemyTelegraphMove = null;
     rootData.tpsEnemyTelegraphPhase = "NONE";
+    rootData.tpsCpuStrikeReadMode = "UNSEEN";
+    rootData.tpsCpuStrikeReadSamples = 0;
+    rootData.tpsCpuStrikeLowRatio = 0;
+    rootData.tpsCpuLearnedLowGuard = false;
 
     this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
     this.enemyPersona = this.p2.definition.archetype === "SPEED"

@@ -61,11 +61,21 @@ export function tpsCpuReadLowGuard(input: {
   attackTick: number;
   difficulty: "EASY" | "NORMAL" | "HARD";
   exchangeTick: number;
+  /** Evidence from independent, already-visible previous strikes. */
+  learnedLowRate?: number;
+  learnedSamples?: number;
 }): boolean {
   if (!input.defenderGuarding || input.move?.hitLevel !== "LOW") return false;
   if (input.difficulty === "EASY") return false;
   const visibleTicks = input.attackTick;
   if (input.difficulty === "HARD") return visibleTicks >= Math.max(8, Math.ceil(input.move.startup * .75));
-  return (Math.floor(input.exchangeTick / 90) % 3 === 0)
-    && visibleTicks >= Math.max(10, input.move.startup - 1);
+  // NORMAL's original 1-in-3 guard read becomes 2-in-3 ONLY after at least
+  // five distinct visible strikes establish a genuine low-heavy history.
+  // Never pre-block a frame-zero low or grant EASY hidden move knowledge.
+  const learned = (input.learnedSamples ?? 0) >= 5 && (input.learnedLowRate ?? 0) >= .625;
+  const visibleMin = learned ? Math.max(8, input.move.startup - 2) : Math.max(10, input.move.startup - 1);
+  return visibleTicks >= visibleMin && (
+    learned ? Math.floor(input.exchangeTick / 90) % 3 !== 2
+      : Math.floor(input.exchangeTick / 90) % 3 === 0
+  );
 }

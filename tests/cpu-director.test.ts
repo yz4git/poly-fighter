@@ -144,3 +144,94 @@ test("CPU learns sustained guard and increases guard-breaking choices", () => {
   }
   assert.ok(guardBreakers >= 12, `guard breakers=${guardBreakers}`);
 });
+
+
+test("CPU reads only independently visible committed strikes, not hidden input or hold frames", () => {
+  const cpu = new CpuFunDirector("NORMAL", 19);
+  const low = situation({ opponent: { ...situation().opponent,
+    state: "ATTACK", moveId: "lowKick", hitLevel: "LOW", moveTick: 0 } });
+  for (let i = 0; i < 45; i += 1) cpu.observe(low);
+  assert.equal(cpu.getStrikeRead().samples, 0, "frame zero must never reveal a chosen low");
+  for (let i = 5; i <= 55; i += 1) cpu.observe(situation({
+    opponent: { ...low.opponent, moveTick: i },
+  }));
+  assert.equal(cpu.getStrikeRead().samples, 1, "long active/recovery is ONE sample");
+  for (let strike = 1; strike < 7; strike += 1) {
+    cpu.observe(situation());
+    for (let tick = 0; tick <= 6; tick += 1) cpu.observe(situation({
+      opponent: { ...low.opponent, moveTick: tick },
+    }));
+  }
+  const learned = cpu.getStrikeRead();
+  assert.equal(learned.mode, "LOW_PATTERN");
+  assert.equal(learned.samples, 7);
+  assert.equal(learned.lowRatio, 1);
+  assert.ok(learned.confidence > .8);
+  // Same move ID with a restart to tick zero is also a distinct observed strike
+  // even if no intermediate neutral frame was visible.
+  for (let tick = 0; tick <= 6; tick += 1) cpu.observe(situation({
+    opponent: { ...low.opponent, moveTick: tick },
+  }));
+  assert.equal(cpu.getStrikeRead().samples, 8);
+  for (let strike = 0; strike < 8; strike += 1) {
+    cpu.observe(situation());
+    for (let tick = 0; tick <= 5; tick += 1) cpu.observe(situation({
+      opponent: { ...low.opponent, moveId: "jab", hitLevel: "HIGH", moveTick: tick },
+    }));
+  }
+  const changed = cpu.getStrikeRead();
+  assert.equal(changed.mode, "UPPER_PATTERN", "latest 8 strikes can disprove old low habit");
+  assert.equal(changed.lowRatio, 0);
+  assert.equal(changed.samples, 8);
+});
+
+test("learned low-heavy opponents make normal/hard CPUs evade more, without perfect reads", () => {
+  const repeatedLows = (cpu: CpuFunDirector) => {
+    for (let strike = 0; strike < 8; strike += 1) {
+      cpu.observe(situation());
+      for (let tick = 0; tick <= 5; tick += 1) cpu.observe(situation({
+        opponent: { ...situation().opponent, state: "ATTACK",
+          moveId: "lowKick", hitLevel: "LOW", moveTick: tick },
+      }));
+    }
+  };
+  for (const diff of ["EASY", "NORMAL", "HARD"] as const) {
+    const naive = new CpuFunDirector(diff, 31);
+    const learned = new CpuFunDirector(diff, 31);
+    repeatedLows(learned);
+    assert.equal(naive.getStrikeRead().mode, "UNSEEN");
+    assert.equal(learned.getStrikeRead().mode, "LOW_PATTERN");
+    let naiveEvasions = 0, learnedEvasions = 0;
+    for (let i = 0; i < 160; i += 1) {
+      const neutral = situation();
+      const a = naive.decide(neutral).intent;
+      const b = learned.decide(neutral).intent;
+      if (a === "SIDESTEP" || a === "RETREAT") naiveEvasions++;
+      if (b === "SIDESTEP" || b === "RETREAT") learnedEvasions++;
+    }
+    assert.ok(learnedEvasions > naiveEvasions,
+      `${diff}: evasion rate must rise after real repeated lows, ${naiveEvasions} -> ${learnedEvasions}`);
+    assert.ok(learnedEvasions < 140, "CPU must leave openings; no perfect low auto-evade");
+  }
+});
+
+test("punch-heavy opponents shift CPU toward guarded/counter answers, not a deterministic parry", () => {
+  const before = new CpuFunDirector("NORMAL", 87);
+  const after = new CpuFunDirector("NORMAL", 87);
+  for (let strike = 0; strike < 8; strike += 1) {
+    after.observe(situation());
+    for (let tick = 0; tick <= 5; tick += 1) after.observe(situation({
+      opponent: { ...situation().opponent, state: "ATTACK",
+        moveId: strike % 2 ? "straight" : "jab", hitLevel: "HIGH", moveTick: tick },
+    }));
+  }
+  assert.equal(after.getStrikeRead().mode, "UPPER_PATTERN");
+  let baseline = 0, adapted = 0;
+  for (let i = 0; i < 160; i += 1) {
+    const neutral = situation();
+    if (["GUARD", "COUNTER"].includes(before.decide(neutral).intent)) baseline++;
+    if (["GUARD", "COUNTER"].includes(after.decide(neutral).intent)) adapted++;
+  }
+  assert.ok(adapted > baseline, `punch read should change defensive plan: ${baseline} -> ${adapted}`);
+  assert.ok(adapted < 140, "a history read cannot make the CPU always guard");
+});

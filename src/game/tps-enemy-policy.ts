@@ -42,6 +42,8 @@ export function tpsCpuActorSnapshot(fighter: FighterRuntime): CpuActorSnapshot {
     state: fighter.state,
     moveId: fighter.currentMove?.id ?? null,
     movePower: fighter.currentMove?.power ?? 0,
+    moveTick: fighter.currentMove ? fighter.moveTick : undefined,
+    hitLevel: fighter.currentMove?.hitLevel ?? null,
     isActive: fighter.isActive(),
     grounded: fighter.grounded,
     x: fighter.position.x,

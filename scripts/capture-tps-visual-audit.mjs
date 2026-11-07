@@ -1194,8 +1194,11 @@ try {
       fighter.input = { ...neutral };
       fighter.previousInput = { ...neutral };
     }
-    game.p1.position.set(0, 0, 0.91);
-    game.p2.position.set(0, 0, -0.61);
+    // Mirror the already-audited canonical guard/block setup. The defender
+    // stays on a stable standing GUARD for the entire first strike instead of
+    // accidentally transitioning to HIT in a fresh custom physics setup.
+    game.p1.position.set(0, 0, 0.76);
+    game.p2.position.set(0, 0, -0.44);
     game.playerComboStage = 0;
     game.playerComboGraceTicks = 0;
     game.playerAttackQueued = false;
@@ -1206,6 +1209,8 @@ try {
     game.__neutralMashLastBase = null;
     game.__neutralMashLastOutcome = undefined;
     game.__mashBufferTicks = 0;
+    game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
     game.playerFlankWindowTicks = 0;
     game.playerPerfectEvadeTicks = 0;
     game.playerInterceptTicks = 0;
@@ -1213,8 +1218,7 @@ try {
     game.airCombo = null;
     game.updateEnemy = () => {
       game.p2.velocity.set(0, 0, 0);
-      if (!['KO', 'KNOCKDOWN', 'HIT', 'BLOCK_STUN'].includes(game.p2.state)) game.p2.state = 'GUARD';
-      game.p2.updatePhysics(1 / 60);
+      if (game.p2.state !== 'BLOCK_STUN') game.p2.state = 'GUARD';
     };
     game.p2.state = 'GUARD';
     game.press('punch', 'tps-adaptive-guard-first');
@@ -1291,6 +1295,8 @@ try {
     game.__neutralMashLastBase = 'jab';
     game.__neutralMashLastOutcome = undefined;
     game.__mashBufferTicks = 0;
+    game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+    game.p1.visual.root.userData.tpsComboLinkState = null;
     game.playerFlankWindowTicks = 0;
     game.playerPerfectEvadeTicks = 0;
     game.playerInterceptTicks = 0;

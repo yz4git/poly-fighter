@@ -5,7 +5,10 @@ import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
 import { chooseCinematicTechnique, cinematicAxesForBufferedTap } from "./cinematic-techniques";
 import { expandedContextMove } from "./move-expansion";
-import { chooseTpsNeutralMashMove, TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap } from "./tps-mash-variety";
+import {
+  chooseTpsNeutralMashMove, tpsBufferedMashDirection, tpsMashContactOutcome,
+  TPS_MASH_BUFFER_TICKS, tpsCanBufferMashTap, type TpsMashOutcome,
+} from "./tps-mash-variety";
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
 import { chooseTpsRangeAttack, isTpsRangeAttack, tpsRangeAdvance } from "./tps-range-attack";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
@@ -69,6 +72,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __neutralMashAttackCount?: number;
   __neutralMashPhrase?: number;
   __neutralMashLastBase?: string | null;
+  __neutralMashLastOutcome?: TpsMashOutcome;
   __rangeAttackSerial?: number;
   __mashBufferTicks?: number;
   __comboLinkSerial?: number;
@@ -314,11 +318,18 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     });
   }
 
-  const opener = chooseTpsOpeningStrike({
-    distance,
+  const mashDirection = tpsBufferedMashDirection({
     forward: game.p1.input.up,
     back: game.p1.input.down,
-    lateral: game.p1.input.left || game.p1.input.right,
+    left: game.p1.input.left,
+    right: game.p1.input.right,
+    queuedBranch: game.__comboQueuedBranch,
+  });
+  const opener = chooseTpsOpeningStrike({
+    distance,
+    forward: mashDirection.forward,
+    back: mashDirection.back,
+    lateral: mashDirection.lateral,
   });
   if (stage === 0 && !flank && !perfect) game.__comboRoute = opener.route;
   const moveId = stage === 0 && !flank && !perfect
@@ -327,9 +338,8 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   // Keep directed attacks deliberate and preserve the very first classic
   // three-hit route. Once neutral ATTACK has actually started several moves,
   // cycle real strike families instead of replaying jab/straight/power forever.
-  const neutralMash = !game.p1.input.up && !game.p1.input.down
-    && !game.p1.input.left && !game.p1.input.right
-    && !flank && !perfect;
+  const neutralMash = !mashDirection.forward && !mashDirection.back
+    && !mashDirection.lateral && !flank && !perfect;
   // A missed opener starts a different phrase after full recovery; a clean
   // linked second/third hit stays in the same phrase. Thus rapid mash play
   // varies immediately instead of needing three successful contacts first.
@@ -342,6 +352,7 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
         stage,
         distance,
         lastBase: game.__neutralMashLastBase,
+        lastOutcome: stage === 0 ? game.__neutralMashLastOutcome : null,
         available: game.p1.definition.moves,
       })
     : null;
@@ -367,6 +378,15 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
   game.p1.visual.root.userData.tpsMashMoveSerial = game.__neutralMashAttackCount ?? 0;
   game.p1.visual.root.userData.tpsMashPhrase = game.__neutralMashPhrase ?? 0;
   game.p1.visual.root.userData.tpsMashSelectedMove = mashChoice?.id ?? null;
+  game.p1.visual.root.userData.tpsMashPressureResponse = mashChoice?.response ?? "PHRASE";
+  if (stage === 0) {
+    game.__neutralMashLastOutcome = undefined;
+    // Tell a one-button player why the next silhouette changed. This is a
+    // brief combat cue, not an extra input prompt, damage modifier or cutscene.
+    if (mashChoice?.response === "LOW_SWITCH") game.setCombatBeat("SWEEP MIX-UP", 14);
+    else if (mashChoice?.response === "BODY_SWITCH") game.setCombatBeat("BODY MIX-UP", 14);
+    else if (mashChoice?.response === "REACH_SWITCH") game.setCombatBeat("RANGE ADJUST", 14);
+  }
 
   // A successful lateral PERFECT STEP creates a large side gap by design. The
   // first counter therefore gets a short authored pursuit lunge so the reward
@@ -407,6 +427,12 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   const beforeMoveId = game.p1.currentMove?.id ?? null;
   const rawAttackPressed = input.punch && !game.p1.input.punch;
   const activeMove = game.p1.currentMove;
+  const previousOutcome = beforeState === "ATTACK" && activeMove
+    ? tpsMashContactOutcome(
+        game.p1.hitTargets.has(game.p2.id),
+        game.p1.visual.root.userData.tpsCleanHitConfirmed === true,
+      )
+    : null;
 
   // An early ATTACK tap during a real move can queue the next strike. The
   // authored link still requires CLEAN contact and its exact cancel window;
@@ -428,7 +454,9 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   // cancelWindow. This preserves a visible follow-through beat before the next
   // startup and makes direction-based branches deterministic even if the player
   // releases the stick before the link point arrives.
-  if (game.p1.state === "ATTACK" && rawAttackPressed && game.playerComboStage < maxTpsComboStage(game.airCombo)) {
+  if (game.p1.state === "ATTACK" && activeMove && rawAttackPressed
+    && tpsCanBufferMashTap(activeMove, game.p1.moveTick)
+    && game.playerComboStage < maxTpsComboStage(game.airCombo)) {
     game.__comboQueuedBranch = input.up
       ? "FORWARD"
       : input.down
@@ -519,6 +547,15 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
   coreUpdatePlayer.call(this, input);
   advanceRangeAttack(game);
 
+  if (beforeState === "ATTACK" && game.p1.state !== "ATTACK" && previousOutcome) {
+    game.__neutralMashLastOutcome = previousOutcome;
+    game.p1.visual.root.userData.tpsMashLastOutcome = previousOutcome;
+    if ((game.__mashBufferTicks ?? 0) <= 0) {
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+    }
+  }
+
   // Only after the ENTIRE whiff/blocked strike has finished, accept a recent
   // buffered mash tap as a fresh opener. No phantom contact, auto-cancel,
   // invulnerable recovery or extra attack button is introduced.
@@ -529,6 +566,8 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
     game.playerAttackQueued = false;
     if (prototype.beginContextAttack.call(this)) game.p1.updatePhysics(FIXED_STEP);
     game.__mashBufferTicks = 0;
+    game.__comboQueuedBranch = undefined;
+    game.__comboQueuedSideSign = undefined;
   }
   game.p1.visual.root.userData.tpsMashBufferTicks = game.__mashBufferTicks ?? 0;
 
@@ -811,6 +850,7 @@ prototype.resetRound = function resetRound(): void {
   game.__neutralMashAttackCount = 0;
   game.__neutralMashPhrase = -1;
   game.__neutralMashLastBase = null;
+  game.__neutralMashLastOutcome = undefined;
   game.__rangeAttackSerial = 0;
   game.p1.visual.root.userData.tpsAutoRangeMove = null;
   game.p1.visual.root.userData.tpsRangeLockedForward = null;
@@ -822,6 +862,8 @@ prototype.resetRound = function resetRound(): void {
   game.p1.visual.root.userData.tpsMashMoveSerial = 0;
   game.p1.visual.root.userData.tpsMashPhrase = 0;
   game.p1.visual.root.userData.tpsMashSelectedMove = null;
+  game.p1.visual.root.userData.tpsMashPressureResponse = "PHRASE";
+  game.p1.visual.root.userData.tpsMashLastOutcome = null;
   game.p1.visual.root.userData.tpsMashBufferTicks = 0;
   game.__comboQueuedBranch = undefined;
   game.__comboQueuedSideSign = undefined;

@@ -1381,6 +1381,84 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/tps-buffered-side-branch.png`);
 
+  // CPU-pattern read uses only actual 60Hz ATTACK animations from the live
+  // fighter, not an injected attack table, hidden tap or fabricated hit.
+  // Observe each move after its first five visible frames, then fully clear
+  // that action before starting another independently readable strike.
+  const cpuPatternProbe = await execute(sessionId, `${gameLookup}
+    const game = findGame();
+    game.finished = false;
+    game.input.clear();
+    const neutral = { left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false };
+    for (const fighter of [game.p1,game.p2]) {
+      fighter.currentMove = null;
+      fighter.moveTick = 0;
+      fighter.velocity.set(0,0,0);
+      fighter.hitTargets.clear();
+      fighter.hitStop = 0; fighter.hitStun = 0; fighter.blockStun = 0;
+      fighter.knockdownTicks = 0; fighter.health = 100;
+      fighter.state = 'IDLE'; fighter.grounded = true;
+      fighter.input = {...neutral}; fighter.previousInput = {...neutral};
+    }
+    game.p1.position.set(0,0,.9);
+    game.p2.position.set(0,0,-2.7);
+    game.playerComboStage=0;game.playerComboGraceTicks=0;game.playerAttackQueued=false;
+    game.playerFlankWindowTicks=0;game.playerFlankAttackTicks=0;
+    game.playerInterceptTicks=0;game.playerReversalTicks=0;game.airCombo=null;
+    game.updateEnemy = () => {
+      game.enemyFunDirector.observe(game.enemySituation());
+      game.p2.state='GUARD';game.p2.velocity.set(0,0,0);
+    };
+    const observations=[];
+    function playVisibleStrike(moveId) {
+      game.p1.currentMove=null;game.p1.moveTick=0;game.p1.state='IDLE';
+      game.p1.hitTargets.clear();game.p1.hitStop=0;
+      game.step();
+      if (!game.p1.beginMove(moveId)) throw new Error('Could not play CPU read strike '+moveId);
+      for(let tick=0;tick<7;tick++) game.step();
+      observations.push({
+        move:moveId,tick:game.p1.moveTick,
+        read:game.enemyFunDirector.getStrikeRead(),
+      });
+    }
+    const hiddenBefore=game.enemyFunDirector.getStrikeRead();
+    for(let index=0;index<8;index++) playVisibleStrike('lowKick');
+    const lowRead=game.enemyFunDirector.getStrikeRead();
+    const lowData={
+      mode:game.p2.visual.root.userData.tpsCpuStrikeReadMode,
+      samples:game.p2.visual.root.userData.tpsCpuStrikeReadSamples,
+      ratio:game.p2.visual.root.userData.tpsCpuStrikeLowRatio,
+    };
+    const lowCountedOnce=observations.slice(0,8).every((x,i)=>x.read.samples===i+1);
+    // The last 8 distinct, VISIBLE punches must disprove old low history
+    // rather than make the CPU cling to a permanent scripted counter.
+    for(let index=0;index<8;index++) playVisibleStrike('jab');
+    const upperRead=game.enemyFunDirector.getStrikeRead();
+    const upperData={
+      mode:game.p2.visual.root.userData.tpsCpuStrikeReadMode,
+      samples:game.p2.visual.root.userData.tpsCpuStrikeReadSamples,
+      ratio:game.p2.visual.root.userData.tpsCpuStrikeLowRatio,
+    };
+    game.updateCamera(1/60);game.updateLockOn();
+    game.renderer.render(game.scene,game.camera);
+    return { hiddenBefore, lowCountedOnce, lowRead, lowData,
+      upperRead,upperData,observations,enemyHealth:game.p2.health };
+  `);
+  if (!cpuPatternProbe.lowCountedOnce
+    || cpuPatternProbe.lowRead.mode !== 'LOW_PATTERN'
+    || cpuPatternProbe.lowRead.samples !== 8
+    || cpuPatternProbe.lowRead.lowRatio !== 1
+    || cpuPatternProbe.lowData.mode !== 'LOW_PATTERN'
+    || cpuPatternProbe.lowData.samples !== 8
+    || cpuPatternProbe.upperRead.mode !== 'UPPER_PATTERN'
+    || cpuPatternProbe.upperRead.samples !== 8
+    || cpuPatternProbe.upperRead.lowRatio !== 0
+    || cpuPatternProbe.upperData.mode !== 'UPPER_PATTERN'
+    || cpuPatternProbe.enemyHealth !== 100) {
+    throw new Error(`TPS CPU visible-strike learning or forgetting failed: ${JSON.stringify(cpuPatternProbe)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-cpu-observed-pattern.png`);
+
   await execute(sessionId, `${gameLookup}
     const game = findGame();
     game.finished = false;
@@ -1401,7 +1479,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

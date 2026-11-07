@@ -1405,6 +1405,9 @@ try {
     game.playerComboStage=0;game.playerComboGraceTicks=0;game.playerAttackQueued=false;
     game.playerFlankWindowTicks=0;game.playerFlankAttackTicks=0;
     game.playerInterceptTicks=0;game.playerReversalTicks=0;game.airCombo=null;
+    // A fresh round gets a fresh CPU memory. Earlier graphical audits must
+    // not contribute hidden initial training samples to this exact replay.
+    game.enemyFunDirector = new game.enemyFunDirector.constructor(game.difficulty,47);
     game.updateEnemy = () => {
       game.enemyFunDirector.observe(game.enemySituation());
       game.p2.state='GUARD';game.p2.velocity.set(0,0,0);

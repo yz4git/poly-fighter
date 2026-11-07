@@ -12,6 +12,7 @@ import {
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
 import { chooseTpsRangeAttack, isTpsRangeAttack, tpsRangeAdvance } from "./tps-range-attack";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
+import { shouldTpsPlayerPunishFeint, tpsFeintPunishAdvance } from "./tps-feint-counterplay";
 import {
   chooseTpsComboContinuationRoute,
   chooseTpsComboRoute,
@@ -80,6 +81,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __comboQueuedSideSign?: number;
   __finalImpactSeconds?: number;
   __finalImpactContact?: THREE.Vector3;
+  enemyFeintReadTicks: number;
 };
 
 function horizontalDirection(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 {
@@ -131,6 +133,36 @@ function advanceRangeAttack(game: ExtendedTpsRuntime): void {
   data.tpsRangeTravelFrame = step;
   data.tpsRangeRemaining = Math.hypot(game.p2.position.x - fighter.position.x, game.p2.position.z - fighter.position.z);
   data.tpsRangeLaneOffset = lateral;
+}
+
+/** A short startup-only, lane-locked step-in when a fake windup was read.
+ * The ordinary resolveAttack still checks contact geometry; dodging the lane
+ * defeats the strike, and there is no instant gap closing or homing. */
+function advanceFeintPunish(game: ExtendedTpsRuntime): void {
+  const p = game.p1;
+  const data = p.visual.root.userData;
+  if (p.state !== "ATTACK" || !p.currentMove || data.tpsFeintPunishArmed !== true) return;
+  const lane = data.tpsFeintPunishLane;
+  if (!Array.isArray(lane) || lane.length < 3) return;
+  const fx = Number(lane[0]), fz = Number(lane[2]);
+  if (!Number.isFinite(fx) || !Number.isFinite(fz)) return;
+  const dx = game.p2.position.x - p.position.x, dz = game.p2.position.z - p.position.z;
+  const total = Number(data.tpsFeintPunishTravel ?? 0);
+  const moved = tpsFeintPunishAdvance({
+    attackMove: p.currentMove.id,
+    moveTick: p.moveTick,
+    startup: p.currentMove.startup,
+    hitStop: p.hitStop,
+    connected: p.hitTargets.has(game.p2.id),
+    longitudinal: dx * fx + dz * fz,
+    lateral: Math.abs(dx * fz - dz * fx),
+    travelTotal: total,
+  });
+  if (moved > 0) {
+    p.position.x += fx * moved;
+    p.position.z += fz * moved;
+    data.tpsFeintPunishTravel = total + moved;
+  }
 }
 
 function hype(game: ExtendedTpsRuntime): TpsHypeDirector {
@@ -190,6 +222,37 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     game.p2.position.x - game.p1.position.x,
     game.p2.position.z - game.p1.position.z,
   );
+  const attackData = game.p1.visual.root.userData;
+  attackData.tpsFeintPunishArmed = false;
+  const directedTap = game.p1.input.up || game.p1.input.down || game.p1.input.left
+    || game.p1.input.right || Boolean(game.__comboQueuedBranch && game.__comboQueuedBranch !== "NEUTRAL");
+  if (shouldTpsPlayerPunishFeint({
+    readTicks: game.enemyFeintReadTicks, distance,
+    playerCanAct: game.p1.canAct(),
+    playerGrounded: game.p1.grounded,
+    defenderGrounded: game.p2.grounded,
+    playerComboStage: game.playerComboStage,
+    directedTap,
+    availableStraight: Boolean(game.p1.definition.moves.straight),
+  })) {
+    // The player's existing ATTACK key launches a real, authored straight.
+    // Save the tap heading; any pursuit root motion is limited to startup and
+    // committed to THIS line, not continuously aimed at a moving rival.
+    if (!game.p1.beginMove("straight")) return false;
+    attackData.tpsFeintPunishArmed = true;
+    attackData.tpsFeintPunishMove = "straight";
+    attackData.tpsFeintPunishTravel = 0;
+    attackData.tpsFeintPunishLane = horizontalDirection(game.p1.position, game.p2.position).toArray();
+    attackData.tpsContextMove = "straight";
+    attackData.tpsComboMove = "straight";
+    attackData.tpsComboRoute = "CLOSE_A";
+    game.__comboRoute = "CLOSE_A";
+    game.__mashBufferTicks = 0;
+    game.playerComboStage = 1;
+    game.playerComboGraceTicks = 34;
+    game.setCombatBeat("FEINT READ · STRIKE!", 18);
+    return true;
+  }
 
   // From outside even the longest regular punch/kick, ATTACK means an actual
   // authored approach strike, automatically. No extra gesture or fake reach.
@@ -546,6 +609,7 @@ prototype.updatePlayer = function updatePlayer(input: InputFrame): void {
 
   coreUpdatePlayer.call(this, input);
   advanceRangeAttack(game);
+  advanceFeintPunish(game);
 
   if (beforeState === "ATTACK" && game.p1.state !== "ATTACK" && previousOutcome) {
     game.__neutralMashLastOutcome = previousOutcome;
@@ -867,6 +931,10 @@ prototype.resetRound = function resetRound(): void {
   game.p1.visual.root.userData.tpsMashBufferTicks = 0;
   game.__comboQueuedBranch = undefined;
   game.__comboQueuedSideSign = undefined;
+  game.p1.visual.root.userData.tpsFeintPunishArmed = false;
+  game.p1.visual.root.userData.tpsFeintPunishMove = null;
+  game.p1.visual.root.userData.tpsFeintPunishTravel = 0;
+  game.p1.visual.root.userData.tpsFeintPunishHitSerial = 0;
   game.p1.visual.root.userData.tpsAirPivotSign = 0;
   game.p1.visual.root.userData.tpsAirBranch = null;
   game.camera.userData.tpsJustEvadeTick = null;

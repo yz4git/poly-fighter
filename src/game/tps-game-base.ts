@@ -56,6 +56,7 @@ import {
   type EnemyTactic,
 } from "./tps-enemy-policy";
 import { chooseTpsCpuWhiffPunish, shouldTpsCpuFeint, tpsCpuFeintRevealTick } from "./tps-enemy-mindgame";
+import { TPS_FEINT_READ_TICKS, TPS_FEINT_SIDE_EXIT_TICKS } from "./tps-feint-counterplay";
 import {
   advanceTpsFinishWindow,
   defeatedFighterForWinner,
@@ -237,6 +238,7 @@ export class TpsFightGame {
   private enemyFeintCandidateSerial = 0;
   private enemyFeintPending = false;
   private enemyLastFeintTick = -1000;
+  private enemyFeintReadTicks = 0;
   private enemyWhiffPunishCooldownTicks = 0;
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
@@ -956,6 +958,8 @@ export class TpsFightGame {
 
     this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
     this.enemyWhiffPunishCooldownTicks = Math.max(0, this.enemyWhiffPunishCooldownTicks - 1);
+    this.enemyFeintReadTicks = Math.max(0, this.enemyFeintReadTicks - 1);
+    this.p2.visual.root.userData.tpsCpuFeintReadTicks = this.enemyFeintReadTicks;
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.reviewEnemyHabitsIfDue();
     this.refreshEnemyTacticIfDue();
@@ -966,6 +970,7 @@ export class TpsFightGame {
     if (this.advanceEnemyTelegraph(towardPlayer)) return;
     if (this.runEnemyOpeningGrace(liveDistance, towardPlayer, tangent)) return;
     if (this.runHeldEnemyDecision(towardPlayer, tangent)) return;
+    if (this.runEnemyFeintRecovery()) return;
     if (this.tryEnemyWhiffPunish(liveDistance)) return;
 
     const decision = adaptTpsCpuDecision(
@@ -985,6 +990,22 @@ export class TpsFightGame {
     this.enemyDirectorHoldTicks = Math.max(1, decision.holdTicks - 1);
     this.moveEnemy(decision.intent, towardPlayer, tangent);
     this.p2.updatePhysics(FIXED_STEP);
+  }
+
+  private runEnemyFeintRecovery(): boolean {
+    if (this.enemyFeintReadTicks <= 0) return false;
+    // After the readable side exit the CPU has to PLANT before choosing its
+    // next attack or guard. No instant parry, invulnerable recovery or teleport.
+    const wait: CpuDecision = {
+      intent: "WAIT", holdTicks: 1, telegraphTicks: 0,
+      reason: "feint-plant-punishable-recovery",
+      comebackMercy: 0, pressure: 0,
+    };
+    this.enemyDirectorDecision = wait;
+    this.publishEnemyDecision(wait);
+    this.p2.state = "IDLE";
+    this.p2.updatePhysics(FIXED_STEP);
+    return true;
   }
 
   private tryEnemyWhiffPunish(distance: number): boolean {
@@ -1099,6 +1120,8 @@ export class TpsFightGame {
     this.enemyDirectorTelegraphTicks = 0;
     this.enemyDirectorTelegraphTotalTicks = 0;
     this.enemyLastFeintTick = this.simulationTicks;
+    this.enemyFeintReadTicks = TPS_FEINT_READ_TICKS;
+    rootData.tpsCpuFeintReadTicks = this.enemyFeintReadTicks;
 
     // A real sidestep, not invisible dodge i-frames. There is NO beginMove
     // call, no active hitbox, no damage, and no instant counterattack.
@@ -1111,18 +1134,18 @@ export class TpsFightGame {
     rootData.tpsCpuFeintSerial = Number(rootData.tpsCpuFeintSerial ?? 0) + 1;
     this.enemyDirectorDecision = {
       intent: "SIDESTEP",
-      holdTicks: 12,
+      holdTicks: TPS_FEINT_SIDE_EXIT_TICKS,
       telegraphTicks: 0,
       reason: "bait-feint-real-side-exit",
       comebackMercy: 0,
       pressure: 0,
     };
-    this.enemyDirectorHoldTicks = 11;
+    this.enemyDirectorHoldTicks = TPS_FEINT_SIDE_EXIT_TICKS - 1;
     this.publishEnemyDecision(this.enemyDirectorDecision);
     const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
     this.moveEnemy("SIDESTEP", towardPlayer, tangent);
     this.p2.updatePhysics(FIXED_STEP);
-    this.setCombatBeat("RIVAL FEINT · READ THE STEP", 26);
+    this.setCombatBeat("FEINT! TAP ATTACK TO PUNISH", 26);
   }
 
   private tickEnemyTelegraph(): void {
@@ -1473,6 +1496,20 @@ export class TpsFightGame {
       attackerIsPlayer: attacker === this.p1,
     });
     const { blocked, reactionStrength } = resolution;
+    // The reward is EARNED by the actual straight physically hitting while
+    // the fake windup is still recovering. It is never a damage multiplier.
+    if (attacker === this.p1 && defender === this.p2
+      && !blocked && move.id === "straight"
+      && attacker.visual.root.userData.tpsFeintPunishArmed === true
+      && this.enemyFeintReadTicks > 0) {
+      this.trainingProgress.punishes += 1;
+      this.setCombatBeat("FEINT PUNISH!", 32);
+      attacker.visual.root.userData.tpsFeintPunishHitSerial =
+        Number(attacker.visual.root.userData.tpsFeintPunishHitSerial ?? 0) + 1;
+      this.enemyFeintReadTicks = 0;
+      defender.visual.root.userData.tpsCpuFeintReadTicks = 0;
+      attacker.visual.root.userData.tpsFeintPunishArmed = false;
+    }
     const resolvedDamage = blocked ? 0 : tpsAirComboDamage(resolution.resolvedDamage, move, this.airCombo);
     const lethalImpact = !blocked && defender.health <= resolvedDamage;
     attacker.visual.root.userData.tpsCleanHitConfirmed = !blocked;
@@ -2119,6 +2156,7 @@ export class TpsFightGame {
     this.enemyFeintCandidateSerial = 0;
     this.enemyFeintPending = false;
     this.enemyLastFeintTick = -1000;
+    this.enemyFeintReadTicks = 0;
     this.enemyWhiffPunishCooldownTicks = 0;
     this.enemyDirectorDecision = null;
     this.enemyDirectorHoldTicks = 0;
@@ -2136,6 +2174,11 @@ export class TpsFightGame {
     rootData.tpsCpuLearnedLowGuard = false;
     rootData.tpsCpuFeintMove = null;
     rootData.tpsCpuFeintSerial = 0;
+    rootData.tpsCpuFeintReadTicks = 0;
+    this.p1.visual.root.userData.tpsFeintPunishArmed = false;
+    this.p1.visual.root.userData.tpsFeintPunishHitSerial = 0;
+    this.p1.visual.root.userData.tpsFeintPunishMove = null;
+    this.p1.visual.root.userData.tpsFeintPunishTravel = 0;
     rootData.tpsCpuWhiffPunishSerial = 0;
     rootData.tpsCpuWhiffPunishMove = null;
 
@@ -2191,6 +2234,7 @@ export class TpsFightGame {
       playerFlankWindowTicks: this.playerFlankWindowTicks,
       playerComboStage: this.playerComboStage,
       playerGuardPunishTicks: this.playerGuardPunishTicks,
+      enemyFeintReadTicks: this.enemyFeintReadTicks,
       playerGuardCrouching: this.playerGuardCrouching,
       combatBeatTicks: this.combatBeatTicks,
       combatBeatLabel: this.combatBeatLabel,

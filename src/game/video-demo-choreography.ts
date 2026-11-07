@@ -9,7 +9,7 @@
  * 5.3-7.3 pivot / rotating high kick; 7.5-8.5 finish punch and reset.
  * Preserve one attack per actual game move: never auto-hit through an animation.
  */
-export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V2" as const;
+export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V3" as const;
 export const VIDEO_STRIKE_CLIPS = {
   jab: "CM_Video_Jab",
   backfist: "CM_Video_Palm",
@@ -53,9 +53,14 @@ const KEYS: Record<VideoStrike, readonly VideoKey[]> = {
       leftHand: [-.08,.81,.14], rightHand: [.14,.72,.06], highGuard: 1 } },
     { t: .39, pose: { drop: -.05, side: -.045, forward: .035, yaw: .28, roll: -.11,
       rightHand: [.10,.76,.28], leftHand: [-.085,.82,.14] } },
-    { t: .50, pose: { forward: .105, drop: -.04, yaw: .99, roll: -.25,
-      chest: .21, rightHand: [.34,.79,.64], leftHand: [-.16,.84,.045], highGuard: .80 } },
-    { t: .58, pose: { forward: .11, drop: -.045, yaw: 1.02, roll: -.24,
+    // Preserve the 3D palm strike's hand extension and large hip turn, but
+    // prevent simultaneous forward chest fold + lateral waist roll at contact.
+    // The former combination placed the neck beyond the approved torso cone
+    // in the real TPS WebGL skeleton audit. Hip turn supplies the power; the
+    // thorax stays tall enough to distinguish a palm from a diving tackle.
+    { t: .50, pose: { forward: .105, drop: -.04, yaw: .99, roll: -.15,
+      chest: .105, rightHand: [.34,.79,.64], leftHand: [-.16,.84,.045], highGuard: .80 } },
+    { t: .58, pose: { forward: .11, drop: -.045, yaw: 1.02, roll: -.14,
       rightHand: [.40,.76,.60], leftHand: [-.16,.84,.05], highGuard: .75 } },
     { t: .70, pose: { forward: .063, yaw: .68, roll: -.16, rightHand: [.31,.76,.45],
       leftHand: [-.10,.79,.12] } },
@@ -66,47 +71,53 @@ const KEYS: Record<VideoStrike, readonly VideoKey[]> = {
   kick: [
     { t: 0, pose: { highGuard: .80 } },
     { t: .19, pose: { drop: -.115, side: -.052, forward: -.036, yaw: -.58,
-      pitch: .21, roll: -.10, chest: .20, highGuard: .92,
+      pitch: .13, roll: -.07, chest: .09, highGuard: .92,
       rightFoot: [.075,.24,.16], rightHand: [.12,.81,.13], leftHand: [-.10,.79,.12] } },
-    { t: .37, pose: { drop: -.092, side: -.093, yaw: -.85, pitch: .31,
-      roll: -.25, rightFoot: [.09,.43,.26],
+    { t: .37, pose: { drop: -.092, side: -.093, yaw: -.85, pitch: .16,
+      roll: -.12, rightFoot: [.09,.43,.26],
       rightHand: [.17,.79,.10], leftHand: [-.12,.82,.19] } },
-    { t: .50, pose: { drop: -.058, side: -.115, forward: .08, yaw: -1.05, pitch: .38,
-      roll: -.34, chest: .19, rightFoot: [.16,.61,.68], leftFoot: [-.10,0,.05],
+    // The raised boot remains fully extended, but the torso no longer dives
+    // head-first toward the target. Support-leg counterbalance comes from
+    // the planted hip turn; chest pitch and lateral roll are kept anatomical.
+    { t: .50, pose: { drop: -.058, side: -.115, forward: .08, yaw: -1.05, pitch: .11,
+      roll: -.11, chest: .07, rightFoot: [.16,.61,.68], leftFoot: [-.10,0,.05],
       leftHand: [-.20,.85,.11], rightHand: [.20,.73,-.03] } },
-    { t: .58, pose: { drop: -.061, side: -.112, forward: .09, yaw: -1.04, pitch: .36,
-      roll: -.30, rightFoot: [.18,.61,.71], leftFoot: [-.10,0,.05],
+    { t: .58, pose: { drop: -.061, side: -.112, forward: .09, yaw: -1.04, pitch: .12,
+      roll: -.11, rightFoot: [.18,.61,.71], leftFoot: [-.10,0,.05],
       leftHand: [-.19,.85,.12], rightHand: [.20,.73,-.02] } },
-    { t: .72, pose: { drop: -.066, side: -.075, yaw: -.71, pitch: .23,
-      roll: -.20, rightFoot: [.13,.46,.51], leftHand: [-.15,.79,.14] } },
-    { t: .81, pose: { drop: -.065, yaw: -.28, pitch: .15, rightFoot: [.065,.22,.22],
+    { t: .72, pose: { drop: -.066, side: -.075, yaw: -.71, pitch: .13,
+      roll: -.10, rightFoot: [.13,.46,.51], leftHand: [-.15,.79,.14] } },
+    { t: .81, pose: { drop: -.065, yaw: -.28, pitch: .10, rightFoot: [.065,.22,.22],
       highGuard: .86 } },
     { t: 1, pose: { highGuard: .85 } },
   ],
   risingKick: [
     { t: 0, pose: { highGuard: .80 } },
     { t: .14, pose: { drop: -.13, side: -.065, forward: -.045, yaw: -.49,
-      pitch: .26, roll: .1, leftHand: [-.10,.77,.14], rightHand: [.12,.81,.17], highGuard: .85 } },
+      pitch: .14, roll: .07, leftHand: [-.10,.77,.14], rightHand: [.12,.81,.17], highGuard: .85 } },
     { t: .30, pose: { drop: -.15, side: -.085, forward: .035, yaw: -.70,
-      pitch: .34, roll: -.18, spin: -Math.PI*.85,
+      pitch: .17, roll: -.11, spin: -Math.PI*.85,
       rightFoot: [.105,.37,.17], leftFoot: [-.11,0,.03],
       leftHand: [-.16,.77,.14], rightHand: [.14,.76,.07] } },
     { t: .42, pose: { drop: -.13, side: -.12, forward: .065, yaw: -.45,
-      pitch: .26, roll: -.26, spin: -Math.PI*1.66,
+      pitch: .14, roll: -.12, spin: -Math.PI*1.66,
       rightFoot: [.15,.59,.42], leftFoot: [-.12,0,.03],
       leftHand: [-.21,.75,.10], rightHand: [.17,.73,.06] } },
+    // The high boot and full 360-degree rotation stay keyed. Keep the neck
+    // stacked over the planted hip instead of combining a deep lateral fold
+    // with a forward dive at the exact visual strike contact.
     { t: .50, pose: { drop: -.075, side: -.13, forward: .095,
-      yaw: .18, pitch: .29, roll: -.41, spin: -PI2,
+      yaw: .18, pitch: .10, roll: -.11, spin: -PI2,
       rightFoot: [.15,.82,.68], leftFoot: [-.12,0,.04],
       leftHand: [-.26,.85,.04], rightHand: [.25,.71,-.03] } },
     { t: .58, pose: { drop: -.075, side: -.12, forward: .09, yaw: .21,
-      pitch: .31, roll: -.34, spin: -PI2,
+      pitch: .11, roll: -.10, spin: -PI2,
       rightFoot: [.18,.79,.64], leftFoot: [-.12,0,.04],
       leftHand: [-.25,.84,.04], rightHand: [.24,.71,-.03] } },
-    { t: .68, pose: { drop: -.085, side: -.083, yaw: .15, roll: -.24, spin: -PI2,
-      pitch: .19, rightFoot: [.14,.62,.48],
+    { t: .68, pose: { drop: -.085, side: -.083, yaw: .15, roll: -.09, spin: -PI2,
+      pitch: .11, rightFoot: [.14,.62,.48],
       rightHand: [.17,.77,.06], leftHand: [-.17,.79,.11] } },
-    { t: .82, pose: { drop: -.055, yaw: -.06, pitch: .10, spin: -PI2,
+    { t: .82, pose: { drop: -.055, yaw: -.06, pitch: .07, spin: -PI2,
       rightFoot: [.07,.23,.18], highGuard: .76 } },
     { t: 1, pose: { highGuard: .86, spin: -PI2 } },
   ],
@@ -170,7 +181,10 @@ export function sampleHeroVideoChoreography(
       drop: (original.drop ?? 0) - weight * .027,
       forward: (original.forward ?? 0) + weight * .027,
       yaw: (original.yaw ?? 0) * (1 + weight * .19),
-      chest: (original.chest ?? 0) + weight * .058,
+      // Keep KAIRO's heavy hip/ground drive, but a backfist is not a
+      // head-first body blow. Limit its extra thoracic hinge, leaving its
+      // authored fist positions and pelvis rotation entirely unchanged.
+      chest: (original.chest ?? 0) + weight * (move === "backfist" ? .022 : .058),
     };
   }
   if (hero === "SERA" && (move === "kick" || move === "risingKick")) {

@@ -9,7 +9,7 @@ import {
 } from "../src/game/video-demo-choreography";
 
 test("reference video choreography: four distinguishable game-ready clips", () => {
-  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V2");
+  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V3");
   assert.equal(new Set(Object.values(VIDEO_STRIKE_CLIPS)).size,4);
   for (const name of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const start=sampleVideoChoreography(name,0,.09);
@@ -94,6 +94,67 @@ test("hero animations use more visible windup, longer strike extension and disti
       const pose = sampleHeroVideoChoreography(move, u, .09, name);
       const values = [pose.side!, pose.forward!, pose.drop!, pose.yaw!, pose.pitch!, pose.roll!, ...pose.leftFoot!, ...pose.rightFoot!, ...pose.leftHand!, ...pose.rightHand!];
       assert.ok(values.every(Number.isFinite), name + " nonfinite pose at phase " + u);
+    }
+  }
+});
+
+
+test("backfist contact keeps an upright torso without flattening the striking hand or hip turn", () => {
+  const neutral = sampleVideoChoreography("backfist", 0, .09);
+  const impact = sampleVideoChoreography("backfist", .50, .09);
+  const follow = sampleVideoChoreography("backfist", .58, .09);
+  const kairo = sampleHeroVideoChoreography("backfist", .50, .09, "KAIRO");
+  assert.ok(impact.yaw! >= .95, "distinct rotated palm strike retains its hip drive");
+  assert.ok(impact.chest! <= .12, "thorax is no longer bent into the fist path");
+  assert.ok(Math.abs(impact.roll!) <= .16, "pelvis no longer dives sideways at contact");
+  assert.ok(kairo.chest! < .14, "POWER fighter receives heavy impact without extra neck fold");
+  assert.ok(kairo.forward! > impact.forward!, "KAIRO retains a genuine forward weight shift");
+  assert.deepEqual(kairo.rightHand, impact.rightHand, "the authored glove path must never be relaxed");
+  assert.ok(impact.rightHand![2] > neutral.rightHand![2] + .45, "the actual palm reaches forward");
+  assert.ok(follow.rightHand![0] > impact.rightHand![0], "palm follows through across center");
+  for (const phase of [.40,.45,.50,.55,.58,.65]) {
+    const a = sampleHeroVideoChoreography("backfist", phase, .09, "KAIRO");
+    const b = sampleHeroVideoChoreography("backfist", phase + .01, .09, "KAIRO");
+    assert.ok(Math.abs(a.chest! - b.chest!) < .027, "torso pitch interpolation must remain smooth");
+    assert.ok(Math.abs(a.roll! - b.roll!) < .035, "waist return must remain smooth");
+  }
+  assert.deepEqual(sampleHeroVideoChoreography("backfist", 0, .09, "KAIRO"), neutral);
+  assert.deepEqual(sampleHeroVideoChoreography("backfist", 1, .09, "KAIRO"), sampleVideoChoreography("backfist", 1, .09));
+});
+
+test("side kick's grounded shoulder counterbalance does not pitch head first at target", () => {
+  const base = sampleVideoChoreography("kick", .5, .09);
+  const sera = sampleHeroVideoChoreography("kick", .5, .09, "SERA");
+  assert.ok(base.yaw! < -1.0, "rotated planted hip still powers the kick");
+  assert.ok(base.pitch! <= .12 && base.chest! <= .08, "raised leg must not force chest into a forward fold");
+  assert.ok(Math.abs(base.roll!) <= .12, "kick support hip must not take upper body into a side dive");
+  assert.deepEqual(base.rightFoot, [.16,.61,.68], "the heel contact target stays exactly authored");
+  assert.deepEqual(base.leftFoot, [-.10,0,.05], "the planted support leg retains its target");
+  assert.ok(sera.rightFoot![1] > base.rightFoot![1], "SERA still earns a higher, agile kick");
+  assert.ok(sera.roll! < base.roll!, "SERA retains its lateral accent");
+  for (const t of [.28,.39,.50,.58,.70,.81]) {
+    const first = sampleVideoChoreography("kick", t, .09);
+    const second = sampleVideoChoreography("kick", t+.01, .09);
+    assert.ok(Math.abs(first.pitch! - second.pitch!) < .032, "kick pitch changes smoothly");
+    assert.ok(Math.abs(first.roll! - second.roll!) < .035, "kick roll changes smoothly");
+  }
+});
+
+test("turning high kick preserves a full revolution and apex foot while keeping chest upright", () => {
+  const rising = sampleVideoChoreography("risingKick", .5, .09);
+  const side = sampleVideoChoreography("kick", .5, .09);
+  assert.ok(rising.rightFoot![1] > .8 && rising.rightFoot![1] > side.rightFoot![1] + .15);
+  assert.equal(rising.spin, -Math.PI*2, "full turn remains exactly one revolution");
+  assert.ok(rising.pitch! <= .11 && Math.abs(rising.roll!) <= .12);
+  for (const fighter of ["KAIRO", "SERA", "VANTA", "AXION"]) {
+    const hero = sampleHeroVideoChoreography("risingKick", .5, .09, fighter);
+    assert.ok(hero.rightFoot![1] >= .82, fighter+" still strikes high");
+    assert.equal(hero.spin, -Math.PI*2, fighter+" spin timing is unchanged");
+    for (const u of [.3,.42,.5,.58,.68]) {
+      const a = sampleHeroVideoChoreography("risingKick", u, .09, fighter);
+      const b = sampleHeroVideoChoreography("risingKick", u + .01, .09, fighter);
+      assert.ok(Math.abs(a.pitch! - b.pitch!) < .03, "spin pitch interpolation remains smooth");
+      assert.ok(Math.abs(a.roll! - b.roll!) < .04, "spin roll interpolation remains smooth");
     }
   }
 });

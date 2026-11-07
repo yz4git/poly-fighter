@@ -104,11 +104,56 @@ for (const [body, definition] of [["male", FIGHTER_DEFINITIONS.red], ["female", 
       action.play();
       action.time = clip.duration * u;
       mixer.update(0); target.scene.updateMatrixWorld(true);
-      return Object.fromEntries(["pelvis", "spine_03", "hand_l", "hand_r", "foot_l", "foot_r", "ball_l", "ball_r"].map(n =>
+      return Object.fromEntries(["pelvis", "spine_03", "neck_01", "upperarm_l", "upperarm_r", "hand_l", "hand_r", "foot_l", "foot_r", "ball_l", "ball_r"].map(n =>
         [n, { position: bone(n).getWorldPosition(new THREE.Vector3()), rotation: bone(n).getWorldQuaternion(new THREE.Quaternion()) }]));
     };
     const ready = pose("CM_Ready", 0);
     const height = new THREE.Box3().setFromObject(target.scene).getSize(new THREE.Vector3()).y;
+
+    // Inspect the actual baked contact skeleton, not a hand-edited reference
+    // pose or a gameplay hitbox. The same pelvis-relative chest/neck ratios are
+    // enforced by scripts/capture-motion-readability-audit.mjs in browser WebGL.
+    const palm = pose("CM_Video_Palm", .50);
+    const pelvis = palm.pelvis.position;
+    const lean = (item: THREE.Vector3) => Math.hypot(item.x - pelvis.x, item.z - pelvis.z)
+      / Math.max(1e-6, Math.abs(item.y - pelvis.y));
+    assert.ok(lean(palm.spine_03.position) <= .42,
+      `${body} palm chest exceeded the 0.42 torso cone: ${lean(palm.spine_03.position).toFixed(4)}`);
+    assert.ok(lean(palm.neck_01.position) <= .48,
+      `${body} palm neck exceeded the 0.48 torso cone: ${lean(palm.neck_01.position).toFixed(4)}`);
+    assert.ok(palm.hand_r.position.distanceTo(ready.hand_r.position) > height * .16,
+      `${body} palm lost the right-hand forward strike`);
+    for (const suffix of ["l", "r"]) {
+      assert.ok(palm[`foot_${suffix}`].position.distanceTo(ready[`foot_${suffix}`].position) < height * .085,
+        `${body} palm lost its two-foot base`);
+    }
+
+    const kick = pose("CM_Video_SideKick", .50);
+    const kickPelvis = kick.pelvis.position;
+    const kickLean = (item: THREE.Vector3) => Math.hypot(item.x - kickPelvis.x, item.z - kickPelvis.z)
+      / Math.max(1e-6, Math.abs(item.y - kickPelvis.y));
+    assert.ok(kickLean(kick.spine_03.position) <= .42,
+      `${body} sidekick chest exceeded the torso cone: ${kickLean(kick.spine_03.position).toFixed(4)}`);
+    assert.ok(kickLean(kick.neck_01.position) <= .48,
+      `${body} sidekick neck exceeded the torso cone: ${kickLean(kick.neck_01.position).toFixed(4)}`);
+    assert.ok(kick.foot_r.position.y > ready.foot_r.position.y + height*.30,
+      `${body} sidekick lost its real extended raised boot`);
+    assert.ok(kick.foot_l.position.distanceTo(ready.foot_l.position) < height*.10,
+      `${body} sidekick lost the support foot`);
+
+    const spinning = pose("CM_Video_SpinKick", .50);
+    const spinPelvis = spinning.pelvis.position;
+    const spinLean = (item: THREE.Vector3) => Math.hypot(item.x - spinPelvis.x, item.z - spinPelvis.z)
+      / Math.max(1e-6, Math.abs(item.y - spinPelvis.y));
+    assert.ok(spinLean(spinning.spine_03.position) <= .42,
+      `${body} spinning kick chest exceeded the torso cone: ${spinLean(spinning.spine_03.position).toFixed(4)}`);
+    assert.ok(spinLean(spinning.neck_01.position) <= .48,
+      `${body} spinning kick neck exceeded the torso cone: ${spinLean(spinning.neck_01.position).toFixed(4)}`);
+    assert.ok(spinning.foot_r.position.y > ready.foot_r.position.y + height * .45,
+      `${body} spinning kick failed to raise the striking boot`);
+    assert.ok(spinning.foot_l.position.distanceTo(ready.foot_l.position) < height * .10,
+      `${body} spinning kick detached the supporting foot`);
+
     for (const clipName of ["BF_Jab_L", "BF_Cross_R", "BF_BodyBlow_L", "BF_Backfist_R", "BF_FrontKick_R", "BF_LowKick_L"]) {
       let previous = pose(clipName, 0);
       for (let frame = 1; frame <= 60; frame++) {

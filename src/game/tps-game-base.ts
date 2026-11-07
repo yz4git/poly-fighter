@@ -55,6 +55,7 @@ import {
   type EnemyPersona,
   type EnemyTactic,
 } from "./tps-enemy-policy";
+import { chooseTpsCpuWhiffPunish, shouldTpsCpuFeint, tpsCpuFeintRevealTick } from "./tps-enemy-mindgame";
 import {
   advanceTpsFinishWindow,
   defeatedFighterForWinner,
@@ -233,6 +234,10 @@ export class TpsFightGame {
   private enemyDirectorTelegraphTotalTicks = 0;
   private enemyDirectorPendingMove: string | null = null;
   private enemyLastStrikeReadMode = "UNSEEN";
+  private enemyFeintCandidateSerial = 0;
+  private enemyFeintPending = false;
+  private enemyLastFeintTick = -1000;
+  private enemyWhiffPunishCooldownTicks = 0;
 
   constructor(mount: HTMLElement, options: TpsFightGameOptions) {
     this.mount = mount;
@@ -950,6 +955,7 @@ export class TpsFightGame {
     if (this.advanceLockedState(this.p2)) return;
 
     this.enemyCooldown = Math.max(0, this.enemyCooldown - 1);
+    this.enemyWhiffPunishCooldownTicks = Math.max(0, this.enemyWhiffPunishCooldownTicks - 1);
     if (this.enemyOpeningGraceTicks > 0) this.enemyOpeningGraceTicks -= 1;
     this.reviewEnemyHabitsIfDue();
     this.refreshEnemyTacticIfDue();
@@ -960,6 +966,7 @@ export class TpsFightGame {
     if (this.advanceEnemyTelegraph(towardPlayer)) return;
     if (this.runEnemyOpeningGrace(liveDistance, towardPlayer, tangent)) return;
     if (this.runHeldEnemyDecision(towardPlayer, tangent)) return;
+    if (this.tryEnemyWhiffPunish(liveDistance)) return;
 
     const decision = adaptTpsCpuDecision(
       this.enemyFunDirector.decide(this.enemySituation()),
@@ -978,6 +985,44 @@ export class TpsFightGame {
     this.enemyDirectorHoldTicks = Math.max(1, decision.holdTicks - 1);
     this.moveEnemy(decision.intent, towardPlayer, tangent);
     this.p2.updatePhysics(FIXED_STEP);
+  }
+
+  private tryEnemyWhiffPunish(distance: number): boolean {
+    const punish = chooseTpsCpuWhiffPunish({
+      difficulty: this.difficulty,
+      opponentState: this.p1.state,
+      opponentMove: this.p1.currentMove,
+      opponentMoveTick: this.p1.moveTick,
+      opponentHitCpu: this.p1.hitTargets.has(this.p2.id),
+      opponentHitStop: this.p1.hitStop,
+      distance,
+      cpuActionable: this.p2.grounded && ["IDLE","WALK","GUARD"].includes(this.p2.state),
+      cpuJab: this.p2.definition.moves.jab ?? null,
+      cpuStraight: this.p2.definition.moves.straight ?? null,
+      jabTelegraphTicks: minimumTpsEnemyTelegraphTicks(this.difficulty, "jab"),
+      straightTelegraphTicks: minimumTpsEnemyTelegraphTicks(this.difficulty, "straight"),
+      cooldownTicks: this.enemyWhiffPunishCooldownTicks,
+    });
+    if (!punish) return false;
+    const decision: CpuDecision = {
+      intent: punish,
+      holdTicks: 1,
+      telegraphTicks: 0,
+      reason: "punish-verified-player-whiff",
+      comebackMercy: 0,
+      pressure: 1,
+    };
+    this.enemyDirectorDecision = decision;
+    this.publishEnemyDecision(decision);
+    if (!this.queueEnemyAttackDecision(decision)) return false;
+    // Always spend the original telegraph and startup. A recovery punish is
+    // earned by remaining close enough to hit before the player recovers.
+    this.enemyWhiffPunishCooldownTicks = 105;
+    this.p2.visual.root.userData.tpsCpuWhiffPunishSerial =
+      Number(this.p2.visual.root.userData.tpsCpuWhiffPunishSerial ?? 0) + 1;
+    this.p2.visual.root.userData.tpsCpuWhiffPunishMove = punish === "JAB" ? "jab" : "straight";
+    this.setCombatBeat("RIVAL WHIFF PUNISH!", 24);
+    return true;
   }
 
   private enemySituation(): CpuSituation {
@@ -1033,12 +1078,51 @@ export class TpsFightGame {
 
   private advanceEnemyTelegraph(towardPlayer: THREE.Vector3): boolean {
     if (!this.enemyDirectorPendingMove) return false;
+    if (this.enemyFeintPending && this.enemyDirectorTelegraphTicks <=
+      tpsCpuFeintRevealTick(this.enemyDirectorTelegraphTotalTicks)) {
+      this.revealEnemyFeint(towardPlayer);
+      return true;
+    }
     if (this.enemyDirectorTelegraphTicks > 0) {
       this.tickEnemyTelegraph();
       this.p2.updatePhysics(FIXED_STEP);
       return true;
     }
     return this.commitEnemyTelegraphedMove(towardPlayer);
+  }
+
+  private revealEnemyFeint(towardPlayer: THREE.Vector3): void {
+    const cancelledMove = this.enemyDirectorPendingMove;
+    const rootData = this.p2.visual.root.userData;
+    this.enemyDirectorPendingMove = null;
+    this.enemyFeintPending = false;
+    this.enemyDirectorTelegraphTicks = 0;
+    this.enemyDirectorTelegraphTotalTicks = 0;
+    this.enemyLastFeintTick = this.simulationTicks;
+
+    // A real sidestep, not invisible dodge i-frames. There is NO beginMove
+    // call, no active hitbox, no damage, and no instant counterattack.
+    rootData.tpsEnemyTelegraphPhase = "FEINT";
+    rootData.tpsEnemyTelegraphMove = null;
+    rootData.tpsEnemyTelegraphProgress = 0;
+    rootData.tpsCpuDirectorTelegraphTicks = 0;
+    rootData.tpsCpuDirectorMove = null;
+    rootData.tpsCpuFeintMove = cancelledMove;
+    rootData.tpsCpuFeintSerial = Number(rootData.tpsCpuFeintSerial ?? 0) + 1;
+    this.enemyDirectorDecision = {
+      intent: "SIDESTEP",
+      holdTicks: 12,
+      telegraphTicks: 0,
+      reason: "bait-feint-real-side-exit",
+      comebackMercy: 0,
+      pressure: 0,
+    };
+    this.enemyDirectorHoldTicks = 11;
+    this.publishEnemyDecision(this.enemyDirectorDecision);
+    const tangent = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x);
+    this.moveEnemy("SIDESTEP", towardPlayer, tangent);
+    this.p2.updatePhysics(FIXED_STEP);
+    this.setCombatBeat("RIVAL FEINT · READ THE STEP", 26);
   }
 
   private tickEnemyTelegraph(): void {
@@ -1072,6 +1156,7 @@ export class TpsFightGame {
 
     const intent = this.enemyDirectorDecision?.intent ?? "JAB";
     this.enemyDirectorPendingMove = null;
+    this.enemyFeintPending = false;
     if (!this.beginEnemyDirectorMove(moveId, intent, towardPlayer)) return false;
     this.p2.updatePhysics(FIXED_STEP);
     return true;
@@ -1150,6 +1235,23 @@ export class TpsFightGame {
       decision.telegraphTicks,
       minimumTpsEnemyTelegraphTicks(this.difficulty, moveId),
     );
+    // A learned, aggression-triggered bait may cancel a *future* windup.
+    // Once the actual ATTACK begins it is fully committed as before.
+    const read = this.enemyFunDirector.getStrikeRead();
+    const canBait = this.enemyTactic === "BAIT" && read.mode === "UPPER_PATTERN"
+      && read.samples >= 5 && this.enemyOpeningGraceTicks <= 0;
+    if (canBait) this.enemyFeintCandidateSerial += 1;
+    this.enemyFeintPending = canBait && shouldTpsCpuFeint({
+      difficulty: this.difficulty,
+      tactic: this.enemyTactic,
+      observedMode: read.mode,
+      observedSamples: read.samples,
+      opponentState: this.p1.state,
+      distance,
+      moveId,
+      candidateNumber: this.enemyFeintCandidateSerial,
+      ticksSinceLastFeint: this.simulationTicks - this.enemyLastFeintTick,
+    });
     this.enemyDirectorPendingMove = moveId;
     this.enemyDirectorTelegraphTicks = telegraphTicks;
     this.enemyDirectorTelegraphTotalTicks = telegraphTicks;
@@ -2014,6 +2116,10 @@ export class TpsFightGame {
     this.enemyOrbitSign = 1;
     this.enemyFunDirector = new CpuFunDirector(this.difficulty, 47);
     this.enemyLastStrikeReadMode = "UNSEEN";
+    this.enemyFeintCandidateSerial = 0;
+    this.enemyFeintPending = false;
+    this.enemyLastFeintTick = -1000;
+    this.enemyWhiffPunishCooldownTicks = 0;
     this.enemyDirectorDecision = null;
     this.enemyDirectorHoldTicks = 0;
     this.enemyDirectorTelegraphTicks = 0;
@@ -2028,6 +2134,10 @@ export class TpsFightGame {
     rootData.tpsCpuStrikeReadSamples = 0;
     rootData.tpsCpuStrikeLowRatio = 0;
     rootData.tpsCpuLearnedLowGuard = false;
+    rootData.tpsCpuFeintMove = null;
+    rootData.tpsCpuFeintSerial = 0;
+    rootData.tpsCpuWhiffPunishSerial = 0;
+    rootData.tpsCpuWhiffPunishMove = null;
 
     this.enemyAdaptReviewTicks = TPS_ADAPT_REVIEW_TICKS;
     this.enemyPersona = this.p2.definition.archetype === "SPEED"

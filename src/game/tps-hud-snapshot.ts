@@ -13,6 +13,7 @@ export type TpsHudSnapshotInput = {
   playerFlankWindowTicks: number;
   playerComboStage: number;
   playerGuardPunishTicks?: number;
+  enemyFeintReadTicks?: number;
   playerGuardCrouching?: boolean;
   combatBeatTicks: number;
   combatBeatLabel: string | null;
@@ -35,6 +36,8 @@ export function buildTpsHudSnapshot(input: TpsHudSnapshotInput): HudSnapshot {
     ? "NONE"
     : input.playerGuardPunishTicks && input.playerGuardPunishTicks > 0 && input.p1State !== "BLOCK_STUN"
       ? "PUNISH"
+      : input.enemyFeintReadTicks && input.enemyFeintReadTicks >= 11 && ["IDLE","WALK","GUARD"].includes(input.p1State)
+        ? "PUNISH"
       : input.enemyThreat.incoming
       ? "INCOMING"
       : input.playerReversalTicks > 0 || input.playerPerfectEvadeTicks > 0
@@ -47,6 +50,8 @@ export function buildTpsHudSnapshot(input: TpsHudSnapshotInput): HudSnapshot {
     ? "BATTLE COMPLETE"
     : input.combatBeatTicks > 0 && input.combatBeatLabel
       ? input.combatBeatLabel
+      : input.enemyFeintReadTicks && input.enemyFeintReadTicks >= 11 && ["IDLE","WALK","GUARD"].includes(input.p1State)
+        ? "FEINT READ · TAP ATTACK"
       : input.finishPending
         ? "KO"
         : input.p1State === "GUARD"

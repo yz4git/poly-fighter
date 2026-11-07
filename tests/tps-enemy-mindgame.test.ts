@@ -70,3 +70,35 @@ test("HARD notices a genuine long-recovery miss earlier, without guaranteed dama
     jabTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","jab"),
     straightTelegraphTicks:minimumTpsEnemyTelegraphTicks("HARD","straight")}),"JAB");
 });
+
+
+test("player can read a real feint using the existing neutral ATTACK key only", async () => {
+  const { shouldTpsPlayerPunishFeint, tpsFeintPunishAdvance,
+    TPS_FEINT_READ_TICKS, TPS_FEINT_PUNISH_MAX_TRAVEL } =
+    await import("../src/game/tps-feint-counterplay");
+  const valid = {
+    readTicks: TPS_FEINT_READ_TICKS, distance: 1.67,
+    playerCanAct:true,playerGrounded:true,defenderGrounded:true,
+    playerComboStage:0,directedTap:false,availableStraight:true,
+  };
+  assert.equal(shouldTpsPlayerPunishFeint(valid),true);
+  for(const change of [
+    {readTicks:0},{readTicks:10},{distance:2.1},{distance:.1},
+    {playerCanAct:false},{playerGrounded:false},{defenderGrounded:false},
+    {playerComboStage:1},{directedTap:true},{availableStraight:false},
+  ]) assert.equal(shouldTpsPlayerPunishFeint({...valid,...change}),false,JSON.stringify(change));
+  const move = {attackMove:"straight",moveTick:0,startup:8,
+    hitStop:0,connected:false,longitudinal:1.75,lateral:0,travelTotal:0};
+  assert.ok(tpsFeintPunishAdvance(move)>.02);
+  let travel=0;
+  for(let tick=0;tick<8;tick++){
+    travel+=tpsFeintPunishAdvance({...move,moveTick:tick,travelTotal:travel});
+  }
+  assert.ok(travel>.16 && travel<=TPS_FEINT_PUNISH_MAX_TRAVEL,
+    `animated startup travel was ${travel}`);
+  for(const change of [
+    {attackMove:"jab"},{moveTick:8},{hitStop:2},{connected:true},
+    {longitudinal:-1},{lateral:1.35},{travelTotal:.35},
+    {longitudinal:1.25},
+  ]) assert.equal(tpsFeintPunishAdvance({...move,...change}),0,JSON.stringify(change));
+});

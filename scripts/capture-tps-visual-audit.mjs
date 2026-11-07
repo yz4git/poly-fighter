@@ -1574,6 +1574,122 @@ try {
   }
   await screenshot(sessionId, `${outputDir}/tps-player-feint-punish.png`);
 
+  // V12: In the actual imported 3D skeleton, a true POWER strike and a
+  // bait POWER feint must share their early coil but have physically distinct
+  // hip/shoulder silhouettes by the final visible windup frames.
+  // The only variable between replays is the earned feint-candidate slot.
+  const poseCompare = async (candidateSerial, snapshotName) => {
+    const sample = await execute(sessionId, `${gameLookup}
+      const g=findGame();
+      const neutral={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};
+      for(const fighter of [g.p1,g.p2]) {
+        fighter.currentMove=null;fighter.moveTick=0;fighter.state='IDLE';
+        fighter.velocity.set(0,0,0);fighter.hitTargets.clear();
+        fighter.hitStop=0;fighter.hitStun=0;fighter.blockStun=0;
+        fighter.knockdownTicks=0;fighter.health=100;fighter.grounded=true;
+        fighter.input={...neutral};fighter.previousInput={...neutral};
+      }
+      g.input.clear();
+      delete g.updateEnemy;
+      g.p1.position.set(0,0,.8);
+      g.p2.position.set(0,0,-.8);
+      g.playerComboStage=0;g.playerAttackQueued=false;
+      g.playerFlankWindowTicks=0;g.playerFlankAttackTicks=0;
+      g.playerInterceptTicks=0;g.playerReversalTicks=0;
+      g.enemyOpeningGraceTicks=0;g.enemyTactic='BAIT';g.enemyTacticTicks=999;
+      g.enemyDirectorPendingMove=null;g.enemyDirectorDecision=null;
+      g.enemyDirectorTelegraphTicks=0;g.enemyDirectorHoldTicks=0;
+      g.enemyFeintPending=false;g.enemyFeintReadTicks=0;
+      g.enemyFeintCandidateSerial=arguments[0];
+      g.enemyLastFeintTick=-1000;g.enemyWhiffPunishCooldownTicks=0;
+      const data=g.p2.visual.root.userData;
+      data.tpsCpuFeintReadTicks=0;
+      data.tpsEnemyTelegraphFeintPlanned=false;
+      const learned=g.enemyFunDirector.getStrikeRead();
+      const decision={intent:'POWER',holdTicks:1,telegraphTicks:0,
+        reason:'visual-comparison',comebackMercy:0,pressure:0};
+      g.enemyDirectorDecision=decision;
+      const queued=g.queueEnemyAttackDecision(decision);
+      const planned=g.enemyFeintPending;
+      const total=g.enemyDirectorTelegraphTotalTicks;
+      function pose(){
+        const host=g.p2.visual.root.children.find(x=>x.name.startsWith('quaternius-ubc-')&&x.name.endsWith('-runtime'));
+        return {
+          phase:data.tpsEnemyTelegraphPoseKind??null,
+          bodyIntensity:Number(data.tpsEnemyTelegraphPoseIntensity??0),
+          yaw:Number(data.tpsEnemyTelegraphPoseHostYaw??0),
+          shoulder:Number(data.tpsEnemyTelegraphPoseShoulder??0),
+          hip:Number(data.tpsEnemyTelegraphPoseHip??0),
+          bones:Number(data.tpsEnemyTelegraphPoseImportedBoneCount??0),
+          hostYaw:host?.rotation.y??null,
+          hostPitch:host?.rotation.x??null,
+          hostRoll:host?.rotation.z??null,
+          hostX:host?.position.x??null,
+          skin:data.quaterniusModelState,
+          attack:g.p2.currentMove?.id??null,
+          telegraph:g.enemyDirectorTelegraphTicks,
+        };
+      }
+      for(let i=0;i<4;i++)g.step();
+      const early=pose();
+      for(let i=0;i<4;i++)g.step();
+      const late=pose();
+      g.updateCamera(1/60);
+      g.updateLockOn();
+      g.renderer.render(g.scene,g.camera);
+      return {learned,queued,planned,total,early,late,
+        enemyHealth:g.p2.health,playerHealth:g.p1.health};
+    `, [candidateSerial]);
+    await screenshot(sessionId, `${outputDir}/${snapshotName}`);
+    return sample;
+  };
+  const strikePoseProbe = await poseCompare(1,'tps-real-windup-body.png');
+  const feintPoseProbe = await poseCompare(3,'tps-feint-windup-body.png');
+  if(strikePoseProbe.learned.mode!=='UPPER_PATTERN'
+    ||feintPoseProbe.learned.mode!=='UPPER_PATTERN'
+    ||!strikePoseProbe.queued||!feintPoseProbe.queued
+    ||strikePoseProbe.planned||!feintPoseProbe.planned
+    ||strikePoseProbe.total!==feintPoseProbe.total
+    ||strikePoseProbe.early.phase!=='COIL'||feintPoseProbe.early.phase!=='COIL'
+    ||strikePoseProbe.late.phase!=='STRIKE_PREP'
+    ||feintPoseProbe.late.phase!=='FEINT_PREP'
+    ||strikePoseProbe.late.skin!=='ready'||feintPoseProbe.late.skin!=='ready'
+    ||strikePoseProbe.late.bones<4||feintPoseProbe.late.bones<4
+    ||Math.abs(strikePoseProbe.early.yaw-feintPoseProbe.early.yaw)>.001
+    ||Math.abs(strikePoseProbe.early.shoulder-feintPoseProbe.early.shoulder)>.001
+    ||Math.abs(strikePoseProbe.late.yaw-feintPoseProbe.late.yaw)<.05
+    ||Math.abs(strikePoseProbe.late.hip-feintPoseProbe.late.hip)<.07
+    ||Math.abs(strikePoseProbe.late.shoulder-feintPoseProbe.late.shoulder)<.03
+    ||strikePoseProbe.late.attack!==null||feintPoseProbe.late.attack!==null) {
+    throw new Error(`TPS imported real-vs-feint body silhouettes are not readable and distinct: ${JSON.stringify({strikePoseProbe,feintPoseProbe})}`);
+  }
+
+  const feintPoseExitProbe = await execute(sessionId, `${gameLookup}
+    const g=findGame(), data=g.p2.visual.root.userData;
+    let exit=null,activeAttack=false;
+    for(let i=0;i<16;i++) {
+      g.step();
+      if(g.p2.currentMove||g.p2.state==='ATTACK')activeAttack=true;
+      if(data.tpsEnemyTelegraphPoseKind==='FEINT_EXIT') {
+        exit={phase:data.tpsEnemyTelegraphPoseKind,
+          yaw:Number(data.tpsEnemyTelegraphPoseHostYaw??0),
+          shoulder:Number(data.tpsEnemyTelegraphPoseShoulder??0),
+          hip:Number(data.tpsEnemyTelegraphPoseHip??0),
+          readTicks:g.enemyFeintReadTicks,
+          state:g.p2.state};
+        break;
+      }
+    }
+    g.updateCamera(1/60);g.renderer.render(g.scene,g.camera);
+    return {exit,activeAttack,playerHealth:g.p1.health};
+  `);
+  if (!feintPoseExitProbe.exit
+    ||Math.abs(feintPoseExitProbe.exit.yaw)<.10
+    ||feintPoseExitProbe.activeAttack
+    ||feintPoseExitProbe.playerHealth!==100)
+    throw new Error(`TPS planted feint exit stopped being real lateral movement: ${JSON.stringify(feintPoseExitProbe)}`);
+  await screenshot(sessionId, `${outputDir}/tps-feint-body-exit.png`);
+
   // A miss is real only if the *actual* attack's active frames ended with
   // no defender collision. Slide the opponent across the committed lane
   // during the startup, then let the production CPU detect recovery by itself.
@@ -1662,7 +1778,7 @@ try {
   const radial = Math.hypot(afterBoundary.p1.x, afterBoundary.p1.z);
   if (radial > 6.15) throw new Error(`TPS circular boundary failed: ${radial}`);
 
-  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, feintProbe, playerFeintReadProbe, whiffPunishProbe, afterBoundary, radial };
+  const report = { initial, iphone, directorSample, afterStrafe, lateralTravel, beforeForwardDistance, afterForward, afterForwardDistance, quickstepProbe, quickstepTravel, punchProbe, afterPunch, damageAfterfeelProbe, guardProbe, kickContactProbe, cameraContinuityProbe, attackAfterfeelProbe, throwProbe, comboProbe, comboLinkProbe, whiffComboProbe, dashAttackProbe, flankProbe, reactiveGuardProbe, bufferedDirectionProbe, cpuPatternProbe, feintProbe, playerFeintReadProbe, strikePoseProbe, feintPoseProbe, feintPoseExitProbe, whiffPunishProbe, afterBoundary, radial };
   await writeFile(`${outputDir}/tps-runtime-state.json`, JSON.stringify(report, null, 2));
   await writeFile(`${outputDir}/webdriver.log`, driverLog);
   console.log(JSON.stringify(report));

@@ -1225,7 +1225,27 @@ try {
     game.step();
     const first = game.p1.currentMove?.id ?? null;
     game.release('punch', 'tps-adaptive-guard-first');
-    let blockedObserved = false;
+
+    // Advance to the actual authored active contact and resolve through the
+    // production collision+guard functions. Do not inject fake hitTargets or
+    // clean-hit flags: this must create genuine BLOCK_STUN and guard damage.
+    game.p1.hitStop = 0;
+    game.p2.hitStop = 0;
+    game.p2.state = 'GUARD';
+    game.p2.visual.root.userData.tpsGuardLevel = 'STANDING';
+    game.p1.moveTick = game.p1.currentMove.startup;
+    game.trackCommittedAttack(game.p1, game.p2);
+    game.resolveAttack(game.p1, game.p2, true);
+    const initialBlock = {
+      health: game.p2.health,
+      state: game.p2.state,
+      guardDamage: game.p2.guardDamage,
+      hitRecorded: game.p1.hitTargets.has(game.p2.id),
+      clean: game.p1.visual.root.userData.tpsCleanHitConfirmed === true,
+    };
+    let blockedObserved = initialBlock.hitRecorded && !initialBlock.clean
+      && initialBlock.state === 'BLOCK_STUN' && initialBlock.guardDamage > 0
+      && initialBlock.health === 100;
     let firstCompletedAt = -1;
     for (let frame=0; frame < 130; frame++) {
       game.step();
@@ -1245,7 +1265,7 @@ try {
     game.updateCamera(1/60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
-    return { first, blockedObserved, firstCompletedAt, lastOutcome, noDamage,
+    return { first, initialBlock, blockedObserved, firstCompletedAt, lastOutcome, noDamage,
       second, response, stage, linkState: game.p1.visual.root.userData.tpsComboLinkState ?? null,
       cue };
   `);

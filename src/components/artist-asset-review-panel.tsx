@@ -351,7 +351,7 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
             </button>
           </>
         )}
-        <button type="button" onClick={capture} disabled={!viewer.current?.loaded}
+        <button type="button" onClick={capture} disabled={!report?.technicallyEligible}
           style={{ ...button, opacity: report?.technicallyEligible ? 1 : .5 }}>
           SAVE ACTUAL VIEW
         </button>

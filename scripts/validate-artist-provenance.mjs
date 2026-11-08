@@ -15,8 +15,8 @@ if (!supplied(source.artistOrStudio)) failures.push("Identify the actual asset a
 if (!supplied(source.sourceOrCommissionReference)) failures.push("Provide original authoring or commissioned asset source");
 if (!supplied(source.license)) failures.push("Describe exact permitted license/rights");
 if (source.commercialGameUse !== true || source.derivativesAllowed !== true ||
-    source.binaryRedistributionAllowed !== true)
-  failures.push("Need documented commercial use, modifications and binary redistribution rights");
+    source.binaryRedistributionAllowed !== true || source.publicRawAssetPostingAllowed !== true)
+  failures.push("Need commercial game, derivative, redistribution and explicit public raw-GLB posting rights");
 if (source.license?.toLowerCase().includes("by") && !supplied(source.attribution))
   failures.push("CC-BY requires attribution");
 const raw = await readFile(modelPath);

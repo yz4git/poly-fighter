@@ -13,7 +13,7 @@ const angles: Record<View, { eye: [number, number, number]; target: [number, num
   "3/4": { eye: [4.35, 1.8, 4.35], target: [0, 1.6, 0] },
   SIDE: { eye: [6, 1.7, 0], target: [0, 1.6, 0] },
   BACK: { eye: [0, 1.65, -6], target: [0, 1.6, 0] },
-  FACE: { eye: [0.55, 2.82, 2.15], target: [0, 2.75, 0] },
+  FACE: { eye: [0.28, 2.96, 1.15], target: [0, 2.91, 0] },
   OUTFIT: { eye: [1.3, 2.1, 3.4], target: [0, 1.95, 0] },
 };
 

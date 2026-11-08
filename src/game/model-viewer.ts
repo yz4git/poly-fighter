@@ -309,6 +309,14 @@ export class ModelViewer {
       this.updateCamera();
     }
     const nextRuntimeState = String(this.visual.root.userData.heroModelState ?? this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    // Actual model readiness and rig coverage, exposed for automated visual QA.
+    const userData = this.visual.root.userData;
+    this.renderer.domElement.dataset.heroModelState = String(userData.heroModelState ?? "unused");
+    this.renderer.domElement.dataset.heroMappedBones = String(userData.heroModelMappedBones ?? 0);
+    this.renderer.domElement.dataset.heroPbrTriangleCount = String(userData.heroPbrTriangleCount ?? 0);
+    this.renderer.domElement.dataset.heroPbrTextureMaterials = String(userData.heroPbrTextureMaterials ?? 0);
+    this.renderer.domElement.dataset.heroModelError = String(userData.heroModelError ?? "");
+
     if (nextRuntimeState !== this.runtimeState) {
       this.runtimeState = nextRuntimeState;
       if (nextRuntimeState === "ready") this.fitModel(false);

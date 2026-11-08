@@ -8,6 +8,7 @@ on:
       - character-authoring/sera-hero.params.json
       - scripts/validate-sera-hero-glb.mjs
       - tools/blender/render-sera-hero-pbr.py
+      - tools/blender/author-sera-hero-v2.py
       - .github/workflows/sera-hero-pbr.yml
   workflow_dispatch:
 
@@ -53,6 +54,14 @@ jobs:
           set -euxo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+          xvfb-run -a blender --background --factory-startup \
+            --python tools/blender/author-sera-hero-v2.py -- \
+            public/models/hero/sera-hero-pbr.glb \
+            artifacts/sera-hero-pbr/sera-hero-v2.glb \
+            artifacts/sera-hero-pbr/sera-hero-v2.blend
+          cp artifacts/sera-hero-pbr/sera-hero-v2.glb public/models/hero/sera-hero-pbr.glb
+          node scripts/validate-sera-hero-glb.mjs \
+            public/models/hero/sera-hero-pbr.glb artifacts/sera-hero-pbr/quality.json
           xvfb-run -a blender --background --factory-startup \
             --python tools/blender/render-sera-hero-pbr.py -- \
             public/models/hero/sera-hero-pbr.glb artifacts/sera-hero-pbr/views

@@ -33,7 +33,7 @@ test("a marketplace name in artist provenance cannot evade restrictions by claim
 test("Renderpeople can only pass license intake with independently recorded separate grant", () => {
   const candidate={...originalCC0(), sourceOrCommissionReference: "https://renderpeople.com/free-3d-people/",
     separateSignedBrowserDistributionGrant: true,
-    separateSignedGrantReference: "https://example.org/actual-signed-license",
+    separateSignedGrantReference: "Signed grant RPR-2026-144 permitting public extractable GLB delivery",
   };
   assert.equal(evaluateArtistLicense(candidate).length,0);
 });

@@ -8,6 +8,7 @@ import {
   type FighterVisualQuality,
 } from "./visual-entry";
 import { updateQuaterniusModelPreview } from "./visual-quaternius-runtime";
+import { updateSeraHeroPose } from "./visual-hero-runtime";
 import {
   ModelViewerMotionController,
   unavailableModelViewerMotionSnapshot,
@@ -55,7 +56,7 @@ export class ModelViewer {
   constructor(mount: HTMLElement, options: ModelViewerOptions) {
     this.mount = mount;
     const modelId = options.modelId ?? "ORIGINAL";
-    this.motionCapable = modelId === "QUATERNIUS_UBC";
+    this.motionCapable = modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR";
     this.onMotionState = options.onMotionState;
     try {
       this.renderer = new THREE.WebGLRenderer({
@@ -96,7 +97,7 @@ export class ModelViewer {
     this.scene.add(this.visual.root);
     this.createFloor(options.definition.colors.primary);
     this.fitModel(true);
-    this.runtimeState = String(this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    this.runtimeState = String(this.visual.root.userData.heroModelState ?? this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
     this.emitMotionState(true);
 
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
@@ -302,11 +303,20 @@ export class ModelViewer {
     this.lastTime = time;
     if (this.motionController) this.motionController.update(dt);
     else updateQuaterniusModelPreview(this.visual, time / 1000);
+    updateSeraHeroPose(this.visual);
     if (!this.userMoved && this.pointers.size === 0) {
       this.yaw += dt * 0.16;
       this.updateCamera();
     }
-    const nextRuntimeState = String(this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    const nextRuntimeState = String(this.visual.root.userData.heroModelState ?? this.visual.root.userData.quaterniusModelState ?? this.visual.root.userData.blenderRuntimeAssetState ?? "static");
+    // Actual model readiness and rig coverage, exposed for automated visual QA.
+    const userData = this.visual.root.userData;
+    this.renderer.domElement.dataset.heroModelState = String(userData.heroModelState ?? "unused");
+    this.renderer.domElement.dataset.heroMappedBones = String(userData.heroModelMappedBones ?? 0);
+    this.renderer.domElement.dataset.heroPbrTriangleCount = String(userData.heroPbrTriangleCount ?? 0);
+    this.renderer.domElement.dataset.heroPbrTextureMaterials = String(userData.heroPbrTextureMaterials ?? 0);
+    this.renderer.domElement.dataset.heroModelError = String(userData.heroModelError ?? "");
+
     if (nextRuntimeState !== this.runtimeState) {
       this.runtimeState = nextRuntimeState;
       if (nextRuntimeState === "ready") this.fitModel(false);

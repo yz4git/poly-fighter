@@ -1,0 +1,88 @@
+name: SERA Hero PBR candidate build
+
+on:
+  push:
+    branches:
+      - chatgpt/sera-hero-pbr-rebuild
+    paths:
+      - character-authoring/sera-hero.params.json
+      - scripts/validate-sera-hero-glb.mjs
+      - tools/blender/render-sera-hero-pbr.py
+      - tools/blender/author-sera-hero-v2.py
+      - .github/workflows/sera-hero-pbr.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-sera:
+    if: github.ref == 'refs/heads/chatgpt/sera-hero-pbr-rebuild'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned MIT-licensed Ara and MakeHuman data
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/olatunde85/3d-gen.git .external/ara
+          git -C .external/ara checkout --detach de8a4a0c36229fb7235a04d001ff928318ac43ea
+          test "$(git -C .external/ara rev-parse HEAD)" = de8a4a0c36229fb7235a04d001ff928318ac43ea
+          cd .external/ara
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run setup-assets
+      - name: Generate independent textured SERA rig
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/sera-hero-pbr public/models/hero
+          cd .external/ara
+          npm run export -- --params "$GITHUB_WORKSPACE/character-authoring/sera-hero.params.json" \
+            --formats glb --detail medium --out "$GITHUB_WORKSPACE/artifacts/sera-hero-pbr"
+          cd "$GITHUB_WORKSPACE"
+          test "$(find artifacts/sera-hero-pbr -maxdepth 1 -type f -name '*.glb' | wc -l)" -eq 1
+          MODEL="$(find artifacts/sera-hero-pbr -maxdepth 1 -type f -name '*.glb' | head -n 1)"
+          cp "$MODEL" public/models/hero/sera-hero-pbr.glb
+          node scripts/validate-sera-hero-glb.mjs public/models/hero/sera-hero-pbr.glb \
+            artifacts/sera-hero-pbr/quality.json
+      - name: Render source GLB from four directions
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+          xvfb-run -a blender --background --factory-startup \
+            --python tools/blender/author-sera-hero-v2.py -- \
+            public/models/hero/sera-hero-pbr.glb \
+            artifacts/sera-hero-pbr/sera-hero-v2.glb \
+            artifacts/sera-hero-pbr/sera-hero-v2.blend
+          cp artifacts/sera-hero-pbr/sera-hero-v2.glb public/models/hero/sera-hero-pbr.glb
+          node scripts/validate-sera-hero-glb.mjs \
+            public/models/hero/sera-hero-pbr.glb artifacts/sera-hero-pbr/quality.json
+          xvfb-run -a blender --background --factory-startup \
+            --python tools/blender/render-sera-hero-pbr.py -- \
+            public/models/hero/sera-hero-pbr.glb artifacts/sera-hero-pbr/views
+          test "$(find artifacts/sera-hero-pbr/views -name '*.png' | wc -l)" -eq 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sera-hero-pbr-candidate
+          path: |
+            artifacts/sera-hero-pbr/**
+            public/models/hero/sera-hero-pbr.glb
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish validated first candidate on feature branch only
+        run: |
+          set -euxo pipefail
+          mkdir -p docs/hero-review
+          cp artifacts/sera-hero-pbr/views/sera-*.png docs/hero-review/
+          cp artifacts/sera-hero-pbr/quality.json docs/hero-review/quality.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/models/hero/sera-hero-pbr.glb docs/hero-review/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Build first SERA PBR asset candidate [skip ci]'
+          git push origin HEAD:chatgpt/sera-hero-pbr-rebuild

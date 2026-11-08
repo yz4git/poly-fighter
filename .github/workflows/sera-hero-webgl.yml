@@ -1,0 +1,66 @@
+name: SERA Hero PBR real WebGL render audit
+
+on:
+  push:
+    branches:
+      - chatgpt/sera-hero-pbr-rebuild
+    paths:
+      - public/models/hero/**
+      - src/game/visual-hero-runtime.ts
+      - src/game/model-viewer.ts
+      - scripts/capture-sera-hero-audit.mjs
+      - .github/workflows/sera-hero-webgl.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-hero-webgl-candidate
+  cancel-in-progress: true
+
+jobs:
+  inspect-hero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate completed hero GLB
+        run: |
+          test -s public/models/hero/sera-hero-pbr.glb
+          node scripts/validate-sera-hero-glb.mjs public/models/hero/sera-hero-pbr.glb
+      - name: Build game preview
+        run: npm run build
+      - name: Start actual game build
+        run: |
+          PORT=3000 npm start > /tmp/sera-hero-server.log 2>&1 &
+          for attempt in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sera-hero-server.log
+          exit 1
+      - name: Capture actual Hero rendering and combat motion
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ] && [ -n "$CHROMEWEBDRIVER" ] && [ -x "$CHROMEWEBDRIVER/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" \
+            SERA_HERO_AUDIT_DIR=artifacts/sera-hero-browser \
+            node scripts/capture-sera-hero-audit.mjs
+          test -s artifacts/sera-hero-browser/sera-hero-idle.png
+          test -s artifacts/sera-hero-browser/sera-hero-power.png
+          test -s artifacts/sera-hero-browser/hero-browser-state.json
+          cp /tmp/sera-hero-server.log artifacts/sera-hero-browser/server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sera-hero-real-webgl
+          path: artifacts/sera-hero-browser
+          if-no-files-found: warn
+          retention-days: 14

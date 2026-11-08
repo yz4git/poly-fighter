@@ -19,6 +19,7 @@ import {
 import type { FighterVisual, FighterVisualQuality, FootPlantMode } from "./visual";
 import type { FighterModelId } from "./model-skins";
 import { disposeQuaterniusModelSkin, installQuaterniusModelSkin } from "./visual-quaternius-runtime";
+import { disposeSeraHeroModel, installSeraHeroModel } from "./visual-hero-runtime";
 
 function repairSeraWinding(visual: FighterVisual): void {
   const geometry = visual.bodyMesh.geometry;
@@ -69,7 +70,12 @@ export function createFighterVisual(
 ): FighterVisual {
   const visual = createOriginalFighterVisual(definition, quality);
   visual.root.userData.modelSkin = modelId;
-  if (modelId === "QUATERNIUS_UBC") installQuaterniusModelSkin(visual, definition);
+  const hero = modelId === "SERA_HERO_PBR" && definition.name === "SERA";
+  // The animation driver stays on the proven UBC rig. HERO is an independent,
+  // texture-preserving render mesh and never changes deterministic hitboxes.
+  if (modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR") installQuaterniusModelSkin(visual, definition);
+  if (hero) installSeraHeroModel(visual);
+  visual.root.userData.modelSkin = modelId;
   const polished = applyCharacterGraphicsPolish(visual, definition, {
     addKairoDetails: modelId === "ORIGINAL",
   });
@@ -82,6 +88,7 @@ export function createFighterVisual(
 }
 
 export function disposeFighterVisual(visual: FighterVisual): void {
+  disposeSeraHeroModel(visual);
   disposeQuaterniusModelSkin(visual);
   disposeBaseFighterVisual(visual);
 }

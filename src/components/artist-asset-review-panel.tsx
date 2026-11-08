@@ -289,7 +289,7 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
 
   const keyStatus = report?.technicallyEligible ? "TECHNICAL PASS / ART UNREVIEWED" : "NOT APPROVED";
   return (
-    <section aria-label="SERA Artist Asset Lab" style={{
+    <section aria-label="SERA Artist Asset Lab" data-asset-intake-state={loading ? "loading" : report?.technicallyEligible ? "tech-pass" : report ? "rejected" : "empty"} data-asset-triangles={report?.triangles ?? 0} style={{
       position: "absolute", inset: 0, zIndex: 12, background: "#050c18",
       color: "#eff7ff", overflow: "hidden", touchAction: "manipulation",
     }}>

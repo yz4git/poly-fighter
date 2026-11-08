@@ -2,7 +2,7 @@
 Checked 2026-11-09 JST. This is an **asset procurement** document, not
 evidence that SERA is complete. No purchase or artist commission placed.
 
-## 0. PRIORITY TO EVALUATE ON iPHONE: EMA — independent game artist source, CC0 claim
+## 0. REJECTED FOR SERA: EMA — original artist character, CC0 claim
 - Original source: https://theunseenvulga.itch.io/3d-character-riggedema
 - Author: THEUNSEENVULGA. Author describes an actually hand-authored
   former game character, **not** MakeHuman-based procedural model.
@@ -13,11 +13,18 @@ evidence that SERA is complete. No purchase or artist commission placed.
 - Author declares **CC0 free personal + commercial use and modification**.
   Confirm original full rights and source asset provenance; sale of unchanged
   files is explicitly discouraged. Not purchased or downloaded into project.
-- State: **NEEDS REAL FACE/HAIR/COSTUME VISUAL REVIEW**. Do not claim art
-  quality from author metadata. Use iPhone ARTIST ASSET LAB / GLB and inspect
-  frontal face, 3/4 face, hair profile, outfit seams and a crouch/kick.
-  Has not been approved as SERA, and cannot replace SERA without major
-  original face/blue-black martial outfit changes.
+- State: **REJECTED AS SERA ART** after original GLB download and six
+  real Blender views (not marketing screenshots). Evidence:
+  https://github.com/yz4git/poly-fighter/actions/runs/42534906922
+- Actual unmodified GLB download: 8,188,284 bytes via author-offered
+  zero-payment route. Six original views rendered from actual mesh.
+- Review: significantly better clothing fit than V3, but disproportionately
+  round eyes, underdeveloped facial planes and stiff mouth, with generic
+  drab gray tactical clothing. No recognizable SERA silhouette.
+- Still useful only as a `ARTIST ASSET LAB` file-picker/rigging **test
+  sample**, not a candidate for character adoption or visual-quality bar.
+- **Do not optimize/retarget this model as SERA**; investigate a sculpt
+  with a mature face, properly designed hair, and an authored combat suit.
 - If acceptable, next step is sculpted face + outfit commission against
   actual editable original FBX/Blender sources, and separate gameplay rig QA.
 

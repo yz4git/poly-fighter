@@ -8,5 +8,8 @@
   "commercialGameUse": false,
   "derivativesAllowed": false,
   "binaryRedistributionAllowed": false,
-  "publicRawAssetPostingAllowed": false
+  "publicRawAssetPostingAllowed": false,
+  "browserGlbExtractabilityAllowed": false,
+  "separateSignedBrowserDistributionGrant": false,
+  "separateSignedGrantReference": "REPLACE_ONLY_IF_SEPARATE_SIGNED_GRANT_EXISTS"
 }

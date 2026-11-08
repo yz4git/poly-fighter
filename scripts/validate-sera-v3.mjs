@@ -16,7 +16,10 @@ const materials=(doc.materials??[]).map(x=>x.name??"");
 const root=meshNames.find(x=>x.includes("sera_hero"));
 need(root,"source anatomical base lost");
 need((doc.skins??[]).length>0,"no skinned GLB");
-need((doc.images??[]).length>=12,"needs genuine cloth PBR plus skin and eyes");
+need((doc.images??[]).length>=11,"needs at least one authored cloth PBR texture plus skin and eyes");
+need((doc.materials??[]).some(m=>m.name?.includes("SERA V3") &&
+  m.pbrMetallicRoughness?.baseColorTexture),
+  "authored fabric must use actual embedded image texture");
 need((doc.meshes??[]).length>25,"missing integrated hairstyle/garment geometry");
 need(meshNames.some(x=>x.includes("V3")&&x.includes("fitted forearm shell")),"fitted forearm shell missing");
 need(meshNames.some(x=>x.includes("V3")&&x.includes("battle tabard")),"tailored cloth missing");

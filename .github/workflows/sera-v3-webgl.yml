@@ -1,0 +1,65 @@
+name: SERA V3 actual WebGL game-play and pose audit
+
+on:
+  push:
+    branches:
+      - chatgpt/sera-v3-integrated
+    paths:
+      - public/models/hero/sera-hero-v3.glb
+      - src/game/model-skins.ts
+      - src/game/visual-hero-runtime.ts
+      - src/game/visual-entry.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-v3-actual-webgl
+  cancel-in-progress: true
+
+jobs:
+  inspect-v3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify delivered SERA V3 GLB
+        run: |
+          node scripts/validate-sera-hero-glb.mjs public/models/hero/sera-hero-v3.glb
+          node scripts/validate-sera-v3.mjs public/models/hero/sera-hero-v3.glb
+      - name: Build actual production game
+        run: npm run build
+      - name: Launch on local preview origin
+        run: |
+          PORT=3000 npm start > /tmp/sera-v3-game.log 2>&1 &
+          for attempt in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sera-v3-game.log
+          exit 1
+      - name: Capture actual SERA V3 WebGL idle and strong attack
+        run: |
+          set -euxo pipefail
+          DRIVER="$(command -v chromedriver || true)"
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" SERA_HERO_CHOICE="SERA V3 / REBUILT" \
+            SERA_HERO_AUDIT_DIR=artifacts/sera-v3-browser \
+            node scripts/capture-sera-hero-audit.mjs
+          test -s artifacts/sera-v3-browser/sera-hero-idle.png
+          test -s artifacts/sera-v3-browser/sera-hero-power.png
+          test -s artifacts/sera-v3-browser/hero-browser-state.json
+          cp /tmp/sera-v3-game.log artifacts/sera-v3-browser/server.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sera-v3-real-webgl-fight
+          path: artifacts/sera-v3-browser/
+          if-no-files-found: warn
+          retention-days: 14

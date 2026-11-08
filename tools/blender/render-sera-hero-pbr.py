@@ -22,7 +22,16 @@ height = maxs[2] - mins[2]
 if height < .1:
     raise RuntimeError("Invalid GLB bounds")
 scene = bpy.context.scene
-scene.render.engine = "BLENDER_EEVEE_NEXT" if bpy.app.version >= (4,2,0) else "BLENDER_EEVEE"
+for engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE", "CYCLES"):
+    try:
+        scene.render.engine = engine
+        break
+    except TypeError:
+        pass
+else:
+    raise RuntimeError("No suitable Blender render engine")
+if scene.render.engine == "CYCLES":
+    scene.cycles.samples = 16
 scene.render.resolution_x = 720
 scene.render.resolution_y = 960
 scene.render.resolution_percentage = 100

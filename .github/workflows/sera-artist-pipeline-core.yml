@@ -9,6 +9,9 @@ on:
       - src/game/artist-glb-contract.ts
       - scripts/artist-asset-quality-gate.mjs
       - tests/artist-glb-contract.test.ts
+      - tests/artist-license-policy.test.ts
+      - scripts/artist-license-policy.mjs
+      - scripts/validate-artist-provenance.mjs
       - .github/workflows/sera-artist-pipeline-core.yml
   workflow_dispatch:
 

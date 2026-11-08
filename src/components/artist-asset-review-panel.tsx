@@ -8,6 +8,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { inspectArtistGlb, type ArtistAssetTechnicalReport } from "@/src/game/artist-glb-contract";
 
 type View = "FRONT" | "3/4" | "SIDE" | "BACK" | "FACE" | "OUTFIT";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
 const angles: Record<View, { eye: [number, number, number]; target: [number, number, number] }> = {
   FRONT: { eye: [0, 1.65, 6], target: [0, 1.6, 0] },
   "3/4": { eye: [4.35, 1.8, 4.35], target: [0, 1.6, 0] },
@@ -85,6 +86,7 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
   const [view, setView] = useState<View>("3/4");
   const [message, setMessage] = useState("iPhoneの「ファイル」から、造形済み・テクスチャ同梱のGLBを選択してください。");
   const [loading, setLoading] = useState(false);
+  const [showSeraReference, setShowSeraReference] = useState(false);
   const [selectedClip, setSelectedClip] = useState("");
   const [clips, setClips] = useState<string[]>([]);
   const [playing, setPlaying] = useState(true);
@@ -294,6 +296,21 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
       color: "#eff7ff", overflow: "hidden", touchAction: "manipulation",
     }}>
       <div ref={host} style={{ position: "absolute", inset: 0 }} />
+      {showSeraReference && (
+        <div aria-label="Original SERA four-view design reference" role="img"
+          style={{
+            position: "absolute", zIndex: 3, pointerEvents: "none",
+            left: "max(8px, env(safe-area-inset-left))",
+            top: "max(74px, env(safe-area-inset-top))",
+            width: "min(41vw, 370px)", height: "min(58vh, 390px)",
+            border: "1px solid #78b3df", borderRadius: 5,
+            backgroundColor: "#081323",
+            backgroundImage: "url('" + BASE_PATH + "/reference/female-turnaround.jpeg')",
+            backgroundSize: "contain", backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            boxShadow: "0 6px 24px #000b",
+          }} />
+      )}
       <header style={{
         position: "absolute", top: "max(10px, env(safe-area-inset-top))",
         left: "max(12px, env(safe-area-inset-left))", zIndex: 2,
@@ -342,6 +359,11 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
             {report.morphTargets} morphs / {report.animations} motion clips
           </div>
         )}
+        <button type="button" aria-pressed={showSeraReference}
+          onClick={() => setShowSeraReference((shown) => !shown)}
+          style={{ ...button, background: showSeraReference ? "#145a6e" : "#102a3c",
+            borderColor: showSeraReference ? "#9dedfd" : "#3c5f7b",
+          }}>SERA REFERENCE {showSeraReference ? "ON" : "OFF"}</button>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 4 }}>
           {(Object.keys(angles) as View[]).map((name) => (
             <button key={name} type="button" aria-pressed={view === name}

@@ -1,0 +1,57 @@
+name: SERA artist-first EMA CC0 genuine art visual review
+
+on:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - scripts/fetch-free-ema-candidate.mjs
+      - .github/workflows/sera-ema-real-art-review.yml
+      - tools/blender/render-artist-review.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-independent-artist-ema-review
+  cancel-in-progress: true
+
+jobs:
+  evaluate-free-artist-character:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain public free original artist GLB without any payment or account
+        run: |
+          set -euxo pipefail
+          DRIVER="$(command -v chromedriver || true)"
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" EMA_DOWNLOAD_DIR=artifacts/ema-private \
+            node scripts/fetch-free-ema-candidate.mjs
+          test -s artifacts/ema-private/EMA.glb
+      - name: Install Blender for real imagery only
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+      - name: Render original unmodified EMA GLB — no procedural meshes
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/ema-review
+          xvfb-run -a blender -b --factory-startup --disable-autoexec \
+            -P tools/blender/render-artist-review.py -- \
+            artifacts/ema-private/EMA.glb artifacts/ema-review/views
+          test "$(find artifacts/ema-review/views -name '*.png' | wc -l)" -eq 6
+          cp artifacts/ema-private/download-audit.json artifacts/ema-review/source.json
+          cat > artifacts/ema-review/NOT-SERA.txt <<'EOF'
+          THIS IS EMA, AN ORIGINAL THIRD-PARTY CC0 ARTIST MODEL.
+          NOT SERA, NOT APPROVED FOR POLYFIGHTER PRODUCTION.
+          GLB IS NEVER UPLOADED OR COMMITTED; ONLY REAL BLENDER PNGS.
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ema-artist-real-six-view-images-only
+          path: artifacts/ema-review/
+          if-no-files-found: warn
+          retention-days: 14

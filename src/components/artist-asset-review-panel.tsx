@@ -320,6 +320,17 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
               opacity: 0, cursor: "pointer" }} />
         </label>
+        <a href="https://theunseenvulga.itch.io/3d-character-riggedema"
+          target="_blank" rel="noopener noreferrer"
+          style={{ ...button, display: "block", textDecoration: "none",
+            padding: "8px 7px", color: "#d6efff", borderColor: "#4b829b",
+            textAlign: "center", fontSize: 9 }}>
+          FREE CC0 ARTIST SAMPLE / EMA
+        </a>
+        <div style={{ color: "#9db6c7", fontSize: 8, lineHeight: 1.5 }}>
+          EMA.glb (約7.8 MB) を取得して上のボタンから開く。
+          これはSERAではなく、品質審査用の別作者モデルです。
+        </div>
         <div style={{ fontSize: 9, color: report?.technicallyEligible ? "#9decb8" : "#d9e3eb",
           fontWeight: 800 }}>{keyStatus}</div>
         {report && (

@@ -56,7 +56,7 @@ export class ModelViewer {
   constructor(mount: HTMLElement, options: ModelViewerOptions) {
     this.mount = mount;
     const modelId = options.modelId ?? "ORIGINAL";
-    this.motionCapable = modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR";
+    this.motionCapable = modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR" || modelId === "SERA_HERO_V3";
     this.onMotionState = options.onMotionState;
     try {
       this.renderer = new THREE.WebGLRenderer({

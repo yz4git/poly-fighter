@@ -1,0 +1,13 @@
+{
+  "asset": "sera-hero-pbr.glb",
+  "bytes": 5010372,
+  "triangles": 41188,
+  "images": 12,
+  "textures": 12,
+  "materials": 10,
+  "skins": 1,
+  "mappedRequiredBones": 20,
+  "morphTargets": 20,
+  "targetMobileSize": "within-initial-budget",
+  "status": "valid-geometry-needs-render-and-device-approval"
+}

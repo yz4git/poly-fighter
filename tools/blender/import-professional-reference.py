@@ -8,9 +8,10 @@ Usage: blender -b --factory-startup --python import-professional-reference.py
 """
 import bpy
 import json
+import math
 import os
 import sys
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 a=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else []
 if len(a)!=4: raise SystemExit("source.fbx source.png output.glb metadata.json required")
@@ -23,6 +24,15 @@ meshes=[obj for obj in bpy.context.scene.objects if obj.type=="MESH"]
 rigs=[obj for obj in bpy.context.scene.objects if obj.type=="ARMATURE"]
 if not meshes or not rigs:
     raise RuntimeError("Professional source did not supply a skinned human rig")
+# FBX has centimeter-scale Z-up model values lying on Blender's positive Y.
+# Transform entire imported rig hierarchy, never individual skinned vertices.
+# This preserves the rest-pose bone inverses, morph targets, and mesh art.
+for root in [obj for obj in bpy.context.scene.objects if obj.parent is None]:
+    root.matrix_world = (
+        Matrix.Scale(.01, 4) @ Matrix.Rotation(math.pi / 2, 4, 'X')
+        @ root.matrix_world
+    )
+bpy.context.view_layer.update()
 
 # Preserve actual author-made geometry and deformation. No procedural edits.
 skinned=[obj for obj in meshes if any(mod.type=="ARMATURE" for mod in obj.modifiers)]

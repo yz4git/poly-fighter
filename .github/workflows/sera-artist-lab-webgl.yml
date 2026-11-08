@@ -1,0 +1,57 @@
+name: SERA artist-first real WebGL file preview audit
+
+on:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - src/components/artist-asset-review-panel.tsx
+      - src/components/model-viewer-panel.tsx
+      - scripts/audit-artist-asset-lab.mjs
+      - .github/workflows/sera-artist-lab-webgl.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-artist-lab-webgl-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit-real-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build the actual game with the new artist-first asset lab
+        run: npm run build
+      - name: Start actual game web server
+        run: |
+          PORT=3000 npm start >/tmp/artist-lab-server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/artist-lab-server.log
+          exit 1
+      - name: Import real GLB locally and capture actual WebGL face/full-body evidence
+        run: |
+          set -euxo pipefail
+          test -s public/models/hero/sera-hero-pbr.glb
+          DRIVER="$(command -v chromedriver || true)"
+          if [ -z "$DRIVER" ]; then
+            echo "Cannot locate chromium chromedriver"; exit 1
+          fi
+          WEBDRIVER_BIN="$DRIVER" PREVIEW_URL="http://127.0.0.1:3000/"             ARTIST_LAB_AUDIT_DIR=artifacts/artist-lab-real-webgl             node scripts/audit-artist-asset-lab.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: artist-lab-real-browser-glb-import-not-art-approval
+          path: artifacts/artist-lab-real-webgl/
+          if-no-files-found: warn
+          retention-days: 14

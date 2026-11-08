@@ -70,11 +70,11 @@ export function createFighterVisual(
 ): FighterVisual {
   const visual = createOriginalFighterVisual(definition, quality);
   visual.root.userData.modelSkin = modelId;
-  const hero = modelId === "SERA_HERO_PBR" && definition.name === "SERA";
+  const hero = (modelId === "SERA_HERO_PBR" || modelId === "SERA_HERO_V3") && definition.name === "SERA";
   // The animation driver stays on the proven UBC rig. HERO is an independent,
   // texture-preserving render mesh and never changes deterministic hitboxes.
-  if (modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR") installQuaterniusModelSkin(visual, definition);
-  if (hero) installSeraHeroModel(visual);
+  if (modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR" || modelId === "SERA_HERO_V3") installQuaterniusModelSkin(visual, definition);
+  if (hero) installSeraHeroModel(visual, modelId === "SERA_HERO_V3" ? "V3" : "V2");
   visual.root.userData.modelSkin = modelId;
   const polished = applyCharacterGraphicsPolish(visual, definition, {
     addKairoDetails: modelId === "ORIGINAL",

@@ -2,7 +2,38 @@
 Checked 2026-11-09 JST. This is an **asset procurement** document, not
 evidence that SERA is complete. No purchase or artist commission placed.
 
-## 1. RECOMMENDED FACE/BODY START: Pradipta Female Base Full Rig
+## 0. PRIORITY TO EVALUATE ON iPHONE: EMA — independent game artist source, CC0 claim
+- Original source: https://theunseenvulga.itch.io/3d-character-riggedema
+- Author: THEUNSEENVULGA. Author describes an actually hand-authored
+  former game character, **not** MakeHuman-based procedural model.
+- Download listed as free/name-your-price; press `Download Now`, then
+  `No thanks, just take me to the downloads`, and select `EMA.glb`.
+- File size: **7.8 MB** (suitable for iPhone on-device trial), FBX 5.3 MB.
+  Author states about **76k triangles**, rigged/Mixamo-ready, hand-painted.
+- Author declares **CC0 free personal + commercial use and modification**.
+  Confirm original full rights and source asset provenance; sale of unchanged
+  files is explicitly discouraged. Not purchased or downloaded into project.
+- State: **NEEDS REAL FACE/HAIR/COSTUME VISUAL REVIEW**. Do not claim art
+  quality from author metadata. Use iPhone ARTIST ASSET LAB / GLB and inspect
+  frontal face, 3/4 face, hair profile, outfit seams and a crouch/kick.
+  Has not been approved as SERA, and cannot replace SERA without major
+  original face/blue-black martial outfit changes.
+- If acceptable, next step is sculpted face + outfit commission against
+  actual editable original FBX/Blender sources, and separate gameplay rig QA.
+
+## 0b. RESTRICTED: Renderpeople Sophia (free, photoreal human)
+- Original publisher: https://renderpeople.com/free-3d-people/
+- Official terms: https://renderpeople.com/general-terms-and-conditions/
+- Section 4.1 explicitly permits commercial games, BUT section 4.3(b)
+  prohibits making 3D data easily extractable or downloadable by end users.
+- A public PolyFighter URL that directly serves the .glb could violate
+  that condition. **Do not use as downloadable browser character** without
+  express separate written authorization. Third-party mirroring on GitHub
+  does not override the upstream publisher's terms.
+- Technical or portrait comparison alone is not approval for final
+  use. This is a license rejection, independent of art quality.
+
+## 1. PURCHASE-ONLY, RIGHTS TO BE CONFIRMED: Pradipta Female Base Full Rig
 - Creator/store: https://www.renderhub.com/pradipta/female-base-full-rig
 - Listed price: $20 USD (check current price at purchase).
 - Listed rights: RenderHub Extended Use License; commercial use supported.
@@ -20,6 +51,7 @@ evidence that SERA is complete. No purchase or artist commission placed.
   needed, and retarget.
 - No raw paid model files in this public repository without a grant. Paid
   item has NOT been purchased by the assistant.
+- Marketplace rights are not assumed to cover a directly downloadable browser GLB. Obtain a **separate explicit web-delivery grant** before buying or integrating.
 
 ## 2. ALTERNATIVE: Devall Assets Diverse Rigged Character Pack Vol. 1
 - Source: https://devallassets.itch.io/diverse-rigged-character-pack-vol-1-9-game-ready-humans

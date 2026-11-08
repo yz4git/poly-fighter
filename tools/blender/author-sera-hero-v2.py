@@ -51,15 +51,15 @@ def mat(name, rgb, rough=.52, metal=.0):
     m.diffuse_color = (*rgb, 1)
     return m
 
-royal = mat("SERA cobalt enamel | armor", (.014, .095, .77), .3, .24)
-royal_light = mat("SERA electric edge | piping", (.06, .44, .95), .27, .34)
+royal = mat("SERA cobalt enamel | armor", (.008, .052, .48), .34, .19)
+royal_light = mat("SERA electric edge | piping", (.015, .24, .82), .31, .28)
 graphite = mat("SERA graphite | combat weave", (.014, .018, .03), .74, .06)
 charcoal = mat("SERA gunmetal | guards", (.062, .071, .095), .38, .53)
-silver = mat("SERA brushed alloy | forearm", (.40, .51, .67), .32, .7)
+silver = mat("SERA brushed alloy | forearm", (.22, .30, .43), .39, .58)
 hairmat = mat("SERA blue-black hair", (.012, .014, .025), .43, .0)
 hairglint = mat("SERA hair glints", (.035, .075, .16), .37, .0)
-emblem = mat("SERA signature cyan crest", (.13, .66, 1.0), .24, .34)
-cloth = mat("SERA indigo tabard", (.021, .055, .42), .72, .0)
+emblem = mat("SERA signature cyan crest", (.08, .47, .95), .3, .34)
+cloth = mat("SERA indigo tabard", (.012, .035, .31), .76, .0)
 
 # Recolor generic cloth rather than stacking opaque clothes over purple sportswear.
 # Preserve the original body textures, eyes, eyebrows and 20 facial morph targets.
@@ -141,7 +141,7 @@ def loft(name, rings, materials, choose=None, segments=32, bind="TRANSFER"):
             faces.append((row*segments+j,row*segments+k,(row+1)*segments+k,(row+1)*segments+j))
             t=2*math.pi*(j+.5)/segments
             mids.append(choose(row,t) if choose else 0)
-    return build_mesh(name,vertices,faces,materials,mids,bind=bind,smooth=False)
+    return build_mesh(name,vertices,faces,materials,mids,bind=bind,smooth=True)
 
 def ribbon(name, paths, width, material, bind="TRANSFER"):
     # A tapered, two-sided hand-authored fabric/hair polygon strip.
@@ -177,22 +177,22 @@ def cylinder_between(name, a, b, radius_a, radius_b, materials, segments=12, cho
         faces.append((j,k,k+segments,j+segments))
         mids.append(choose(j) if choose else 0)
     # coordinates are already GLTF x,y,z; authoring functions will convert.
-    return build_mesh(name,verts,faces,materials,mids,bind=bind)
+    return build_mesh(name,verts,faces,materials,mids,bind=bind,smooth=True)
 
 # Distinctive armor silhouette based on original SERA four-view turnaround:
 # cobalt asymmetric split shell, black core, upright collar, bare midriff.
 torso=[
  (1.125,.155,.099,.020),
  (1.175,.170,.114,.020),
- (1.240,.188,.128,.022),
- (1.315,.203,.131,.018),
- (1.370,.195,.107,.016),
- (1.412,.143,.085,.018),
+ (1.240,.174,.119,.022),
+ (1.315,.187,.124,.018),
+ (1.370,.179,.103,.016),
+ (1.400,.125,.080,.018),
 ]
 loft("SERA cobalt split-breastplate",torso,[royal,graphite,royal_light],
      lambda row,t: 1 if math.cos(t)>.76 else (2 if .67<math.cos(t)<=.76 else 0))
 loft("SERA standing neck guard",[
- (1.392,.115,.084,.018),(1.440,.100,.082,.022),(1.472,.084,.075,.022)
+ (1.395,.097,.071,.018),(1.428,.088,.067,.022),(1.445,.082,.063,.022)
  ],[royal,graphite],lambda row,t: 1 if math.cos(t)>.45 else 0, segments=24)
 
 # High-contrast torso chevrons; diagonal edges read even from TPS camera.
@@ -206,39 +206,39 @@ loft("SERA articulated cobalt hip belt",[
  ],[royal,charcoal],lambda row,t: 1 if abs(math.sin(t))>.83 else 0)
 ribbon("SERA asymmetric front combat-tabard",
        [(-.075,1.009,.141),(-.095,.915,.163),(-.105,.820,.161),(-.112,.706,.148),(-.117,.653,.143)],
-       .205,cloth)
+       .135,cloth)
 ribbon("SERA tabard cobalt seam",
        [(-.083,.998,.151),(-.094,.89,.177),(-.106,.762,.177),(-.116,.668,.16)],
        .018,royal_light)
 ribbon("SERA left side battle split",
        [(-.166,1.0,.017),(-.18,.88,.008),(-.20,.78,.014),(-.223,.70,.01)],
-       .125,royal)
+       .070,royal)
 ribbon("SERA right hip tail",
        [(.173,.998,-.005),(.198,.878,-.011),(.219,.78,-.012),(.226,.728,-.018)],
-       .098,royal)
+       .060,royal)
 
 # Two-tone bracers, silver wedge on each forearm, woven glove cuff.
 for side,label in [(-1,"L"),(1,"R")]:
     a=(side*.340,1.240,.037); b=(side*.443,1.137,.037)
-    cylinder_between("SERA forearm gauntlet "+label,a,b,.053,.043,[graphite,royal,silver],
+    cylinder_between("SERA forearm gauntlet "+label,a,b,.037,.029,[graphite,royal,silver],
                      choose=lambda i: 2 if i in (0,1,11) else (1 if i in (2,3,9,10) else 0))
     cylinder_between("SERA blue glove cuff "+label,(side*.434,1.145,.038),
-                     (side*.468,1.109,.037),.046,.033,[royal],segments=10)
+                     (side*.468,1.109,.037),.034,.028,[royal],segments=10)
     # Bare shoulders remain recognizable; light armor protects outer deltoids.
     cylinder_between("SERA shoulder articulation "+label,(side*.205,1.367,.030),
-                     (side*.273,1.297,.039),.062,.053,[royal,charcoal],
+                     (side*.259,1.321,.039),.043,.037,[royal,charcoal],
                      choose=lambda i: 1 if i%4==0 else 0,segments=12)
 
 # Angular shin plating; inset black boots and bright cobalt diagonal cutlines.
 for side,label in [(-1,"L"),(1,"R")]:
     x=side*.123
     cylinder_between("SERA shin armor "+label,(x,.195,.054),(x,.501,.054),
-                     .063,.078,[royal,charcoal],
+                     .051,.057,[royal,charcoal],
                      choose=lambda i: 1 if i in (6,7,8,9) else 0)
     ribbon("SERA shin insignia "+label,[(x,.47,.136),(x-side*.015,.365,.132),
             (x,.259,.117)],.026,royal_light)
     cylinder_between("SERA ankle blue clasp "+label,(x,.18,.042),
-                     (x,.235,.048),.078,.065,[royal],segments=12)
+                     (x,.235,.048),.059,.050,[royal],segments=12)
 
 # Artist-shaped high ponytail and angular asymmetrical fringe. Base hair mesh
 # remains underneath, but its original flat gray-purple shader is replaced.
@@ -252,14 +252,14 @@ ribbon("SERA fringe blue-black edge",
        [(-.069,1.634,.115),(-.052,1.607,.135),(-.029,1.579,.149)],
        .009,hairglint,bind="HEAD")
 cylinder_between("SERA cobalt ponytail tie",(-.002,1.648,-.078),
-                 (.005,1.628,-.094),.038,.033,[royal_light],segments=12,bind="HEAD")
+                 (.005,1.628,-.094),.017,.014,[royal_light],segments=12,bind="HEAD")
 # The base ponytail is retained, but differentiated with authored cascading tips.
 for i in range(5):
     x=(-.036+i*.018)
     ribbon("SERA hair taper "+str(i),[(x,1.607,-.087),
           (x*1.30,1.529,-.108),(x*1.6,1.443,-.114),
           (x*1.8+(.006 if i%2 else -.006),1.353,-.085)],
-          .020,hairmat,bind="HEAD")
+          .013,hairmat,bind="HEAD")
 
 # Stronger eyes without replacing the real skinned, morphable face: fine
 # stylized upper-lid graphic arcs placed near the face.

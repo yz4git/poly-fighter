@@ -32,6 +32,8 @@ else:
     raise RuntimeError("No suitable Blender render engine")
 if scene.render.engine == "CYCLES":
     scene.cycles.samples = 16
+scene.view_settings.view_transform = 'AgX'
+scene.view_settings.exposure = -0.55
 scene.render.resolution_x = 720
 scene.render.resolution_y = 960
 scene.render.resolution_percentage = 100
@@ -50,9 +52,9 @@ def light(name, offset, energy, size):
     obj.location = center + Vector(offset) * height
     obj.rotation_euler = (center - obj.location).to_track_quat("-Z", "Y").to_euler()
 
-light("Key", (-.75,-1.1,1.2), 950, 3)
-light("Fill", (.85,.2,.5), 530, 3)
-light("Rim", (.35,1,1.1), 1100, 2.5)
+light("Key", (-.75,-1.1,1.2), 625, 2.6)
+light("Fill", (.85,.2,.5), 265, 2.8)
+light("Rim", (.35,1,1.1), 710, 2.2)
 camera_data = bpy.data.cameras.new("Review camera")
 camera = bpy.data.objects.new("Review camera", camera_data)
 scene.collection.objects.link(camera)

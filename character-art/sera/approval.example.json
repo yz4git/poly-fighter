@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "character": "SERA",
+  "reviewer": "REPLACE_WITH_HUMAN_REVIEWER",
+  "reviewDate": null,
+  "approvedGlbSha256": null,
+  "facialIdentityMatchesSera": false,
+  "professionalHairSilhouette": false,
+  "tailoredGarmentsNoFloatingParts": false,
+  "credibleSkinHairClothMaterials": false,
+  "combatPoseDeformationPassed": false,
+  "iphoneSafariPerformancePassed": false
+}

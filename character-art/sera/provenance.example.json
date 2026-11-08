@@ -7,5 +7,6 @@
   "attribution": "",
   "commercialGameUse": false,
   "derivativesAllowed": false,
-  "binaryRedistributionAllowed": false
+  "binaryRedistributionAllowed": false,
+  "publicRawAssetPostingAllowed": false
 }

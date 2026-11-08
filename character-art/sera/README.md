@@ -44,8 +44,12 @@ The file stays ON DEVICE. Tap SAVE ACTUAL VIEW to obtain a real PNG.
 
 Once the face, silhouette, hair and costumes genuinely look good, upload a
 candidate.glb file and provenance.json into THIS directory on the working
-branch through GitHub. Use provenance.example.json as the schema, replacing
-all placeholders with genuine licensed rights. The candidate audit then runs
+branch through GitHub ONLY IF the license expressly permits publishing the raw
+model in a public repository. Most paid asset licenses are for embedded game
+use and do not permit republishing raw downloadable assets. For those, keep
+artwork in private artist-controlled storage and obtain an appropriate
+redistribution grant before moving it here. Use provenance.example.json
+as the schema and provide real licensing evidence. The candidate audit then runs
 in GitHub Actions: structural rig/material gate plus six real Blender PNGs.
 An optional artist-owned source can be exported, without any automated
 anatomy creation, using:

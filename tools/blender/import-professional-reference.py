@@ -18,7 +18,7 @@ source,texture,out,report=map(os.path.abspath,a)
 if not os.path.isfile(source) or not os.path.isfile(texture):
     raise RuntimeError("Missing pinned CC0 comparison source/texture")
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.fbx(filepath=source, use_anim=False)
+bpy.ops.import_scene.fbx(filepath=source)
 meshes=[obj for obj in bpy.context.scene.objects if obj.type=="MESH"]
 rigs=[obj for obj in bpy.context.scene.objects if obj.type=="ARMATURE"]
 if not meshes or not rigs:

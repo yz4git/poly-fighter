@@ -312,12 +312,13 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
         maxHeight: "80%", overflowY: "auto", padding: 10,
         display: "flex", flexDirection: "column", gap: 7, ...shell,
       }}>
-        <label style={{ ...button, display: "block", textAlign: "center",
+        <label style={{ ...button, display: "block", position: "relative", overflow: "hidden", textAlign: "center",
           color: "#06121f", background: "#6ee5ff", borderColor: "#6ee5ff" }}>
           {loading ? "CHECKING…" : "IMPORT ARTIST GLB"}
           <input type="file" accept=".glb,model/gltf-binary" disabled={loading}
             onChange={(event) => { void onFile(event.target.files?.[0]); event.currentTarget.value = ""; }}
-            style={{ display: "none" }} />
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
+              opacity: 0, cursor: "pointer" }} />
         </label>
         <div style={{ fontSize: 9, color: report?.technicallyEligible ? "#9decb8" : "#d9e3eb",
           fontWeight: 800 }}>{keyStatus}</div>

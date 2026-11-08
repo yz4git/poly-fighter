@@ -20,7 +20,16 @@ mid=Vector([(a+b)/2 for a,b in zip(lo,hi)])
 height=hi[2]-lo[2]
 if height<.5:raise RuntimeError("Invalid character bounds")
 scene=bpy.context.scene
-scene.render.engine="BLENDER_EEVEE" if bpy.app.version<(4,2,0) else "BLENDER_EEVEE_NEXT"
+for engine in ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT", "CYCLES"):
+    try:
+        scene.render.engine=engine
+        break
+    except TypeError:
+        continue
+else:
+    raise RuntimeError("No available Blender studio renderer")
+if scene.render.engine=="CYCLES":
+    scene.cycles.samples=16
 scene.render.resolution_x=780
 scene.render.resolution_y=960
 scene.render.resolution_percentage=100

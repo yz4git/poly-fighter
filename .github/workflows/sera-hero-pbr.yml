@@ -52,8 +52,8 @@ jobs:
         run: |
           set -euxo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y blender python3-numpy
-          blender --background --factory-startup \
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+          xvfb-run -a blender --background --factory-startup \
             --python tools/blender/render-sera-hero-pbr.py -- \
             public/models/hero/sera-hero-pbr.glb artifacts/sera-hero-pbr/views
           test "$(find artifacts/sera-hero-pbr/views -name '*.png' | wc -l)" -eq 4

@@ -1,0 +1,81 @@
+name: SERA professional 3D art intake and evidence
+
+on:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - character-art/sera/candidate.glb
+      - character-art/sera/provenance.json
+      - character-art/sera/approval.json
+      - scripts/artist-asset-quality-gate.mjs
+      - scripts/validate-artist-provenance.mjs
+      - scripts/artist-approval-gate.mjs
+      - tools/blender/export-artist-hero.py
+      - tools/blender/render-artist-review.py
+      - .github/workflows/sera-artist-candidate-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-artist-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-art-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Detect hand-produced candidate instead of generating more placeholder models
+        id: candidate
+        run: |
+          if test -s character-art/sera/candidate.glb; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "ARTIST_GLTF_PRESENT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "NO_SUBMITTED_PROFESSIONAL_ASSET: artwork selection still pending."
+            echo "No substitute MakeHuman/Ara character will be generated."
+          fi
+      - name: Check exact character geometry, skeleton and embedded PBR maps
+        if: steps.candidate.outputs.present == 'true'
+        run: |
+          set -euxo pipefail
+          node --import tsx scripts/artist-asset-quality-gate.mjs             character-art/sera/candidate.glb artifacts/artist-review/quality.json
+          node scripts/validate-artist-provenance.mjs             character-art/sera/candidate.glb character-art/sera/provenance.json             > artifacts/artist-review/provenance-audit.json
+      - name: Install Blender headless evidence renderer
+        if: steps.candidate.outputs.present == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+      - name: Render six authentic images of the actual supplied GLB
+        if: steps.candidate.outputs.present == 'true'
+        run: |
+          set -euxo pipefail
+          xvfb-run -a blender --background --disable-autoexec --factory-startup             --python tools/blender/render-artist-review.py --             character-art/sera/candidate.glb artifacts/artist-review/views
+          test "$(find artifacts/artist-review/views -name '*.png' | wc -l)" -eq 6
+      - name: Upload actual results without distributing or releasing model
+        if: steps.candidate.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sera-artist-submission-technical-and-six-real-views
+          path: artifacts/artist-review/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Verify explicit human sign-off only when supplied
+        if: steps.candidate.outputs.present == 'true'
+        run: |
+          if test -s character-art/sera/approval.json; then
+            node scripts/artist-approval-gate.mjs               character-art/sera/candidate.glb character-art/sera/approval.json
+          else
+            echo "ART_APPROVAL_PENDING: full quality and iPhone tests are mandatory."
+          fi
+      - name: Confirm no automatic release or upload was attempted
+        run: echo "Intake is only a review pipeline. Existing SERA and deployed game remain unchanged."

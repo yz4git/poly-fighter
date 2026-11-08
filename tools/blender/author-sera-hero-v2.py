@@ -276,8 +276,8 @@ for obj in new_objects+[body,arm]:
     obj.select_set(True)
 bpy.context.view_layer.objects.active = body
 bpy.ops.export_scene.gltf(filepath=output_path,export_format="GLB",
-                           export_selected=True,export_animations=False,
-                           export_morph=True,export_skinning=True,
+                           use_selection=True,export_animations=False,
+                           export_morph=True,export_skins=True,
                            export_yup=True)
 if len(args)>2:
     source_blend=os.path.abspath(args[2])

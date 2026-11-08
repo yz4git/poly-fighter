@@ -8,7 +8,7 @@ import type { FighterVisual } from "./visual";
 // UVs, geometry, garments, hair, morph targets and independent artist rig.
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
 export const SERA_HERO_MODEL_URL = BASE_PATH + "/models/hero/sera-hero-pbr.glb";
-export const SERA_HERO_RUNTIME_VERSION = "SERA_HERO_PBR_V1";
+export const SERA_HERO_RUNTIME_VERSION = "SERA_HERO_PBR_V2";
 
 // Source bone (UBC/UAL) -> final hero bone (Ara game/Mixamo rig).
 export const SERA_HERO_BONE_MAP = {
@@ -50,6 +50,7 @@ type HeroRuntime = {
   host: THREE.Group;
   model: THREE.Group;
   materials: THREE.Material[];
+  faceMeshes: THREE.SkinnedMesh[];
   tracks: BindTrack[];
   sourceHost: THREE.Object3D | null;
   sourceMeshes: THREE.Mesh[];
@@ -190,7 +191,11 @@ function prepareModel(source: THREE.Group, visual: FighterVisual): HeroRuntime {
   visual.root.userData.heroPbrTriangleCount = Math.round(faces);
   visual.root.userData.heroPbrTextureMaterials = textured;
   visual.root.userData.heroPbrVersion = SERA_HERO_RUNTIME_VERSION;
-  return { host, model, materials, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
+  const faceMeshes = skinned.filter((mesh) =>
+    Boolean(mesh.morphTargetDictionary?.eyeBlinkLeft) ||
+    mesh.morphTargetDictionary?.eyeBlinkLeft === 0,
+  );
+  return { host, model, materials, faceMeshes, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
 }
 
 export function installSeraHeroModel(visual: FighterVisual): void {
@@ -264,6 +269,27 @@ export function updateSeraHeroPose(visual: FighterVisual): void {
   // textured mesh is visible. Root transform/hitboxes remain gameplay-owned.
   for (const mesh of runtime.sourceMeshes) mesh.visible = false;
   runtime.host.visible = true;
+  // Preserve the glTF facial blend shapes for more than just static neutral.
+  // A narrow blink impulse and low resting focus are safe even during hitstop.
+  const seconds = performance.now() * 0.001;
+  const blink = Math.pow(Math.max(0, Math.cos(seconds * Math.PI / 1.65)), 40);
+  const clip = String(root.userData.combatMotionCurrentClip ?? "");
+  const attackFocus = /Power|Kick|Counter|Blow|Jab|Cross/.test(clip);
+  for (const mesh of runtime.faceMeshes) {
+    const dictionary = mesh.morphTargetDictionary;
+    const weights = mesh.morphTargetInfluences;
+    if (!dictionary || !weights) continue;
+    const write = (name: string, amount: number) => {
+      const index = dictionary[name];
+      if (index !== undefined) weights[index] = amount;
+    };
+    write("eyeBlinkLeft", blink * 0.95);
+    write("eyeBlinkRight", blink * 0.95);
+    write("browDownLeft", attackFocus ? 0.20 : 0.08);
+    write("browDownRight", attackFocus ? 0.20 : 0.08);
+    write("mouthPress", attackFocus ? 0.13 : 0.035);
+  }
+  root.userData.heroFacialMorphsActive = runtime.faceMeshes.length > 0;
   root.userData.heroModelState = "ready";
   root.userData.heroModelMappedBones = runtime.tracks.length;
   root.userData.heroModelAsset = SERA_HERO_MODEL_URL;

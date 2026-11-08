@@ -67,14 +67,17 @@ try{
     await wait(150);
   }
   const clickedFile=await js(
-    "const nodes=[...document.querySelectorAll('a')];"+
-    "const direct=nodes.find(x=>/EMA\\.glb/i.test(x.innerText||'') && x.href);"+
-    "const box=[...document.querySelectorAll('*')].find(el=>"+
-      "el.children.length>=1&&el.children.length<=7&&"+
-      "/EMA\\.glb/i.test(el.textContent||'')&&"+
-      "el.querySelector('a.download_btn,a[href*=download],a[data-upload_id]'));"+
-    "const anchor=direct||box?.querySelector('a.download_btn,a[href*=download],a[data-upload_id]');"+
-    "if(!anchor)return false;anchor.click();return true;"
+    "const labels=[...document.querySelectorAll('*')].filter(x=>"+
+      "x.children.length===0&&x.textContent?.trim()==='EMA.glb');"+
+    "for(const label of labels){"+
+      "for(let p=label.parentElement;p&&p!==document.body;p=p.parentElement){"+
+        "if((p.innerText||'').length>400)break;"+
+        "const anchors=[...p.querySelectorAll('a')].filter(a=>"+
+          "/download/i.test(a.textContent||'')&&a.getAttribute('href')!=='#');"+
+        "if(anchors.length){anchors[0].click();return true;}"+
+      "}"+
+    "}"+
+    "return false;"
   );
   if(!clickedFile)throw new Error("EMA.glb not offered by public page: "+
     JSON.stringify({url,links}).slice(0,1900));

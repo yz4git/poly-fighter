@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { ModelViewer } from "@/src/game/model-viewer";
+import { ArtistAssetReviewPanel } from "./artist-asset-review-panel";
 import {
   unavailableModelViewerMotionSnapshot,
   type ModelViewerMotionClipInfo,
@@ -46,12 +47,14 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
   const [fighterId, setFighterId] = useState<(typeof fighterIds)[number]>("blue");
   const [modelId, setModelId] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
   const [fallback, setFallback] = useState<string | null>(null);
+  const [artistLab, setArtistLab] = useState(false);
   const [motionState, setMotionState] = useState<ModelViewerMotionSnapshot>(() => unavailableModelViewerMotionSnapshot(true));
   const fighter = FIGHTER_DEFINITIONS[fighterId];
   const motionReady = motionState.available && motionState.clips.length > 0;
   const timeline = motionState.duration > 0 ? Math.min(1, motionState.time / motionState.duration) : 0;
 
   useEffect(() => {
+    if (artistLab) return undefined;
     const host = hostRef.current;
     if (!host) return undefined;
     setFallback(null);
@@ -77,7 +80,9 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
       viewerRef.current = null;
       viewer.destroy();
     };
-  }, [fighter, modelId, quality]);
+  }, [artistLab, fighter, modelId, quality]);
+
+  if (artistLab) return <ArtistAssetReviewPanel onBack={() => setArtistLab(false)} />;
 
   return (
     <section
@@ -187,6 +192,16 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
             </button>
           );
         })}
+        <button
+          type="button"
+          aria-label="Open SERA Artist Asset Lab"
+          onClick={() => setArtistLab(true)}
+          style={{
+            marginTop: 5, padding: "11px 12px",
+            border: "1px solid #77e9ff", background: "#103b54",
+            color: "#eaffff", fontWeight: 900, fontSize: 10,
+          }}
+        >ARTIST ASSET LAB / GLB</button>
         <button
           type="button"
           onClick={() => viewerRef.current?.reset()}

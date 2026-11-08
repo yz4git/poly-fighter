@@ -58,7 +58,8 @@ try{
  await wait(600);
  if(!await click("MODEL VIEW"))throw new Error("MODEL VIEW button missing");
  await wait(250);
- if(!await click("SERA HERO PBR"))throw new Error("SERA HERO PBR switch missing");
+ const modelChoice=process.env.SERA_HERO_CHOICE ?? "SERA HERO PBR";
+ if(!await click(modelChoice))throw new Error("Hero model switch missing: "+modelChoice);
  let current;
  for(let i=0;i<200;i++){
   current=await state();

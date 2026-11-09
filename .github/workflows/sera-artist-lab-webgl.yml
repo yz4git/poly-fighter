@@ -12,6 +12,8 @@ on:
       - src/game/visual-hero-runtime.ts
       - src/game/model-viewer.ts
       - scripts/audit-artist-asset-lab.mjs
+      - scripts/make-unrigged-sculpt-fixture.mjs
+      - src/game/artist-glb-contract.ts
       - .github/workflows/sera-artist-lab-webgl.yml
   workflow_dispatch:
 
@@ -44,6 +46,11 @@ jobs:
           done
           cat /tmp/artist-lab-server.log
           exit 1
+      - name: Produce unrigged high-detail static concept from existing V2 test geometry
+        run: |
+          node scripts/make-unrigged-sculpt-fixture.mjs \
+            public/models/hero/sera-hero-pbr.glb artifacts/artist-lab-static-concept.glb
+          test -s artifacts/artist-lab-static-concept.glb
       - name: Import real GLB locally and capture actual WebGL face/full-body evidence
         run: |
           set -euxo pipefail

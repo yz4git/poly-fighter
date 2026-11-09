@@ -1,0 +1,69 @@
+{
+  "subject": "SERA — original reference, NOT generated final mesh",
+  "master_reference": "public/reference/female-turnaround.jpeg",
+  "master_sha256": "bc10b31d55626c4f0650b73c7b09850e300f12802ff1db5e1c61a56e3ed389d8",
+  "master_size_px": [
+    1536,
+    1024
+  ],
+  "output_size_px": [
+    640,
+    1280
+  ],
+  "provenance": "Unaltered original pixels; crop/resize/pad only, no AI reimagination",
+  "review_required": "Compare generated head/hair/garments with all four views",
+  "views": [
+    {
+      "name": "front",
+      "crop_xyxy": [
+        8,
+        174,
+        389,
+        1015
+      ],
+      "image": "front.png",
+      "sha256": "b62b943bc6cff5bdd2e7c11185277e3fe1ce8e6bf1db6311a67e6d78653d04cf",
+      "width": 640,
+      "height": 1280
+    },
+    {
+      "name": "three-quarter",
+      "crop_xyxy": [
+        390,
+        174,
+        758,
+        1015
+      ],
+      "image": "three-quarter.png",
+      "sha256": "3eaeb2caec334c9ca852ca16cd28bf8f3547487894fad4b40b050460eaf7f559",
+      "width": 640,
+      "height": 1280
+    },
+    {
+      "name": "side",
+      "crop_xyxy": [
+        760,
+        174,
+        1133,
+        1015
+      ],
+      "image": "side.png",
+      "sha256": "e2688f5fdc32d17dffbfa3d499bd718be901f1d7442528c134f9553b60ee2130",
+      "width": 640,
+      "height": 1280
+    },
+    {
+      "name": "back",
+      "crop_xyxy": [
+        1135,
+        174,
+        1527,
+        1015
+      ],
+      "image": "back.png",
+      "sha256": "9beb2104cd2a1801fce3cff0775a00de2c64fe2be1ff166bfa51decb82fd3c09",
+      "width": 640,
+      "height": 1280
+    }
+  ]
+}

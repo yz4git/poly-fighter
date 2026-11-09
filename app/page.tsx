@@ -568,7 +568,7 @@ export default function Home() {
 
           <div className="difficulty" style={{ marginTop: 10 }}>
             <span>VISUAL MODEL</span>
-            {FIGHTER_MODEL_OPTIONS.map((option) => (
+            {FIGHTER_MODEL_OPTIONS.filter((option) => option.id !== "SERA_ARTIST_PREVIEW").map((option) => (
               <button key={option.id} type="button" className={modelChoice === option.id ? "active" : ""} onClick={() => setModelChoice(option.id)}>
                 {option.label}
               </button>

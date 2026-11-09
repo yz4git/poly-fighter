@@ -1,0 +1,71 @@
+name: SERA art-first quality reference — real professional character
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - tools/blender/import-professional-reference.py
+      - tools/blender/render-artist-review.py
+      - .github/workflows/sera-reference-pro-model.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-professional-model-reference
+  cancel-in-progress: true
+
+jobs:
+  render-existing-artist-character:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch unchanged high-detail author model from source at pinned exact commit
+        uses: actions/checkout@v4
+        with:
+          repository: s0ck3t/VideoIntoBlenderModel
+          ref: c1f1fa8f01524d60197c4d65306349e266d339cb
+          path: .external/attractor
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            assets/rigs/attractor_mechanic_tpose.fbx
+            assets/rigs/attractor_mechanic_tpose.png
+            assets/LICENCES.md
+      - name: Install Blender headless and software display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri xvfb
+      - name: Import actual artist geometry and preserve morph/weights
+        run: |
+          set -euxo pipefail
+          test -s .external/attractor/assets/rigs/attractor_mechanic_tpose.fbx
+          test -s .external/attractor/assets/rigs/attractor_mechanic_tpose.png
+          xvfb-run -a blender -b --factory-startup --disable-autoexec \
+            -P tools/blender/import-professional-reference.py -- \
+            .external/attractor/assets/rigs/attractor_mechanic_tpose.fbx \
+            .external/attractor/assets/rigs/attractor_mechanic_tpose.png \
+            artifacts/artist-pro-reference/attractor-mechanic-CC0-reference.glb \
+            artifacts/artist-pro-reference/source-geometry.json
+          test -s artifacts/artist-pro-reference/attractor-mechanic-CC0-reference.glb
+      - name: Render six real 3D views and face/outfit close-ups
+        run: |
+          set -euxo pipefail
+          xvfb-run -a blender -b --factory-startup --disable-autoexec \
+            -P tools/blender/render-artist-review.py -- \
+            artifacts/artist-pro-reference/attractor-mechanic-CC0-reference.glb \
+            artifacts/artist-pro-reference/views
+          test "$(find artifacts/artist-pro-reference/views -name '*.png' | wc -l)" -eq 6
+      - name: Preserve actual source license evidence with diagnostic render outputs
+        run: |
+          cp .external/attractor/assets/LICENCES.md artifacts/artist-pro-reference/UPSTREAM-LICENSES.md
+          echo "REFERENCE ONLY — NOT SERA, NOT approved for game integration." > artifacts/artist-pro-reference/NOT-SERA.txt
+      - name: Upload real 3D comparative reference (no game release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: existing-artist-cc0-model-real-six-views-and-skinned-glb
+          path: artifacts/artist-pro-reference
+          if-no-files-found: warn
+          retention-days: 14

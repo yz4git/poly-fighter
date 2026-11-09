@@ -1,0 +1,55 @@
+name: SERA original 4-view sculpt reference inputs
+
+on:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - scripts/prepare-sera-multiview.py
+      - public/reference/female-turnaround.jpeg
+      - .github/workflows/sera-original-four-view-inputs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sera-original-reference-views
+  cancel-in-progress: true
+
+jobs:
+  prepare-real-original-design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image crop utility
+        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Crop the genuine original SERA illustration, do not synthesize a character
+        run: |
+          python scripts/prepare-sera-multiview.py \
+            public/reference/female-turnaround.jpeg docs/sera-generation-input
+          for f in front three-quarter side back; do
+            test -s "docs/sera-generation-input/$f.png"
+          done
+          test -s docs/sera-generation-input/manifest.json
+      - name: Store art-generation inputs only in draft branch, NOT public game
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/sera-generation-input/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Add crop-only original SERA four-view sculpt references [skip ci]'
+          git fetch origin chatgpt/sera-artist-first-pipeline
+          git rebase origin/chatgpt/sera-artist-first-pipeline
+          git push origin HEAD:chatgpt/sera-artist-first-pipeline
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sera-original-multiview-generation-inputs
+          path: docs/sera-generation-input/
+          if-no-files-found: error
+          retention-days: 14

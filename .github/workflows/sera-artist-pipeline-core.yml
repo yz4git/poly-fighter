@@ -1,0 +1,49 @@
+name: SERA artist-first pipeline - core checks
+
+on:
+  push:
+    branches: [chatgpt/sera-artist-first-pipeline]
+    paths:
+      - src/components/artist-asset-review-panel.tsx
+      - src/components/model-viewer-panel.tsx
+      - src/game/local-artist-preview.ts
+      - src/game/model-skins.ts
+      - src/game/visual-entry.ts
+      - src/game/visual-hero-runtime.ts
+      - src/game/model-viewer.ts
+      - app/page.tsx
+      - src/game/artist-glb-contract.ts
+      - scripts/artist-asset-quality-gate.mjs
+      - tests/artist-glb-contract.test.ts
+      - tests/artist-license-policy.test.ts
+      - scripts/artist-license-policy.mjs
+      - scripts/validate-artist-provenance.mjs
+      - .github/workflows/sera-artist-pipeline-core.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sera-artist-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Artist GLB contract and existing gameplay regression tests
+        run: npm run test:ci:static
+      - name: Lint all application code
+        run: npm run lint
+      - name: Produce real game build
+        run: npm run build
+      - name: Verify rendered HTML
+        run: npm run test:ci:postbuild

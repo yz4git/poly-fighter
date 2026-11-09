@@ -6,6 +6,12 @@ on:
     paths:
       - src/components/artist-asset-review-panel.tsx
       - src/components/model-viewer-panel.tsx
+      - src/game/local-artist-preview.ts
+      - src/game/model-skins.ts
+      - src/game/visual-entry.ts
+      - src/game/visual-hero-runtime.ts
+      - src/game/model-viewer.ts
+      - app/page.tsx
       - src/game/artist-glb-contract.ts
       - scripts/artist-asset-quality-gate.mjs
       - tests/artist-glb-contract.test.ts

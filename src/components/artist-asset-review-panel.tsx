@@ -211,14 +211,14 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
     setClips([]);
     setMessage("GLB構造・スキニング・テクスチャを検査しています…");
     try {
-      if (file.size > 32 * 1024 * 1024)
-        throw new Error("32 MiBを超えています。ゲーム用にリトポロジーと圧縮を行ってください。");
+      if (file.size > 80 * 1024 * 1024)
+        throw new Error("造形の目視審査の安全上限は80 MiBです。軽い確認用GLBを書き出してください。");
       const data = await file.arrayBuffer();
       if (ticket !== requestId.current) return;
       const next = inspectArtistGlb(data, file.name);
       setReport(next);
-      if (next.technicalErrors.length)
-        throw new Error("技術審査に不合格: " + next.technicalErrors.join(" / "));
+      if (!next.visualReviewEligible)
+        throw new Error("GLBの表示不可: " + next.technicalErrors.join(" / "));
       setMessage("実際のPBR材質・顔・髪・衣装を表示しています…");
       const gltf = await new Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>>>((resolve, reject) => {
         const loader = new GLTFLoader();
@@ -247,10 +247,12 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
       }
       setClips(gltf.animations.map((clip) => clip.name));
       setSelectedClip(gltf.animations[0]?.name ?? "");
-      eligibleFile.current = file;
+      eligibleFile.current = next.combatRigCompatible ? file : null;
       setPlaying(true);
       cameraTo("3/4");
-      setMessage("技術審査合格。これは造形の承認ではありません。顔・髪・服・関節を目視審査してください。");
+      setMessage(next.combatRigCompatible
+        ? "格闘テストの技術条件に合格。顔・髪・衣装はまだ品質未承認です。"
+        : "造形の目視審査モードです。顔や衣装を先に確認できます。骨格・PBR・ポリゴン数は格闘テスト前に修正が必要です。");
     } catch (error) {
       if (ticket === requestId.current) {
         setMessage(error instanceof Error ? error.message : "ファイルの読み込みに失敗しました。");
@@ -297,7 +299,7 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
   };
 
   const launchCombatTest = () => {
-    if (!report?.technicallyEligible || !eligibleFile.current) return;
+    if (!report?.combatRigCompatible || !eligibleFile.current) return;
     try {
       registerLocalArtistPreview(eligibleFile.current);
       onTestCombat();
@@ -305,9 +307,12 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
       setMessage(error instanceof Error ? error.message : String(error));
     }
   };
-  const keyStatus = report?.technicallyEligible ? "TECHNICAL PASS / ART UNREVIEWED" : "NOT APPROVED";
+  const keyStatus = !report ? "NO SCULPT SELECTED"
+    : report.combatRigCompatible ? "COMBAT TECH PASS / ART UNREVIEWED"
+    : report.visualReviewEligible ? "SCULPT VISUAL REVIEW ONLY / ART UNREVIEWED"
+    : "GLB INVALID / NOT APPROVED";
   return (
-    <section aria-label="SERA Artist Asset Lab" data-asset-intake-state={loading ? "loading" : report?.technicallyEligible ? "tech-pass" : report ? "rejected" : "empty"} data-asset-triangles={report?.triangles ?? 0} style={{
+    <section aria-label="SERA Artist Asset Lab" data-asset-intake-state={loading ? "loading" : report?.combatRigCompatible ? "tech-pass" : report?.visualReviewEligible ? "visual-only" : report ? "rejected" : "empty"} data-asset-triangles={report?.triangles ?? 0} style={{
       position: "absolute", inset: 0, zIndex: 12, background: "#050c18",
       color: "#eff7ff", overflow: "hidden", touchAction: "manipulation",
     }}>
@@ -364,7 +369,7 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
           EMA.glb (約7.8 MB) を取得して上のボタンから開く。
           これはSERAとして不採用の検査用モデルです。
         </div>
-        <div style={{ fontSize: 9, color: report?.technicallyEligible ? "#9decb8" : "#d9e3eb",
+        <div style={{ fontSize: 9, color: report?.combatRigCompatible ? "#9decb8" : report?.visualReviewEligible ? "#f5d88c" : "#d9e3eb",
           fontWeight: 800 }}>{keyStatus}</div>
         {report && (
           <div style={{ fontSize: 9, lineHeight: 1.6, color: "#bdd0e0", overflowWrap: "anywhere" }}>
@@ -373,9 +378,14 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
             {report.skinnedPrimitives} skinned parts / {report.images} images<br />
             {report.normalMaps} normal / {report.pbrRoughnessMaps} roughness maps<br />
             {report.morphTargets} morphs / {report.animations} motion clips
+            {!report.combatRigCompatible && report.visualReviewEligible && (
+              <div style={{ marginTop: 6, color: "#e7be84" }}>
+                格闘テスト未対応 / {report.technicalErrors.slice(0, 3).join(" / ")}
+              </div>
+            )}
           </div>
         )}
-        {report?.technicallyEligible && (
+        {report?.combatRigCompatible && (
           <button type="button" onClick={launchCombatTest}
             style={{ ...button, background: "#174a38", borderColor: "#91e9af",
               color: "#d9ffe9", fontSize: 9 }}>
@@ -412,8 +422,8 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
             </button>
           </>
         )}
-        <button type="button" onClick={capture} disabled={!report?.technicallyEligible}
-          style={{ ...button, opacity: report?.technicallyEligible ? 1 : .5 }}>
+        <button type="button" onClick={capture} disabled={!report?.visualReviewEligible}
+          style={{ ...button, opacity: report?.visualReviewEligible ? 1 : .5 }}>
           SAVE ACTUAL VIEW
         </button>
         <div style={{ color: "#93a9bf", fontSize: 8, lineHeight: 1.5 }}>

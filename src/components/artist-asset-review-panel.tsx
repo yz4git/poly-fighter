@@ -6,6 +6,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { inspectArtistGlb, type ArtistAssetTechnicalReport } from "@/src/game/artist-glb-contract";
+import { registerLocalArtistPreview } from "@/src/game/local-artist-preview";
 
 type View = "FRONT" | "3/4" | "SIDE" | "BACK" | "FACE" | "OUTFIT";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
@@ -78,10 +79,14 @@ function formatMiB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
-export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
+export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
+  onBack: () => void;
+  onTestCombat: () => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer | null>(null);
   const requestId = useRef(0);
+  const eligibleFile = useRef<File | null>(null);
   const [report, setReport] = useState<ArtistAssetTechnicalReport | null>(null);
   const [view, setView] = useState<View>("3/4");
   const [message, setMessage] = useState("iPhoneの「ファイル」から、造形済み・テクスチャ同梱のGLBを選択してください。");
@@ -200,6 +205,7 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
   const onFile = async (file?: File) => {
     if (!file) return;
     const ticket = ++requestId.current;
+    eligibleFile.current = null;
     setLoading(true);
     setReport(null);
     setClips([]);
@@ -241,6 +247,7 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
       }
       setClips(gltf.animations.map((clip) => clip.name));
       setSelectedClip(gltf.animations[0]?.name ?? "");
+      eligibleFile.current = file;
       setPlaying(true);
       cameraTo("3/4");
       setMessage("技術審査合格。これは造形の承認ではありません。顔・髪・服・関節を目視審査してください。");
@@ -289,6 +296,15 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
     }, "image/png");
   };
 
+  const launchCombatTest = () => {
+    if (!report?.technicallyEligible || !eligibleFile.current) return;
+    try {
+      registerLocalArtistPreview(eligibleFile.current);
+      onTestCombat();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
   const keyStatus = report?.technicallyEligible ? "TECHNICAL PASS / ART UNREVIEWED" : "NOT APPROVED";
   return (
     <section aria-label="SERA Artist Asset Lab" data-asset-intake-state={loading ? "loading" : report?.technicallyEligible ? "tech-pass" : report ? "rejected" : "empty"} data-asset-triangles={report?.triangles ?? 0} style={{
@@ -359,6 +375,17 @@ export function ArtistAssetReviewPanel({ onBack }: { onBack: () => void }) {
             {report.morphTargets} morphs / {report.animations} motion clips
           </div>
         )}
+        {report?.technicallyEligible && (
+          <button type="button" onClick={launchCombatTest}
+            style={{ ...button, background: "#174a38", borderColor: "#91e9af",
+              color: "#d9ffe9", fontSize: 9 }}>
+            TEST REAL PUNCH / KICK
+          </button>
+        )}
+        <div style={{ fontSize: 8, lineHeight: 1.5, color: "#9dcfbb" }}>
+          端末内のGLBを既存格闘モーションに一時接続します。
+          実モデルの関節が合わない場合は旧キャラへ戻ります。製品採用はしません。
+        </div>
         <button type="button" aria-pressed={showSeraReference}
           onClick={() => setShowSeraReference((shown) => !shown)}
           style={{ ...button, background: showSeraReference ? "#145a6e" : "#102a3c",

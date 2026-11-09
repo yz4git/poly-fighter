@@ -97,7 +97,7 @@ try {
   if(!await click("TEST REAL PUNCH / KICK"))
     throw new Error("Actual fighting-motion test launch button missing");
   const combatState=()=>js(
-    "const section=document.querySelector('section[aria-label=\\"Model View\\"]');"+
+    "const section=[...document.querySelectorAll('section')].find(s=>s.getAttribute('aria-label')==='Model View');"+
     "const canvas=section?.querySelector('canvas');"+
     "return {open:!!section,model:canvas?.dataset.heroModelState??'absent',"+
     "mappedBones:Number(canvas?.dataset.heroMappedBones??0),"+

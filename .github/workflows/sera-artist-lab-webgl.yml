@@ -6,6 +6,11 @@ on:
     paths:
       - src/components/artist-asset-review-panel.tsx
       - src/components/model-viewer-panel.tsx
+      - src/game/local-artist-preview.ts
+      - src/game/model-skins.ts
+      - src/game/visual-entry.ts
+      - src/game/visual-hero-runtime.ts
+      - src/game/model-viewer.ts
       - scripts/audit-artist-asset-lab.mjs
       - .github/workflows/sera-artist-lab-webgl.yml
   workflow_dispatch:

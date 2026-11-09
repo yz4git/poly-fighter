@@ -130,9 +130,38 @@ try {
   if(!clipStarted) throw new Error("Local artist rig did not expose the real BF_Power_R combat move");
   await wait(170);
   await capture("04-artist-glb-real-heavy-strike");
+  // Return and load a genuine GLB with the same textured mesh but NO skin.
+  // Face-first concept sculpting must be allowed BEFORE weight painting.
+  if(!await click("ARTIST ASSET LAB / GLB"))
+    throw new Error("Cannot return from combat to artist visual studio");
+  await wait(400);
+  await js(
+    "const el=document.querySelector('section[aria-label=\"SERA Artist Asset Lab\"] input[type=file]');"+
+    "if(!el)return false;el.style.display='block';return true;");
+  const staticElements=await request("/session/"+session+"/elements","POST",{
+    using:"css selector",value:"section[aria-label='SERA Artist Asset Lab'] input[type=file]"
+  });
+  const staticId=staticElements?.[0]?.["element-6066-11e4-a52e-4f735466cecf"];
+  if(!staticId) throw new Error("File input not re-created on visual-only studio return");
+  const staticPath=path.resolve("artifacts/artist-lab-static-concept.glb");
+  await request("/session/"+session+"/element/"+staticId+"/value","POST",{
+    text:staticPath,value:[...staticPath]
+  });
+  let sculpt=null;
+  for(let i=0;i<200;i++){
+    sculpt=await state();
+    if(sculpt.glbState==="visual-only"||sculpt.glbState==="rejected")break;
+    await wait(200);
+  }
+  if(sculpt?.glbState!=="visual-only"||sculpt.triangles<10000)
+    throw new Error("Real unrigged concept failed visual-only gate: "+JSON.stringify(sculpt));
+  if(await click("TEST REAL PUNCH / KICK"))
+    throw new Error("Unrigged concept must NEVER allow fight retarget");
+  await wait(250);
+  await capture("05-unrigged-face-sculpt-visual-only");
   await writeFile(output+"/actual-browser-result.json",JSON.stringify({
-    before,after:current,combat,clipStarted,
-    note:"V2 fixture only tests local imported GLB fighting rig; it is NOT approved SERA art",
+    before,after:current,combat,clipStarted,sculpt,
+    note:"Both V2 fixtures exist only for pipeline testing and are not approved SERA art",
   },null,2));
   console.log("ARTIST_LAB_REAL_WEBGL_AND_COMBAT_RETARGET_PASSED",JSON.stringify(combat));
 } finally {

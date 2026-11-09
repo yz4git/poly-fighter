@@ -58,7 +58,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
     const host = hostRef.current;
     if (!host) return undefined;
     setFallback(null);
-    setMotionState(unavailableModelViewerMotionSnapshot(modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR"));
+    setMotionState(unavailableModelViewerMotionSnapshot(modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR" || modelId === "SERA_ARTIST_PREVIEW"));
     let viewer: ModelViewer;
     try {
       viewer = new ModelViewer(host, {
@@ -82,7 +82,12 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
     };
   }, [artistLab, fighter, modelId, quality]);
 
-  if (artistLab) return <ArtistAssetReviewPanel onBack={() => setArtistLab(false)} />;
+  if (artistLab) return <ArtistAssetReviewPanel onBack={() => setArtistLab(false)}
+    onTestCombat={() => {
+      setFighterId("blue"); // SERA: only this fighter is permitted for local art retarget QA.
+      setModelId("SERA_ARTIST_PREVIEW");
+      setArtistLab(false);
+    }} />;
 
   return (
     <section

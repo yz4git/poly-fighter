@@ -72,7 +72,10 @@ test("solid-color procedural primitives do not pass as quality assets", () => {
   assert.equal(inspectArtistGlb(buildGlb(doc)).technicallyEligible, false);
 });
 test("size cap is enforced before model parsing", () => {
-  const buffer = new ArrayBuffer(ARTIST_GLB_MAX_BYTES + 1);
+  const small = buildGlb(model());
+  const buffer = new ArrayBuffer(ARTIST_GLB_MAX_BYTES + 4);
+  new Uint8Array(buffer).set(new Uint8Array(small));
+  new DataView(buffer).setUint32(8, buffer.byteLength, true);
   assert.match(inspectArtistGlb(buffer).technicalErrors[0], /32 MiB/);
   assert.equal(inspectArtistGlb(buffer).visualReviewEligible, true);
   assert.equal(inspectArtistGlb(buffer).technicallyEligible, false);

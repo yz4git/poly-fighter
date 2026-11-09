@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ARTIST_GLB_MAX_BYTES, inspectArtistGlb } from "../src/game/artist-glb-contract";
+import { ARTIST_GLB_MAX_BYTES, ARTIST_GLB_VISUAL_MAX_BYTES, inspectArtistGlb } from "../src/game/artist-glb-contract";
 
 function buildGlb(doc: object): ArrayBuffer {
   const text = JSON.stringify(doc);
@@ -19,7 +19,10 @@ function buildGlb(doc: object): ArrayBuffer {
   return buffer;
 }
 const bones = [
-  "mixamorig:Hips","mixamorig:Spine","mixamorig:Head",
+  "mixamorig:Hips","mixamorig:Spine","mixamorig:Spine1",
+  "mixamorig:Spine2","mixamorig:Neck","mixamorig:Head",
+  "mixamorig:LeftShoulder","mixamorig:RightShoulder",
+  "mixamorig:LeftHand","mixamorig:RightHand",
   "mixamorig:LeftArm","mixamorig:RightArm",
   "mixamorig:LeftForeArm","mixamorig:RightForeArm",
   "mixamorig:LeftUpLeg","mixamorig:RightUpLeg",
@@ -43,6 +46,9 @@ function model() {
 test("accept technically valid imported artistic GLB but never auto approve quality", () => {
   const result = inspectArtistGlb(buildGlb(model()), "sera-artist.glb");
   assert.equal(result.technicallyEligible, true);
+  assert.equal(result.visualReviewEligible, true);
+  assert.equal(result.combatRigCompatible, true);
+  assert.equal(result.reviewStage, "MOBILE_TECH_PASS");
   assert.equal(result.triangles, 20000);
   assert.equal(result.artApproval, "NOT_REVIEWED");
   assert.equal(result.missingBones.length, 0);
@@ -68,4 +74,40 @@ test("solid-color procedural primitives do not pass as quality assets", () => {
 test("size cap is enforced before model parsing", () => {
   const buffer = new ArrayBuffer(ARTIST_GLB_MAX_BYTES + 1);
   assert.match(inspectArtistGlb(buffer).technicalErrors[0], /32 MiB/);
+  assert.equal(inspectArtistGlb(buffer).visualReviewEligible, true);
+  assert.equal(inspectArtistGlb(buffer).technicallyEligible, false);
+});
+
+test("allow an unrigged high-detail face sculpt for visual review, not fighting", () => {
+  const doc = model();
+  doc.skins = [];
+  doc.nodes = [];
+  doc.meshes[0].primitives[0].attributes = { POSITION: 0 } as typeof doc.meshes[0]["primitives"][0]["attributes"];
+  doc.accessors[0].count = 480000;
+  doc.materials = [{ pbrMetallicRoughness: {} }] as typeof doc.materials;
+  doc.images = [];
+  const report = inspectArtistGlb(buildGlb(doc),"face-approval-sculpt.glb");
+  assert.equal(report.visualReviewEligible,true);
+  assert.equal(report.technicallyEligible,false);
+  assert.equal(report.combatRigCompatible,false);
+  assert.equal(report.reviewStage,"VISUAL_ONLY");
+  assert.equal(report.artApproval,"NOT_REVIEWED");
+  assert.ok(report.warnings.some(x=>x.includes("Unrigged high-poly")));
+});
+test("reject suspiciously huge sculpt even for mobile visual inspection", () => {
+  const report = inspectArtistGlb(new ArrayBuffer(ARTIST_GLB_VISUAL_MAX_BYTES+1));
+  assert.equal(report.visualReviewEligible,false);
+  assert.equal(report.reviewStage,"INVALID");
+});
+test("art inspection accepts unrigged but refuses remote external textures", () => {
+  const doc=model();
+  doc.skins=[];
+  doc.images[0] = { uri:"https://external.example.net/skin.png" } as typeof doc.images[number];
+  const report=inspectArtistGlb(buildGlb(doc));
+  assert.equal(report.visualReviewEligible,false);
+  assert.ok(report.technicalErrors.some(x=>x.includes("External")));
+});
+test("a production-ready technical pass does not confer artistic approval", () => {
+  const report = inspectArtistGlb(buildGlb(model()));
+  assert.equal(report.artApproval,"NOT_REVIEWED");
 });

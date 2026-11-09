@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterVisual } from "./visual";
+import { localArtistPreviewUrl } from "./local-artist-preview";
 
 // Separate character asset, never a procedural overlay on the old model.
 // The UBC skeleton remains a hidden motion driver; this GLB owns its PBR skin,
@@ -9,6 +10,7 @@ import type { FighterVisual } from "./visual";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "") ?? "";
 export const SERA_HERO_MODEL_URL = BASE_PATH + "/models/hero/sera-hero-pbr.glb";
 export const SERA_HERO_RUNTIME_VERSION = "SERA_HERO_PBR_V2";
+export const SERA_ARTIST_PREVIEW_RUNTIME_VERSION = "SERA_ARTIST_UNAPPROVED_LOCAL_TEST";
 
 // Source bone (UBC/UAL) -> final hero bone (Ara game/Mixamo rig).
 export const SERA_HERO_BONE_MAP = {
@@ -51,6 +53,7 @@ type HeroRuntime = {
   model: THREE.Group;
   materials: THREE.Material[];
   faceMeshes: THREE.SkinnedMesh[];
+  assetUrl: string;
   tracks: BindTrack[];
   sourceHost: THREE.Object3D | null;
   sourceMeshes: THREE.Mesh[];
@@ -59,23 +62,24 @@ type HeroRuntime = {
 
 const runtimes = new WeakMap<THREE.Object3D, HeroRuntime>();
 const tokens = new WeakMap<THREE.Object3D, object>();
-let assetPromise: Promise<THREE.Group> | null = null;
+const assetPromises = new Map<string, Promise<THREE.Group>>();
 const qA = new THREE.Quaternion();
 const qB = new THREE.Quaternion();
 const qC = new THREE.Quaternion();
 const qD = new THREE.Quaternion();
 const qE = new THREE.Quaternion();
 
-function loadSource(): Promise<THREE.Group> {
-  if (!assetPromise) {
-    assetPromise = new GLTFLoader().loadAsync(SERA_HERO_MODEL_URL)
-      .then((gltf) => gltf.scene)
-      .catch((error: unknown) => {
-        assetPromise = null;
-        throw error;
-      });
-  }
-  return assetPromise;
+function loadSource(url: string): Promise<THREE.Group> {
+  const existing = assetPromises.get(url);
+  if (existing) return existing;
+  const next = new GLTFLoader().loadAsync(url)
+    .then((gltf) => gltf.scene)
+    .catch((error: unknown) => {
+      assetPromises.delete(url);
+      throw error;
+    });
+  assetPromises.set(url, next);
+  return next;
 }
 
 function skinnedMeshes(root: THREE.Object3D): THREE.SkinnedMesh[] {
@@ -99,10 +103,19 @@ function bindPoseWorldRotation(mesh: THREE.SkinnedMesh, bone: THREE.Bone): THREE
   return rot;
 }
 
+function canonicalBoneName(name: string): string {
+  return name.split(":").pop()!.replace(/^(mixamorig|DEF|JNT)[-_]?/i, "");
+}
+
 function mapBones(model: THREE.Group): Map<string, THREE.Bone> {
   const result = new Map<string, THREE.Bone>();
   model.traverse((node) => {
-    if ((node as THREE.Bone).isBone) result.set(node.name, node as THREE.Bone);
+    if ((node as THREE.Bone).isBone) {
+      const bone = node as THREE.Bone;
+      result.set(bone.name, bone);
+      const normalized = canonicalBoneName(bone.name);
+      if (!result.has(normalized)) result.set(normalized, bone);
+    }
   });
   return result;
 }
@@ -111,8 +124,10 @@ function buildTracks(
   sourceHost: THREE.Object3D,
   heroModel: THREE.Group,
 ): BindTrack[] {
-  const sourceMesh = skinnedMeshes(sourceHost)[0];
-  const heroMesh = skinnedMeshes(heroModel)[0];
+  const sourceMesh = skinnedMeshes(sourceHost)
+    .sort((a, b) => b.skeleton.bones.length - a.skeleton.bones.length)[0];
+  const heroMesh = skinnedMeshes(heroModel)
+    .sort((a, b) => b.skeleton.bones.length - a.skeleton.bones.length)[0];
   if (!sourceMesh || !heroMesh) throw new Error("Both motion driver and hero need skinned meshes");
   const source = mapBones(sourceHost);
   const target = mapBones(heroModel);
@@ -146,7 +161,7 @@ function buildTracks(
   return tracks;
 }
 
-function prepareModel(source: THREE.Group, visual: FighterVisual): HeroRuntime {
+function prepareModel(source: THREE.Group, visual: FighterVisual, assetUrl: string): HeroRuntime {
   const model = cloneSkeleton(source) as THREE.Group;
   const skinned = skinnedMeshes(model);
   if (!skinned.length) throw new Error("Hero asset must have a skinned mesh");
@@ -182,7 +197,7 @@ function prepareModel(source: THREE.Group, visual: FighterVisual): HeroRuntime {
   if (size.y <= 0) throw new Error("Hero model has no height");
   const center = bounds.getCenter(new THREE.Vector3());
   const host = new THREE.Group();
-  host.name = "sera-hero-pbr-runtime";
+  host.name = assetUrl === SERA_HERO_MODEL_URL ? "sera-hero-pbr-runtime" : "sera-artist-local-test-runtime";
   host.scale.setScalar(1 / size.y);
   model.position.set(-center.x, -bounds.min.y, -center.z);
   host.add(model);
@@ -190,23 +205,29 @@ function prepareModel(source: THREE.Group, visual: FighterVisual): HeroRuntime {
   visual.root.add(host);
   visual.root.userData.heroPbrTriangleCount = Math.round(faces);
   visual.root.userData.heroPbrTextureMaterials = textured;
-  visual.root.userData.heroPbrVersion = SERA_HERO_RUNTIME_VERSION;
+  visual.root.userData.heroPbrVersion = assetUrl === SERA_HERO_MODEL_URL ? SERA_HERO_RUNTIME_VERSION : SERA_ARTIST_PREVIEW_RUNTIME_VERSION;
   const faceMeshes = skinned.filter((mesh) =>
     Boolean(mesh.morphTargetDictionary?.eyeBlinkLeft) ||
     mesh.morphTargetDictionary?.eyeBlinkLeft === 0,
   );
-  return { host, model, materials, faceMeshes, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
+  return { host, model, materials, faceMeshes, assetUrl, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
 }
 
-export function installSeraHeroModel(visual: FighterVisual): void {
+export function installSeraHeroModel(visual: FighterVisual, mode: "PBR" | "LOCAL" = "PBR"): void {
   const root = visual.root;
   if (typeof window === "undefined" || runtimes.has(root)) return;
   const token = {};
   tokens.set(root, token);
   root.userData.heroModelState = "loading";
-  void loadSource().then((source) => {
+  const assetUrl = mode === "LOCAL" ? localArtistPreviewUrl() : SERA_HERO_MODEL_URL;
+  if (!assetUrl) {
+    root.userData.heroModelState = "failed";
+    root.userData.heroModelError = "Import an artist GLB in ARTIST ASSET LAB before selecting LOCAL ARTIST TEST.";
+    return;
+  }
+  void loadSource(assetUrl).then((source) => {
     if (tokens.get(root) !== token) return;
-    const runtime = prepareModel(source, visual);
+    const runtime = prepareModel(source, visual, assetUrl);
     if (tokens.get(root) !== token) {
       runtime.host.removeFromParent();
       for (const material of runtime.materials) material.dispose();
@@ -292,7 +313,7 @@ export function updateSeraHeroPose(visual: FighterVisual): void {
   root.userData.heroFacialMorphsActive = runtime.faceMeshes.length > 0;
   root.userData.heroModelState = "ready";
   root.userData.heroModelMappedBones = runtime.tracks.length;
-  root.userData.heroModelAsset = SERA_HERO_MODEL_URL;
+  root.userData.heroModelAsset = runtime.assetUrl;
 }
 
 export function disposeSeraHeroModel(visual: FighterVisual): void {

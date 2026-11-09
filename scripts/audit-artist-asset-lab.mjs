@@ -94,11 +94,32 @@ try {
   if(!await click("FACE"))throw new Error("Face camera missing");
   await wait(200);
   await capture("02-face-review-technical-fixture-only");
+  if(!await click("TEST REAL PUNCH / KICK"))
+    throw new Error("Actual fighting-motion test launch button missing");
+  const combatState=()=>js(
+    "const section=document.querySelector('section[aria-label=\\"Model View\\"]');"+
+    "const canvas=section?.querySelector('canvas');"+
+    "return {open:!!section,model:canvas?.dataset.heroModelState??'absent',"+
+    "mappedBones:Number(canvas?.dataset.heroMappedBones??0),"+
+    "triangles:Number(canvas?.dataset.heroPbrTriangleCount??0),"+
+    "error:canvas?.dataset.heroModelError??''};"
+  );
+  let combat=null;
+  for(let i=0;i<200;i++){
+    combat=await combatState();
+    if(combat.model==="failed")throw new Error("Local GLB fighter retarget failed: "+JSON.stringify(combat));
+    if(combat.model==="ready")break;
+    await wait(180);
+  }
+  if(combat?.model!=="ready"||combat.mappedBones<20||combat.triangles<10000)
+    throw new Error("Actual fighting-model transfer never reached ready: "+JSON.stringify(combat));
+  await wait(350);
+  await capture("03-artist-glb-retargeted-real-fighter");
   await writeFile(output+"/actual-browser-result.json",JSON.stringify({
-    before,after:current,
-    note:"V2 fixture demonstrates only local GLB import; it is NOT approved SERA art",
+    before,after:current,combat,
+    note:"V2 fixture only tests local imported GLB fighting rig; it is NOT approved SERA art",
   },null,2));
-  console.log("ARTIST_LAB_REAL_WEBGL_FILE_IMPORT_PASSED",JSON.stringify(current));
+  console.log("ARTIST_LAB_REAL_WEBGL_AND_COMBAT_RETARGET_PASSED",JSON.stringify(combat));
 } finally {
   if(session) await request("/session/"+session,"DELETE").catch(()=>{});
   driver.kill("SIGTERM");

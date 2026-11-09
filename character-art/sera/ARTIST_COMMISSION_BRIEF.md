@@ -5,6 +5,49 @@ Reference: \`public/reference/female-turnaround.jpeg\`.
 Game: PolyFighter, third-person / virtual-fighter style fighting game,
 Three.js/WebGL iPhone Safari 60fps target.
 
+## Actual source-image art direction — corrected from V2/V3
+
+The original `public/reference/female-turnaround.jpeg` is a *purposeful
+high-end FACETED, low-poly-style female fighter*. Do **not** substitute
+a generic photoreal MakeHuman face, elderly scan, super-real skin or a
+cartoonish Blender Rain look simply because those are available. Commercial
+quality means **precision matching SERA's stylized identity**, not maximal
+poly count or photoreal materials.
+
+Verified crop-only, same-character sources for multi-view reconstruction:
+
+- `docs/sera-generation-input/front.png` — original front design
+- `docs/sera-generation-input/three-quarter.png` — same authored 3/4 design
+- `docs/sera-generation-input/side.png` — real ear/jaw/ponytail silhouette
+- `docs/sera-generation-input/back.png` — ponytail attachment / cape design
+- `docs/sera-generation-input/manifest.json` — SHA-256 provenance
+
+Art priorities directly supported by those four views:
+
+1. **Face**: wide sharp angular brows, narrow almond eyes, planar cheek/jaw
+   transitions, confident expression, defined nose bridge; avoid doll eyes,
+   uniform MakeHuman smoothing or rounded cartoon face.
+2. **Hair**: high black ponytail with large **tapered sculpted masses**, clean
+   tied-root geometry and defined face-framing locks. No spaghetti strands,
+   cylindrical tubes, comb teeth or round plastic hair cap.
+3. **Suit**: cobalt-blue raised collar + vest over black cropped armor,
+   purposeful exposed midriff, asymmetrical blue waist tabard, black
+   leggings, blue/black angular shin boots. Two elongated light silver
+   guards along the forearms. Build every part as designed costume topology,
+   not generic boxes glued to a source figure.
+4. **Surface**: planar facets as a design language. Preserve believable
+   curvature/anatomy at movable joints and a readable head. Use controlled
+   shading (facets on armor, selective smoothness on skin) instead of
+   uniform faceted normals or glossy everywhere.
+5. **Performance**: original reference says approximately 11.5k polygons
+   and 1.68 m height. This is a *source-art target*, not a license to drop
+   facial fidelity below the reference. Aim 30–55k triangles after measured
+   mobile retopo, with authentic texture details rather than high noise.
+
+Face/head/ponytail still-frame quality **must pass in front, 3/4 and
+profile views** BEFORE facial retargeting or armor detailing. No automated
+polygon or color change can substitute for sculpt design acceptance.
+
 ## Director's brief (Japanese)
 
 SERAを「市販格闘ゲームの主役として成立する」品質で造形する。

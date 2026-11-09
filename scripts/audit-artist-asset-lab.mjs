@@ -115,8 +115,23 @@ try {
     throw new Error("Actual fighting-model transfer never reached ready: "+JSON.stringify(combat));
   await wait(350);
   await capture("03-artist-glb-retargeted-real-fighter");
+  let clipStarted=false;
+  for(let i=0;i<120;i++){
+    clipStarted=await js(
+      "const el=[...document.querySelectorAll('select')].find(x=>x.getAttribute('aria-label')==='Motion clip');"+
+      "if(!el||![...el.options].some(o=>o.value==='BF_Power_R'))return false;"+
+      "const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;"+
+      "setter.call(el,'BF_Power_R');el.dispatchEvent(new Event('change',{bubbles:true}));"+
+      "return true;"
+    );
+    if(clipStarted) break;
+    await wait(160);
+  }
+  if(!clipStarted) throw new Error("Local artist rig did not expose the real BF_Power_R combat move");
+  await wait(170);
+  await capture("04-artist-glb-real-heavy-strike");
   await writeFile(output+"/actual-browser-result.json",JSON.stringify({
-    before,after:current,combat,
+    before,after:current,combat,clipStarted,
     note:"V2 fixture only tests local imported GLB fighting rig; it is NOT approved SERA art",
   },null,2));
   console.log("ARTIST_LAB_REAL_WEBGL_AND_COMBAT_RETARGET_PASSED",JSON.stringify(combat));

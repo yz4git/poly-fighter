@@ -281,6 +281,30 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
             </div>
           )}
         </div>
+        {motionReady && (
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 5 }}>
+            <span style={{ color: "#9bb3c8", fontSize: 9 }}>
+              BONE RETARGET: {motionState.rotationMode === "WORLD" ? "WORLD REST" : "LOCAL LEGACY"}
+            </span>
+            <button
+              type="button"
+              aria-label="Compare retarget rotation basis"
+              aria-pressed={motionState.rotationMode === "WORLD"}
+              title="Compare the original local bone rotation transfer with world-rest-basis correction. Preview only."
+              onClick={() => viewerRef.current?.setRetargetRotationMode(motionState.rotationMode === "LOCAL" ? "WORLD" : "LOCAL")}
+              style={{
+                ...transportButtonStyle,
+                minWidth: 90,
+                height: 25,
+                fontSize: 9,
+                color: motionState.rotationMode === "WORLD" ? "#5ce8ff" : "#d8e8f7",
+                borderColor: motionState.rotationMode === "WORLD" ? "rgba(92,232,255,.65)" : "rgba(175,218,255,.28)",
+              }}
+            >
+              {motionState.rotationMode === "WORLD" ? "WORLD ON" : "TRY WORLD"}
+            </button>
+          </div>
+        )}
         <div style={{ marginTop: 7, display: "grid", gridTemplateColumns: "48px minmax(80px, 1fr) 48px", alignItems: "center", gap: 8 }}>
           <span style={{ color: "#91a7bf", fontSize: 8, fontVariantNumeric: "tabular-nums" }}>{formatTime(motionState.time)}s</span>
           <input

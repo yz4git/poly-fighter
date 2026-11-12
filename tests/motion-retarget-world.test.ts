@@ -33,7 +33,8 @@ function armClip(source: THREE.Bone): THREE.AnimationClip {
 
 function lastQuaternion(clip: THREE.AnimationClip): THREE.Quaternion {
   const track = clip.tracks[0];
-  return new THREE.Quaternion().fromArray(track.values, track.values.length - 4);
+  // Three stores tracks as Float32; normalize before angleTo's unit-dot check.
+  return new THREE.Quaternion().fromArray(track.values, track.values.length - 4).normalize();
 }
 
 test("WORLD retarget carries parent-rest rotation into the target basis", () => {

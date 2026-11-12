@@ -63,8 +63,11 @@ export function retargetMotionClips(
   const sourceRestInverse = new THREE.Quaternion();
   const targetAnimated = new THREE.Quaternion();
   const localDelta = new THREE.Quaternion();
+  // A fixed change-of-basis pair per bone track; no per-key allocations.
   const fromParent = new THREE.Quaternion();
   const toParent = new THREE.Quaternion();
+  const sourceToTarget = new THREE.Quaternion();
+  const targetToSource = new THREE.Quaternion();
 
   for (const clip of clips) {
     const tracks: THREE.KeyframeTrack[] = [];
@@ -85,6 +88,8 @@ export function retargetMotionClips(
         if (mode === "WORLD") {
           fromParent.copy(parentWorldQuaternion(sourceNode));
           toParent.copy(parentWorldQuaternion(targetNode));
+          sourceToTarget.copy(toParent).invert().multiply(fromParent);
+          targetToSource.copy(sourceToTarget).invert();
         }
         for (let offset = 0; offset < track.values.length; offset += 4) {
           sourceAnimated.fromArray(track.values, offset).normalize();
@@ -92,10 +97,9 @@ export function retargetMotionClips(
             // Global delta = P_s * (A_s * R_s^-1) * P_s^-1
             // A_t = P_t^-1 * globalDelta * P_t * R_t
             localDelta.copy(sourceAnimated).multiply(sourceRestInverse);
-            targetAnimated.copy(toParent).invert()
-              .multiply(fromParent).multiply(localDelta)
-              .multiply(fromParent.clone().invert())
-              .multiply(toParent)
+            targetAnimated.copy(sourceToTarget)
+              .multiply(localDelta)
+              .multiply(targetToSource)
               .multiply(targetNode.quaternion)
               .normalize();
           } else {

@@ -49,7 +49,7 @@ test("WORLD retarget carries parent-rest rotation into the target basis", () => 
     .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2))
     .multiply(source.parent.quaternion.clone().invert());
   const localExpected = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-  assert.ok(lastQuaternion(world).angleTo(worldExpected) < 1e-5, "world-space arm axis should match source world axis");
+  assert.ok(lastQuaternion(world).angleTo(worldExpected) < 1e-5, `world-space arm mismatch: actual=${lastQuaternion(world).toArray()} expected=${worldExpected.toArray()} sourceParent=${source.parent.getWorldQuaternion(new THREE.Quaternion()).toArray()}`);
   assert.ok(lastQuaternion(legacy).angleTo(localExpected) < 1e-5, "LOCAL remains backward compatible");
   assert.ok(lastQuaternion(world).angleTo(lastQuaternion(legacy)) > 1, "the two rest bases should be distinguishable");
   assert.ok(source.joint.quaternion.angleTo(sourceBefore) < 1e-6, "source rig must not be mutated");
@@ -92,5 +92,5 @@ test("WORLD mode preserves neutral pose when parent rest rotations match", () =>
   const clip = armClip(source.joint);
   const world = retargetMotionClips(source.root, target.root, [clip], { rotationMode: "WORLD" }).get("ArmStrike")!;
   const local = retargetMotionClips(source.root, target.root, [clip]).get("ArmStrike")!;
-  assert.ok(lastQuaternion(world).angleTo(lastQuaternion(local)) < 1e-5);
+  assert.ok(lastQuaternion(world).angleTo(lastQuaternion(local)) < 1e-5, `same rest basis mismatch: actual=${lastQuaternion(world).toArray()} legacy=${lastQuaternion(local).toArray()}`);
 });

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { retargetMotionClips, type RetargetRotationMode } from "./motion-retarget";
 import type { FighterVisual } from "./visual-entry";
 import { createCombatMotionLibrary } from "./combat-motion-authoring";
 import { FIGHTER_DEFINITIONS } from "./definitions";
@@ -25,6 +26,7 @@ export interface ModelViewerMotionClipInfo {
 export interface ModelViewerMotionSnapshot {
   available: boolean;
   loading: boolean;
+  rotationMode: RetargetRotationMode;
   clips: ModelViewerMotionClipInfo[];
   clipName: string;
   playing: boolean;
@@ -79,14 +81,6 @@ function loadMotionSources(): Promise<MotionSourcePack[]> {
   return sourcePromise;
 }
 
-function nodeMap(root: THREE.Object3D): Map<string, THREE.Object3D> {
-  const result = new Map<string, THREE.Object3D>();
-  root.traverse((object) => {
-    if (object.name) result.set(object.name, object);
-  });
-  return result;
-}
-
 function findQuaterniusTarget(visual: FighterVisual): THREE.Object3D | null {
   let target: THREE.Object3D | null = null;
   visual.root.traverse((object) => {
@@ -109,62 +103,6 @@ function restoreBindPose(target: THREE.Object3D): void {
   target.updateMatrixWorld(true);
 }
 
-function retargetClip(
-  sourceRoot: THREE.Object3D,
-  targetRoot: THREE.Object3D,
-  clip: THREE.AnimationClip,
-): THREE.AnimationClip {
-  const sourceNodes = nodeMap(sourceRoot);
-  const targetNodes = nodeMap(targetRoot);
-  const tracks: THREE.KeyframeTrack[] = [];
-  const sourceAnimated = new THREE.Quaternion();
-  const sourceRestInverse = new THREE.Quaternion();
-  const targetAnimated = new THREE.Quaternion();
-
-  for (const track of clip.tracks) {
-    const parsed = THREE.PropertyBinding.parseTrackName(track.name);
-    const nodeName = parsed.nodeName;
-    const propertyName = parsed.propertyName;
-    if (!nodeName || !propertyName) continue;
-    const sourceNode = sourceNodes.get(nodeName);
-    const targetNode = targetNodes.get(nodeName);
-    if (!sourceNode || !targetNode) continue;
-
-    if (propertyName === "quaternion" && track.values.length % 4 === 0) {
-      const values = new Float32Array(track.values.length);
-      sourceRestInverse.copy(sourceNode.quaternion).invert();
-      for (let offset = 0; offset < track.values.length; offset += 4) {
-        sourceAnimated.fromArray(track.values, offset).normalize();
-        targetAnimated.copy(targetNode.quaternion)
-          .multiply(sourceRestInverse)
-          .multiply(sourceAnimated)
-          .normalize();
-        targetAnimated.toArray(values, offset);
-      }
-      const next = new THREE.QuaternionKeyframeTrack(track.name, track.times, values);
-      next.setInterpolation(track.getInterpolation());
-      tracks.push(next);
-      continue;
-    }
-
-    if (propertyName === "position" && nodeName === "pelvis" && track.values.length % 3 === 0) {
-      const values = new Float32Array(track.values.length);
-      for (let offset = 0; offset < track.values.length; offset += 3) {
-        values[offset] = targetNode.position.x + (track.values[offset] - sourceNode.position.x);
-        values[offset + 1] = targetNode.position.y + (track.values[offset + 1] - sourceNode.position.y);
-        values[offset + 2] = targetNode.position.z + (track.values[offset + 2] - sourceNode.position.z);
-      }
-      const next = new THREE.VectorKeyframeTrack(track.name, track.times, values);
-      next.setInterpolation(track.getInterpolation());
-      tracks.push(next);
-    }
-  }
-
-  const result = new THREE.AnimationClip(clip.name, clip.duration, tracks, clip.blendMode);
-  result.optimize();
-  return result;
-}
-
 function clipSort(a: ModelViewerMotionClipInfo, b: ModelViewerMotionClipInfo): number {
   if (a.name === "Idle_Loop") return -1;
   if (b.name === "Idle_Loop") return 1;
@@ -179,6 +117,7 @@ export function unavailableModelViewerMotionSnapshot(loading = false): ModelView
   return {
     available: false,
     loading,
+    rotationMode: "LOCAL",
     clips: [],
     clipName: "",
     playing: false,
@@ -192,6 +131,10 @@ export function unavailableModelViewerMotionSnapshot(loading = false): ModelView
 export class ModelViewerMotionController {
   private readonly mixer: THREE.AnimationMixer;
   private readonly target: THREE.Object3D;
+  private readonly visual: FighterVisual;
+  private sourcePacks: MotionSourcePack[] = [];
+  private rotationMode: RetargetRotationMode = "LOCAL";
+  private readonly clipBanks = new Map<RetargetRotationMode, Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource }>>();
   private readonly clips = new Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource }>();
   private currentAction: THREE.AnimationAction | null = null;
   private clipName = "";
@@ -199,33 +142,72 @@ export class ModelViewerMotionController {
   private loop = true;
   private speed = 1;
 
-  private constructor(target: THREE.Object3D) {
+  private constructor(target: THREE.Object3D, visual: FighterVisual) {
     this.target = target;
+    this.visual = visual;
     this.mixer = new THREE.AnimationMixer(target);
   }
 
   static async create(visual: FighterVisual): Promise<ModelViewerMotionController> {
     const target = findQuaterniusTarget(visual);
     if (!target) throw new Error("Quaternius Model View target is not ready");
-    const controller = new ModelViewerMotionController(target);
-    const packs = await loadMotionSources();
-    // The normal Model View may already have advanced Idle_Loop while the
-    // libraries were loading. Retarget from the actual UBC bind/rest pose, not
-    // that animated frame, otherwise every preview clip inherits an idle bias.
-    restoreBindPose(target);
-    for (const pack of packs) {
-      for (const clip of pack.clips) {
-        const retargeted = retargetClip(pack.root, target, clip);
-        controller.clips.set(retargeted.name, { clip: retargeted, source: pack.source });
-      }
-    }
-    const bodyDefinition = visual.root.userData.quaterniusBodyType === "FEMALE" ? FIGHTER_DEFINITIONS.blue : FIGHTER_DEFINITIONS.red;
-    const combatClips = createCombatMotionLibrary(target as THREE.Group, new Map([...controller.clips].map(([name, entry]) => [name, entry.clip])), bodyDefinition);
-    for (const [name, clip] of combatClips) controller.clips.set(name, { clip, source: name.startsWith("BF_") ? "BLENDER" : "PROCEDURAL" });
+    const controller = new ModelViewerMotionController(target, visual);
+    controller.sourcePacks = await loadMotionSources();
+    controller.rebuildClips();
     const initial = controller.clips.has("Idle_Loop") ? "Idle_Loop" : controller.clipInfos()[0]?.name;
     if (!initial) throw new Error("No compatible motion clips found for Model View");
     controller.setClip(initial, true);
     return controller;
+  }
+
+  /** Called only on preview creation or an explicit comparison toggle. */
+  private rebuildClips(): void {
+    this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.target);
+    this.currentAction = null;
+    restoreBindPose(this.target);
+    this.clips.clear();
+
+    let bank = this.clipBanks.get(this.rotationMode);
+    if (!bank) {
+      bank = new Map();
+      for (const pack of this.sourcePacks) {
+        const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
+          rotationMode: this.rotationMode,
+        });
+        for (const [name, clip] of retargeted) bank.set(name, { clip, source: pack.source });
+      }
+      const bodyDefinition = this.visual.root.userData.quaterniusBodyType === "FEMALE"
+        ? FIGHTER_DEFINITIONS.blue : FIGHTER_DEFINITIONS.red;
+      const combatClips = createCombatMotionLibrary(
+        this.target as THREE.Group,
+        new Map([...bank].map(([name, entry]) => [name, entry.clip])),
+        bodyDefinition,
+      );
+      for (const [name, clip] of combatClips) {
+        bank.set(name, { clip, source: name.startsWith("BF_") ? "BLENDER" : "PROCEDURAL" });
+      }
+      this.clipBanks.set(this.rotationMode, bank);
+    }
+    for (const [name, entry] of bank) this.clips.set(name, entry);
+  }
+
+  /** Preview-only A/B test: shipping gameplay keeps its proven LOCAL method. */
+  setRotationMode(mode: RetargetRotationMode): void {
+    if (mode === this.rotationMode) return;
+    const previousClip = this.clipName;
+    const previousTime = this.currentAction?.time ?? 0;
+    const wasPlaying = this.playing;
+    this.rotationMode = mode;
+    this.rebuildClips();
+    const nextClip = this.clips.has(previousClip) ? previousClip : "Idle_Loop";
+    this.clipName = "";
+    this.setClip(nextClip, true);
+    if (this.currentAction) {
+      this.currentAction.time = THREE.MathUtils.clamp(previousTime, 0, this.currentAction.getClip().duration);
+      this.mixer.update(0);
+    }
+    this.setPlaying(wasPlaying);
   }
 
   private clipInfos(): ModelViewerMotionClipInfo[] {
@@ -319,6 +301,7 @@ export class ModelViewerMotionController {
     return {
       available: true,
       loading: false,
+      rotationMode: this.rotationMode,
       clips: this.clipInfos(),
       clipName: this.clipName,
       playing: this.playing,
@@ -334,5 +317,6 @@ export class ModelViewerMotionController {
     this.mixer.uncacheRoot(this.target);
     this.currentAction = null;
     this.clips.clear();
+    this.clipBanks.clear();
   }
 }

@@ -174,6 +174,34 @@ async function poseMotionViewer(sessionId, clipName, normalized) {
   `);
 }
 
+/** Exercise the user-visible local/world button against the real WebGL Model View. */
+async function toggleRetargetWorld(sessionId, expectedWorld) {
+  const clicked = await execute(sessionId, `
+    const toggle = document.querySelector('button[aria-label="Compare retarget rotation basis"]');
+    if (!toggle) return { clicked: false };
+    toggle.click();
+    return { clicked: true };
+  `);
+  if (!clicked?.clicked) throw new Error("Model View retarget A/B switch missing");
+  await delay(250);
+  const result = await execute(sessionId, `
+    const toggle = document.querySelector('button[aria-label="Compare retarget rotation basis"]');
+    const select = document.querySelector('select[aria-label="Motion clip"]');
+    const timeline = document.querySelector('input[aria-label="Motion timeline"]');
+    const playButton = document.querySelector('button[aria-label="Play motion"]');
+    return {
+      world: toggle?.getAttribute('aria-pressed') === 'true',
+      clip: select?.value,
+      timeline: Number(timeline?.value ?? -1),
+      paused: Boolean(playButton),
+    };
+  `);
+  if (result?.world !== expectedWorld || result?.clip !== "PF_Power_R" || Math.abs(result?.timeline - 500) > 3 || !result?.paused) {
+    throw new Error(`Model View retarget A/B lost clip, timeline or pause state: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function screenshot(sessionId, path) {
   const encoded = await command(`/session/${sessionId}/screenshot`);
   const bytes = Buffer.from(encoded, "base64");
@@ -220,6 +248,10 @@ try {
     throw new Error(`Motion Viewer did not hold PF_Power_R at 50%: ${JSON.stringify(proceduralPower)}`);
   }
   await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-power.png`);
+  const worldPower = await toggleRetargetWorld(sessionId, true);
+  await screenshot(sessionId, `${outputDir}/model-view-motion-procedural-power-world.png`);
+  const restoredLocalPower = await toggleRetargetWorld(sessionId, false);
+
 
   const blenderPower = await poseMotionViewer(sessionId, "BF_Power_R", 0.5);
   if (blenderPower.clip !== "BF_Power_R" || Math.abs(blenderPower.timeline - 500) > 2 || !blenderPower.paused) {
@@ -324,9 +356,9 @@ try {
   const titleState = await execute(sessionId, `return { title: document.body.innerText.includes('START FIGHT'), modelView: document.body.innerText.includes('CHARACTER LAB') };`);
   if (!titleState?.title || titleState?.modelView) throw new Error(`MODEL VIEW did not return cleanly to title: ${JSON.stringify(titleState)}`);
 
-  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, proceduralFrontKick, blenderFrontKick, proceduralLowKick, blenderLowKick, proceduralRisingKick, blenderRisingKick, proceduralDashKick, blenderDashKick, proceduralHitHeavy, blenderHitHeavy, proceduralGuardBreak, blenderGuardBreak, kairo, kairoMotionReady, titleState }, null, 2));
+  await writeFile(`${outputDir}/model-view-state.json`, JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, worldPower, restoredLocalPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, proceduralFrontKick, blenderFrontKick, proceduralLowKick, blenderLowKick, proceduralRisingKick, blenderRisingKick, proceduralDashKick, blenderDashKick, proceduralHitHeavy, blenderHitHeavy, proceduralGuardBreak, blenderGuardBreak, kairo, kairoMotionReady, titleState }, null, 2));
   await writeFile(`${outputDir}/model-view-webdriver.log`, driverLog);
-  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, proceduralHitHeavy, blenderHitHeavy, proceduralGuardBreak, blenderGuardBreak, kairo, kairoMotionReady, titleState }));
+  console.log(JSON.stringify({ sera, seraAfterLoad, motionReady, proceduralPower, worldPower, restoredLocalPower, blenderPower, proceduralCross, blenderCross, proceduralJab, blenderJab, proceduralBodyBlow, blenderBodyBlow, proceduralBackfist, blenderBackfist, proceduralHitHeavy, blenderHitHeavy, proceduralGuardBreak, blenderGuardBreak, kairo, kairoMotionReady, titleState }));
 } finally {
   if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
   try {

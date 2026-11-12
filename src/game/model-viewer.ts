@@ -274,6 +274,12 @@ export class ModelViewer {
     this.emitMotionState(true);
   }
 
+  /** Switch rest-basis correction only in Model View (not ranked combat). */
+  setRetargetRotationMode(mode: "LOCAL" | "WORLD"): void {
+    this.motionController?.setRotationMode(mode);
+    this.emitMotionState(true);
+  }
+
   seekMotion(normalized: number): void {
     this.motionController?.seekNormalized(normalized);
     this.emitMotionState(true);

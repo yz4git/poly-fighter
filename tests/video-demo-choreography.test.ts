@@ -177,3 +177,21 @@ test("Sakurai jab contact keeps the striking fist authored and visibly tucks its
   assert.deepEqual(sampleVideoChoreography("jab", 1, .09).leftHand,
     [-.095, .76, .16], "original idle hand is recovered without a persistent offset");
 });
+
+test("V5 jab reduces lateral planted-foot displacement without weakening its actual hand target", () => {
+  const recoil = sampleVideoChoreography("jab", .20, .09);
+  const contact = sampleVideoChoreography("jab", .50, .09);
+  const follow = sampleVideoChoreography("jab", .57, .09);
+  assert.ok(contact.side! <= .04 && follow.side! <= .04,
+    "pelvis no longer translates so far sideways that both feet appear to slide");
+  assert.ok(contact.yaw! <= .46 && follow.yaw! <= .46,
+    "compact jab does not use a heavyweight hook-sized hip turn");
+  assert.ok(contact.yaw! - recoil.yaw! > .75,
+    "still visibly transfers weight from the loaded guard through contact");
+  assert.deepEqual(contact.leftHand, [-.035, .76, .74],
+    "the fixed left striking-fist contact target is retained");
+  assert.deepEqual(follow.leftHand, [-.025, .75, .78],
+    "the authored overtravel target is also unchanged");
+  assert.deepEqual(contact.rightHand, [.12, .69, .18],
+    "the previous V4 opposite-hand guard improvement survives");
+});

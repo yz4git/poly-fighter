@@ -9,7 +9,7 @@ import {
 } from "../src/game/video-demo-choreography";
 
 test("reference video choreography: four distinguishable game-ready clips", () => {
-  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V3");
+  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V4");
   assert.equal(new Set(Object.values(VIDEO_STRIKE_CLIPS)).size,4);
   for (const name of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const start=sampleVideoChoreography(name,0,.09);
@@ -157,4 +157,23 @@ test("turning high kick preserves a full revolution and apex foot while keeping 
       assert.ok(Math.abs(a.roll! - b.roll!) < .04, "spin roll interpolation remains smooth");
     }
   }
+});
+
+test("Sakurai jab contact keeps the striking fist authored and visibly tucks its opposite guard", () => {
+  const opening = sampleVideoChoreography("jab", .20, .09);
+  const load = sampleVideoChoreography("jab", .40, .09);
+  const contact = sampleVideoChoreography("jab", .50, .09);
+  const overtravel = sampleVideoChoreography("jab", .57, .09);
+  const recovery = sampleVideoChoreography("jab", .68, .09);
+  assert.deepEqual(contact.leftHand, [-.035, .76, .74], "do not move actual fist contact");
+  assert.deepEqual(overtravel.leftHand, [-.025, .75, .78], "strike follow-through stays intact");
+  assert.ok(opening.rightHand![1] > load.rightHand![1]);
+  assert.ok(load.rightHand![1] > contact.rightHand![1], "guard settles below the brow on contact");
+  assert.ok(contact.rightHand![1] <= .70 && overtravel.rightHand![1] <= .70);
+  assert.ok(contact.rightHand![2] >= .16, "opposite fist stays in front of the chin");
+  assert.ok(recovery.rightHand![1] > overtravel.rightHand![1], "guard lifts back smoothly in recovery");
+  assert.deepEqual(sampleHeroVideoChoreography("jab", .50, .09, "KAIRO").rightHand,
+    contact.rightHand, "KAIRO retains the newly authored opposite-hand guard");
+  assert.deepEqual(sampleVideoChoreography("jab", 1, .09).leftHand,
+    [-.095, .76, .16], "original idle hand is recovered without a persistent offset");
 });

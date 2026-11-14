@@ -26,7 +26,7 @@ import {
   TPS_HYPE_PROFILE,
   TpsHypeDirector,
   tpsHypeHitStopForTier,
-  tpsHypeImpactTier,
+  tpsHypeImpactTierForMove,
   tpsHypeKnockbackScaleForTier,
 } from "./tps-hype";
 
@@ -812,7 +812,7 @@ prototype.resolveAttack = function resolveAttack(
     attacker.visual.root.userData.tpsFinalImpact = true;
   }
 
-  const tier = tpsHypeImpactTier(move.id, move.power);
+  const tier = tpsHypeImpactTierForMove(move);
   const sharedHitStop = tpsHypeHitStopForTier(tier, blocked);
   attacker.hitStop = Math.max(attacker.hitStop, sharedHitStop);
   defender.hitStop = Math.max(defender.hitStop, sharedHitStop);

@@ -792,6 +792,11 @@ try {
         punchFactor: Number(data.tpsClosePunchLane ?? 0),
         punchX: Number(data.tpsClosePunchLaneX ?? 0),
         attackAfterfeel: Number(data.tpsAttackAfterfeel ?? 0),
+        footlockVersion: data.tpsPunchFootlockVersion ?? null,
+        footlockWeight: Number(data.tpsPunchFootlockWeight ?? 0),
+        footlockActive: data.tpsPunchFootlockActive === true,
+        leftFootImprovement: Number(data.tpsPunchFootlockLeftImprovement ?? 0),
+        rightFootImprovement: Number(data.tpsPunchFootlockRightImprovement ?? 0),
       };
     };
     const idle = sample("idle", -1);
@@ -820,6 +825,9 @@ try {
       maxFootRStep: maxStep("footR"),
       maxHostStep: maxStep("host"),
       maxRootStep: maxStep("root"),
+      totalAnkleImprovement: samples.reduce((total, frame) =>
+        total + frame.leftFootImprovement + frame.rightFootImprovement, 0),
+      correctedTicks: samples.filter((frame) => frame.footlockActive).length,
       atContact: samples[move.startup],
       lastStartup: samples[move.startup - 1],
     };

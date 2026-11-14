@@ -833,7 +833,25 @@ try {
           && s.footL && s.footR && s.leftHand)) {
     throw new Error(`Continuous neutral-to-jab lane missing: ${JSON.stringify(neutralToJab)}`);
   }
+  // Guard the actually observed transition, not just the existence of a
+  // lane flag. A sudden imported-host translation shifts both planted feet
+  // even when the gameplay position and authored punch keys remain stable.
+  const continuousBudget = {
+    firstFrame: 0.06,
+    maximumPerTick: 0.16,
+  };
+  if (neutralToJab.firstFrameHostTravel > continuousBudget.firstFrame
+      || neutralToJab.firstFrameFootLTravel > continuousBudget.firstFrame
+      || neutralToJab.firstFrameFootRTravel > continuousBudget.firstFrame
+      || neutralToJab.maxHostStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxFootLStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxFootRStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxRootStep > 1e-6) {
+    throw new Error(`Neutral-to-jab planted-foot continuity budget exceeded: ${JSON.stringify({ continuousBudget, neutralToJab })}`);
+  }
   await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);
+  await writeFile(`${outputDir}/neutral-to-jab-continuity.json`,
+    JSON.stringify({ continuousBudget, neutralToJab }, null, 2));
   const diagnostics = {
     neutralToJab,
     sakuraiRootAndFootTravel,

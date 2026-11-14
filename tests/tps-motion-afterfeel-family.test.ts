@@ -42,8 +42,8 @@ test("TPS telegraph path cannot invoke the retired animation-family helper", () 
   // The old name remained in a third call site and caused a live WebGL
   // runtime ReferenceError, which unit tests for the pure helper did not catch.
   const source = readFileSync(new URL("../src/game/motion-reaction.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /\\bcomboMomentumKindForMove\\b/,
+  assert.doesNotMatch(source, /\bcomboMomentumKindForMove\b/,
     "all telegraph, combo-link and post-attack sites must use tpsMotionAfterfeelKind");
-  assert.match(source, /const kind = tpsMotionAfterfeelKind\\(move\\);/,
+  assert.match(source, /const kind = tpsMotionAfterfeelKind\(move\);/,
     "enemy windup renders the same authored family as its recovery");
 });

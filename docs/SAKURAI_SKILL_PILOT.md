@@ -49,3 +49,17 @@ Manual on **iPhone Safari landscape**:
 ## Follow-up if accepted
 
 Review punch/kick pose silhouettes at impact and character-specific follow-through with actual device captures before increasing VFX. Do not treat extra particle density as a replacement for readable body poses.
+
+## Phase 2: authored silhouette timing, same combat rules
+
+The reference motion skill highlights **036 (attack breakdown)**, **049 (instant readable startup)**, **062 (contact pose)** and **077 (follow-through)**. The game's `combat-motion-timeline.ts` now assigns light punches, committed punches, heavy strikes and kicks distinct **animation sampling** profiles.
+
+- **Anticipation:** heavy strikes show a modest windup pose on their first accepted rendered tick, instead of waiting for interpolation to leave neutral.
+- **Contact:** the exact original authored contact key remains at the *first ACTIVE gameplay tick*; no hit detection or startup timers are shifted.
+- **Overtravel:** the ACTIVE pose continues a modest distance through the authored clip. Heavy and rotating moves travel farther than jabs, rather than appearing to freeze at the same near-contact key.
+- **Follow-through:** heavy strikes briefly retain the end of that clip's active arc into RECOVERY before sampling back to neutral, without extending recovery or lockout time.
+- **Variants:** expanded moves inherit their base clip's readable anticipation/contact/recovery sampling via `sourceOfExpandedClip`.
+
+No new animations, procedural limb deformation or geometry have been created; this is a targeted, reversible **timing remap over existing authored Blender keyframes**. It needs actual video-frame review before claiming visual quality. Existing punch/kick and model-preview contracts remain unchanged.
+
+**Phase 2 audit:** compare jab, straight, power and rising kick on the same opponent and camera, including startup frame 0, first ACTIVE, last ACTIVE and first RECOVERY; also compare the POWER SNAP expanded variation. Reject the experiment if an arm passes through the chest, a planted foot skates, a fast jab feels delayed or an idle transition snaps.

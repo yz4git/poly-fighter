@@ -145,7 +145,7 @@ jobs:
           test -s artifacts/tps-visual-audit/tps-block-punish-handoff.json
           test -s artifacts/tps-visual-audit/tps-attack-action-handoff.json
           # Fixed-camera motion storyboard: startup/contact/overtravel/follow-through.
-          for move in jab power risingKick; do
+          for move in jab power risingkick; do
             for frame in startup contact overtravel followthrough; do
               test -s "artifacts/tps-visual-audit/tps-sakurai-${move}-${frame}.png"
               file "artifacts/tps-visual-audit/tps-sakurai-${move}-${frame}.png" | grep -q "PNG image data"

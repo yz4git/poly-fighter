@@ -66,6 +66,7 @@ import {
 } from "./tps-finish-flow";
 import {
   computeTpsCameraFraming,
+  tpsCameraAttackFamily,
   TPS_CAMERA_MAX_TRAVEL_SPEED,
   type TpsCameraFraming,
 } from "./tps-camera-profile";
@@ -1882,7 +1883,7 @@ export class TpsFightGame {
     // Expanded moves share a base animation family. Keep the actual move ID
     // for HUD/telemetry, but frame the jab/kick silhouette as the same strike
     // even when the chosen variant is named jabSnap or kickPivot.
-    const cameraMoveFamily = attackMove?.motionBase ?? attackMoveId;
+    const cameraMoveFamily = tpsCameraAttackFamily(attackMove);
 
     // Read the same deterministic 60 Hz contact envelope that drives authored
     // clip sampling instead of depending on presentation-only runtime telemetry.

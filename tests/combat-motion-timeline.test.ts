@@ -135,3 +135,29 @@ test("expanded punch and kick variants inherit their motion family silhouette be
     assert.equal(sampleCombatMotionTimeline(move, move.startup, derived).phase, event.contact);
   }
 });
+
+test("the shipped video-reference and range clips receive the same authored beat identity", () => {
+  const cases = [
+    ["CM_Video_Jab", "LIGHT"],
+    ["CM_Video_Palm", "PUNCH"],
+    ["CM_Video_SideKick", "KICK"],
+    ["CM_Video_SpinKick", "HEAVY"],
+    ["CM_Range_rangeBlitz", "PUNCH"],
+    ["CM_Range_rangeCrescent", "KICK"],
+    ["CM_Range_rangeComet", "HEAVY"],
+  ] as const;
+  for (const [clip, family] of cases) {
+    const event = authoredMotionEvents(clip);
+    assert.equal(event.contact, 0.5);
+    assert.ok(event.contactExit >= event.contact);
+    if (family === "LIGHT") {
+      assert.equal(event.anticipation, 0);
+      assert.equal(event.followHold, 0);
+    } else {
+      assert.ok(event.anticipation > 0, clip);
+      assert.ok(event.followHold > 0, clip);
+    }
+  }
+  assert.ok(authoredMotionEvents("CM_Video_SpinKick").contactExit >
+    authoredMotionEvents("CM_Video_Jab").contactExit);
+});

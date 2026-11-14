@@ -453,7 +453,7 @@ function applyImportedTelegraph(fighter: FighterRuntime, state: ImportedTelegrap
   if (!host) return;
   const move = fighter.definition.moves[moveId];
   const side = sideForVisualContact(move?.visualContact);
-  const kind = comboMomentumKindForMove(moveId);
+  const kind = tpsMotionAfterfeelKind(move);
   const load = smooth01(progress);
   const scale = root.scale.x;
 

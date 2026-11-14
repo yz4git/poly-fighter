@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
+import { expandMoveSet } from "../src/game/move-expansion";
 import {
   TPS_HYPE_PROFILE,
   tpsHypeImpactTier,
   tpsHypeImpactTierForMove,
   tpsHypeHitStopForTier,
+  tpsHypeKnockbackScaleForTier,
 } from "../src/game/tps-hype";
 import { cinematicImpactStyle } from "../src/game/tps-cinematic-impact-spectacle";
 
@@ -43,4 +47,23 @@ test("guard spark scales modestly by threat and never obscures both fighters", (
   const unblocked = cinematicImpactStyle(3, false, false, false, 1, false);
   assert.ok(unblocked.scale > guards[2].scale);
   assert.ok(unblocked.opacity > guards[2].opacity);
+});
+
+test("family-aware hit feedback does not change physics for fast derived attacks", () => {
+  const moves = expandMoveSet(FIGHTER_DEFINITIONS.red.moves);
+  const powerSnap = moves.powerSnap;
+  assert.ok(powerSnap, "actual POWER SNAP exists");
+  const visualTier = tpsHypeImpactTierForMove(powerSnap);
+  const originalPhysicsTier = tpsHypeImpactTier(powerSnap.id, powerSnap.power);
+  assert.equal(visualTier, 3, "power silhouette remains heavy");
+  assert.notEqual(originalPhysicsTier, visualTier, "fast variant retains lighter physical impact");
+  assert.ok(tpsHypeKnockbackScaleForTier(originalPhysicsTier) <
+    tpsHypeKnockbackScaleForTier(visualTier), "accidentally sharing tiers changes real knockback");
+  const core = readFileSync(new URL("../src/game/tps-game.ts", import.meta.url), "utf8");
+  assert.match(core, /const physicsTier = tpsHypeImpactTier\(move\.id, move\.power\);/,
+    "combat simulation must keep the original impact classifier");
+  assert.match(core, /tpsHypeKnockbackScaleForTier\(physicsTier\)/,
+    "knockback uses only the old physical tier, not the new visual tier");
+  assert.match(core, /physicsTier === 3 && defender\.state/,
+    "heavy vertical knockdown threshold also retains its former physics tier");
 });

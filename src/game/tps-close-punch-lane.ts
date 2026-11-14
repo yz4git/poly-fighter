@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import type { MoveDefinition } from "./types";
 import { PresentationAnimationController } from "./presentation-animation";
 
 type ClosePunchLaneState = {
@@ -18,6 +19,14 @@ type ClosePunchProfile = {
 
 const states = new WeakMap<FighterRuntime, ClosePunchLaneState>();
 const CLOSE_PUNCH_MOVES = new Set(["jab", "straight", "bodyBlow"]);
+
+/** A derived punch keeps its base hand lane, while its gameplay ID is intact. */
+export function tpsClosePunchFamily(
+  move: Pick<MoveDefinition, "id" | "motionBase"> | null,
+): string | null {
+  const base = move?.motionBase ?? move?.id;
+  return base && CLOSE_PUNCH_MOVES.has(base) ? base : null;
+}
 let installed = false;
 
 function ensureState(fighter: FighterRuntime): ClosePunchLaneState {
@@ -72,13 +81,14 @@ function applyClosePunchLane(
 ): void {
   const root = fighter.visual.root;
   const move = fighter.currentMove;
+  const moveFamily = tpsClosePunchFamily(move);
   if (
     !root.userData.combatTps
     || root.userData.quaterniusModelState !== "ready"
     || opponent.visual.root.userData.quaterniusModelState !== "ready"
     || fighter.state !== "ATTACK"
     || !move
-    || !CLOSE_PUNCH_MOVES.has(move.id)
+    || !moveFamily
   ) return;
 
   const dx = opponent.position.x - fighter.position.x;
@@ -106,7 +116,7 @@ function applyClosePunchLane(
   if (!host) return;
 
   const side = contactSide(move.visualContact);
-  const profile = tpsClosePunchProfile(move.id);
+  const profile = tpsClosePunchProfile(moveFamily);
   const scale = root.scale.x;
   const screenDirection = profile.direction;
 

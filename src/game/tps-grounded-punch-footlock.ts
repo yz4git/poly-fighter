@@ -134,7 +134,7 @@ function applyFootlock(fighter: FighterRuntime, state: FootlockState): void {
     const foot = chain.foot!;
     const current = foot.getWorldPosition(new THREE.Vector3());
     const anchor = anchors[side].clone().add(travel);
-    const error = anchor.sub(current);
+    const error = anchor.clone().sub(current);
     error.y = 0; // Do not change authored foot height or ankle vertical pose.
     const requested = error.length();
     if (requested < 1e-4) continue;

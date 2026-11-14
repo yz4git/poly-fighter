@@ -61,14 +61,15 @@ export const AUTHORED_MOTION_EVENTS: Readonly<Record<string, AuthoredMotionEvent
   // All four clips are reconstructed with a clear 0.50 contact key.
   // This pins first-active hitboxes to the actual visual strike, not a
   // separate clock or the arbitrary last keyframe.
-  CM_Video_Jab: events(.50),
-  CM_Video_Palm: events(.50),
-  CM_Video_SideKick: events(.50),
-  CM_Video_SpinKick: events(.50),
-  // Approach strike hitboxes become live only at the dedicated contact key.
-  CM_Range_rangeBlitz: events(.50),
-  CM_Range_rangeCrescent: events(.50),
-  CM_Range_rangeComet: events(.50),
+  CM_Video_Jab: events(.50, "LIGHT"),
+  CM_Video_Palm: events(.50, "PUNCH"),
+  CM_Video_SideKick: events(.50, "KICK"),
+  CM_Video_SpinKick: events(.50, "HEAVY"),
+  // Travel is implemented in the authored approach clip, not by moving the
+  // hitbox: range moves retain their actual 0.50-frame contact contract.
+  CM_Range_rangeBlitz: events(.50, "PUNCH"),
+  CM_Range_rangeCrescent: events(.50, "KICK"),
+  CM_Range_rangeComet: events(.50, "HEAVY"),
 };
 
 function clamp01(value: number): number {

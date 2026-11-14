@@ -20,6 +20,7 @@ import { installTpsCounterSlipBoostPresentation } from "@/src/game/tps-counter-s
 import { installTpsCounterattackHandoffPresentation } from "@/src/game/tps-counterattack-handoff";
 import { installTpsFinalImpactVfxReadability } from "@/src/game/tps-final-impact-vfx-readability";
 import { installTpsGroundingReadabilityPresentation } from "@/src/game/tps-grounding-readability";
+import { installTpsGroundedPunchFootlockPresentation } from "@/src/game/tps-grounded-punch-footlock";
 import { installTpsGuardClashPresentation } from "@/src/game/tps-guard-clash";
 import { installTpsImpactBeatSyncPresentation } from "@/src/game/tps-impact-beat-sync";
 import { installTpsImpactFollowthroughPresentation } from "@/src/game/tps-impact-followthrough";
@@ -77,6 +78,8 @@ const TPS_PRESENTATION_INSTALLERS = [
   installTpsImpactBeatSyncPresentation,
   installTpsCounterattackHandoffPresentation,
   installTpsAttackActionHandoffPresentation,
+  // Final post-presentation leg IK: preserve the authored upper-body punch.
+  installTpsGroundedPunchFootlockPresentation,
 ] as const;
 
 installAll(RIVAL_RUNTIME_INSTALLERS);

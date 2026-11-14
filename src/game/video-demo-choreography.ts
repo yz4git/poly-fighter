@@ -9,7 +9,7 @@
  * 5.3-7.3 pivot / rotating high kick; 7.5-8.5 finish punch and reset.
  * Preserve one attack per actual game move: never auto-hit through an animation.
  */
-export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V4" as const;
+export const VIDEO_CHOREOGRAPHY_VERSION = "VIDEO_REFERENCE_CHOREOGRAPHY_V5" as const;
 export const VIDEO_STRIKE_CLIPS = {
   jab: "CM_Video_Jab",
   backfist: "CM_Video_Palm",
@@ -32,20 +32,22 @@ const PI2 = Math.PI * 2;
 
 const KEYS: Record<VideoStrike, readonly VideoKey[]> = {
   jab: [
+    // Reduce waist side translation/rotation to keep both feet planted.
+    // The LEFT punch path and the tucked opposite glove keys remain unchanged.
     // Keep the authored LEFT striking fist and contact key unchanged.
     // V4 tucks the non-striking right hand below eyebrow height instead of
     // letting that glove sit above the head and hide the jab in the TPS view.
     { t: 0, pose: { highGuard: .8 } },
     { t: .20, pose: { drop: -.065, side: -.025, forward: -.036, yaw: -.38, pitch: .08, roll: .09,
       rightHand: [.083,.80,.12], leftHand: [-.095,.79,.10], highGuard: 1 } },
-    { t: .40, pose: { forward: .025, side: .055, drop: -.044, yaw: .29, chest: .15, pitch: -.06,
+    { t: .40, pose: { forward: .025, side: .027, drop: -.044, yaw: .24, chest: .15, pitch: -.06,
       rightHand: [.095,.75,.16], leftHand: [-.084,.79,.39], highGuard: .86 } },
-    { t: .50, pose: { forward: .085, drop: -.032, side: .085, yaw: .63,
+    { t: .50, pose: { forward: .085, drop: -.032, side: .037, yaw: .44,
       chest: .22, pitch: -.14, roll: -.10, leftHand: [-.035,.76,.74],
       rightHand: [.12,.69,.18], highGuard: .9 } },
-    { t: .57, pose: { forward: .067, side: .09, yaw: .58, chest: .18, pitch: -.11,
+    { t: .57, pose: { forward: .067, side: .038, yaw: .44, chest: .18, pitch: -.11,
       leftHand: [-.025,.75,.78], rightHand: [.12,.69,.19], highGuard: .88 } },
-    { t: .68, pose: { forward: .026, side: .056, yaw: .32, chest: .12, leftHand: [-.048,.75,.51],
+    { t: .68, pose: { forward: .026, side: .026, yaw: .22, chest: .12, leftHand: [-.048,.75,.51],
       rightHand: [.09,.74,.17], highGuard: .85 } },
     { t: .84, pose: { forward: .011, yaw: .07, leftHand: [-.090,.78,.15], highGuard: .9 } },
     { t: 1, pose: { highGuard: .83, leftHand: [-.095,.76,.16] } },

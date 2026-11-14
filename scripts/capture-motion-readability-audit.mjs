@@ -663,6 +663,25 @@ try {
           game.updateVisual(game.p1, game.p2, auditTime);
           game.updateVisual(game.p2, game.p1, auditTime + 0.007);
         }
+        // Report the outgoing close-neutral host lane so an apparent foot
+        // slide cannot be confused with an authored skeleton weight shift.
+        const beforeMove = {
+          p1Mode: game.p1.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          p1Lane: Number(game.p1.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          p1Factor: Number(game.p1.visual.root.userData.tpsCloseNeutralLane ?? 0),
+          p2Mode: game.p2.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          p2Lane: Number(game.p2.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          p1Residue: {
+            attack: Number(game.p1.visual.root.userData.tpsAttackAfterfeel ?? 0),
+            damage: Number(game.p1.visual.root.userData.tpsDamageAfterfeel ?? 0),
+            punish: Number(game.p1.visual.root.userData.tpsPunishReadyPose ?? 0),
+          },
+          p2Residue: {
+            attack: Number(game.p2.visual.root.userData.tpsAttackAfterfeel ?? 0),
+            damage: Number(game.p2.visual.root.userData.tpsDamageAfterfeel ?? 0),
+            punish: Number(game.p2.visual.root.userData.tpsPunishReadyPose ?? 0),
+          },
+        };
         if (!game.p1.beginMove(moveId)) return { error: "move-not-found", moveId };
         const move = game.p1.currentMove;
         const tick = stage === "startup"
@@ -694,6 +713,11 @@ try {
           visualRootPosition: point(game.p1.visual.root),
           importedHostPosition: point(host),
           importedHostLocalX: host?.position?.x ?? null,
+          beforeMove,
+          neutralLaneMode: game.p1.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          neutralLaneX: Number(game.p1.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          punchLaneX: Number(game.p1.visual.root.userData.tpsClosePunchLaneX ?? 0),
+          punchLaneFactor: Number(game.p1.visual.root.userData.tpsClosePunchLane ?? 0),
           fighterState: game.p1.state,
         };
       `, [moveId, stage]);

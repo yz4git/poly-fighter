@@ -9,7 +9,7 @@ import {
 } from "../src/game/video-demo-choreography";
 
 test("reference video choreography: four distinguishable game-ready clips", () => {
-  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V4");
+  assert.equal(VIDEO_CHOREOGRAPHY_VERSION, "VIDEO_REFERENCE_CHOREOGRAPHY_V5");
   assert.equal(new Set(Object.values(VIDEO_STRIKE_CLIPS)).size,4);
   for (const name of Object.keys(VIDEO_STRIKE_CLIPS) as VideoStrike[]) {
     const start=sampleVideoChoreography(name,0,.09);

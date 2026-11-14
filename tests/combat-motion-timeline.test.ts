@@ -161,3 +161,26 @@ test("the shipped video-reference and range clips receive the same authored beat
   assert.ok(authoredMotionEvents("CM_Video_SpinKick").contactExit >
     authoredMotionEvents("CM_Video_Jab").contactExit);
 });
+
+test("motion storyboards sample actual windup and recovery, not duplicate boundary poses", () => {
+  for (const [moveId, clip] of [
+    ["jab", "CM_Video_Jab"],
+    ["power", "BF_Power_R"],
+    ["risingKick", "CM_Video_SpinKick"],
+  ] as const) {
+    const move = FIGHTER_DEFINITIONS.red.moves[moveId];
+    const windupTick = Math.max(1, Math.floor(move.startup * 0.45));
+    const contactTick = move.startup;
+    const overtravelTick = move.startup + move.active - 1;
+    const releaseTick = Math.min(move.startup + move.active + move.recovery - 1,
+      move.startup + move.active + Math.max(1, Math.round(move.recovery * 0.45)));
+    const samples = [windupTick, contactTick, overtravelTick, releaseTick]
+      .map((tick) => sampleCombatMotionTimeline(move, tick, clip));
+    assert.deepEqual(samples.map((s) => s.stage),
+      ["STARTUP", "ACTIVE", "ACTIVE", "RECOVERY"], moveId);
+    assert.ok(samples[0].phase < samples[1].phase, moveId + ": windup actually precedes contact");
+    assert.ok(samples[1].phase <= samples[2].phase, moveId + ": overtravel never rewinds");
+    assert.ok(samples[2].phase + 0.045 < samples[3].phase,
+      moveId + ": follow-through snapshot must show the real recovery arc");
+  }
+});

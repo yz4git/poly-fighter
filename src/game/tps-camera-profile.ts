@@ -1,4 +1,12 @@
 import * as THREE from "three";
+import type { MoveDefinition } from "./types";
+
+/** Expanded attacks use their original silhouette for camera staging. */
+export function tpsCameraAttackFamily(
+  move: Pick<MoveDefinition, "id" | "motionBase"> | null,
+): string | null {
+  return move?.motionBase ?? move?.id ?? null;
+}
 
 // Camera-only TPS tuning. Keep this separate from deterministic gameplay tuning
 // so visual composition can be reviewed/refined without mixing it into combat rules.

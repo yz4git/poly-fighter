@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
-import type { HitEvent } from "./types";
+import type { HitEvent, MoveDefinition } from "./types";
 import { TpsCinematicImpactSpectacle } from "./tps-cinematic-impact-spectacle";
 import { TpsSignatureMotionVfx } from "./tps-signature-motion-vfx";
 import { tpsDecorativeHitLane } from "./tps-screen-readability";
@@ -183,8 +183,24 @@ export function tpsHypeImpactTier(moveId: string, power: number): ImpactTier {
   return 1;
 }
 
+/** A variant retains its authored motion family's impact weight, even if
+ * the derived move id is different (e.g. POWER SNAP). Cinematic techniques
+ * have a distinct silhouette/contact beat regardless of numeric damage.
+ */
+export function tpsHypeImpactTierForMove(
+  move: Pick<MoveDefinition, "id" | "motionBase" | "cinematicRole" | "power">,
+): ImpactTier {
+  if (move.cinematicRole) return 3;
+  return Math.max(
+    tpsHypeImpactTier(move.id, move.power),
+    tpsHypeImpactTier(move.motionBase ?? move.id, move.power),
+  ) as ImpactTier;
+}
+
 export function tpsHypeHitStopForTier(tier: ImpactTier, blocked: boolean): number {
-  if (blocked) return 1;
+  // Every successful guard remains faster than a clean hit, but the weight of
+  // the blocked attack stays legible instead of giving every guard a 1f tap.
+  if (blocked) return tier;
   if (tier === 3) return TPS_HYPE_PROFILE.heavySharedHitStopTicks;
   if (tier === 2) return TPS_HYPE_PROFILE.mediumSharedHitStopTicks;
   return TPS_HYPE_PROFILE.lightSharedHitStopTicks;
@@ -331,7 +347,7 @@ export class TpsHypeDirector {
   }
 
   hit(event: HitEvent, camera: THREE.PerspectiveCamera): void {
-    const tier = event.blocked ? 1 : tpsHypeImpactTier(event.move.id, event.move.power);
+    const tier = tpsHypeImpactTierForMove(event.move);
     const color = event.blocked
       ? 0x7deeff
       : event.counter
@@ -409,7 +425,7 @@ export class TpsHypeDirector {
       ring.mesh.scale.setScalar(ring.startScale);
       ring.mesh.material.color.setHex(color);
       ring.baseOpacity = event.blocked
-        ? 0.26
+        ? 0.25 + tier * 0.01
         : tier === 3
           ? Math.max(0.34, 0.46 - index * 0.08)
           : tier === 2
@@ -419,9 +435,9 @@ export class TpsHypeDirector {
     }
 
     const burst = this.bursts.find((entry) => entry.life <= 0) ?? this.bursts[0];
-    burst.life = event.blocked ? 0.10 : tier === 3 ? 0.20 : tier === 2 ? 0.15 : 0.11;
+    burst.life = event.blocked ? 0.08 + tier * 0.02 : tier === 3 ? 0.20 : tier === 2 ? 0.15 : 0.11;
     burst.maxLife = burst.life;
-    burst.startScale = event.blocked ? 0.28 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.35 : 0.30;
+    burst.startScale = event.blocked ? 0.24 + tier * 0.04 : tier === 3 ? TPS_HYPE_PROFILE.heavyBurstScale : tier === 2 ? 0.35 : 0.30;
     burst.aspect = impactBurstAspect(tier, event.blocked);
     burst.lines.visible = true;
     burst.lines.position.copy(visualPoint);
@@ -431,13 +447,13 @@ export class TpsHypeDirector {
     const initialCrossScale = burst.startScale / Math.sqrt(burst.aspect);
     burst.lines.scale.set(burst.startScale * burst.aspect, initialCrossScale, burst.startScale);
     burst.lines.material.color.setHex(color);
-    burst.baseOpacity = event.blocked ? 0.22 : tier === 3 ? 0.46 : tier === 2 ? 0.37 : 0.29;
+    burst.baseOpacity = event.blocked ? 0.19 + tier * 0.01 : tier === 3 ? 0.46 : tier === 2 ? 0.37 : 0.29;
     burst.lines.material.opacity = burst.baseOpacity;
 
     if (event.blocked) {
       this.fovOffset = Math.max(this.fovOffset, 0.65);
-      this.cameraKick = Math.max(this.cameraKick, 0.018);
-      this.cameraShake = Math.max(this.cameraShake, 0.018);
+      this.cameraKick = Math.max(this.cameraKick, 0.014 + tier * 0.004);
+      this.cameraShake = Math.max(this.cameraShake, 0.015 + tier * 0.003);
       return;
     }
 

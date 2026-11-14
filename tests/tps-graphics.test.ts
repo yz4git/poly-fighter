@@ -31,7 +31,11 @@ test("TPS exhilaration pass adds fast confirms, cinematic finishers and bounded 
   assert.equal(tpsHypeHitStopForTier(1, false), 3);
   assert.equal(tpsHypeHitStopForTier(2, false), 5);
   assert.equal(tpsHypeHitStopForTier(3, false), 9);
-  assert.equal(tpsHypeHitStopForTier(3, true), 1);
+  // Guard stop now conveys attack weight (1/2/3f), but remains faster than
+  // a clean 3/5/9f hit and preserves the same fixed-tick combat contracts.
+  assert.equal(tpsHypeHitStopForTier(1, true), 1);
+  assert.equal(tpsHypeHitStopForTier(2, true), 2);
+  assert.equal(tpsHypeHitStopForTier(3, true), 3);
   assert.equal(tpsHypeImpactTier("jab", 0.7), 1);
   assert.equal(tpsHypeImpactTier("straight", 1.1), 2);
   assert.equal(tpsHypeImpactTier("power", 2.2), 3);

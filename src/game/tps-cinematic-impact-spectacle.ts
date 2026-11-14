@@ -25,7 +25,15 @@ export function cinematicImpactStyle(
   streak: number,
   finishing: boolean,
 ): CinematicImpactStyle {
-  if (blocked) return { shards: 1, groundWaves: 0, scale: 0.45, opacity: 0.16, duration: 0.10 };
+  // A hard-earned heavy guard sounds/looks heavier than a jab guard, but
+  // guarding never triggers arena shockwaves or hides either fighter.
+  if (blocked) return {
+    shards: 1,
+    groundWaves: 0,
+    scale: tier === 3 ? 0.60 : tier === 2 ? 0.52 : 0.45,
+    opacity: tier === 3 ? 0.19 : tier === 2 ? 0.175 : 0.16,
+    duration: tier === 3 ? 0.14 : tier === 2 ? 0.12 : 0.10,
+  };
   const crescendo = Math.min(3, Math.max(0, streak - 1));
   const major = tier === 3 || counter || signature;
   return {

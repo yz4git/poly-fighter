@@ -151,6 +151,11 @@ jobs:
               file "artifacts/tps-visual-audit/tps-sakurai-${move}-${frame}.png" | grep -q "PNG image data"
             done
           done
+          # Continuous 60 Hz standby-to-jab handoff: actual planted feet and
+          # Quaternius host motion, not the separate static storyboard samples.
+          test -s artifacts/tps-visual-audit/neutral-to-jab-continuity.json
+          test -s artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png
+          file artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png | grep -q "PNG image data"
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

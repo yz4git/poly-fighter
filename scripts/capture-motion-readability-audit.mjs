@@ -632,9 +632,11 @@ try {
     throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);
   }
 
-  // Sakurai 036/049/062/077: capture the actual motion timeline, not just a
-  // contact screenshot. These poses are sampled at four exact gameplay ticks,
-  // with a fixed duel camera and already-allocated Three.js meshes.
+  // Sakurai 036/049/062/077: capture actual motion beats, not just a
+  // contact screenshot. Windup is sampled partway through STARTUP and
+  // followthrough well into RECOVERY; the old first/last boundary-only
+  // capture concealed almost all movement after the hit.
+  // These are source-authored poses at exact game ticks, not stepped hitboxes.
   const sakuraiStoryboard = {};
   for (const moveId of ["jab", "power", "risingKick"]) {
     sakuraiStoryboard[moveId] = {};
@@ -659,10 +661,12 @@ try {
         }
         if (!game.p1.beginMove(moveId)) return { error: "move-not-found", moveId };
         const move = game.p1.currentMove;
-        const tick = stage === "startup" ? 0
+        const tick = stage === "startup"
+          ? Math.max(1, Math.floor(move.startup * 0.45))
           : stage === "contact" ? move.startup
           : stage === "overtravel" ? move.startup + move.active - 1
-          : move.startup + move.active;
+          : Math.min(move.startup + move.active + move.recovery - 1,
+            move.startup + move.active + Math.max(1, Math.round(move.recovery * 0.45)));
         game.p1.moveTick = tick;
         // Let imported-blender inertialization settle without advancing the
         // gameplay tick. This makes each still measure its authored pose.
@@ -693,10 +697,14 @@ try {
       await screenshot(sessionId, `${outputDir}/tps-sakurai-${moveId.toLowerCase()}-${stage}.png`);
     }
     const frames = sakuraiStoryboard[moveId];
-    if (frames.startup.phase > frames.contact.phase
-        || frames.contact.phase > frames.overtravel.phase
-        || frames.overtravel.phase > frames.followthrough.phase) {
-      throw new Error(`Sakurai motion phases are not ordered for ${moveId}: ${JSON.stringify(frames)}`);
+    if (!(frames.startup.phase < frames.contact.phase
+        && frames.contact.phase <= frames.overtravel.phase
+        && frames.overtravel.phase + 0.045 < frames.followthrough.phase)
+        || frames.startup.timelineStage !== "STARTUP"
+        || frames.contact.timelineStage !== "ACTIVE"
+        || frames.overtravel.timelineStage !== "ACTIVE"
+        || frames.followthrough.timelineStage !== "RECOVERY") {
+      throw new Error(`Sakurai motion frames failed to show four distinct beats for ${moveId}: ${JSON.stringify(frames)}`);
     }
   }
 

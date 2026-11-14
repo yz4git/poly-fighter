@@ -26,6 +26,7 @@ import {
   TPS_HYPE_PROFILE,
   TpsHypeDirector,
   tpsHypeHitStopForTier,
+  tpsHypeImpactTier,
   tpsHypeImpactTierForMove,
   tpsHypeKnockbackScaleForTier,
 } from "./tps-hype";
@@ -812,13 +813,18 @@ prototype.resolveAttack = function resolveAttack(
     attacker.visual.root.userData.tpsFinalImpact = true;
   }
 
-  const tier = tpsHypeImpactTierForMove(move);
-  const sharedHitStop = tpsHypeHitStopForTier(tier, blocked);
+  // Family-aware tiers are presentation-only. A derived POWER SNAP still
+  // looks/sounds like a power attack, but must not secretly inherit the
+  // heavier knockback/launch physics of its unmodified parent move.
+  const presentationTier = tpsHypeImpactTierForMove(move);
+  const sharedHitStop = tpsHypeHitStopForTier(presentationTier, blocked);
   attacker.hitStop = Math.max(attacker.hitStop, sharedHitStop);
   defender.hitStop = Math.max(defender.hitStop, sharedHitStop);
 
   if (!blocked) {
-    const knockbackScale = tpsHypeKnockbackScaleForTier(tier);
+    // Keep the precise pre-pilot combat tier for simulation balance.
+    const physicsTier = tpsHypeImpactTier(move.id, move.power);
+    const knockbackScale = tpsHypeKnockbackScaleForTier(physicsTier);
     defender.velocity.x *= knockbackScale;
     defender.velocity.z *= knockbackScale;
     if (move.cinematicRole === "meteorSlam") {
@@ -829,7 +835,7 @@ prototype.resolveAttack = function resolveAttack(
     } else if (move.launcher) {
       defender.velocity.y = Math.max(defender.velocity.y, TPS_HYPE_PROFILE.launcherVerticalSpeed);
       defender.grounded = false;
-    } else if (tier === 3 && defender.state !== "KO" && ["KNOCKDOWN", "THROW"].includes(defender.state)) {
+    } else if (physicsTier === 3 && defender.state !== "KO" && ["KNOCKDOWN", "THROW"].includes(defender.state)) {
       defender.velocity.y = Math.max(defender.velocity.y, TPS_HYPE_PROFILE.heavyKnockdownVerticalSpeed);
       defender.grounded = false;
     }

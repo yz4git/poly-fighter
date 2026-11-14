@@ -76,3 +76,43 @@ The completed Phase 2 GitHub WebGL audits show **all eight checks passing** for 
 **Newly fixed issue:** the imported-model `motion-reaction.ts` afterfeel and combo momentum classifier previously checked only exact move IDs. `powerSnap`, `backfistPivot`, `lowKickDrive`, and other generated variants silently fell back to a generic punch tail. Both end-of-attack and combo-link afterfeel now use their actual `motionBase`. Cinematic moves receive explicit heavy/sweep handling. Tests cover four variants across the base families, including cinematic roles. Only small presentation-layer transforms are affected, not gameplay timing or balance.
 
 **Next review priority:** sample and inspect motion at startup, first ACTIVE, late ACTIVE and early RECOVERY on a consistent fixed camera, rather than judging from the contact frame alone; also assess foot stability and arm silhouette in a real 60 fps iPhone capture before merging.
+
+## Phase 9: contact-aware planted-foot IK (measured in actual WebGL)
+
+**Problem:** the contact camera uses a cosmetic close-neutral lane and a second
+punch lane to keep both fighters visible. The previous Phase 8 correction stopped
+the one-frame teleport but moved the *entire* imported model, including both
+planted boots, sideways through jab startup.
+
+**Implementation:** a final `tps-grounded-punch-footlock.ts` presentation
+wrapper now captures both ankle positions from a stable close neutral, follows
+the real fighter's gameplay translation, and applies bounded two-bone IK to
+`thigh/calf/foot` bones on jab, straight and body blow. The support leg has
+higher weight; each foot target is clamped to **0.16 world units** correction.
+The authored torso, punch-contact hand, camera, hitboxes, damage, input and
+locomotion code remain unchanged. IK fades out during recovery. Kicks, jumps,
+throws and combo-followup attacks never inherit old idle foot anchors.
+References to imported rig bones are cached to avoid repeated scene-tree
+searches on 60 Hz mobile frames.
+
+**Measured result:** comparing production WebGL artifact
+[baseline #43625267499](https://github.com/yz4git/poly-fighter/actions/runs/43625267499/artifacts/14126016731)
+with
+[IK #43627352753](https://github.com/yz4git/poly-fighter/actions/runs/43627352753/artifacts/14127131918),
+using the same close neutral and continuous eight-frame jab:
+
+| Motion metric (world units) | Prior | With foot IK |
+| --- | ---: | ---: |
+| Peak left-foot horizontal displacement from neutral | 0.2492 | 0.1271 |
+| Peak right-foot horizontal displacement from neutral | 0.2164 | 0.0560 |
+| Largest per-tick left-foot travel | 0.1022 | 0.0648 |
+| Largest per-tick right-foot travel | 0.1013 | 0.0507 |
+| First-frame host displacement | 0 | 0 |
+| Gameplay-root displacement | 0 | 0 |
+| Left striking-hand horizontal reach at jab contact | 1.1926 | 1.1915 |
+
+Actual screenshots show no obvious broken knee geometry at contact. The
+post-IK browser audit requires planted-foot drift to remain below bounded
+thresholds and the striking-hand reach to remain at least 1.1 world units.
+The next release gate remains a real iPhone Safari 60 fps play session,
+because a fixed-camera CI pose cannot rule out all visual ankle pops.

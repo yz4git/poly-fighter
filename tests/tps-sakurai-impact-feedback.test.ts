@@ -51,11 +51,13 @@ test("guard spark scales modestly by threat and never obscures both fighters", (
 
 test("family-aware hit feedback does not change physics for fast derived attacks", () => {
   const moves = expandMoveSet(FIGHTER_DEFINITIONS.red.moves);
-  const powerSnap = moves.powerSnap;
-  assert.ok(powerSnap, "actual POWER SNAP exists");
-  const visualTier = tpsHypeImpactTierForMove(powerSnap);
-  const originalPhysicsTier = tpsHypeImpactTier(powerSnap.id, powerSnap.power);
-  assert.equal(visualTier, 3, "power silhouette remains heavy");
+  // BACKFIST SNAP has light numerical power despite inheriting the heavy
+  // spinning-family animation; POWER SNAP itself is still tier 3 numerically.
+  const backfistSnap = moves.backfistSnap;
+  assert.ok(backfistSnap, "actual BACKFIST SNAP exists");
+  const visualTier = tpsHypeImpactTierForMove(backfistSnap);
+  const originalPhysicsTier = tpsHypeImpactTier(backfistSnap.id, backfistSnap.power);
+  assert.equal(visualTier, 3, "backfist silhouette remains heavy");
   assert.notEqual(originalPhysicsTier, visualTier, "fast variant retains lighter physical impact");
   assert.ok(tpsHypeKnockbackScaleForTier(originalPhysicsTier) <
     tpsHypeKnockbackScaleForTier(visualTier), "accidentally sharing tiers changes real knockback");

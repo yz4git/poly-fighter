@@ -2,7 +2,7 @@ import type { FighterRuntime } from "./fighter";
 import { reactionKindForMove } from "./motion-profile";
 import { PresentationAnimationController } from "./presentation-animation";
 import { TpsHypeDirector } from "./tps-hype";
-import type { HitEvent, ReactionKind } from "./types";
+import type { HitEvent, MoveDefinition, ReactionKind } from "./types";
 import { getVisualContactPoint } from "./visual";
 
 export type MotionReactionState = {
@@ -83,10 +83,22 @@ function sideForEvent(event: HitEvent): -1 | 1 {
   return sideForVisualContact(event.move.visualContact);
 }
 
-function comboMomentumKindForMove(moveId: string): ComboMomentumKind {
-  if (["kick", "lowKick", "risingKick", "dashKick"].includes(moveId)) return "KICK";
-  if (["power", "throw"].includes(moveId)) return "HEAVY";
-  if (["backfist", "counter"].includes(moveId)) return "SWEEP";
+/**
+ * The afterfeel must inherit the authored attack family, not the literal
+ * expanded move id. A POWER SNAP or BACKFIST PIVOT is still a committed
+ * power/sweep through its recovery even when its numerical hit is lighter.
+ * This only selects a bounded imported-model presentation tail.
+ */
+export function tpsMotionAfterfeelKind(
+  move: Pick<MoveDefinition, "id" | "motionBase" | "cinematicRole"> | undefined,
+): ComboMomentumKind {
+  if (!move) return "PUNCH";
+  const base = move.motionBase ?? move.id;
+  if (move.cinematicRole === "cycloneSweep" || move.cinematicRole === "airPivot") return "SWEEP";
+  if (move.cinematicRole) return "HEAVY";
+  if (["kick", "lowKick", "risingKick", "dashKick"].includes(base)) return "KICK";
+  if (["power", "throw"].includes(base)) return "HEAVY";
+  if (["backfist", "counter"].includes(base)) return "SWEEP";
   return "PUNCH";
 }
 
@@ -279,7 +291,7 @@ function beginComboMomentumCarry(fighter: FighterRuntime, state: ComboMomentumCa
   state.fromMove = fromMove;
   const move = fighter.definition.moves[fromMove];
   state.side = sideForVisualContact(move?.visualContact);
-  state.kind = comboMomentumKindForMove(fromMove);
+  state.kind = tpsMotionAfterfeelKind(move);
 
   root.userData.tpsComboMomentumFromMove = fromMove;
   root.userData.tpsComboMomentumKind = state.kind;
@@ -352,7 +364,7 @@ function beginAttackAfterfeel(fighter: FighterRuntime, state: AttackAfterfeelSta
 
   if (state.lastState === "ATTACK" && settling && state.lastMoveId) {
     const move = fighter.definition.moves[state.lastMoveId];
-    state.kind = comboMomentumKindForMove(state.lastMoveId);
+    state.kind = tpsMotionAfterfeelKind(move);
     state.side = sideForVisualContact(move?.visualContact);
     state.duration = attackAfterfeelDuration(state.kind);
     state.until = timeSeconds + state.duration;

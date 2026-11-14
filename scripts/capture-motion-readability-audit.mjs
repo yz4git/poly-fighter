@@ -326,6 +326,10 @@ try {
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       points: bonePoints(game.p1),
+      gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+      visualRootPosition: point(game.p1.visual.root),
+      importedHostPosition: point(host),
+      importedHostLocalX: host?.position?.x ?? null,
       visibleClip: host?.userData?.quaterniusCurrentClip ?? null,
       fistMeshCount,
       correctionsEnabled: game.p1.visual.root.userData.motionCorrectionsEnabled === true,
@@ -686,10 +690,16 @@ try {
           phase: host?.userData?.combatMotionSampledPhase ?? null,
           timelineStage: host?.userData?.combatMotionTimelineStage ?? null,
           points: bonePoints(game.p1),
+          gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+          visualRootPosition: point(game.p1.visual.root),
+          importedHostPosition: point(host),
+          importedHostLocalX: host?.position?.x ?? null,
           fighterState: game.p1.state,
         };
       `, [moveId, stage]);
       if (frame?.error || !frame?.points?.head || !Number.isFinite(frame?.phase)
+          || !Number.isFinite(frame?.visualRootPosition?.x)
+          || !Number.isFinite(frame?.importedHostPosition?.x)
           || frame.fighterState !== "ATTACK") {
         throw new Error(`Sakurai storyboard pose missing for ${moveId}/${stage}: ${JSON.stringify(frame)}`);
       }
@@ -708,7 +718,20 @@ try {
     }
   }
 
+  // Distinguish real IK foot travel from a presentation-root translation.
+  // Do not classify every boot position change as an animation defect:
+  // a kick intentionally lifts the striking leg, while a jab should not.
+  const sakuraiRootAndFootTravel = Object.fromEntries(
+    Object.entries(sakuraiStoryboard).map(([moveId, stages]) => {
+      const rootTravel = distance(stages.startup.visualRootPosition, stages.contact.visualRootPosition);
+      const hostTravel = distance(stages.startup.importedHostPosition, stages.contact.importedHostPosition);
+      const footLTravel = distance(stages.startup.points.footL, stages.contact.points.footL);
+      const footRTravel = distance(stages.startup.points.footR, stages.contact.points.footR);
+      return [moveId, { rootTravel, hostTravel, footLTravel, footRTravel }];
+    }),
+  );
   const diagnostics = {
+    sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,
     neutral,

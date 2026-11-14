@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import process from "node:process";
 const driver = process.env.WEBDRIVER_BIN;
@@ -18,6 +19,14 @@ async function screenshot(id, path) { const encoded = await command(`/session/${
 async function clickButton(id, text) { return execute(id, `const b=[...document.querySelectorAll('button')].find(x=>x.textContent?.includes(arguments[0]));if(!b)return false;b.click();return true;`, [text]); }
 const lookup = `function findGame(){const host=document.querySelector('main.poly-app');if(!host)return null;const key=Object.keys(host).find(k=>k.startsWith('__reactFiber$'));let f=key?host[key]:null;const seen=new Set();while(f&&!seen.has(f)){seen.add(f);let h=f.memoizedState;while(h){const v=h.memoizedState;const c=v&&typeof v==='object'&&'current'in v?v.current:null;if(c&&c.p1&&c.p2&&c.renderer&&c.camera&&c.scene)return c;h=h.next;}f=f.return;}return null;}`;
 const reset = `function resetFighter(f){f.currentMove=null;f.moveTick=0;f.hitStop=0;f.hitStun=0;f.blockStun=0;f.knockdownTicks=0;f.guardDamage=0;f.velocity.set(0,0,0);f.hitTargets.clear();f.health=100;f.state='IDLE';f.grounded=true;const n={left:false,right:false,up:false,down:false,punch:false,kick:false,guard:false};f.input={...n};f.previousInput={...n};}`;
+// Compare the exact bundle contract against the source version instead of
+// hardcoding V3/V4 here: every source-level motion revision must invalidate its
+// compiled clip and be visible in this real-rig WebGL audit.
+const choreographySource = readFileSync(new URL("../src/game/video-demo-choreography.ts", import.meta.url), "utf8");
+const expectedVideoVersion = choreographySource.match(
+  /export const VIDEO_CHOREOGRAPHY_VERSION = "([^"]+)" as const;/,
+)?.[1];
+if (!expectedVideoVersion) throw new Error("Cannot read authored video choreography version");
 const cases = [
   // The right-hand backfist uses the calibrated reference-palm skeleton clip.
   // The left-hand counterpart still uses its independently authored BF clip.
@@ -62,7 +71,7 @@ try {
     if (c.authored) {
       if (result.policy !== "AUTHORED_ATTACK_PRESERVE" || result.baselineClip !== c.clip) throw new Error(`Authored intent mismatch: ${JSON.stringify({ c, result })}`);
       if (result.clip !== null || result.phase !== null || result.currentMove !== null) throw new Error(`Authored intent unexpectedly re-entered Motion Expansion: ${JSON.stringify({ c, result })}`);
-      if (c.clip === "CM_Video_Palm" && (!result.videoActive || result.videoVersion !== "VIDEO_REFERENCE_CHOREOGRAPHY_V3")) {
+      if (c.clip === "CM_Video_Palm" && (!result.videoActive || result.videoVersion !== expectedVideoVersion)) {
         throw new Error(`Authored reference palm lost its real active clip/version: ${JSON.stringify({ c, result })}`);
       }
     } else if (!result.active || result.phase !== "ACTIVE" || result.clip !== c.clip || result.currentMove !== c.move || !result.visible || result.policy !== "PROCEDURAL_ASSIST") {

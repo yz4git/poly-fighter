@@ -857,9 +857,38 @@ try {
       || neutralToJab.maxRootStep > 1e-6) {
     throw new Error(`Neutral-to-jab planted-foot continuity budget exceeded: ${JSON.stringify({ continuousBudget, neutralToJab })}`);
   }
+  // The baseline rigid-host lane could pass the instant-jump check while
+  // both boots slid around 0.25 / 0.22 world units during five startup ticks.
+  // Assert the *measured* horizontal glide is smaller, not merely that an IK
+  // telemetry flag was enabled. This contract is intentionally jab-only.
+  const planarDisplacement = (from, to) =>
+    Math.hypot(to.x - from.x, to.z - from.z);
+  const maxPlantedGlide = (side) => Math.max(...neutralToJab.samples.map((frame) =>
+    planarDisplacement(neutralToJab.idle[side], frame[side])));
+  const visibleLeftGlide = maxPlantedGlide("footL");
+  const visibleRightGlide = maxPlantedGlide("footR");
+  const contactHandTravel = planarDisplacement(
+    neutralToJab.idle.leftHand, neutralToJab.atContact.leftHand);
+  const groundedPunchFootlockQuality = {
+    version: neutralToJab.samples[0].footlockVersion,
+    correctedTicks: neutralToJab.correctedTicks,
+    leftGlide: visibleLeftGlide,
+    rightGlide: visibleRightGlide,
+    strikeTravel: contactHandTravel,
+  };
+  if (groundedPunchFootlockQuality.version !== "CONTACT_FOOT_IK_V1"
+      || groundedPunchFootlockQuality.correctedTicks < neutralToJab.startupTicks
+      || neutralToJab.totalAnkleImprovement < 0.45
+      || visibleLeftGlide > 0.18
+      || visibleRightGlide > 0.11
+      || neutralToJab.maxFootLStep > 0.085
+      || neutralToJab.maxFootRStep > 0.085
+      || contactHandTravel < 1.1) {
+    throw new Error(`Grounded jab foot IK did not reduce real screen-space foot skating: ${JSON.stringify({ groundedPunchFootlockQuality, neutralToJab })}`);
+  }
   await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);
   await writeFile(`${outputDir}/neutral-to-jab-continuity.json`,
-    JSON.stringify({ continuousBudget, neutralToJab }, null, 2));
+    JSON.stringify({ continuousBudget, groundedPunchFootlockQuality, neutralToJab }, null, 2));
   const diagnostics = {
     neutralToJab,
     sakuraiRootAndFootTravel,

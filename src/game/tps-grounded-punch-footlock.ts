@@ -20,6 +20,7 @@ type FootlockState = {
   idleFeet: FootSnapshot | null;
   currentFeet: FootSnapshot | null;
   startPosition: THREE.Vector3 | null;
+  cachedRig: ReturnType<typeof importedRig>;
 };
 
 const states = new WeakMap<FighterRuntime, FootlockState>();
@@ -91,7 +92,12 @@ function applyFootlock(fighter: FighterRuntime, state: FootlockState): void {
     && fighter.velocity.lengthSq() < 0.04;
   const ready = data.combatTps && data.quaterniusModelState === "ready";
   if (!ready) return;
-  const rig = importedRig(fighter);
+  // Skin and rig remain stable across frames; avoid six scene-tree bone lookups
+  // on every 60 Hz iPhone frame, rebuilding only after a model-host replacement.
+  const rig = state.cachedRig?.host.parent === fighter.visual.root
+    ? state.cachedRig
+    : importedRig(fighter);
+  state.cachedRig = rig;
   if (!rig) return;
 
   const feet = snapshotFeet(rig);
@@ -174,7 +180,7 @@ export function installTpsGroundedPunchFootlockPresentation(): void {
   ): void {
     const state = states.get(fighter) ?? {
       lastState: "", lastMove: null, idleFeet: null, currentFeet: null,
-      startPosition: null,
+      startPosition: null, cachedRig: null,
     };
     states.set(fighter, state);
     baseUpdate.call(this, fighter, opponent, timeSeconds);

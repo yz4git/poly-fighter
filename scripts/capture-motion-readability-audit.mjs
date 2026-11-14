@@ -632,7 +632,76 @@ try {
     throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);
   }
 
+  // Sakurai 036/049/062/077: capture the actual motion timeline, not just a
+  // contact screenshot. These poses are sampled at four exact gameplay ticks,
+  // with a fixed duel camera and already-allocated Three.js meshes.
+  const sakuraiStoryboard = {};
+  for (const moveId of ["jab", "power", "risingKick"]) {
+    sakuraiStoryboard[moveId] = {};
+    for (const stage of ["startup", "contact", "overtravel", "followthrough"]) {
+      const frame = await execute(sessionId, `${gameLookup}${resetAndPose}
+        const [moveId, stage] = arguments;
+        const game = findGame();
+        resetFighter(game.p1);
+        resetFighter(game.p2);
+        resetTpsTransient(game);
+        game.finished = false;
+        game.input.clear();
+        game.p1.position.set(0, 0, 0.74);
+        game.p2.position.set(0, 0, -0.48);
+        game.p1.facing = 1;
+        game.p2.facing = -1;
+        let auditTime = performance.now() / 1000;
+        for (let settle = 0; settle < 10; settle += 1) {
+          auditTime += 1 / 60;
+          game.updateVisual(game.p1, game.p2, auditTime);
+          game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        }
+        if (!game.p1.beginMove(moveId)) return { error: "move-not-found", moveId };
+        const move = game.p1.currentMove;
+        const tick = stage === "startup" ? 0
+          : stage === "contact" ? move.startup
+          : stage === "overtravel" ? move.startup + move.active - 1
+          : move.startup + move.active;
+        game.p1.moveTick = tick;
+        // Let imported-blender inertialization settle without advancing the
+        // gameplay tick. This makes each still measure its authored pose.
+        for (let settle = 0; settle < 10; settle += 1) {
+          auditTime += 1 / 60;
+          game.updateVisual(game.p1, game.p2, auditTime);
+          game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        }
+        game.updateCamera(1 / 60);
+        game.updateLockOn();
+        game.renderer.render(game.scene, game.camera);
+        const host = game.p1.visual.root.children.find((child) =>
+          child.name?.startsWith("quaternius-ubc-") && child.name?.endsWith("-runtime"));
+        return {
+          moveId, stage, tick,
+          clip: game.p1.visual.root.userData.combatMotionCurrentClip ?? null,
+          phase: host?.userData?.combatMotionSampledPhase ?? null,
+          timelineStage: host?.userData?.combatMotionTimelineStage ?? null,
+          points: bonePoints(game.p1),
+          fighterState: game.p1.state,
+        };
+      `, [moveId, stage]);
+      if (frame?.error || !frame?.points?.head || !Number.isFinite(frame?.phase)
+          || frame.fighterState !== "ATTACK") {
+        throw new Error(`Sakurai storyboard pose missing for ${moveId}/${stage}: ${JSON.stringify(frame)}`);
+      }
+      sakuraiStoryboard[moveId][stage] = frame;
+      await screenshot(sessionId, `${outputDir}/tps-sakurai-${moveId.toLowerCase()}-${stage}.png`);
+    }
+    const frames = sakuraiStoryboard[moveId];
+    if (frames.startup.phase > frames.contact.phase
+        || frames.contact.phase > frames.overtravel.phase
+        || frames.overtravel.phase > frames.followthrough.phase) {
+      throw new Error(`Sakurai motion phases are not ordered for ${moveId}: ${JSON.stringify(frames)}`);
+    }
+  }
+
   const diagnostics = {
+    sakuraiStoryboard,
     preload,
     neutral,
     allMovesActive: Object.values(results).every((result) => result.activeReached === true),

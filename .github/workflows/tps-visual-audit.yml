@@ -105,6 +105,9 @@ jobs:
             echo "ChromeDriver is not available"
             exit 1
           fi
+          # Capture the new authored-frame storyboard first: unrelated circuit smoke
+          # tests must not prevent inspecting the actual combat pose regression.
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-entry-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-rival-circuit-apex-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-rival-circuit-finish-audit.mjs
@@ -115,7 +118,6 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-counterattack-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-block-punish-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-attack-action-handoff-audit.mjs
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
           for image in \

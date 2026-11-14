@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { tpsCloseNeutralPunchCarry } from "../src/game/tps-close-neutral-lane";
+import { tpsClosePunchFamily, tpsClosePunchProfile } from "../src/game/tps-close-punch-lane";
+import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
+import { expandMoveSet } from "../src/game/move-expansion";
 
 test("close jab and cross retain their existing stance lane until their own punch lane takes over", () => {
   for (const moveId of ["jab", "straight", "bodyBlow"]) {
@@ -42,4 +45,24 @@ test("render-only stance-to-punch lanes do not add an overshoot at short distanc
     "no double-applied sideways launch while lanes overlap");
   assert.ok(Math.max(...samples.slice(1).map((x, i) => Math.abs(x - samples[i]))) < stanceLane * 0.35,
     "camera-facing model moves in small, bounded increments instead of one full-lane snap");
+});
+
+test("all generated jab/cross/body-blow variants receive the same authored attack lane", () => {
+  const moves = expandMoveSet(FIGHTER_DEFINITIONS.red.moves);
+  for (const base of ["jab", "straight", "bodyBlow"]) {
+    assert.equal(tpsClosePunchFamily(moves[base]), base);
+    const expected = tpsClosePunchProfile(base);
+    for (const variant of ["Snap", "Drive", "Pivot", "Crush"]) {
+      const move = moves[`${base}${variant}`];
+      assert.ok(move, `${base}/${variant} exists`);
+      assert.equal(tpsClosePunchFamily(move), base, move.id);
+      assert.deepEqual(tpsClosePunchProfile(tpsClosePunchFamily(move)!), expected);
+      assert.equal(tpsCloseNeutralPunchCarry(move.motionBase!, 0, move.startup, true), 1,
+        move.id + " preserves stance-to-attack lane continuity");
+    }
+  }
+  for (const base of ["kick", "risingKick", "power", "throw"]) {
+    assert.equal(tpsClosePunchFamily(moves[base]), null, base + " remains outside punch lane");
+  }
+  assert.equal(tpsClosePunchFamily(null), null);
 });

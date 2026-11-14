@@ -754,7 +754,88 @@ try {
       return [moveId, { rootTravel, hostTravel, footLTravel, footRTravel }];
     }),
   );
+  // The independent storyboard resets each pose, so it cannot measure
+  // the real standby-to-jab transition across continuous 60 Hz frames.
+  const neutralToJab = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.finished = false;
+    game.input.clear();
+    game.p1.position.set(0, 0, 0.74);
+    game.p2.position.set(0, 0, -0.48);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    let sampleTime = performance.now() / 1000;
+    const update = () => {
+      sampleTime += 1 / 60;
+      game.updateVisual(game.p1, game.p2, sampleTime);
+      game.updateVisual(game.p2, game.p1, sampleTime + 0.007);
+    };
+    for (let i = 0; i < 48; i += 1) update();
+    const sample = (label, tick) => {
+      const root = game.p1.visual.root;
+      const data = root.userData;
+      const host = root.children.find((child) =>
+        child.name?.startsWith("quaternius-ubc-") && child.name?.endsWith("-runtime"));
+      const bones = bonePoints(game.p1);
+      return {
+        label, tick, fighterState: game.p1.state,
+        gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+        root: point(root), host: point(host), hostLocalX: host?.position?.x ?? null,
+        footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+        leftHand: bones?.handL ?? null,
+        neutralMode: data.tpsCloseNeutralLaneMode ?? null,
+        neutralFactor: Number(data.tpsCloseNeutralLane ?? 0),
+        neutralX: Number(data.tpsCloseNeutralLaneX ?? 0),
+        punchFactor: Number(data.tpsClosePunchLane ?? 0),
+        punchX: Number(data.tpsClosePunchLaneX ?? 0),
+        attackAfterfeel: Number(data.tpsAttackAfterfeel ?? 0),
+      };
+    };
+    const idle = sample("idle", -1);
+    if (!game.p1.beginMove("jab")) return { error: "jab-begin-failed", idle };
+    const move = game.p1.currentMove;
+    const samples = [];
+    for (let tick = 0; tick < move.startup + move.active; tick += 1) {
+      game.p1.moveTick = tick;
+      update();
+      samples.push(sample("jab", tick));
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const distance = (a, b) => a && b
+      ? Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) : NaN;
+    const first = samples[0];
+    const maxStep = (key) => Math.max(...samples.map((s, i) =>
+      distance(s[key], i === 0 ? idle[key] : samples[i - 1][key])));
+    return {
+      idle, samples, startupTicks: move.startup,
+      firstFrameHostTravel: distance(idle.host, first.host),
+      firstFrameFootLTravel: distance(idle.footL, first.footL),
+      firstFrameFootRTravel: distance(idle.footR, first.footR),
+      maxFootLStep: maxStep("footL"),
+      maxFootRStep: maxStep("footR"),
+      maxHostStep: maxStep("host"),
+      maxRootStep: maxStep("root"),
+      atContact: samples[move.startup],
+      lastStartup: samples[move.startup - 1],
+    };
+  `);
+  if (neutralToJab?.error || !neutralToJab?.idle?.footL
+      || neutralToJab.idle.neutralMode !== "NEUTRAL"
+      || neutralToJab.idle.neutralFactor < 0.7
+      || neutralToJab.samples[0]?.neutralMode !== "ATTACK_HANDOFF"
+      || neutralToJab.samples[0]?.neutralFactor < 0.7
+      || !neutralToJab.samples.every((s) => Number.isFinite(s.hostLocalX)
+          && s.footL && s.footR && s.leftHand)) {
+    throw new Error(`Continuous neutral-to-jab lane missing: ${JSON.stringify(neutralToJab)}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);
   const diagnostics = {
+    neutralToJab,
     sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,

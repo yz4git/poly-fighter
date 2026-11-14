@@ -63,3 +63,16 @@ The reference motion skill highlights **036 (attack breakdown)**, **049 (instant
 No new animations, procedural limb deformation or geometry have been created; this is a targeted, reversible **timing remap over existing authored Blender keyframes**. It needs actual video-frame review before claiming visual quality. Existing punch/kick and model-preview contracts remain unchanged.
 
 **Phase 2 audit:** compare jab, straight, power and rising kick on the same opponent and camera, including startup frame 0, first ACTIVE, last ACTIVE and first RECOVERY; also compare the POWER SNAP expanded variation. Reject the experiment if an arm passes through the chest, a planted foot skates, a fast jab feels delayed or an idle transition snaps.
+
+## Phase 3: afterfeel consistency and evidence review
+
+The completed Phase 2 GitHub WebGL audits show **all eight checks passing** for commit `18aeddf`. The browser-rendered images were compared against the prior commit's screenshots:
+
+- Same-position contact screenshots for jab, straight, body blow, backfist, power and kicks still look broadly similar. This is **expected**, since the first active tick is intentionally anchored to the same authored contact key.
+- Motion-readability diagnostics show distinct punch silhouettes at capture: jab/straight distance `2.515`, backfist/bodyblow `6.673`, backfist/power `4.338`, bodyblow/power `3.542` (sum of selected joint-space point distances in the audit; **not** a quality rating or a before/after improvement score).
+- Rendered strike heights retain low kick `0.908`, front kick `2.123` and rising kick `2.415` (audit world units).
+- **Important:** one still image cannot prove whether the new windup/hold timing feels better. Real iPhone Safari review remains a release requirement.
+
+**Newly fixed issue:** the imported-model `motion-reaction.ts` afterfeel and combo momentum classifier previously checked only exact move IDs. `powerSnap`, `backfistPivot`, `lowKickDrive`, and other generated variants silently fell back to a generic punch tail. Both end-of-attack and combo-link afterfeel now use their actual `motionBase`. Cinematic moves receive explicit heavy/sweep handling. Tests cover four variants across the base families, including cinematic roles. Only small presentation-layer transforms are affected, not gameplay timing or balance.
+
+**Next review priority:** sample and inspect motion at startup, first ACTIVE, late ACTIVE and early RECOVERY on a consistent fixed camera, rather than judging from the contact frame alone; also assess foot stability and arm silhouette in a real 60 fps iPhone capture before merging.

@@ -1423,11 +1423,111 @@ try {
   }
   await writeFile(`${outputDir}/tps-real-contact-combos.json`,
     JSON.stringify(realHitCombos, null, 2));
+  // Phase 15: active real CPU exchange (not a passive/dummy attack audit).
+  // Drive the actual fixed-step combat loop with neutral player input; the
+  // original CPU director, windup, movement, attack geometry and guard logic
+  // all run. Never seed hitTargets/CLEAN, force attack state or fake damage.
+  const liveCpuExchange = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    if (!game || typeof game.step !== "function") return {error:"missing-real-game-step"};
+    const frozenCpu = game.updateEnemy;
+    // The earlier storyboard intentionally installed a passive CPU override.
+    // Remove only that instance override to restore production prototype AI.
+    if (!Object.prototype.hasOwnProperty.call(game,"updateEnemy"))
+      return {error:"passive-cpu-override-missing"};
+    delete game.updateEnemy;
+    const activeCpu = game.updateEnemy;
+    if (typeof activeCpu !== "function" || activeCpu === frozenCpu)
+      return {error:"production-cpu-not-restored"};
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.input.clear();
+    game.finished = false;
+    game.paused = false;
+    game.finishPending = false;
+    game.enemyOpeningGraceTicks = 0;
+    game.enemyCooldown = 0;
+    game.p1.position.set(0,0,0.74);
+    game.p2.position.set(0,0,-0.76);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    let cpuUpdates = 0;
+    game.updateEnemy = function() {
+      cpuUpdates += 1;
+      return activeCpu.call(this);
+    };
+    const attacks=[], intents=new Set(), samples=[];
+    const initialHealth=game.p1.health;
+    let lastMove=null, lastEnemyPosition=game.p2.position.clone();
+    let maxCpuRootStep=0, invalidPosition=false, unconfirmedDamage=0;
+    let firstAttackFrame=null, lastHealth=game.p1.health;
+    const totalFrames=360;
+    for (let frame=1;frame<=totalFrames;frame++) {
+      // This is the production tick: includes real input, both fighter
+      // physics, CPU decisions, resolveAttack in both directions, and visuals.
+      game.step();
+      const p1=game.p1, p2=game.p2;
+      const intent=p2.visual.root.userData.tpsCpuDirectorIntent;
+      if (typeof intent === "string") intents.add(intent);
+      const moveId=p2.currentMove?.id ?? null;
+      if (p2.state === "ATTACK" && moveId && (moveId !== lastMove ||
+          p2.moveTick === 0)) {
+        attacks.push({frame,move:moveId,tick:p2.moveTick});
+        if (firstAttackFrame === null) firstAttackFrame=frame;
+      }
+      lastMove=moveId;
+      const distance=p2.position.distanceTo(lastEnemyPosition);
+      maxCpuRootStep=Math.max(maxCpuRootStep,distance);
+      lastEnemyPosition.copy(p2.position);
+      for (const fighter of [p1,p2]) {
+        if (![fighter.position.x,fighter.position.y,fighter.position.z,
+              fighter.health,fighter.hitStop].every(Number.isFinite))
+          invalidPosition=true;
+      }
+      if (p1.health < lastHealth && !p2.hitTargets.has(p1.id))
+        unconfirmedDamage += lastHealth-p1.health;
+      lastHealth=p1.health;
+      if (frame % 30 === 0 || frame === 1) {
+        samples.push({frame,enemyState:p2.state,enemyMove:moveId,
+          enemyIntent:intent ?? null,playerHealth:p1.health,
+          enemyHealth:p2.health,cpuX:p2.position.x,cpuZ:p2.position.z,
+          separation:Math.hypot(p1.position.x-p2.position.x,
+            p1.position.z-p2.position.z)});
+      }
+      if (game.finished || game.finishPending) break;
+    }
+    game.updateEnemy=frozenCpu;
+    game.updateCamera(1/60);
+    game.updateLockOn();
+    game.renderer.render(game.scene,game.camera);
+    return {frames:game.simulationTicks,cpuUpdates,attacks,firstAttackFrame,
+      intents:[...intents],samples,initialHealth,finalHealth:game.p1.health,
+      maxCpuRootStep,invalidPosition,unconfirmedDamage,
+      productionCpuRestored:activeCpu!==frozenCpu};
+  `);
+  if (liveCpuExchange?.error || !liveCpuExchange?.productionCpuRestored
+      || liveCpuExchange.cpuUpdates < 180
+      || liveCpuExchange.invalidPosition
+      || liveCpuExchange.unconfirmedDamage > 0
+      || !Number.isFinite(liveCpuExchange.maxCpuRootStep)
+      || liveCpuExchange.maxCpuRootStep > 0.35
+      || !Array.isArray(liveCpuExchange.attacks)
+      || liveCpuExchange.attacks.length === 0
+      || !Array.isArray(liveCpuExchange.samples)
+      || liveCpuExchange.samples.length < 4) {
+    throw new Error(`Live CPU combat contract failed: ${JSON.stringify(liveCpuExchange)}`);
+  }
+  console.log("TPS_LIVE_CPU_EXCHANGE="+JSON.stringify(liveCpuExchange));
+  await screenshot(sessionId,`${outputDir}/tps-live-cpu-exchange.png`);
+  await writeFile(`${outputDir}/tps-live-cpu-exchange.json`,
+    JSON.stringify(liveCpuExchange,null,2));
   const diagnostics = {
     neutralToJab,
     confirmedComboHandoffs,
     tripleCombos,
     realHitCombos,
+    liveCpuExchange,
     sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,

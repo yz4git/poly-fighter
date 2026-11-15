@@ -1376,6 +1376,11 @@ try {
         if (current) maxAttackTick = Math.max(maxAttackTick,game.p1.moveTick);
         render();
         if (game.p2.health <= 0) break;
+        // The guarded control concerns the first jab and its entire
+        // cancellable window, not an unrelated second neutral strike after
+        // recovery. The guard dummy is allowed to return to IDLE after block.
+        if (spec.guard && current?.id === "jab" && game.p1.moveTick >=
+            current.startup + current.active + current.recovery - 2) break;
         if (hits.length >= 3 && current && game.p1.moveTick >= current.startup + 2) break;
       }
       game.updateCamera(1/60);

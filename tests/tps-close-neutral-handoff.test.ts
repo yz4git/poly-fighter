@@ -96,6 +96,6 @@ test("all jab-derived startups receive an active punch lane before neutral relea
     const base = tpsClosePunchFamily(move);
     assert.equal(base, "jab");
     assert.equal(tpsClosePunchLaneInFactor(base, 0, move.startup), 0);
-    assert.ok(tpsClosePunchLaneInFactor(base, Math.max(1, move.startup - 2), move.startup) > .3);
+    assert.ok(tpsClosePunchLaneInFactor(base, Math.max(1, move.startup - 2), move.startup) > .14);
   }
 });

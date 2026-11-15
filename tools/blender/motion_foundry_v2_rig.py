@@ -210,7 +210,7 @@ def key_matrix(control: bpy.types.Object, frame: int, matrix_world: Matrix) -> N
 def smooth_control_curves(control: bpy.types.Object) -> None:
     if not control.animation_data or not control.animation_data.action:
         return
-    for curve in control.animation_data.action.fcurves:
+    for curve in v1.iter_action_fcurves(control.animation_data.action):
         for key in curve.keyframe_points:
             key.interpolation = "BEZIER"
             key.handle_left_type = "AUTO_CLAMPED"

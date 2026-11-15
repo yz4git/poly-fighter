@@ -1085,9 +1085,177 @@ try {
   }
   await writeFile(`${outputDir}/tps-confirmed-combo-foot-continuity.json`,
     JSON.stringify(confirmedComboHandoffs, null, 2));
+
+  // Phase 13: actual three-strike TPS buffered link routing at 60Hz. The
+  // previous two-move tests cannot catch a second transition that starts
+  // from a backfist or a cross's already-inertialized imported model.
+  // CLEAN is seeded at each ACTIVE frame to isolate model continuity from
+  // opponent damage, but ALL links/branches run through updatePlayer.
+  const tripleCombos = {};
+  for (const spec of [
+    { label: "close-a", route: "CLOSE_A", expected: ["jab", "straight", "power"] },
+    { label: "close-b", route: "CLOSE_B", expected: ["jab", "backfist", "power"] },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0];
+      const game = findGame();
+      if (!game || typeof game.updatePlayer !== "function") return { error: "no-TPS-updatePlayer" };
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, -0.48);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      const data = game.p1.visual.root.userData;
+      data.tpsCleanHitConfirmed = false;
+      data.tpsComboLinkState = "NONE";
+      data.tpsComboLinkFromMove = "";
+      game.__comboRoute = spec.route;
+      game.__comboRouteSeed = 0;
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      game.__neutralMashAttackCount = 0;
+      let time = performance.now() / 1000;
+      const render = () => {
+        time += 1/60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i = 0; i < 48; i += 1) render();
+      const neutral = {
+        left: false, right: false, up: false, down: false,
+        punch: false, kick: false, guard: false,
+      };
+      if (!game.p1.beginMove("jab")) return { error: "three-hit-jab-not-started" };
+      render();
+      const sample = (tick) => {
+        const root = game.p1.visual.root;
+        const d = root.userData;
+        const host = root.children.find((node) =>
+          node.name?.startsWith("quaternius-ubc-") && node.name?.endsWith("-runtime"));
+        const bones = bonePoints(game.p1);
+        return {
+          tick, move: game.p1.currentMove?.id ?? null,
+          family: game.p1.currentMove?.motionBase ?? game.p1.currentMove?.id ?? null,
+          moveTick: game.p1.moveTick,
+          startup: game.p1.currentMove?.startup ?? 0,
+          state: game.p1.state,
+          host: point(host), root: point(root),
+          footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+          pelvis: bones?.pelvis ?? null, handL: bones?.handL ?? null,
+          handR: bones?.handR ?? null,
+          comboLink: d.tpsComboLinkState ?? null,
+          linkFrom: d.tpsComboLinkFromMove ?? null,
+          linkSerial: Number(d.tpsComboLinkSerial ?? 0),
+          bridge: Number(d.tpsComboLaneBridgeFactor ?? 0),
+          bridgeFrom: d.tpsComboLaneBridgeSourceMove ?? null,
+          bridgeTo: d.tpsComboLaneBridgeTargetMove ?? null,
+          footlock: Number(d.tpsPunchFootlockWeight ?? 0),
+          gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+        };
+      };
+      const samples = [sample(0)];
+      const movePhases = [];
+      const transitions = [];
+      let lastMove = "jab";
+      let lastMoveRef = game.p1.currentMove;
+      let queuedFor = new Set();
+      let seededFor = new Set();
+      const planar = (a,b) => a && b ? Math.hypot(a.x-b.x, a.z-b.z) : NaN;
+      for (let frame = 1; frame < 110; frame += 1) {
+        const move = game.p1.currentMove;
+        if (!move) break;
+        if (!seededFor.has(move.id) && game.p1.moveTick >= move.startup) {
+          game.p1.hitTargets.add(game.p2.id);
+          data.tpsCleanHitConfirmed = true;
+          seededFor.add(move.id);
+          movePhases.push({ type: "confirmed", move: move.id, tick: frame });
+        }
+        const pressed = !queuedFor.has(move.id) && game.p1.moveTick >= move.startup + move.active + 1
+          && queuedFor.size < 2;
+        if (pressed) {
+          queuedFor.add(move.id);
+          movePhases.push({ type: "queued", move: move.id, tick: frame });
+        }
+        game.updatePlayer({ ...neutral, punch: pressed });
+        render();
+        const current = sample(frame);
+        const previous = samples[samples.length - 1];
+        samples.push(current);
+        if (current.move && current.move !== lastMove) {
+          transitions.push({
+            from: lastMove, to: current.move, frame,
+            before: previous, after: current,
+            host: planar(previous.host, current.host),
+            footL: planar(previous.footL, current.footL),
+            footR: planar(previous.footR, current.footR),
+            pelvis: planar(previous.pelvis, current.pelvis),
+            handL: planar(previous.handL, current.handL),
+            handR: planar(previous.handR, current.handR),
+            gameplay: planar(previous.gamePosition, current.gamePosition),
+          });
+          lastMove = current.move;
+          lastMoveRef = game.p1.currentMove;
+          movePhases.push({type: "linked", move: current.move, tick: frame});
+        }
+        if (transitions.length === 2 && current.move === spec.expected[2]
+            && current.moveTick >= current.startup + 2) break;
+      }
+      game.updateCamera(1/60);
+      game.updateLockOn();
+      game.renderer.render(game.scene, game.camera);
+      const followups = transitions.map((t) => {
+        const frames = samples.filter((s) => s.tick >= t.frame && s.move === t.to);
+        return {
+          move: t.to,
+          frames: frames.length,
+          bridgeAtEntry: frames[0]?.bridge ?? 0,
+          bridgeAtContact: frames.find((s) => s.moveTick >= s.startup)?.bridge ?? null,
+          invalidFootlockTicks: frames.filter((s) => s.footlock > 0).length,
+          peakFootLStep: Math.max(0,...frames.slice(1).map((s,i) =>
+            planar(s.footL, frames[i].footL))),
+          peakFootRStep: Math.max(0,...frames.slice(1).map((s,i) =>
+            planar(s.footR, frames[i].footR))),
+        };
+      });
+      return { spec, transitions, followups, queued: [...queuedFor], seeded: [...seededFor],
+        movePhases, samples, lastMove, lastMoveStillValid: !!lastMoveRef };
+    `, [spec]);
+    if (result?.error || result?.transitions?.length !== 2
+        || result.transitions[0].from !== "jab"
+        || result.transitions[0].to !== spec.expected[1]
+        || result.transitions[1].from !== spec.expected[1]
+        || result.transitions[1].to !== spec.expected[2]
+        || result.followups?.length !== 2
+        || result.followups.some((stage) => stage.invalidFootlockTicks !== 0
+          || stage.bridgeAtContact !== 0)
+        || !result.transitions.every((t) =>
+          Number.isFinite(t.host) && Number.isFinite(t.footL)
+          && Number.isFinite(t.footR) && Number.isFinite(t.pelvis))) {
+      throw new Error(`Real three-hit combo route/foot telemetry failed: ${JSON.stringify(result)}`);
+    }
+    console.log("TPS_TRIPLE_COMBO=" + JSON.stringify({
+      route: spec.route,
+      transitions: result.transitions.map((t) => ({
+        from:t.from,to:t.to,host:t.host,footL:t.footL,footR:t.footR,
+        pelvis:t.pelvis,handL:t.handL,handR:t.handR,gameplay:t.gameplay,
+      })),
+      followups: result.followups,
+    }));
+    tripleCombos[spec.label] = result;
+    await screenshot(sessionId, `${outputDir}/tps-combo-triple-${spec.label}.png`);
+  }
+  await writeFile(`${outputDir}/tps-triple-combo-continuity.json`,
+    JSON.stringify(tripleCombos, null, 2));
   const diagnostics = {
     neutralToJab,
     confirmedComboHandoffs,
+    tripleCombos,
     sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,

@@ -901,7 +901,7 @@ try {
   const confirmedComboHandoffs = {};
   for (const spec of [
     { label: "straight", branch: "NEUTRAL", expected: "straight", confirmed: true },
-    { label: "bodyblow", branch: "BACK", expected: "bodyBlow", confirmed: true },
+    { label: "backfist", branch: "BACK", expected: "backfist", confirmed: true },
     { label: "whiff", branch: "NEUTRAL", expected: null, confirmed: false },
   ]) {
     const result = await execute(sessionId, `${gameLookup}${resetAndPose}
@@ -920,6 +920,8 @@ try {
       game.p1.facing = 1;
       game.p2.facing = -1;
       game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+      game.p1.visual.root.userData.tpsComboLinkState = "NONE";
+      game.p1.visual.root.userData.tpsComboLinkFromMove = "";
       game.__comboRoute = "CLOSE_A";
       game.playerComboStage = 0;
       game.playerComboGraceTicks = 0;
@@ -953,6 +955,10 @@ try {
           handL: bones?.handL ?? null, handR: bones?.handR ?? null,
           footlockActive: d.tpsPunchFootlockActive === true,
           footlockWeight: Number(d.tpsPunchFootlockWeight ?? 0),
+          bridgeVersion: d.tpsComboLaneBridgeVersion ?? null,
+          bridgeFactor: Number(d.tpsComboLaneBridgeFactor ?? 0),
+          bridgeLocalX: Number(d.tpsComboLaneBridgeLocalX ?? 0),
+          bridgeLocalZ: Number(d.tpsComboLaneBridgeLocalZ ?? 0),
           neutralFactor: Number(d.tpsCloseNeutralLane ?? 0),
           neutralMode: d.tpsCloseNeutralLaneMode ?? "NONE",
           punchFactor: Number(d.tpsClosePunchLane ?? 0),
@@ -1042,10 +1048,14 @@ try {
           || result.afterLink.comboLink !== "LINKED"
           || result.afterLink.comboLinkFrom !== "jab"
           || result.followupFootlockActiveTicks !== 0
-          || result.afterLink.footlockWeight !== 0) {
+          || result.afterLink.footlockWeight !== 0
+          || result.afterLink.bridgeVersion !== "CONFIRMED_COMBO_HOST_CONTINUITY_V1"
+          || result.afterLink.bridgeFactor < 0.99
+          || result.atLinkStep.host > 0.12) {
         throw new Error(`Real confirmed ${spec.label} combo handoff lost or inherited planted jab anchors: ${JSON.stringify(result)}`);
       }
-    } else if (result.linkedAt !== -1 || result.linkedMove !== null) {
+    } else if (result.linkedAt !== -1 || result.linkedMove !== null
+        || result.frames.some((frame) => frame.bridgeFactor > 0)) {
       throw new Error(`Whiff must not cancel into a combo: ${JSON.stringify(result)}`);
     }
     confirmedComboHandoffs[spec.label] = result;

@@ -373,3 +373,34 @@ test("CPU versus CPU survives 10,000 fixed ticks with finite runtime state", () 
   assert.ok(observedStates.size >= 5);
   arena.dispose();
 });
+
+test("TPS clean-hit presentation is owned by the current move and clears on linked attacks and rounds", () => {
+  const { p1, p2 } = makeFighters();
+  const data = p1.visual.root.userData;
+  data.tpsCleanHitConfirmed = true;
+  data.tpsStrikeContact = true;
+  assert.equal(p1.beginMove("jab"), true);
+  assert.equal(data.tpsCleanHitConfirmed, false);
+  assert.equal(data.tpsStrikeContact, false);
+  assert.equal(p1.currentMove?.id, "jab");
+
+  // A real clean jab can earn its next attack, but the incoming move must
+  // begin visually/contact-wise unconfirmed until its own hit resolution.
+  p1.hitTargets.add(p2.id);
+  data.tpsCleanHitConfirmed = true;
+  data.tpsStrikeContact = true;
+  p1.state = "IDLE"; // mirror the TPS cancel handoff's temporary actionable state
+  p1.currentMove = null;
+  assert.equal(p1.beginMove("straight"), true);
+  assert.equal(p1.hitTargets.has(p2.id), false);
+  assert.equal(data.tpsCleanHitConfirmed, false);
+  assert.equal(data.tpsStrikeContact, false);
+
+  p1.hitTargets.add(p2.id);
+  data.tpsCleanHitConfirmed = true;
+  data.tpsStrikeContact = true;
+  p1.resetForRound(0, 0, 1);
+  assert.equal(p1.hitTargets.size, 0);
+  assert.equal(data.tpsCleanHitConfirmed, false);
+  assert.equal(data.tpsStrikeContact, false);
+});

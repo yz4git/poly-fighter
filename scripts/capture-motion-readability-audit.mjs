@@ -876,10 +876,10 @@ try {
     rightGlide: visibleRightGlide,
     strikeTravel: contactHandTravel,
   };
-  if (groundedPunchFootlockQuality.version !== "CONTACT_FOOT_IK_V1"
+  if (groundedPunchFootlockQuality.version !== "CONTACT_FOOT_IK_V2"
       || groundedPunchFootlockQuality.correctedTicks < neutralToJab.startupTicks
       || neutralToJab.totalAnkleImprovement < 0.45
-      || visibleLeftGlide > 0.18
+      || visibleLeftGlide > 0.11
       || visibleRightGlide > 0.11
       || neutralToJab.maxFootLStep > 0.085
       || neutralToJab.maxFootRStep > 0.085

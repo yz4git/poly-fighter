@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import { PresentationAnimationController } from "./presentation-animation";
 
-export const TPS_COMBO_LANE_BRIDGE_VERSION = "CONFIRMED_COMBO_HOST_CONTINUITY_V1";
+export const TPS_COMBO_LANE_BRIDGE_VERSION = "CONFIRMED_COMBO_HOST_CONTINUITY_V2";
 
 type ComboLaneBridgeState = {
   lastHost: THREE.Object3D | null;
@@ -19,7 +19,10 @@ type ComboLaneBridgeState = {
 };
 
 const states = new WeakMap<FighterRuntime, ComboLaneBridgeState>();
-const CLOSE_PUNCH_BASES = new Set(["jab", "straight", "bodyBlow"]);
+// CLOSE_B's real second hit is a backfist for Kairo. Its authored sweep
+// carries a visible model-side lane into the power finisher; without this
+// family the host jumped 0.356 world units at the second combo link.
+const CLOSE_PUNCH_BASES = new Set(["jab", "straight", "bodyBlow", "backfist"]);
 let installed = false;
 
 function importedHost(fighter: FighterRuntime): THREE.Object3D | null {
@@ -75,7 +78,7 @@ function ensureState(fighter: FighterRuntime): ComboLaneBridgeState {
 }
 
 /**
- * A clean jab link replaces the authored clip and drops its close-punch lane
+ * A clean close-strike link replaces the authored clip and drops its screen lane
  * on the same 60 Hz frame. That can displace the whole imported mesh by nearly
  * half a world unit although gameplay root is still exactly stationary.
  * Bridge only that presentation-host discontinuity and ease it back into the

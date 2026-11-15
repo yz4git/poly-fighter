@@ -893,8 +893,169 @@ try {
   await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);
   await writeFile(`${outputDir}/neutral-to-jab-continuity.json`,
     JSON.stringify({ continuousBudget, groundedPunchFootlockQuality, neutralToJab }, null, 2));
+  // Exercise *actual* TPS hit-confirm/cancel routing rather than faking an
+  // ATTACK->ATTACK pose switch. Only the clean-hit flag is seeded: this audit
+  // deliberately isolates the animation handoff from damage and CPU timing.
+  // Both directions (neutral straight and BACK body blow), plus the whiff
+  // control, run from a 48-frame settled close stance at deterministic 60 Hz.
+  const confirmedComboHandoffs = {};
+  for (const spec of [
+    { label: "straight", branch: "NEUTRAL", expected: "straight", confirmed: true },
+    { label: "bodyblow", branch: "BACK", expected: "bodyBlow", confirmed: true },
+    { label: "whiff", branch: "NEUTRAL", expected: null, confirmed: false },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0];
+      const game = findGame();
+      if (!game || typeof game.updatePlayer !== "function") {
+        return { error: "TPS updatePlayer missing" };
+      }
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, -0.48);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+      game.__comboRoute = "CLOSE_A";
+      game.playerComboStage = 0;
+      game.playerComboGraceTicks = 0;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      game.__neutralMashAttackCount = 0;
+      let time = performance.now() / 1000;
+      const update = () => {
+        time += 1 / 60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i = 0; i < 48; i += 1) update();
+      const neutral = {
+        left: false, right: false, up: false, down: false,
+        punch: false, kick: false, guard: false,
+      };
+      const sample = (index) => {
+        const root = game.p1.visual.root;
+        const d = root.userData;
+        const host = root.children.find((node) =>
+          node.name?.startsWith("quaternius-ubc-") && node.name?.endsWith("-runtime"));
+        const bones = bonePoints(game.p1);
+        return {
+          index, moveId: game.p1.currentMove?.id ?? null,
+          moveBase: game.p1.currentMove?.motionBase ?? game.p1.currentMove?.id ?? null,
+          moveTick: game.p1.moveTick, state: game.p1.state,
+          gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+          root: point(root), host: point(host), pelvis: bones?.pelvis ?? null,
+          footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+          handL: bones?.handL ?? null, handR: bones?.handR ?? null,
+          footlockActive: d.tpsPunchFootlockActive === true,
+          footlockWeight: Number(d.tpsPunchFootlockWeight ?? 0),
+          neutralFactor: Number(d.tpsCloseNeutralLane ?? 0),
+          neutralMode: d.tpsCloseNeutralLaneMode ?? "NONE",
+          punchFactor: Number(d.tpsClosePunchLane ?? 0),
+          comboLink: d.tpsComboLinkState ?? null,
+          comboLinkFrom: d.tpsComboLinkFromMove ?? null,
+          comboLinkTick: Number(d.tpsComboLinkTick ?? -1),
+        };
+      };
+      const idle = sample(-1);
+      if (!game.p1.beginMove("jab")) return { error: "jab-start-failed" };
+      game.__comboRoute = "CLOSE_A";
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      update();
+      const frames = [sample(0)];
+      const openingMove = game.p1.currentMove;
+      const queueTick = openingMove.startup + openingMove.active + 1;
+      const total = openingMove.startup + openingMove.active + openingMove.recovery;
+      let queued = false, linkedAt = -1, linkedMove = null, cleanWasSeeded = false;
+      for (let frame = 1; frame <= total + 25; frame += 1) {
+        const duringJab = game.p1.currentMove?.id === "jab";
+        if (duringJab && spec.confirmed && !cleanWasSeeded
+            && game.p1.moveTick >= openingMove.startup) {
+          // A known CLEAN hit at the authored ACTIVE frame permits the game's
+          // own cancellable input path. No direct animation state replacement.
+          game.p1.hitTargets.add(game.p2.id);
+          game.p1.visual.root.userData.tpsCleanHitConfirmed = true;
+          cleanWasSeeded = true;
+        }
+        const press = duringJab && !queued && game.p1.moveTick >= queueTick;
+        if (press) queued = true;
+        game.updatePlayer({
+          ...neutral, punch: press,
+          down: press && spec.branch === "BACK",
+        });
+        update();
+        const current = sample(frame);
+        frames.push(current);
+        if (linkedAt < 0 && current.moveId && current.moveId !== "jab") {
+          linkedAt = frames.length - 1;
+          linkedMove = current.moveId;
+        }
+        if (linkedAt >= 0 && frames.length - linkedAt > 10) break;
+        if (!spec.confirmed && !game.p1.currentMove) break;
+      }
+      game.updateCamera(1 / 60);
+      game.updateLockOn();
+      game.renderer.render(game.scene, game.camera);
+      const d2 = (a, b) => a && b
+        ? Math.hypot(a.x-b.x, a.z-b.z) : NaN;
+      const delta = (a, b, key) => d2(a[key], b[key]);
+      const from = linkedAt > 0 ? frames[linkedAt - 1] : null;
+      const to = linkedAt >= 0 ? frames[linkedAt] : null;
+      const next = linkedAt >= 0 ? frames.slice(linkedAt, linkedAt + 8) : [];
+      const maxStep = (key, entries) => entries.length >= 2
+        ? Math.max(...entries.slice(1).map((sample, i) => delta(sample, entries[i], key))) : null;
+      return {
+        spec, idle, queued, cleanWasSeeded, total, queueTick,
+        linkedAt, linkedMove, linkedBase: to?.moveBase ?? null,
+        beforeLink: from, afterLink: to,
+        atLinkStep: from && to ? {
+          footL: delta(from, to, "footL"),
+          footR: delta(from, to, "footR"),
+          pelvis: delta(from, to, "pelvis"),
+          handL: delta(from, to, "handL"),
+          handR: delta(from, to, "handR"),
+          host: delta(from, to, "host"),
+          root: delta(from, to, "root"),
+        } : null,
+        followupPeakStep: {
+          footL: maxStep("footL", next), footR: maxStep("footR", next),
+          pelvis: maxStep("pelvis", next), handL: maxStep("handL", next),
+          handR: maxStep("handR", next),
+        },
+        followupFootlockActiveTicks: next.filter((f) => f.footlockActive).length,
+        frames,
+      };
+    `, [spec]);
+    if (result?.error || !result?.queued || result?.cleanWasSeeded !== spec.confirmed
+        || !result?.frames?.every((frame) =>
+          Number.isFinite(frame?.footL?.x) && Number.isFinite(frame?.footR?.z)
+            && Number.isFinite(frame?.pelvis?.x) && Number.isFinite(frame?.handL?.z))) {
+      throw new Error(`Combo foot continuity telemetry missing for ${spec.label}: ${JSON.stringify(result)}`);
+    }
+    if (spec.confirmed) {
+      if (result.linkedBase !== spec.expected || result.linkedAt <= 0
+          || result.afterLink.comboLink !== "LINKED"
+          || result.afterLink.comboLinkFrom !== "jab"
+          || result.followupFootlockActiveTicks !== 0
+          || result.afterLink.footlockWeight !== 0) {
+        throw new Error(`Real confirmed ${spec.label} combo handoff lost or inherited planted jab anchors: ${JSON.stringify(result)}`);
+      }
+    } else if (result.linkedAt !== -1 || result.linkedMove !== null) {
+      throw new Error(`Whiff must not cancel into a combo: ${JSON.stringify(result)}`);
+    }
+    confirmedComboHandoffs[spec.label] = result;
+    await screenshot(sessionId, `${outputDir}/tps-combo-${spec.label}-followup.png`);
+  }
+  await writeFile(`${outputDir}/tps-confirmed-combo-foot-continuity.json`,
+    JSON.stringify(confirmedComboHandoffs, null, 2));
   const diagnostics = {
     neutralToJab,
+    confirmedComboHandoffs,
     sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,

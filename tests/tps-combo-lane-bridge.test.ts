@@ -42,6 +42,14 @@ test("only confirmed same-fighter ATTACK combo links inherit the outgoing punch 
   assert.equal(tpsShouldBridgeConfirmedCombo({ ...genuine, newMove: "backfist" }), true,
     "a buffered BACK branch keeps the outgoing lead-jab screen position");
   assert.equal(tpsShouldBridgeConfirmedCombo({
+    ...genuine, lastMove: "backfist", previousFamily: "backfist",
+    newMove: "power", linkFromMove: "backfist",
+  }), true, "the BACK backfist follow-up must not teleport into the third hit");
+  assert.equal(tpsShouldBridgeConfirmedCombo({
+    ...genuine, lastMove: "backfistPivot", previousFamily: "backfist",
+    newMove: "power", linkFromMove: "backfistPivot",
+  }), true, "all authored backfist variants remain eligible for the same bounded carry");
+  assert.equal(tpsShouldBridgeConfirmedCombo({
     ...genuine, lastMove: "jabSnap", linkFromMove: "jabSnap",
   }), true, "authored jab variants keep their own actual IDs");
   for (const caseInput of [

@@ -294,6 +294,18 @@ def _write_samples(
                 bone.location = sample.location
                 bone.keyframe_insert(data_path="location", frame=frame, group=name)
 
+def _action_curves(action):
+    """Include Blender 5.0 layered Action channelbags as well as legacy curves."""
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        yield from legacy
+        return
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            for channelbag in getattr(strip, "channelbags", ()):
+                yield from channelbag.fcurves
+
+
 def apply_replacement_inbetween(
     scene: bpy.types.Scene,
     armature: bpy.types.Object,
@@ -387,7 +399,7 @@ def apply_replacement_inbetween(
     )
 
     # Dense bake curves should stay linear after the surgical replacement.
-    for curve in action.fcurves:
+    for curve in _action_curves(action):
         for point in curve.keyframe_points:
             point.interpolation = "LINEAR"
 
@@ -415,7 +427,7 @@ def apply_replacement_inbetween(
             frames,
             write_pelvis_location=True,
         )
-        for curve in action.fcurves:
+        for curve in _action_curves(action):
             for point in curve.keyframe_points:
                 point.interpolation = "LINEAR"
         bpy.context.view_layer.update()

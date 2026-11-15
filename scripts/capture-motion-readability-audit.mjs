@@ -1263,10 +1263,134 @@ try {
   }
   await writeFile(`${outputDir}/tps-triple-combo-continuity.json`,
     JSON.stringify(tripleCombos, null, 2));
+
+  // Phase 14: the earlier CLEAN hit markers isolated animation transitions.
+  // These cases instead use production strike geometry, health reduction,
+  // hitstop, reaction physics and actual TPS cancel routing. The opening jab
+  // starts in a settled stance and the CPU stays passive (training dummy).
+  // NO hitTargets or clean-hit flags are written after initialization.
+  const realHitCombos = {};
+  for (const spec of [
+    { label: "close-contact", distance: 1.08, expectedHits: 1 },
+    { label: "out-of-range", distance: 3.2, expectedHits: 0 },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0], game = findGame();
+      if (!game || typeof game.resolveAttack !== "function"
+          || typeof game.updatePlayer !== "function") {
+        return { error: "missing-real-physics-or-strike-resolution" };
+      }
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, 0.74 - spec.distance);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      const pdata = game.p1.visual.root.userData;
+      pdata.tpsCleanHitConfirmed = false;
+      pdata.tpsComboLinkState = "NONE";
+      pdata.tpsComboLinkFromMove = "";
+      game.__neutralMashPhrase = -1;
+      game.__neutralMashAttackCount = 0;
+      game.__neutralMashLastBase = null;
+      game.__neutralMashLastOutcome = undefined;
+      game.__comboRoute = "CLOSE_A";
+      game.__comboRouteSeed = 0;
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      let time = performance.now()/1000;
+      const render = () => {
+        time += 1/60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i=0;i<48;i++) render();
+      if (!game.p1.beginMove("jab")) return {error:"jab-not-started"};
+      render();
+      const neutral = { left:false,right:false,up:false,down:false,
+        punch:false,kick:false,guard:false };
+      const hits = [], moves = [{frame:0,move:"jab"}], links = [];
+      let lastMove = "jab";
+      let hitMoveId = null;
+      let queuedFor = new Set();
+      let maxAttackTick = 0, unexpectedClean = false;
+      for (let frame=1;frame<130;frame++) {
+        const moveBefore = game.p1.currentMove;
+        if (!moveBefore && frame > 2) break;
+        const hitLastTick = moveBefore && game.p1.hitTargets.has(game.p2.id);
+        const press = !!moveBefore && !!hitLastTick
+          && game.p1.moveTick >= moveBefore.startup+moveBefore.active+1
+          && !queuedFor.has(moveBefore.id) && queuedFor.size < 2;
+        if (press) queuedFor.add(moveBefore.id);
+        const oldHealth = game.p2.health;
+        game.updatePlayer({...neutral,punch:press});
+        game.p2.updatePhysics(1/60);
+        // Full production engine's geometry and real damage handling.
+        game.resolveAttack(game.p1,game.p2,false);
+        const current = game.p1.currentMove;
+        if (current && current.id !== lastMove) {
+          moves.push({frame,move:current.id});
+          links.push({
+            frame,from:lastMove,to:current.id,
+            comboLink:pdata.tpsComboLinkState ?? null,
+            fromMove:pdata.tpsComboLinkFromMove ?? null,
+          });
+          lastMove = current.id;
+        }
+        if (game.p2.health < oldHealth) {
+          hits.push({
+            frame,move:game.p1.currentMove?.id ?? moveBefore?.id ?? null,
+            playerTick:game.p1.moveTick,damage:oldHealth-game.p2.health,
+            enemyHealth:game.p2.health,
+            contact:pdata.tpsStrikeContact === true,
+            clean:pdata.tpsCleanHitConfirmed === true,
+            committedRange:pdata.tpsStrikeReach ?? null,
+            hitTargets:game.p1.hitTargets.has(game.p2.id),
+            enemyState:game.p2.state,
+            enemyDistance:Math.hypot(game.p1.position.x-game.p2.position.x,
+              game.p1.position.z-game.p2.position.z),
+          });
+          hitMoveId = current?.id ?? moveBefore?.id ?? null;
+        }
+        if (!game.p1.hitTargets.has(game.p2.id)
+            && pdata.tpsCleanHitConfirmed === true && !hits.some(h=>h.move===current?.id)) {
+          unexpectedClean = true;
+        }
+        if (current) maxAttackTick = Math.max(maxAttackTick,game.p1.moveTick);
+        render();
+        if (game.p2.health <= 0) break;
+        if (hits.length >= 3 && current && game.p1.moveTick >= current.startup + 2) break;
+      }
+      game.updateCamera(1/60);
+      game.updateLockOn();
+      game.renderer.render(game.scene,game.camera);
+      return {spec,hits,moves,links,enemyFinalHealth:game.p2.health,
+        enemyFinalState:game.p2.state,enemyPosition:{
+          x:game.p2.position.x,y:game.p2.position.y,z:game.p2.position.z,
+        },queued:[...queuedFor],maxAttackTick,unexpectedClean,
+        root:point(game.p1.visual.root),hitMoveId,
+        clean:pdata.tpsCleanHitConfirmed===true};
+    `, [spec]);
+    if (result?.error || !Array.isArray(result.hits)
+        || !Number.isFinite(result.enemyFinalHealth)) {
+      throw new Error(`Real collision/damage telemetry missing ${spec.label}: ${JSON.stringify(result)}`);
+    }
+    console.log("TPS_REAL_CONTACT=" + JSON.stringify(result));
+    realHitCombos[spec.label] = result;
+    await screenshot(sessionId,`${outputDir}/tps-real-contact-${spec.label}.png`);
+  }
+  await writeFile(`${outputDir}/tps-real-contact-combos.json`,
+    JSON.stringify(realHitCombos, null, 2));
   const diagnostics = {
     neutralToJab,
     confirmedComboHandoffs,
     tripleCombos,
+    realHitCombos,
     sakuraiRootAndFootTravel,
     sakuraiStoryboard,
     preload,

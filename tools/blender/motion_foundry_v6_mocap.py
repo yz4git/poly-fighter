@@ -232,18 +232,26 @@ def _source_event_names(source: bpy.types.Object) -> dict:
 def _new_bvh_armature(scene: bpy.types.Scene, path: str) -> Tuple[bpy.types.Object, bpy.types.Action]:
     before_objects = {obj.name for obj in scene.objects}
     before_actions = {action.name for action in bpy.data.actions}
-    bpy.ops.import_anim.bvh(
-        filepath=str(Path(path).resolve()),
-        target="ARMATURE",
-        global_scale=1.0,
-        frame_start=1,
-        use_fps_scale=False,
-        update_scene_fps=False,
-        update_scene_duration=False,
-        rotate_mode="QUATERNION",
-        axis_forward="-Z",
-        axis_up="Y",
-    )
+    import_settings = {
+        "filepath": str(Path(path).resolve()),
+        "target": "ARMATURE",
+        "global_scale": 1.0,
+        "frame_start": 1,
+        "use_fps_scale": False,
+        "update_scene_fps": False,
+        "update_scene_duration": False,
+        "rotate_mode": "QUATERNION",
+        "axis_forward": "-Z",
+        "axis_up": "Y",
+    }
+    # Blender 5 removed the old BVH operator's target option, and future
+    # releases may adjust more optional properties. Keep every supported
+    # authored setting while allowing the importer to use its default for
+    # retired options; armature/Action postconditions below remain mandatory.
+    available = set(bpy.ops.import_anim.bvh.get_rna_type().properties.keys())
+    bpy.ops.import_anim.bvh(**{
+        name: value for name, value in import_settings.items() if name in available
+    })
     armatures = [obj for obj in scene.objects if obj.name not in before_objects and obj.type == "ARMATURE"]
     if not armatures:
         raise RuntimeError(f"BVH import did not create an armature: {path}")

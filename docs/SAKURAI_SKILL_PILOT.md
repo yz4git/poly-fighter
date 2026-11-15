@@ -162,3 +162,62 @@ telemetry, or striking-hand contact travel below **1.15** world units.
 the measured correction but do not substitute for landscape iPhone Safari
 60 fps input, long combo loops, or skinning stress tests. Main stays unchanged
 until explicitly reviewed and merged.
+
+## Phase 12: confirmed-combo foot and presentation-host continuity
+
+**Problem identified by the first continuous clean-hit WebGL audit:** the
+previous standalone jab IK eliminated startup skating but did **not** preserve
+the entire imported production mesh across a live authored combo cancel.
+At jab tick 10, the first linked BACK route (Kairo's backfist, not body blow)
+dropped the outgoing presentational punch lane while selecting the next
+authored attack. The gameplay root moved **0**, but the host moved **0.42563**
+world units in one 60 Hz tick; left and right feet jumped **0.52054** and
+**0.49333** world units.
+
+**Fix:** `src/game/tps-combo-lane-bridge.ts` is an explicitly
+presentation-only *confirmed-combo inertialization* layer, installed
+after authored attack / VFX presentation and before the final foot IK.
+It recognizes an actual `tpsComboLinkState: LINKED` and exact outgoing
+move ID, and keeps the world-space position of the **imported host** on
+the first frame of a linked close punch's follow-up, then smoothly
+releases the horizontal carry by the new move's first ACTIVE frame.
+There is no new committed travel, no change to gameplay clocks/hitboxes,
+no foot-IK anchor carried into the next attack, and no force applied
+to kicks, throws, whiffs, reactions or guard transitions. A large
+discontinuity beyond 0.65 world units is not silently masked.
+The new layer removes its own prior frame's host correction before
+resampling, avoiding accumulating visual offsets.
+
+**Validation:** ChromeDriver WebGL audit plays a settled neutral jab,
+seeds a deterministic CLEAN hit *without bypassing the actual
+TPS input/cancel path*, presses ATTACK during the buffer window and
+lets the real `updatePlayer` and combo-route policy select the
+follow-up; it also runs a whiff control. This isolates combo
+handoff visuals, **not** full damage or enemy AI gameplay.
+The character's actual CLOSE_A continuation is straight and
+CLOSE_B with BACK input is backfist.
+
+| Jab cancellation, 60 Hz world-space planar step | Before | Phase 12 |
+| --- | ---: | ---: |
+| BACK branch imported host displacement at link | 0.42563 | **0** |
+| BACK branch left planted foot at link | 0.52054 | **0.11248** |
+| BACK branch right planted foot at link | 0.49333 | **0.07059** |
+| BACK branch pelvis step at link | 0.32549 | **0.13064** |
+| Neutral branch straight imported host step | not previously gated | **0** |
+| Neutral branch straight left/right foot step | not previously gated | **0.10140 / 0.06497** |
+
+In the whiff control, another independent neutral attack is permitted
+**only after** jab's full recovery at tick 18; the confirmed-combo
+presentation bridge remains zero for all its frames. All committed
+attacks continue to release carried host offsets by ACTIVE contact.
+
+**Browser CI regression budgets:** at every confirmed jab link,
+host planar step <=0.04, left/right foot step <=0.18/0.14,
+pelvis step <=0.20, game-root step <=1e-6; follow-up left/right
+per-tick movement <=0.20 and no carry at or beyond the next ACTIVE
+frame. Unit tests also lock the correct SPEED route and exact
+no-bridge conditions.
+
+**Open validation:** headless WebGL is not a replacement for
+landscape iPhone Safari 60 fps, touch-input cadence or longer
+real opponent combo stress. PR stays draft and main stays unchanged.

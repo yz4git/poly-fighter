@@ -205,7 +205,7 @@ def apply_body_direction(scene: bpy.types.Scene, armature: bpy.types.Object, spe
             arm = curve_value(spec.arm_open, u)
             add_rotation_delta(armature.pose.bones["upperarm_l"], (-arm * 0.22, 0.0, -arm), frame)
             add_rotation_delta(armature.pose.bones["upperarm_r"], (-arm * 0.22, 0.0, arm), frame)
-    for fcurve in action.fcurves:
+    for fcurve in v1.iter_action_fcurves(action):
         for key in fcurve.keyframe_points:
             key.interpolation = "BEZIER"
             key.handle_left_type = "AUTO_CLAMPED"

@@ -1054,10 +1054,22 @@ try {
           || result.atLinkStep.host > 0.12) {
         throw new Error(`Real confirmed ${spec.label} combo handoff lost or inherited planted jab anchors: ${JSON.stringify(result)}`);
       }
-    } else if (result.linkedAt !== -1 || result.linkedMove !== null
+    } else if ((result.linkedAt >= 0 && result.linkedAt < result.total)
+        || result.frames.some((frame) => frame.comboLink === "LINKED"
+          && frame.comboLinkFrom === "jab")
         || result.frames.some((frame) => frame.bridgeFactor > 0)) {
-      throw new Error(`Whiff must not cancel into a combo: ${JSON.stringify(result)}`);
+      // A whiff may start another independent neutral attack after the jab's
+      // COMPLETE recovery. It must never receive the confirmed combo bridge.
+      throw new Error(`Whiff prematurely cancelled or inherited a clean-hit bridge: ${JSON.stringify(result)}`);
     }
+    console.log("TPS_COMBO_CONTINUITY=" + JSON.stringify({
+      scenario: spec.label, queued: result.queued,
+      linkedAt: result.linkedAt, linkedBase: result.linkedBase,
+      firstTransition: result.atLinkStep,
+      bridgeFactor: result.afterLink?.bridgeFactor ?? 0,
+      followupPeakStep: result.followupPeakStep,
+      neutralAfterWhiff: !spec.confirmed && result.linkedAt >= result.total,
+    }));
     confirmedComboHandoffs[spec.label] = result;
     await screenshot(sessionId, `${outputDir}/tps-combo-${spec.label}-followup.png`);
   }

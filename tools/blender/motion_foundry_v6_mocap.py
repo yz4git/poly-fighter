@@ -23,6 +23,19 @@ from mathutils import Matrix, Quaternion, Vector
 
 FPS = 60
 
+
+def _action_fcurves(action):
+    """Read keyed curves from pre-4.4 and Blender 5 layered Actions."""
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        yield from legacy
+        return
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            for channelbag in getattr(strip, "channelbags", ()):
+                yield from channelbag.fcurves
+
+
 # CMU/Bruce-Hahne BVH joint -> Quaternius Universal humanoid joint.
 # Fingers are deliberately omitted: mocap fingers are synthetic/noisy and the
 # game should preserve its authored fist/hand shape.
@@ -568,7 +581,7 @@ def _anchor_support_foot(
     # Source time-warp samples subframes. Dense linear root interpolation avoids
     # Bezier overshoot reintroducing foot drift between the 60 Hz anchor samples.
     pelvis_path = 'pose.bones["pelvis"].location'
-    for curve in action.fcurves:
+    for curve in _action_fcurves(action):
         if curve.data_path == pelvis_path:
             for key in curve.keyframe_points:
                 key.interpolation = "LINEAR"
@@ -743,7 +756,7 @@ def build_mocap_prior(
             pb.keyframe_insert(data_path="rotation_quaternion", frame=dest_frame, group=pb.name)
             pb.keyframe_insert(data_path="scale", frame=dest_frame, group=pb.name)
 
-    for curve in action.fcurves:
+    for curve in _action_fcurves(action):
         for key in curve.keyframe_points:
             key.interpolation = "BEZIER"
             key.handle_left_type = "AUTO_CLAMPED"

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
+import type { MoveDefinition } from "./types";
 import { PresentationAnimationController } from "./presentation-animation";
 
 type ClosePunchLaneState = {
@@ -18,6 +19,14 @@ type ClosePunchProfile = {
 
 const states = new WeakMap<FighterRuntime, ClosePunchLaneState>();
 const CLOSE_PUNCH_MOVES = new Set(["jab", "straight", "bodyBlow"]);
+
+/** A derived punch keeps its base hand lane, while its gameplay ID is intact. */
+export function tpsClosePunchFamily(
+  move: Pick<MoveDefinition, "id" | "motionBase"> | null,
+): string | null {
+  const base = move?.motionBase ?? move?.id;
+  return base && CLOSE_PUNCH_MOVES.has(base) ? base : null;
+}
 let installed = false;
 
 function ensureState(fighter: FighterRuntime): ClosePunchLaneState {
@@ -51,7 +60,27 @@ function removeClosePunchLane(fighter: FighterRuntime, state: ClosePunchLaneStat
   fighter.visual.root.userData.tpsClosePunchLane = 0;
 }
 
-export const TPS_CLOSE_PUNCH_LANE_VERSION = "SHOULDER_CONTACT_LANE_V2";
+export const TPS_CLOSE_PUNCH_LANE_VERSION = "SHOULDER_CONTACT_LANE_V3";
+
+/**
+ * For a lead jab, begin opening the already-authored punch lane one tick
+ * earlier, before the neutral lane's release reaches its fastest point.
+ * This replaces excessive whole-body lane motion with a smoother transfer:
+ * the support boots require less IK correction and the punch still peaks
+ * at its normal ACTIVE contact. Longer crosses and body blows stay unchanged.
+ */
+export function tpsClosePunchLaneInFactor(
+  family: string,
+  moveTick: number,
+  startup: number,
+): number {
+  const preparation = family === "jab" ? 5 : 4;
+  return THREE.MathUtils.smoothstep(
+    moveTick,
+    Math.max(0, startup - preparation),
+    startup + 1,
+  );
+}
 
 /**
  * The closer lead jab must expose both torsos without detaching its glove from
@@ -72,13 +101,14 @@ function applyClosePunchLane(
 ): void {
   const root = fighter.visual.root;
   const move = fighter.currentMove;
+  const moveFamily = tpsClosePunchFamily(move);
   if (
     !root.userData.combatTps
     || root.userData.quaterniusModelState !== "ready"
     || opponent.visual.root.userData.quaterniusModelState !== "ready"
     || fighter.state !== "ATTACK"
     || !move
-    || !CLOSE_PUNCH_MOVES.has(move.id)
+    || !moveFamily
   ) return;
 
   const dx = opponent.position.x - fighter.position.x;
@@ -88,11 +118,7 @@ function applyClosePunchLane(
 
   const activeStart = move.startup;
   const activeEnd = move.startup + Math.max(1, move.active);
-  const laneIn = THREE.MathUtils.smoothstep(
-    fighter.moveTick,
-    Math.max(0, activeStart - 4),
-    activeStart + 1,
-  );
+  const laneIn = tpsClosePunchLaneInFactor(moveFamily, fighter.moveTick, activeStart);
   const laneOut = 1 - THREE.MathUtils.smoothstep(
     fighter.moveTick,
     activeEnd + 1,
@@ -106,7 +132,7 @@ function applyClosePunchLane(
   if (!host) return;
 
   const side = contactSide(move.visualContact);
-  const profile = tpsClosePunchProfile(move.id);
+  const profile = tpsClosePunchProfile(moveFamily);
   const scale = root.scale.x;
   const screenDirection = profile.direction;
 

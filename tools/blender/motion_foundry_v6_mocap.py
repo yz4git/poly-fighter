@@ -23,6 +23,19 @@ from mathutils import Matrix, Quaternion, Vector
 
 FPS = 60
 
+
+def _action_fcurves(action):
+    """Read keyed curves from pre-4.4 and Blender 5 layered Actions."""
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        yield from legacy
+        return
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            for channelbag in getattr(strip, "channelbags", ()):
+                yield from channelbag.fcurves
+
+
 # CMU/Bruce-Hahne BVH joint -> Quaternius Universal humanoid joint.
 # Fingers are deliberately omitted: mocap fingers are synthetic/noisy and the
 # game should preserve its authored fist/hand shape.
@@ -232,18 +245,26 @@ def _source_event_names(source: bpy.types.Object) -> dict:
 def _new_bvh_armature(scene: bpy.types.Scene, path: str) -> Tuple[bpy.types.Object, bpy.types.Action]:
     before_objects = {obj.name for obj in scene.objects}
     before_actions = {action.name for action in bpy.data.actions}
-    bpy.ops.import_anim.bvh(
-        filepath=str(Path(path).resolve()),
-        target="ARMATURE",
-        global_scale=1.0,
-        frame_start=1,
-        use_fps_scale=False,
-        update_scene_fps=False,
-        update_scene_duration=False,
-        rotate_mode="QUATERNION",
-        axis_forward="-Z",
-        axis_up="Y",
-    )
+    import_settings = {
+        "filepath": str(Path(path).resolve()),
+        "target": "ARMATURE",
+        "global_scale": 1.0,
+        "frame_start": 1,
+        "use_fps_scale": False,
+        "update_scene_fps": False,
+        "update_scene_duration": False,
+        "rotate_mode": "QUATERNION",
+        "axis_forward": "-Z",
+        "axis_up": "Y",
+    }
+    # Blender 5 removed the old BVH operator's target option, and future
+    # releases may adjust more optional properties. Keep every supported
+    # authored setting while allowing the importer to use its default for
+    # retired options; armature/Action postconditions below remain mandatory.
+    available = set(bpy.ops.import_anim.bvh.get_rna_type().properties.keys())
+    bpy.ops.import_anim.bvh(**{
+        name: value for name, value in import_settings.items() if name in available
+    })
     armatures = [obj for obj in scene.objects if obj.name not in before_objects and obj.type == "ARMATURE"]
     if not armatures:
         raise RuntimeError(f"BVH import did not create an armature: {path}")
@@ -560,7 +581,7 @@ def _anchor_support_foot(
     # Source time-warp samples subframes. Dense linear root interpolation avoids
     # Bezier overshoot reintroducing foot drift between the 60 Hz anchor samples.
     pelvis_path = 'pose.bones["pelvis"].location'
-    for curve in action.fcurves:
+    for curve in _action_fcurves(action):
         if curve.data_path == pelvis_path:
             for key in curve.keyframe_points:
                 key.interpolation = "LINEAR"
@@ -735,7 +756,7 @@ def build_mocap_prior(
             pb.keyframe_insert(data_path="rotation_quaternion", frame=dest_frame, group=pb.name)
             pb.keyframe_insert(data_path="scale", frame=dest_frame, group=pb.name)
 
-    for curve in action.fcurves:
+    for curve in _action_fcurves(action):
         for key in curve.keyframe_points:
             key.interpolation = "BEZIER"
             key.handle_left_type = "AUTO_CLAMPED"

@@ -66,6 +66,7 @@ import {
 } from "./tps-finish-flow";
 import {
   computeTpsCameraFraming,
+  tpsCameraAttackFamily,
   TPS_CAMERA_MAX_TRAVEL_SPEED,
   type TpsCameraFraming,
 } from "./tps-camera-profile";
@@ -1879,6 +1880,10 @@ export class TpsFightGame {
     const fightDistance = horizontalDistance(this.p1.position, this.p2.position);
     const attackMove = this.p1.state === "ATTACK" ? this.p1.currentMove : null;
     const attackMoveId = attackMove?.id ?? null;
+    // Expanded moves share a base animation family. Keep the actual move ID
+    // for HUD/telemetry, but frame the jab/kick silhouette as the same strike
+    // even when the chosen variant is named jabSnap or kickPivot.
+    const cameraMoveFamily = tpsCameraAttackFamily(attackMove);
 
     // Read the same deterministic 60 Hz contact envelope that drives authored
     // clip sampling instead of depending on presentation-only runtime telemetry.
@@ -1899,7 +1904,7 @@ export class TpsFightGame {
       flankWindowTicks: TPS_FLANK_WINDOW_TICKS,
       playerEvadeSign: this.playerEvadeSign,
       maxHitStop: Math.max(this.p1.hitStop, this.p2.hitStop),
-      attackMoveId,
+      attackMoveId: cameraMoveFamily,
       authoredContactWeight,
       dramaPhase: this.dramaPhase,
       dramaIntensity: this.dramaIntensity,

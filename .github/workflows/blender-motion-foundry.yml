@@ -275,34 +275,16 @@ jobs:
           npm run test:rules
           npm run lint
 
-      - name: Publish generated Foundry assets and integration to PR branch
+      # Generated motion assets are review artifacts on pull requests.
+      # Do not auto-commit/push from CI: parallel GitHub jobs can race with
+      # human/agent branch updates and reject non-fast-forward pushes.
+      # The following upload preserves all generated preview metrics.
+      - name: Validate generated Foundry previews without changing the PR
         if: github.event_name == 'pull_request'
-        shell: bash
         run: |
-          set -euo pipefail
-          if git diff --quiet --exit-code && [ -z "$(git status --porcelain)" ]; then
-            echo "Blender Motion Foundry branch is already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            public/models/quaternius/blender-fight-core.glb \
-            public/models/quaternius/blender-fight-core.metrics.json \
-            public/models/quaternius/blender-fight-core.generator.sha256 \
-            public/models/quaternius/blender-cross-core.glb \
-            public/models/quaternius/blender-cross-core.metrics.json \
-            public/models/quaternius/blender-cross-core.generator.sha256 \
-            public/models/quaternius/blender-strikes-core.glb \
-            public/models/quaternius/blender-strikes-core.metrics.json \
-            public/models/quaternius/blender-strikes-core.generator.sha256 \
-            src/game/visual-quaternius-runtime.ts \
-            src/game/model-viewer-motion.ts \
-            scripts/capture-model-view-audit.mjs \
-            tests/quaternius-model-skin.test.ts \
-            package.json
-          git commit -m "Generate shared Blender v2 strike actions"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          test -s public/models/quaternius/blender-fight-core.metrics.json
+          test -s public/models/quaternius/blender-cross-core.metrics.json
+          test -s public/models/quaternius/blender-strikes-core.metrics.json
 
       - uses: actions/upload-artifact@v4
         if: always()

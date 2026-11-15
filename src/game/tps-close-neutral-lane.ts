@@ -48,6 +48,45 @@ function smooth01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+const CLOSE_PUNCH_HANDOFF_MOVES = new Set(["jab", "straight", "bodyBlow"]);
+
+/**
+ * Preserve the outgoing neutral screen-lane only while a close punch commits
+ * its startup. The punch's own authored lane replaces it at contact; both
+ * are visual-only host offsets. Without this bridge the neutral lane vanishes
+ * instantly on ATTACK and the host (including planted boots) jumps sideways
+ * before the punch lane ramps in four ticks before impact.
+ *
+ * No carry is introduced when a new combo attack starts directly from an
+ * active/neutral-free pose, or for kicks/throws/finishers.
+ */
+export function tpsCloseNeutralPunchCarry(
+  moveId: string,
+  moveTick: number,
+  startupTicks: number,
+  hadNeutralLane: boolean,
+): number {
+  if (!hadNeutralLane || !CLOSE_PUNCH_HANDOFF_MOVES.has(moveId) || startupTicks <= 0) return 0;
+  return 1 - smooth01(moveTick / startupTicks);
+}
+
+function punchStartupLaneFactor(
+  fighter: FighterRuntime,
+  opponent: FighterRuntime,
+  hadNeutralLane: boolean,
+): number {
+  if (!hadNeutralLane) return 0;
+  for (const candidate of [fighter, opponent]) {
+    if (candidate.state !== "ATTACK" || !candidate.currentMove) continue;
+    const move = candidate.currentMove;
+    const factor = tpsCloseNeutralPunchCarry(
+      move.motionBase ?? move.id, candidate.moveTick, move.startup, true,
+    );
+    if (factor > 0) return factor;
+  }
+  return 0;
+}
+
 function enemyStartupLaneFactor(fighter: FighterRuntime, opponent: FighterRuntime): number {
   for (const candidate of [fighter, opponent]) {
     const root = candidate.visual.root;
@@ -86,6 +125,7 @@ function applyCloseNeutralLane(
   fighter: FighterRuntime,
   opponent: FighterRuntime,
   state: CloseNeutralLaneState,
+  hadNeutralLane: boolean,
 ): void {
   const root = fighter.visual.root;
   const opponentRoot = opponent.visual.root;
@@ -101,7 +141,10 @@ function applyCloseNeutralLane(
     && CLOSE_NEUTRAL_STATES.has(opponent.state)
     && !fighter.currentMove
     && !opponent.currentMove;
-  const startupHandoff = enemyStartupLaneFactor(fighter, opponent);
+  const startupHandoff = Math.max(
+    enemyStartupLaneFactor(fighter, opponent),
+    punchStartupLaneFactor(fighter, opponent, hadNeutralLane),
+  );
   if (!neutralEligible && startupHandoff <= 1e-4) return;
 
   const dx = opponent.position.x - fighter.position.x;
@@ -156,8 +199,12 @@ export function installTpsCloseNeutralLanePresentation(): void {
     timeSeconds: number,
   ): void {
     const state = ensureState(fighter);
+    const hadNeutralLane = state.positionX > 1e-4
+      && ["NEUTRAL", "ATTACK_HANDOFF"].includes(
+        String(fighter.visual.root.userData.tpsCloseNeutralLaneMode ?? ""),
+      );
     removeCloseNeutralLane(fighter, state);
     baseUpdate.call(this, fighter, opponent, timeSeconds);
-    applyCloseNeutralLane(fighter, opponent, state);
+    applyCloseNeutralLane(fighter, opponent, state, hadNeutralLane);
   };
 }

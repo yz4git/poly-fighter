@@ -326,6 +326,10 @@ try {
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       points: bonePoints(game.p1),
+      gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+      visualRootPosition: point(game.p1.visual.root),
+      importedHostPosition: point(host),
+      importedHostLocalX: host?.position?.x ?? null,
       visibleClip: host?.userData?.quaterniusCurrentClip ?? null,
       fistMeshCount,
       correctionsEnabled: game.p1.visual.root.userData.motionCorrectionsEnabled === true,
@@ -632,7 +636,900 @@ try {
     throw new Error(`RISING KICK is not visibly higher than front kick: ${JSON.stringify({ risingY, kickY })}`);
   }
 
+  // Sakurai 036/049/062/077: capture actual motion beats, not just a
+  // contact screenshot. Windup is sampled partway through STARTUP and
+  // followthrough well into RECOVERY; the old first/last boundary-only
+  // capture concealed almost all movement after the hit.
+  // These are source-authored poses at exact game ticks, not stepped hitboxes.
+  const sakuraiStoryboard = {};
+  for (const moveId of ["jab", "power", "risingKick"]) {
+    sakuraiStoryboard[moveId] = {};
+    for (const stage of ["startup", "contact", "overtravel", "followthrough"]) {
+      const frame = await execute(sessionId, `${gameLookup}${resetAndPose}
+        const [moveId, stage] = arguments;
+        const game = findGame();
+        resetFighter(game.p1);
+        resetFighter(game.p2);
+        resetTpsTransient(game);
+        game.finished = false;
+        game.input.clear();
+        game.p1.position.set(0, 0, 0.74);
+        game.p2.position.set(0, 0, -0.48);
+        game.p1.facing = 1;
+        game.p2.facing = -1;
+        let auditTime = performance.now() / 1000;
+        for (let settle = 0; settle < 10; settle += 1) {
+          auditTime += 1 / 60;
+          game.updateVisual(game.p1, game.p2, auditTime);
+          game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        }
+        // Report the outgoing close-neutral host lane so an apparent foot
+        // slide cannot be confused with an authored skeleton weight shift.
+        const beforeMove = {
+          p1Mode: game.p1.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          p1Lane: Number(game.p1.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          p1Factor: Number(game.p1.visual.root.userData.tpsCloseNeutralLane ?? 0),
+          p2Mode: game.p2.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          p2Lane: Number(game.p2.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          p1Residue: {
+            attack: Number(game.p1.visual.root.userData.tpsAttackAfterfeel ?? 0),
+            damage: Number(game.p1.visual.root.userData.tpsDamageAfterfeel ?? 0),
+            punish: Number(game.p1.visual.root.userData.tpsPunishReadyPose ?? 0),
+          },
+          p2Residue: {
+            attack: Number(game.p2.visual.root.userData.tpsAttackAfterfeel ?? 0),
+            damage: Number(game.p2.visual.root.userData.tpsDamageAfterfeel ?? 0),
+            punish: Number(game.p2.visual.root.userData.tpsPunishReadyPose ?? 0),
+          },
+        };
+        if (!game.p1.beginMove(moveId)) return { error: "move-not-found", moveId };
+        const move = game.p1.currentMove;
+        const tick = stage === "startup"
+          ? Math.max(1, Math.floor(move.startup * 0.45))
+          : stage === "contact" ? move.startup
+          : stage === "overtravel" ? move.startup + move.active - 1
+          : Math.min(move.startup + move.active + move.recovery - 1,
+            move.startup + move.active + Math.max(1, Math.round(move.recovery * 0.45)));
+        game.p1.moveTick = tick;
+        // Let imported-blender inertialization settle without advancing the
+        // gameplay tick. This makes each still measure its authored pose.
+        for (let settle = 0; settle < 10; settle += 1) {
+          auditTime += 1 / 60;
+          game.updateVisual(game.p1, game.p2, auditTime);
+          game.updateVisual(game.p2, game.p1, auditTime + 0.007);
+        }
+        game.updateCamera(1 / 60);
+        game.updateLockOn();
+        game.renderer.render(game.scene, game.camera);
+        const host = game.p1.visual.root.children.find((child) =>
+          child.name?.startsWith("quaternius-ubc-") && child.name?.endsWith("-runtime"));
+        return {
+          moveId, stage, tick,
+          clip: game.p1.visual.root.userData.combatMotionCurrentClip ?? null,
+          phase: host?.userData?.combatMotionSampledPhase ?? null,
+          timelineStage: host?.userData?.combatMotionTimelineStage ?? null,
+          points: bonePoints(game.p1),
+          gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+          visualRootPosition: point(game.p1.visual.root),
+          importedHostPosition: point(host),
+          importedHostLocalX: host?.position?.x ?? null,
+          beforeMove,
+          neutralLaneMode: game.p1.visual.root.userData.tpsCloseNeutralLaneMode ?? "UNSET",
+          neutralLaneX: Number(game.p1.visual.root.userData.tpsCloseNeutralLaneX ?? 0),
+          punchLaneX: Number(game.p1.visual.root.userData.tpsClosePunchLaneX ?? 0),
+          punchLaneFactor: Number(game.p1.visual.root.userData.tpsClosePunchLane ?? 0),
+          fighterState: game.p1.state,
+        };
+      `, [moveId, stage]);
+      if (frame?.error || !frame?.points?.head || !Number.isFinite(frame?.phase)
+          || !Number.isFinite(frame?.visualRootPosition?.x)
+          || !Number.isFinite(frame?.importedHostPosition?.x)
+          || frame.fighterState !== "ATTACK") {
+        throw new Error(`Sakurai storyboard pose missing for ${moveId}/${stage}: ${JSON.stringify(frame)}`);
+      }
+      sakuraiStoryboard[moveId][stage] = frame;
+      await screenshot(sessionId, `${outputDir}/tps-sakurai-${moveId.toLowerCase()}-${stage}.png`);
+    }
+    const frames = sakuraiStoryboard[moveId];
+    if (!(frames.startup.phase < frames.contact.phase
+        && frames.contact.phase <= frames.overtravel.phase
+        && frames.overtravel.phase + 0.045 < frames.followthrough.phase)
+        || frames.startup.timelineStage !== "STARTUP"
+        || frames.contact.timelineStage !== "ACTIVE"
+        || frames.overtravel.timelineStage !== "ACTIVE"
+        || frames.followthrough.timelineStage !== "RECOVERY") {
+      throw new Error(`Sakurai motion frames failed to show four distinct beats for ${moveId}: ${JSON.stringify(frames)}`);
+    }
+  }
+
+  // Distinguish real IK foot travel from a presentation-root translation.
+  // Do not classify every boot position change as an animation defect:
+  // a kick intentionally lifts the striking leg, while a jab should not.
+  const sakuraiRootAndFootTravel = Object.fromEntries(
+    Object.entries(sakuraiStoryboard).map(([moveId, stages]) => {
+      const rootTravel = distance(stages.startup.visualRootPosition, stages.contact.visualRootPosition);
+      const hostTravel = distance(stages.startup.importedHostPosition, stages.contact.importedHostPosition);
+      const footLTravel = distance(stages.startup.points.footL, stages.contact.points.footL);
+      const footRTravel = distance(stages.startup.points.footR, stages.contact.points.footR);
+      return [moveId, { rootTravel, hostTravel, footLTravel, footRTravel }];
+    }),
+  );
+  // The independent storyboard resets each pose, so it cannot measure
+  // the real standby-to-jab transition across continuous 60 Hz frames.
+  const neutralToJab = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.finished = false;
+    game.input.clear();
+    game.p1.position.set(0, 0, 0.74);
+    game.p2.position.set(0, 0, -0.48);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    let sampleTime = performance.now() / 1000;
+    const update = () => {
+      sampleTime += 1 / 60;
+      game.updateVisual(game.p1, game.p2, sampleTime);
+      game.updateVisual(game.p2, game.p1, sampleTime + 0.007);
+    };
+    for (let i = 0; i < 48; i += 1) update();
+    const sample = (label, tick) => {
+      const root = game.p1.visual.root;
+      const data = root.userData;
+      const host = root.children.find((child) =>
+        child.name?.startsWith("quaternius-ubc-") && child.name?.endsWith("-runtime"));
+      const bones = bonePoints(game.p1);
+      return {
+        label, tick, fighterState: game.p1.state,
+        gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+        root: point(root), host: point(host), hostLocalX: host?.position?.x ?? null,
+        footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+        leftHand: bones?.handL ?? null,
+        neutralMode: data.tpsCloseNeutralLaneMode ?? null,
+        neutralFactor: Number(data.tpsCloseNeutralLane ?? 0),
+        neutralX: Number(data.tpsCloseNeutralLaneX ?? 0),
+        punchFactor: Number(data.tpsClosePunchLane ?? 0),
+        punchLaneVersion: data.tpsClosePunchLaneVersion ?? null,
+        punchX: Number(data.tpsClosePunchLaneX ?? 0),
+        attackAfterfeel: Number(data.tpsAttackAfterfeel ?? 0),
+        footlockVersion: data.tpsPunchFootlockVersion ?? null,
+        footlockWeight: Number(data.tpsPunchFootlockWeight ?? 0),
+        footlockActive: data.tpsPunchFootlockActive === true,
+        leftFootImprovement: Number(data.tpsPunchFootlockLeftImprovement ?? 0),
+        rightFootImprovement: Number(data.tpsPunchFootlockRightImprovement ?? 0),
+      };
+    };
+    const idle = sample("idle", -1);
+    if (!game.p1.beginMove("jab")) return { error: "jab-begin-failed", idle };
+    const move = game.p1.currentMove;
+    const samples = [];
+    for (let tick = 0; tick < move.startup + move.active; tick += 1) {
+      game.p1.moveTick = tick;
+      update();
+      samples.push(sample("jab", tick));
+    }
+    game.updateCamera(1 / 60);
+    game.updateLockOn();
+    game.renderer.render(game.scene, game.camera);
+    const distance = (a, b) => a && b
+      ? Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) : NaN;
+    const first = samples[0];
+    const maxStep = (key) => Math.max(...samples.map((s, i) =>
+      distance(s[key], i === 0 ? idle[key] : samples[i - 1][key])));
+    return {
+      idle, samples, startupTicks: move.startup,
+      firstFrameHostTravel: distance(idle.host, first.host),
+      firstFrameFootLTravel: distance(idle.footL, first.footL),
+      firstFrameFootRTravel: distance(idle.footR, first.footR),
+      maxFootLStep: maxStep("footL"),
+      maxFootRStep: maxStep("footR"),
+      maxHostStep: maxStep("host"),
+      maxRootStep: maxStep("root"),
+      totalAnkleImprovement: samples.reduce((total, frame) =>
+        total + frame.leftFootImprovement + frame.rightFootImprovement, 0),
+      correctedTicks: samples.filter((frame) => frame.footlockActive).length,
+      atContact: samples[move.startup],
+      lastStartup: samples[move.startup - 1],
+    };
+  `);
+  if (neutralToJab?.error || !neutralToJab?.idle?.footL
+      || neutralToJab.idle.neutralMode !== "NEUTRAL"
+      || neutralToJab.idle.neutralFactor < 0.7
+      || neutralToJab.samples[0]?.neutralMode !== "ATTACK_HANDOFF"
+      || neutralToJab.samples[0]?.neutralFactor < 0.7
+      || !neutralToJab.samples.every((s) => Number.isFinite(s.hostLocalX)
+          && s.footL && s.footR && s.leftHand)) {
+    throw new Error(`Continuous neutral-to-jab lane missing: ${JSON.stringify(neutralToJab)}`);
+  }
+  // Guard the actually observed transition, not just the existence of a
+  // lane flag. A sudden imported-host translation shifts both planted feet
+  // even when the gameplay position and authored punch keys remain stable.
+  const continuousBudget = {
+    firstFrame: 0.06,
+    maximumPerTick: 0.16,
+  };
+  if (neutralToJab.firstFrameHostTravel > continuousBudget.firstFrame
+      || neutralToJab.firstFrameFootLTravel > continuousBudget.firstFrame
+      || neutralToJab.firstFrameFootRTravel > continuousBudget.firstFrame
+      || neutralToJab.maxHostStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxFootLStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxFootRStep > continuousBudget.maximumPerTick
+      || neutralToJab.maxRootStep > 1e-6) {
+    throw new Error(`Neutral-to-jab planted-foot continuity budget exceeded: ${JSON.stringify({ continuousBudget, neutralToJab })}`);
+  }
+  // The baseline rigid-host lane could pass the instant-jump check while
+  // both boots slid around 0.25 / 0.22 world units during five startup ticks.
+  // Assert the *measured* horizontal glide is smaller, not merely that an IK
+  // telemetry flag was enabled. This contract is intentionally jab-only.
+  const planarDisplacement = (from, to) =>
+    Math.hypot(to.x - from.x, to.z - from.z);
+  const maxPlantedGlide = (side) => Math.max(...neutralToJab.samples.map((frame) =>
+    planarDisplacement(neutralToJab.idle[side], frame[side])));
+  const visibleLeftGlide = maxPlantedGlide("footL");
+  const visibleRightGlide = maxPlantedGlide("footR");
+  const contactHandTravel = planarDisplacement(
+    neutralToJab.idle.leftHand, neutralToJab.atContact.leftHand);
+  const groundedPunchFootlockQuality = {
+    version: neutralToJab.samples[0].footlockVersion,
+    punchLaneVersion: neutralToJab.atContact.punchLaneVersion,
+    correctedTicks: neutralToJab.correctedTicks,
+    leftGlide: visibleLeftGlide,
+    rightGlide: visibleRightGlide,
+    strikeTravel: contactHandTravel,
+  };
+  if (groundedPunchFootlockQuality.version !== "CONTACT_FOOT_IK_V2"
+      || groundedPunchFootlockQuality.punchLaneVersion !== "SHOULDER_CONTACT_LANE_V3"
+      || groundedPunchFootlockQuality.correctedTicks < neutralToJab.startupTicks
+      || neutralToJab.totalAnkleImprovement < 0.45
+      || visibleLeftGlide > 0.045
+      || visibleRightGlide > 0.025
+      || neutralToJab.maxFootLStep > 0.022
+      || neutralToJab.maxFootRStep > 0.022
+      || neutralToJab.maxHostStep > 0.085
+      || contactHandTravel < 1.15) {
+    throw new Error(`Grounded jab foot IK did not reduce real screen-space foot skating: ${JSON.stringify({ groundedPunchFootlockQuality, neutralToJab })}`);
+  }
+  await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);
+  await writeFile(`${outputDir}/neutral-to-jab-continuity.json`,
+    JSON.stringify({ continuousBudget, groundedPunchFootlockQuality, neutralToJab }, null, 2));
+  // Exercise *actual* TPS hit-confirm/cancel routing rather than faking an
+  // ATTACK->ATTACK pose switch. Only the clean-hit flag is seeded: this audit
+  // deliberately isolates the animation handoff from damage and CPU timing.
+  // Both directions (neutral straight and BACK body blow), plus the whiff
+  // control, run from a 48-frame settled close stance at deterministic 60 Hz.
+  const confirmedComboHandoffs = {};
+  for (const spec of [
+    { label: "straight", branch: "NEUTRAL", expected: "straight", confirmed: true },
+    { label: "backfist", branch: "BACK", expected: "backfist", confirmed: true },
+    { label: "whiff", branch: "NEUTRAL", expected: null, confirmed: false },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0];
+      const game = findGame();
+      if (!game || typeof game.updatePlayer !== "function") {
+        return { error: "TPS updatePlayer missing" };
+      }
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, -0.48);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      game.p1.visual.root.userData.tpsCleanHitConfirmed = false;
+      game.p1.visual.root.userData.tpsComboLinkState = "NONE";
+      game.p1.visual.root.userData.tpsComboLinkFromMove = "";
+      game.__comboRoute = "CLOSE_A";
+      game.playerComboStage = 0;
+      game.playerComboGraceTicks = 0;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      game.__neutralMashAttackCount = 0;
+      let time = performance.now() / 1000;
+      const update = () => {
+        time += 1 / 60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i = 0; i < 48; i += 1) update();
+      const neutral = {
+        left: false, right: false, up: false, down: false,
+        punch: false, kick: false, guard: false,
+      };
+      const sample = (index) => {
+        const root = game.p1.visual.root;
+        const d = root.userData;
+        const host = root.children.find((node) =>
+          node.name?.startsWith("quaternius-ubc-") && node.name?.endsWith("-runtime"));
+        const bones = bonePoints(game.p1);
+        return {
+          index, moveId: game.p1.currentMove?.id ?? null,
+          moveBase: game.p1.currentMove?.motionBase ?? game.p1.currentMove?.id ?? null,
+          moveTick: game.p1.moveTick, moveStartup: game.p1.currentMove?.startup ?? null,
+          state: game.p1.state,
+          gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+          root: point(root), host: point(host), pelvis: bones?.pelvis ?? null,
+          footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+          handL: bones?.handL ?? null, handR: bones?.handR ?? null,
+          footlockActive: d.tpsPunchFootlockActive === true,
+          footlockWeight: Number(d.tpsPunchFootlockWeight ?? 0),
+          bridgeVersion: d.tpsComboLaneBridgeVersion ?? null,
+          bridgeFactor: Number(d.tpsComboLaneBridgeFactor ?? 0),
+          bridgeLocalX: Number(d.tpsComboLaneBridgeLocalX ?? 0),
+          bridgeLocalZ: Number(d.tpsComboLaneBridgeLocalZ ?? 0),
+          neutralFactor: Number(d.tpsCloseNeutralLane ?? 0),
+          neutralMode: d.tpsCloseNeutralLaneMode ?? "NONE",
+          punchFactor: Number(d.tpsClosePunchLane ?? 0),
+          comboLink: d.tpsComboLinkState ?? null,
+          comboLinkFrom: d.tpsComboLinkFromMove ?? null,
+          comboLinkTick: Number(d.tpsComboLinkTick ?? -1),
+        };
+      };
+      const idle = sample(-1);
+      if (!game.p1.beginMove("jab")) return { error: "jab-start-failed" };
+      game.__comboRoute = "CLOSE_A";
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      update();
+      const frames = [sample(0)];
+      const openingMove = game.p1.currentMove;
+      const queueTick = openingMove.startup + openingMove.active + 1;
+      const total = openingMove.startup + openingMove.active + openingMove.recovery;
+      let queued = false, linkedAt = -1, linkedMove = null, cleanWasSeeded = false;
+      for (let frame = 1; frame <= total + 25; frame += 1) {
+        const duringJab = game.p1.currentMove?.id === "jab";
+        if (duringJab && spec.confirmed && !cleanWasSeeded
+            && game.p1.moveTick >= openingMove.startup) {
+          // A known CLEAN hit at the authored ACTIVE frame permits the game's
+          // own cancellable input path. No direct animation state replacement.
+          game.p1.hitTargets.add(game.p2.id);
+          game.p1.visual.root.userData.tpsCleanHitConfirmed = true;
+          cleanWasSeeded = true;
+        }
+        const press = duringJab && !queued && game.p1.moveTick >= queueTick;
+        if (press) queued = true;
+        game.updatePlayer({
+          ...neutral, punch: press,
+          down: press && spec.branch === "BACK",
+        });
+        update();
+        const current = sample(frame);
+        frames.push(current);
+        if (linkedAt < 0 && current.moveId && current.moveId !== "jab") {
+          linkedAt = frames.length - 1;
+          linkedMove = current.moveId;
+        }
+        if (linkedAt >= 0 && frames.length - linkedAt > 10) break;
+        if (!spec.confirmed && !game.p1.currentMove) break;
+      }
+      game.updateCamera(1 / 60);
+      game.updateLockOn();
+      game.renderer.render(game.scene, game.camera);
+      const d2 = (a, b) => a && b
+        ? Math.hypot(a.x-b.x, a.z-b.z) : NaN;
+      const delta = (a, b, key) => d2(a[key], b[key]);
+      const from = linkedAt > 0 ? frames[linkedAt - 1] : null;
+      const to = linkedAt >= 0 ? frames[linkedAt] : null;
+      const next = linkedAt >= 0 ? frames.slice(linkedAt, linkedAt + 8) : [];
+      const maxStep = (key, entries) => entries.length >= 2
+        ? Math.max(...entries.slice(1).map((sample, i) => delta(sample, entries[i], key))) : null;
+      return {
+        spec, idle, queued, cleanWasSeeded, total, queueTick,
+        linkedAt, linkedMove, linkedBase: to?.moveBase ?? null,
+        beforeLink: from, afterLink: to,
+        atLinkStep: from && to ? {
+          footL: delta(from, to, "footL"),
+          footR: delta(from, to, "footR"),
+          pelvis: delta(from, to, "pelvis"),
+          handL: delta(from, to, "handL"),
+          handR: delta(from, to, "handR"),
+          host: delta(from, to, "host"),
+          root: delta(from, to, "root"),
+        } : null,
+        followupPeakStep: {
+          footL: maxStep("footL", next), footR: maxStep("footR", next),
+          pelvis: maxStep("pelvis", next), handL: maxStep("handL", next),
+          handR: maxStep("handR", next),
+        },
+        followupFootlockActiveTicks: next.filter((f) => f.footlockActive).length,
+        frames,
+      };
+    `, [spec]);
+    if (result?.error || !result?.queued || result?.cleanWasSeeded !== spec.confirmed
+        || !result?.frames?.every((frame) =>
+          Number.isFinite(frame?.footL?.x) && Number.isFinite(frame?.footR?.z)
+            && Number.isFinite(frame?.pelvis?.x) && Number.isFinite(frame?.handL?.z))) {
+      throw new Error(`Combo foot continuity telemetry missing for ${spec.label}: ${JSON.stringify(result)}`);
+    }
+    if (spec.confirmed) {
+      if (result.linkedBase !== spec.expected || result.linkedAt <= 0
+          || result.afterLink.comboLink !== "LINKED"
+          || result.afterLink.comboLinkFrom !== "jab"
+          || result.followupFootlockActiveTicks !== 0
+          || result.afterLink.footlockWeight !== 0
+          || result.afterLink.bridgeVersion !== "CONFIRMED_COMBO_HOST_CONTINUITY_V2"
+          || result.afterLink.bridgeFactor < 0.99
+          || result.atLinkStep.host > 0.04
+          || result.atLinkStep.footL > 0.18
+          || result.atLinkStep.footR > 0.14
+          || result.atLinkStep.pelvis > 0.20
+          || result.atLinkStep.root > 1e-6
+          || result.followupPeakStep.footL > 0.20
+          || result.followupPeakStep.footR > 0.20
+          || result.frames.some((frame) =>
+            frame.moveBase === spec.expected && frame.moveTick >= frame.moveStartup
+              && frame.bridgeFactor > 1e-4)) {
+        throw new Error(`Real confirmed ${spec.label} combo handoff lost or inherited planted jab anchors: ${JSON.stringify(result)}`);
+      }
+    } else if ((result.linkedAt >= 0 && result.linkedAt < result.total)
+        || result.frames.some((frame) => frame.comboLink === "LINKED"
+          && frame.comboLinkFrom === "jab")
+        || result.frames.some((frame) => frame.bridgeFactor > 0)) {
+      // A whiff may start another independent neutral attack after the jab's
+      // COMPLETE recovery. It must never receive the confirmed combo bridge.
+      throw new Error(`Whiff prematurely cancelled or inherited a clean-hit bridge: ${JSON.stringify(result)}`);
+    }
+    console.log("TPS_COMBO_CONTINUITY=" + JSON.stringify({
+      scenario: spec.label, queued: result.queued,
+      linkedAt: result.linkedAt, linkedBase: result.linkedBase,
+      firstTransition: result.atLinkStep,
+      bridgeFactor: result.afterLink?.bridgeFactor ?? 0,
+      followupPeakStep: result.followupPeakStep,
+      neutralAfterWhiff: !spec.confirmed && result.linkedAt >= result.total,
+    }));
+    confirmedComboHandoffs[spec.label] = result;
+    await screenshot(sessionId, `${outputDir}/tps-combo-${spec.label}-followup.png`);
+  }
+  await writeFile(`${outputDir}/tps-confirmed-combo-foot-continuity.json`,
+    JSON.stringify(confirmedComboHandoffs, null, 2));
+
+  // Phase 13: actual three-strike TPS buffered link routing at 60Hz. The
+  // previous two-move tests cannot catch a second transition that starts
+  // from a backfist or a cross's already-inertialized imported model.
+  // CLEAN is seeded at each ACTIVE frame to isolate model continuity from
+  // opponent damage, but ALL links/branches run through updatePlayer.
+  const tripleCombos = {};
+  for (const spec of [
+    { label: "close-a", route: "CLOSE_A", expected: ["jab", "straight", "power"] },
+    { label: "close-b", route: "CLOSE_B", expected: ["jab", "backfist", "power"] },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0];
+      const game = findGame();
+      if (!game || typeof game.updatePlayer !== "function") return { error: "no-TPS-updatePlayer" };
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, -0.48);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      const data = game.p1.visual.root.userData;
+      data.tpsCleanHitConfirmed = false;
+      data.tpsComboLinkState = "NONE";
+      data.tpsComboLinkFromMove = "";
+      game.__comboRoute = spec.route;
+      game.__comboRouteSeed = 0;
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      game.__neutralMashAttackCount = 0;
+      // A previous audit's neutral-mash phrase may survive resetRound.
+      // Reset the phrase so CLOSE_A/B test authored route continuity instead
+      // of selecting a legitimate but unrelated changing mash variation.
+      game.__neutralMashPhrase = -1;
+      game.__neutralMashLastBase = null;
+      game.__neutralMashLastOutcome = undefined;
+      let time = performance.now() / 1000;
+      const render = () => {
+        time += 1/60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i = 0; i < 48; i += 1) render();
+      const neutral = {
+        left: false, right: false, up: false, down: false,
+        punch: false, kick: false, guard: false,
+      };
+      if (!game.p1.beginMove("jab")) return { error: "three-hit-jab-not-started" };
+      render();
+      const sample = (tick) => {
+        const root = game.p1.visual.root;
+        const d = root.userData;
+        const host = root.children.find((node) =>
+          node.name?.startsWith("quaternius-ubc-") && node.name?.endsWith("-runtime"));
+        const bones = bonePoints(game.p1);
+        return {
+          tick, move: game.p1.currentMove?.id ?? null,
+          family: game.p1.currentMove?.motionBase ?? game.p1.currentMove?.id ?? null,
+          moveTick: game.p1.moveTick,
+          startup: game.p1.currentMove?.startup ?? 0,
+          state: game.p1.state,
+          host: point(host), root: point(root),
+          footL: bones?.footL ?? null, footR: bones?.footR ?? null,
+          pelvis: bones?.pelvis ?? null, handL: bones?.handL ?? null,
+          handR: bones?.handR ?? null,
+          comboLink: d.tpsComboLinkState ?? null,
+          linkFrom: d.tpsComboLinkFromMove ?? null,
+          linkSerial: Number(d.tpsComboLinkSerial ?? 0),
+          bridge: Number(d.tpsComboLaneBridgeFactor ?? 0),
+          bridgeFrom: d.tpsComboLaneBridgeSourceMove ?? null,
+          bridgeTo: d.tpsComboLaneBridgeTargetMove ?? null,
+          footlock: Number(d.tpsPunchFootlockWeight ?? 0),
+          gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
+        };
+      };
+      const samples = [sample(0)];
+      const movePhases = [];
+      const transitions = [];
+      let lastMove = "jab";
+      let lastMoveRef = game.p1.currentMove;
+      let queuedFor = new Set();
+      let seededFor = new Set();
+      const planar = (a,b) => a && b ? Math.hypot(a.x-b.x, a.z-b.z) : NaN;
+      for (let frame = 1; frame < 110; frame += 1) {
+        const move = game.p1.currentMove;
+        if (!move) break;
+        if (!seededFor.has(move.id) && game.p1.moveTick >= move.startup) {
+          game.p1.hitTargets.add(game.p2.id);
+          data.tpsCleanHitConfirmed = true;
+          seededFor.add(move.id);
+          movePhases.push({ type: "confirmed", move: move.id, tick: frame });
+        }
+        const pressed = !queuedFor.has(move.id) && game.p1.moveTick >= move.startup + move.active + 1
+          && queuedFor.size < 2;
+        if (pressed) {
+          queuedFor.add(move.id);
+          movePhases.push({ type: "queued", move: move.id, tick: frame });
+        }
+        game.updatePlayer({ ...neutral, punch: pressed });
+        render();
+        const current = sample(frame);
+        const previous = samples[samples.length - 1];
+        samples.push(current);
+        if (current.move && current.move !== lastMove) {
+          transitions.push({
+            from: lastMove, to: current.move, frame,
+            before: previous, after: current,
+            host: planar(previous.host, current.host),
+            footL: planar(previous.footL, current.footL),
+            footR: planar(previous.footR, current.footR),
+            pelvis: planar(previous.pelvis, current.pelvis),
+            handL: planar(previous.handL, current.handL),
+            handR: planar(previous.handR, current.handR),
+            gameplay: planar(previous.gamePosition, current.gamePosition),
+          });
+          lastMove = current.move;
+          lastMoveRef = game.p1.currentMove;
+          movePhases.push({type: "linked", move: current.move, tick: frame});
+        }
+        if (transitions.length === 2 && current.move === spec.expected[2]
+            && current.moveTick >= current.startup + 2) break;
+      }
+      game.updateCamera(1/60);
+      game.updateLockOn();
+      game.renderer.render(game.scene, game.camera);
+      const followups = transitions.map((t) => {
+        const frames = samples.filter((s) => s.tick >= t.frame && s.move === t.to);
+        return {
+          move: t.to,
+          frames: frames.length,
+          bridgeAtEntry: frames[0]?.bridge ?? 0,
+          bridgeAtContact: frames.find((s) => s.moveTick >= s.startup)?.bridge ?? null,
+          invalidFootlockTicks: frames.filter((s) => s.footlock > 0).length,
+          peakFootLStep: Math.max(0,...frames.slice(1).map((s,i) =>
+            planar(s.footL, frames[i].footL))),
+          peakFootRStep: Math.max(0,...frames.slice(1).map((s,i) =>
+            planar(s.footR, frames[i].footR))),
+        };
+      });
+      return { spec, transitions, followups, queued: [...queuedFor], seeded: [...seededFor],
+        movePhases, samples, lastMove, lastMoveStillValid: !!lastMoveRef };
+    `, [spec]);
+    if (result?.error || result?.transitions?.length !== 2
+        || result.transitions[0].from !== "jab"
+        || result.transitions[0].to !== spec.expected[1]
+        || result.transitions[1].from !== spec.expected[1]
+        || result.transitions[1].to !== spec.expected[2]
+        || result.followups?.length !== 2
+        || result.followups.some((stage) => stage.invalidFootlockTicks !== 0
+          || stage.bridgeAtContact !== 0)
+        || result.transitions.some((step) =>
+          step.host > 0.04 || step.gameplay > 1e-6
+            || step.footL > 0.28 || step.footR > 0.20
+            || step.pelvis > 0.23)
+        || result.followups.some((stage) => stage.bridgeAtEntry < 0.99)
+        || !result.transitions.every((t) =>
+          Number.isFinite(t.host) && Number.isFinite(t.footL)
+          && Number.isFinite(t.footR) && Number.isFinite(t.pelvis))) {
+      throw new Error(`Real three-hit combo route/foot telemetry failed: ${JSON.stringify(result)}`);
+    }
+    console.log("TPS_TRIPLE_COMBO=" + JSON.stringify({
+      route: spec.route,
+      transitions: result.transitions.map((t) => ({
+        from:t.from,to:t.to,host:t.host,footL:t.footL,footR:t.footR,
+        pelvis:t.pelvis,handL:t.handL,handR:t.handR,gameplay:t.gameplay,
+      })),
+      followups: result.followups,
+    }));
+    tripleCombos[spec.label] = result;
+    await screenshot(sessionId, `${outputDir}/tps-combo-triple-${spec.label}.png`);
+  }
+  await writeFile(`${outputDir}/tps-triple-combo-continuity.json`,
+    JSON.stringify(tripleCombos, null, 2));
+
+  // Phase 14: the earlier CLEAN hit markers isolated animation transitions.
+  // These cases instead use production strike geometry, health reduction,
+  // hitstop, reaction physics and actual TPS cancel routing. The opening jab
+  // starts in a settled stance and the CPU stays passive (training dummy).
+  // NO hitTargets or clean-hit flags are written after initialization.
+  const realHitCombos = {};
+  for (const spec of [
+    { label: "close-contact", distance: 1.08, guard: false, expectedHits: 3 },
+    { label: "guarded-contact", distance: 1.08, guard: true, expectedHits: 0 },
+    { label: "out-of-range", distance: 3.2, guard: false, expectedHits: 0 },
+  ]) {
+    const result = await execute(sessionId, `${gameLookup}${resetAndPose}
+      const spec = arguments[0], game = findGame();
+      if (!game || typeof game.resolveAttack !== "function"
+          || typeof game.updatePlayer !== "function") {
+        return { error: "missing-real-physics-or-strike-resolution" };
+      }
+      resetFighter(game.p1);
+      resetFighter(game.p2);
+      resetTpsTransient(game);
+      game.input.clear();
+      game.finished = false;
+      game.p1.position.set(0, 0, 0.74);
+      game.p2.position.set(0, 0, 0.74 - spec.distance);
+      game.p1.facing = 1;
+      game.p2.facing = -1;
+      if (spec.guard) game.p2.state = "GUARD";
+      const pdata = game.p1.visual.root.userData;
+      pdata.tpsCleanHitConfirmed = false;
+      pdata.tpsComboLinkState = "NONE";
+      pdata.tpsComboLinkFromMove = "";
+      game.__neutralMashPhrase = -1;
+      game.__neutralMashAttackCount = 0;
+      game.__neutralMashLastBase = null;
+      game.__neutralMashLastOutcome = undefined;
+      game.__comboRoute = "CLOSE_A";
+      game.__comboRouteSeed = 0;
+      game.playerComboStage = 1;
+      game.playerComboGraceTicks = 34;
+      game.__comboQueuedBranch = undefined;
+      game.__comboQueuedSideSign = undefined;
+      let time = performance.now()/1000;
+      const render = () => {
+        time += 1/60;
+        game.updateVisual(game.p1, game.p2, time);
+        game.updateVisual(game.p2, game.p1, time + 0.007);
+      };
+      for (let i=0;i<48;i++) render();
+      if (!game.p1.beginMove("jab")) return {error:"jab-not-started"};
+      render();
+      const neutral = { left:false,right:false,up:false,down:false,
+        punch:false,kick:false,guard:false };
+      const hits = [], blocks = [], moves = [{frame:0,move:"jab"}], links = [];
+      let lastMove = "jab";
+      let hitMoveId = null;
+      let queuedFor = new Set();
+      let maxAttackTick = 0, unexpectedClean = false;
+      for (let frame=1;frame<130;frame++) {
+        const moveBefore = game.p1.currentMove;
+        if (!moveBefore && frame > 2) break;
+        const hitLastTick = moveBefore && game.p1.hitTargets.has(game.p2.id);
+        const press = !!moveBefore && !!hitLastTick
+          && game.p1.moveTick >= moveBefore.startup+moveBefore.active+1
+          && !queuedFor.has(moveBefore.id) && queuedFor.size < 2;
+        if (press) queuedFor.add(moveBefore.id);
+        const oldHealth = game.p2.health;
+        const oldGuardDamage = game.p2.guardDamage;
+        game.updatePlayer({...neutral,punch:press});
+        game.p2.updatePhysics(1/60);
+        // Full production engine's geometry, blocking and damage handling.
+        game.resolveAttack(game.p1,game.p2,game.p2.state === "GUARD");
+        if (game.p2.guardDamage > oldGuardDamage) {
+          blocks.push({frame,move:moveBefore?.id ?? null,
+            guardDamage:game.p2.guardDamage-oldGuardDamage,
+            defenderHitStop:game.p2.hitStop,
+            clean:pdata.tpsCleanHitConfirmed === true,
+            hitTargets:game.p1.hitTargets.has(game.p2.id)});
+        }
+        const current = game.p1.currentMove;
+        if (current && current.id !== lastMove) {
+          moves.push({frame,move:current.id});
+          links.push({
+            frame,from:lastMove,to:current.id,
+            comboLink:pdata.tpsComboLinkState ?? null,
+            fromMove:pdata.tpsComboLinkFromMove ?? null,
+          });
+          lastMove = current.id;
+        }
+        if (game.p2.health < oldHealth) {
+          hits.push({
+            frame,move:game.p1.currentMove?.id ?? moveBefore?.id ?? null,
+            playerTick:game.p1.moveTick,damage:oldHealth-game.p2.health,
+            enemyHealth:game.p2.health,
+            contact:pdata.tpsStrikeContact === true,
+            clean:pdata.tpsCleanHitConfirmed === true,
+            committedRange:pdata.tpsStrikeReach ?? null,
+            hitTargets:game.p1.hitTargets.has(game.p2.id),
+            attackerHitStop:game.p1.hitStop,
+            defenderHitStop:game.p2.hitStop,
+            enemyState:game.p2.state,
+            enemyDistance:Math.hypot(game.p1.position.x-game.p2.position.x,
+              game.p1.position.z-game.p2.position.z),
+          });
+          hitMoveId = current?.id ?? moveBefore?.id ?? null;
+        }
+        if (!game.p1.hitTargets.has(game.p2.id)
+            && pdata.tpsCleanHitConfirmed === true && !hits.some(h=>h.move===current?.id)) {
+          unexpectedClean = true;
+        }
+        if (current) maxAttackTick = Math.max(maxAttackTick,game.p1.moveTick);
+        render();
+        if (game.p2.health <= 0) break;
+        // The guarded control concerns the first jab and its entire
+        // cancellable window, not an unrelated second neutral strike after
+        // recovery. The guard dummy is allowed to return to IDLE after block.
+        if (spec.guard && current?.id === "jab" && game.p1.moveTick >=
+            current.startup + current.active + current.recovery - 2) break;
+        if (hits.length >= 3 && current && game.p1.moveTick >= current.startup + 2) break;
+      }
+      game.updateCamera(1/60);
+      game.updateLockOn();
+      game.renderer.render(game.scene,game.camera);
+      return {spec,hits,blocks,moves,links,
+        enemyFinalHealth:game.p2.health,enemyGuardDamage:game.p2.guardDamage,
+        enemyFinalState:game.p2.state,enemyPosition:{
+          x:game.p2.position.x,y:game.p2.position.y,z:game.p2.position.z,
+        },queued:[...queuedFor],maxAttackTick,unexpectedClean,
+        root:point(game.p1.visual.root),hitMoveId,
+        clean:pdata.tpsCleanHitConfirmed===true};
+    `, [spec]);
+    if (result?.error || !Array.isArray(result.hits)
+        || !Number.isFinite(result.enemyFinalHealth)
+        || result.unexpectedClean
+        || (spec.label === "close-contact" && (
+          result.hits.map((hit) => hit.move).join(",") !== "jab,straight,power"
+          || result.hits.length !== 3 || result.links.length !== 2
+          || result.links.some((link) => link.comboLink !== "LINKED")
+          || result.hits.some((hit) => !hit.clean || !hit.hitTargets
+            || !hit.contact || hit.damage <= 0 || hit.defenderHitStop <= 0)
+          || result.enemyFinalHealth > 70
+        ))
+        || (spec.label === "guarded-contact" && (
+          result.hits.length !== 0 || result.blocks.length < 1
+          || result.blocks.some((block) => block.clean || !block.hitTargets)
+          || result.links.some((link) => link.comboLink === "LINKED")
+          || result.enemyFinalHealth !== 100 || result.enemyGuardDamage <= 0
+        ))
+        || (spec.label === "out-of-range" && (
+          result.hits.length !== 0 || result.blocks.length !== 0
+          || result.links.length !== 0 || result.enemyFinalHealth !== 100
+        ))) {
+      throw new Error(`Real strike/guard/whiff combat contract failed ${spec.label}: ${JSON.stringify(result)}`);
+    }
+    console.log("TPS_REAL_CONTACT=" + JSON.stringify(result));
+    realHitCombos[spec.label] = result;
+    await screenshot(sessionId,`${outputDir}/tps-real-contact-${spec.label}.png`);
+  }
+  await writeFile(`${outputDir}/tps-real-contact-combos.json`,
+    JSON.stringify(realHitCombos, null, 2));
+  // Phase 15: active real CPU exchange (not a passive/dummy attack audit).
+  // Drive the actual fixed-step combat loop with neutral player input; the
+  // original CPU director, windup, movement, attack geometry and guard logic
+  // all run. Never seed hitTargets/CLEAN, force attack state or fake damage.
+  const liveCpuExchange = await execute(sessionId, `${gameLookup}${resetAndPose}
+    const game = findGame();
+    if (!game || typeof game.step !== "function") return {error:"missing-real-game-step"};
+    const frozenCpu = game.updateEnemy;
+    // The earlier storyboard intentionally installed a passive CPU override.
+    // Remove only that instance override to restore production prototype AI.
+    if (!Object.prototype.hasOwnProperty.call(game,"updateEnemy"))
+      return {error:"passive-cpu-override-missing"};
+    delete game.updateEnemy;
+    const activeCpu = game.updateEnemy;
+    if (typeof activeCpu !== "function" || activeCpu === frozenCpu)
+      return {error:"production-cpu-not-restored"};
+    resetFighter(game.p1);
+    resetFighter(game.p2);
+    resetTpsTransient(game);
+    game.input.clear();
+    game.finished = false;
+    game.paused = false;
+    game.finishPending = false;
+    game.enemyOpeningGraceTicks = 0;
+    game.enemyCooldown = 0;
+    game.p1.position.set(0,0,0.74);
+    game.p2.position.set(0,0,-0.76);
+    game.p1.facing = 1;
+    game.p2.facing = -1;
+    let cpuUpdates = 0;
+    game.updateEnemy = function() {
+      cpuUpdates += 1;
+      return activeCpu.call(this);
+    };
+    const attacks=[], intents=new Set(), samples=[];
+    const initialHealth=game.p1.health;
+    let lastMove=null, lastEnemyPosition=game.p2.position.clone();
+    let maxCpuRootStep=0, invalidPosition=false, unconfirmedDamage=0;
+    let firstAttackFrame=null, lastHealth=game.p1.health;
+    const totalFrames=360;
+    for (let frame=1;frame<=totalFrames;frame++) {
+      // This is the production tick: includes real input, both fighter
+      // physics, CPU decisions, resolveAttack in both directions, and visuals.
+      game.step();
+      const p1=game.p1, p2=game.p2;
+      const intent=p2.visual.root.userData.tpsCpuDirectorIntent;
+      if (typeof intent === "string") intents.add(intent);
+      const moveId=p2.currentMove?.id ?? null;
+      if (p2.state === "ATTACK" && moveId && (moveId !== lastMove ||
+          p2.moveTick === 0)) {
+        attacks.push({frame,move:moveId,tick:p2.moveTick});
+        if (firstAttackFrame === null) firstAttackFrame=frame;
+      }
+      lastMove=moveId;
+      const distance=p2.position.distanceTo(lastEnemyPosition);
+      maxCpuRootStep=Math.max(maxCpuRootStep,distance);
+      lastEnemyPosition.copy(p2.position);
+      for (const fighter of [p1,p2]) {
+        if (![fighter.position.x,fighter.position.y,fighter.position.z,
+              fighter.health,fighter.hitStop].every(Number.isFinite))
+          invalidPosition=true;
+      }
+      if (p1.health < lastHealth && !p2.hitTargets.has(p1.id))
+        unconfirmedDamage += lastHealth-p1.health;
+      lastHealth=p1.health;
+      if (frame % 30 === 0 || frame === 1) {
+        samples.push({frame,enemyState:p2.state,enemyMove:moveId,
+          enemyIntent:intent ?? null,playerHealth:p1.health,
+          enemyHealth:p2.health,cpuX:p2.position.x,cpuZ:p2.position.z,
+          separation:Math.hypot(p1.position.x-p2.position.x,
+            p1.position.z-p2.position.z)});
+      }
+      if (game.finished || game.finishPending) break;
+    }
+    game.updateEnemy=frozenCpu;
+    game.updateCamera(1/60);
+    game.updateLockOn();
+    game.renderer.render(game.scene,game.camera);
+    return {frames:game.simulationTicks,cpuUpdates,attacks,firstAttackFrame,
+      intents:[...intents],samples,initialHealth,finalHealth:game.p1.health,
+      maxCpuRootStep,invalidPosition,unconfirmedDamage,
+      productionCpuRestored:activeCpu!==frozenCpu};
+  `);
+  if (liveCpuExchange?.error || !liveCpuExchange?.productionCpuRestored
+      || liveCpuExchange.cpuUpdates < 180
+      || liveCpuExchange.invalidPosition
+      || liveCpuExchange.unconfirmedDamage > 0
+      || !Number.isFinite(liveCpuExchange.maxCpuRootStep)
+      || liveCpuExchange.maxCpuRootStep > 0.35
+      || !Array.isArray(liveCpuExchange.attacks)
+      || liveCpuExchange.attacks.length === 0
+      || !Array.isArray(liveCpuExchange.samples)
+      || liveCpuExchange.samples.length < 4) {
+    throw new Error(`Live CPU combat contract failed: ${JSON.stringify(liveCpuExchange)}`);
+  }
+  console.log("TPS_LIVE_CPU_EXCHANGE="+JSON.stringify(liveCpuExchange));
+  await screenshot(sessionId,`${outputDir}/tps-live-cpu-exchange.png`);
+  await writeFile(`${outputDir}/tps-live-cpu-exchange.json`,
+    JSON.stringify(liveCpuExchange,null,2));
   const diagnostics = {
+    neutralToJab,
+    confirmedComboHandoffs,
+    tripleCombos,
+    realHitCombos,
+    liveCpuExchange,
+    sakuraiRootAndFootTravel,
+    sakuraiStoryboard,
     preload,
     neutral,
     allMovesActive: Object.values(results).every((result) => result.activeReached === true),

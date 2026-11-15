@@ -103,6 +103,7 @@ try {
     capabilities: {
       alwaysMatch: {
         browserName: "chrome",
+        "goog:loggingPrefs": { browser: "ALL" },
         "goog:chromeOptions": {
           args: [
             "--headless=new",
@@ -118,6 +119,24 @@ try {
   sessionId = session.sessionId;
   await navigateHome(sessionId);
   await mkdir(outputDir, { recursive: true });
+  // Capture the real browser exception if the iPhone landscape smoke test
+  // encounters a WebGL/animation startup failure under headless CI.
+  // Merely seeing a canvas is not proof the animation frame loop survived.
+  await execute(sessionId, `
+    window.__polyAuditErrors = [];
+    window.addEventListener("error", (event) => {
+      window.__polyAuditErrors.push(String(event.message) + "\\n" + String(event.error?.stack ?? ""));
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      window.__polyAuditErrors.push("rejection: " + String(event.reason?.stack ?? event.reason));
+    });
+    const priorError = console.error.bind(console);
+    console.error = (...args) => {
+      window.__polyAuditErrors.push(args.map((v) => String(v?.stack ?? v)).join(" "));
+      priorError(...args);
+    };
+    return true;
+  `);
 
   const title = await execute(sessionId, `
     const labels = [...document.querySelectorAll('button')].map((entry) => entry.textContent ?? '');
@@ -279,7 +298,20 @@ try {
     && !circuitMatch.fallback
     && withinViewport(circuitMatch.attack, circuitMatch.width, circuitMatch.height)
     && withinViewport(circuitMatch.step, circuitMatch.width, circuitMatch.height);
-  if (!circuitMatchPass) throw new Error(`Rival Circuit runtime audit failed: ${JSON.stringify(circuitMatch)}`);
+  if (!circuitMatchPass) {
+    const details = await execute(sessionId, `
+      return {
+        fallbackPanel: document.querySelector(".fallback-panel")?.innerText ?? null,
+        browserExceptions: window.__polyAuditErrors ?? [],
+      };
+    `).catch((error) => ({ captureError: String(error) }));
+    const logs = await command(`/session/${sessionId}/log`, "POST", { type: "browser" })
+      .catch((error) => [{ level: "LOG_UNAVAILABLE", message: String(error) }]);
+    await writeFile(`${outputDir}/tps-fallback-diagnostic.json`,
+      JSON.stringify({ circuitMatch, details, browserLogs: logs }, null, 2));
+    await screenshot(sessionId, `${outputDir}/tps-fallback-diagnostic.png`).catch(() => undefined);
+    throw new Error(`Rival Circuit runtime audit failed: ${JSON.stringify({ circuitMatch, details, logs })}`);
+  }
   await screenshot(sessionId, `${outputDir}/rival-circuit-pressure-match-iphone.png`);
 
   await navigateHome(sessionId);

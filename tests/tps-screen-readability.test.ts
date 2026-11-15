@@ -56,7 +56,7 @@ test("camera escalation occurs only at close range after an earned linked combo"
 
 
 test("near-contact punch silhouette uses bounded and distinct lead/rear screen lanes", () => {
-  assert.equal(TPS_CLOSE_PUNCH_LANE_VERSION, "SHOULDER_CONTACT_LANE_V2");
+  assert.equal(TPS_CLOSE_PUNCH_LANE_VERSION, "SHOULDER_CONTACT_LANE_V3");
   const jab = tpsClosePunchProfile("jab");
   const cross = tpsClosePunchProfile("straight");
   const low = tpsClosePunchProfile("bodyBlow");

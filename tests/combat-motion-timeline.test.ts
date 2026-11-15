@@ -79,3 +79,108 @@ test("kick and punch attacks use the exact same phase contract", () => {
     assert.equal(sampleCombatMotionTimeline(move, move.startup, clip).stage, "ACTIVE");
   }
 });
+
+test("sakurai-style punch windup appears immediately without moving the gameplay contact frame", () => {
+  const light = FIGHTER_DEFINITIONS.red.moves.jab;
+  const heavy = FIGHTER_DEFINITIONS.red.moves.power;
+  const lightClip = "BF_Jab_L";
+  const heavyClip = "BF_Power_R";
+  const firstJab = sampleCombatMotionTimeline(light, 0, lightClip);
+  const firstPower = sampleCombatMotionTimeline(heavy, 0, heavyClip);
+  assert.equal(firstJab.phase, 0, "fast jab begins at its original authored pose");
+  assert.ok(firstPower.phase > 0.04, "slow heavy punch immediately assumes a readable windup silhouette");
+  assert.ok(firstPower.phase < authoredMotionEvents(heavyClip).contact * 0.13,
+    "anticipation must not skip the whole committed startup");
+  for (const [move, clip] of [[light, lightClip], [heavy, heavyClip]] as const) {
+    const firstActive = sampleCombatMotionTimeline(move, move.startup, clip);
+    assert.equal(firstActive.stage, "ACTIVE");
+    assert.equal(firstActive.phase, authoredMotionEvents(clip).contact,
+      "the hitbox's first active tick remains the EXACT strike-contact pose");
+  }
+});
+
+test("heavy attack swing visibly overtravels and holds its end pose before recovery", () => {
+  const heavy = FIGHTER_DEFINITIONS.red.moves.power;
+  const jab = FIGHTER_DEFINITIONS.red.moves.jab;
+  const heavyEvent = authoredMotionEvents("BF_Power_R");
+  const jabEvent = authoredMotionEvents("BF_Jab_L");
+  assert.ok(heavyEvent.contactExit - heavyEvent.contact > jabEvent.contactExit - jabEvent.contact,
+    "power strike receives more authored follow-through travel than a jab");
+  const heavyLastActive = sampleCombatMotionTimeline(heavy,
+    heavy.startup + heavy.active - 1, "BF_Power_R");
+  assert.equal(heavyLastActive.phase, heavyEvent.contactExit);
+  assert.equal(heavyLastActive.contactWeight, 1);
+  const earlyRecovery = sampleCombatMotionTimeline(heavy,
+    heavy.startup + heavy.active, "BF_Power_R");
+  assert.equal(earlyRecovery.stage, "RECOVERY");
+  assert.equal(earlyRecovery.phase, heavyEvent.contactExit,
+    "the first recovery frame preserves the fully extended follow-through");
+  const midway = sampleCombatMotionTimeline(heavy,
+    heavy.startup + heavy.active + heavy.recovery * 0.5, "BF_Power_R");
+  assert.ok(midway.phase > heavyEvent.contactExit && midway.phase < 1);
+  const final = sampleCombatMotionTimeline(heavy,
+    heavy.startup + heavy.active + heavy.recovery - 1, "BF_Power_R");
+  assert.equal(final.phase, 1, "authored stance returns by the original recovery end");
+});
+
+test("expanded punch and kick variants inherit their motion family silhouette beats", () => {
+  for (const [id, clip] of [["power", "BF_Power_R"], ["risingKick", "BF_RisingKick_R"],
+    ["straight", "BF_Cross_R"]] as const) {
+    const move = FIGHTER_DEFINITIONS.red.moves[id];
+    const derived = expandedClipName(clip, "SNAP");
+    const first = sampleCombatMotionTimeline(move, 0, derived);
+    const event = authoredMotionEvents(clip);
+    assert.ok(first.phase > 0);
+    assert.deepEqual(authoredMotionEvents(derived), event);
+    assert.equal(sampleCombatMotionTimeline(move, move.startup, derived).phase, event.contact);
+  }
+});
+
+test("the shipped video-reference and range clips receive the same authored beat identity", () => {
+  const cases = [
+    ["CM_Video_Jab", "LIGHT"],
+    ["CM_Video_Palm", "PUNCH"],
+    ["CM_Video_SideKick", "KICK"],
+    ["CM_Video_SpinKick", "HEAVY"],
+    ["CM_Range_rangeBlitz", "PUNCH"],
+    ["CM_Range_rangeCrescent", "KICK"],
+    ["CM_Range_rangeComet", "HEAVY"],
+  ] as const;
+  for (const [clip, family] of cases) {
+    const event = authoredMotionEvents(clip);
+    assert.equal(event.contact, 0.5);
+    assert.ok(event.contactExit >= event.contact);
+    if (family === "LIGHT") {
+      assert.equal(event.anticipation, 0);
+      assert.equal(event.followHold, 0);
+    } else {
+      assert.ok(event.anticipation > 0, clip);
+      assert.ok(event.followHold > 0, clip);
+    }
+  }
+  assert.ok(authoredMotionEvents("CM_Video_SpinKick").contactExit >
+    authoredMotionEvents("CM_Video_Jab").contactExit);
+});
+
+test("motion storyboards sample actual windup and recovery, not duplicate boundary poses", () => {
+  for (const [moveId, clip] of [
+    ["jab", "CM_Video_Jab"],
+    ["power", "BF_Power_R"],
+    ["risingKick", "CM_Video_SpinKick"],
+  ] as const) {
+    const move = FIGHTER_DEFINITIONS.red.moves[moveId];
+    const windupTick = Math.max(1, Math.floor(move.startup * 0.45));
+    const contactTick = move.startup;
+    const overtravelTick = move.startup + move.active - 1;
+    const releaseTick = Math.min(move.startup + move.active + move.recovery - 1,
+      move.startup + move.active + Math.max(1, Math.round(move.recovery * 0.45)));
+    const samples = [windupTick, contactTick, overtravelTick, releaseTick]
+      .map((tick) => sampleCombatMotionTimeline(move, tick, clip));
+    assert.deepEqual(samples.map((s) => s.stage),
+      ["STARTUP", "ACTIVE", "ACTIVE", "RECOVERY"], moveId);
+    assert.ok(samples[0].phase < samples[1].phase, moveId + ": windup actually precedes contact");
+    assert.ok(samples[1].phase <= samples[2].phase, moveId + ": overtravel never rewinds");
+    assert.ok(samples[2].phase + 0.045 < samples[3].phase,
+      moveId + ": follow-through snapshot must show the real recovery arc");
+  }
+});

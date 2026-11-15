@@ -13,6 +13,13 @@ function replaceOnce(source, before, after, label) {
 }
 
 await patch("src/game/visual-quaternius-runtime.ts", (input) => {
+  // This installer predates the production reaction/motion-handoff rewrite.
+  // On already integrated runtimes, do not downgrade the authored CM_Block,
+  // selective head reactions, hitstop, or Kinodo transition planner just to
+  // satisfy obsolete exact-text patches. Verify the required assets instead.
+  if (input.includes("QUATERNIUS_BLENDER_REACTIONS_URL")
+      && input.includes("blenderReactionClips")
+      && input.includes("quaterniusDirectionalReactionMotionSource")) return input;
   let source = input;
   source = replaceOnce(
     source,
@@ -143,6 +150,10 @@ await patch("src/game/model-viewer-motion.ts", (input) => {
 });
 
 await patch("scripts/capture-model-view-audit.mjs", (input) => {
+  // A current model-view audit already covers directional reaction assets.
+  if (input.includes("hasBlenderHitHeavy")
+      && input.includes("hasBlenderGuardBreak")
+      && input.includes("model-view-motion-blender-guard-break.png")) return input;
   let source = input;
   source = replaceOnce(
     source,

@@ -105,6 +105,9 @@ jobs:
             echo "ChromeDriver is not available"
             exit 1
           fi
+          # Capture the new authored-frame storyboard first: unrelated circuit smoke
+          # tests must not prevent inspecting the actual combat pose regression.
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-entry-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-rival-circuit-apex-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-rival-circuit-finish-audit.mjs
@@ -115,7 +118,6 @@ jobs:
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-counterattack-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-block-punish-handoff-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-tps-attack-action-handoff-audit.mjs
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-readability-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/capture-motion-intent-audit.mjs
           WEBDRIVER_BIN="$DRIVER" AUDIT_URL="http://127.0.0.1:3000/" TPS_AUDIT_DIR="artifacts/tps-visual-audit" node scripts/touch-input-safety-audit.mjs
           for image in \
@@ -142,6 +144,45 @@ jobs:
           test -s artifacts/tps-visual-audit/tps-counterattack-handoff.json
           test -s artifacts/tps-visual-audit/tps-block-punish-handoff.json
           test -s artifacts/tps-visual-audit/tps-attack-action-handoff.json
+          # Fixed-camera motion storyboard: startup/contact/overtravel/follow-through.
+          for move in jab power risingkick; do
+            for frame in startup contact overtravel followthrough; do
+              test -s "artifacts/tps-visual-audit/tps-sakurai-${move}-${frame}.png"
+              file "artifacts/tps-visual-audit/tps-sakurai-${move}-${frame}.png" | grep -q "PNG image data"
+            done
+          done
+          # Continuous 60 Hz standby-to-jab handoff: actual planted feet and
+          # Quaternius host motion, not the separate static storyboard samples.
+          test -s artifacts/tps-visual-audit/neutral-to-jab-continuity.json
+          test -s artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png
+          file artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png | grep -q "PNG image data"
+          # Actual clean-hit jab->straight / jab->backfist link versus whiff.
+          # The WebGL script inspects live ankle/pelvis/hand motion and prevents
+          # the original idle foot-lock from leaking into linked attacks.
+          test -s artifacts/tps-visual-audit/tps-confirmed-combo-foot-continuity.json
+          for branch in straight backfist whiff; do
+            test -s "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png"
+            file "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png" | grep -q "PNG image data"
+          done
+          # Three-hit clean-confirmed routes: CROSS and BACKFIST each proceed
+          # into the actual stage-three authored strike, with no foot IK leak.
+          test -s artifacts/tps-visual-audit/tps-triple-combo-continuity.json
+          for route in close-a close-b; do
+            test -s "artifacts/tps-visual-audit/tps-combo-triple-${route}.png"
+            file "artifacts/tps-visual-audit/tps-combo-triple-${route}.png" | grep -q "PNG image data"
+          done
+          # Real production hit geometry and health updates, without synthetic
+          # CLEAN or hitTargets seeding; passive dummy vs a range whiff.
+          test -s artifacts/tps-visual-audit/tps-real-contact-combos.json
+          for scenario in close-contact guarded-contact out-of-range; do
+            test -s "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png"
+            file "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png" | grep -q "PNG image data"
+          done
+          # Full production 60Hz step with active rival CPU; neither fighter
+          # receives synthetic hit flags or forced attack/health outcomes.
+          test -s artifacts/tps-visual-audit/tps-live-cpu-exchange.json
+          test -s artifacts/tps-visual-audit/tps-live-cpu-exchange.png
+          file artifacts/tps-visual-audit/tps-live-cpu-exchange.png | grep -q "PNG image data"
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

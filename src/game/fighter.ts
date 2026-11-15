@@ -144,6 +144,11 @@ export class FighterRuntime {
     this.currentMove = move;
     this.moveTick = 0;
     this.hitTargets.clear();
+    // TPS combo confirmation is per-attack, not a persistent fighter status.
+    // Reset the presentation/confirmation bits with the authoritative contact
+    // set so a linked move never appears "clean" before its own first hit.
+    this.visual.root.userData.tpsCleanHitConfirmed = false;
+    this.visual.root.userData.tpsStrikeContact = false;
     this.velocity.x *= 0.2;
     this.state = "ATTACK";
     return true;
@@ -279,6 +284,8 @@ export class FighterRuntime {
     this.currentMove = null;
     this.moveTick = 0;
     this.hitTargets.clear();
+    this.visual.root.userData.tpsCleanHitConfirmed = false;
+    this.visual.root.userData.tpsStrikeContact = false;
     this.input = cloneInput(EMPTY_INPUT);
     this.previousInput = cloneInput(EMPTY_INPUT);
     this.inputBuffer.clear();

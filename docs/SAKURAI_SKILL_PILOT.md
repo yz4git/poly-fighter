@@ -116,3 +116,49 @@ post-IK browser audit requires planted-foot drift to remain below bounded
 thresholds and the striking-hand reach to remain at least 1.1 world units.
 The next release gate remains a real iPhone Safari 60 fps play session,
 because a fixed-camera CI pose cannot rule out all visual ankle pops.
+
+## Phase 11: overlap the jab stance and strike lanes instead of increasing IK
+
+**Measured bottleneck:** Phase 10's CONTACT_FOOT_IK_V2 left only
+0.06871 world units of lead boot drift, but the worst displacement remained
+at jab startup ticks 3-4. The close-neutral screen lane was releasing faster
+than the close-punch silhouette lane was entering. Both move the entire imported
+visual host, forcing the planted boot IK to absorb an avoidable transient.
+
+**Change:** in `tps-close-punch-lane.ts`, `SHOULDER_CONTACT_LANE_V3`
+begins loading the **jab only** one startup tick earlier (at startup - 5
+instead of startup - 4). It still begins at zero, reaches contact via the
+same eased smoothstep and leaves the cross/body-blow timing untouched.
+No more ankle reach, no extra pelvis translation, no game physics changes.
+
+**Actual continuous 60 Hz TPS WebGL evidence:**
+[previous V2 / run 43663250347](https://github.com/yz4git/poly-fighter/actions/runs/43663250347/artifacts/14140418802)
+versus
+[V3 / run 43666449616](https://github.com/yz4git/poly-fighter/actions/runs/43666449616/artifacts/14142520957).
+
+| Measurement, game-world units unless noted | V2 | V3 |
+| --- | ---: | ---: |
+| Maximum jab left-boot horizontal drift from planted idle | 0.06871 | **0.02103** |
+| Maximum jab right-boot horizontal drift | 0.05603 | **0.000000013** |
+| Maximum left-boot travel in a single simulation tick | 0.04980 | **0.00783** |
+| Maximum right-boot travel in a single simulation tick | 0.05074 | **0.00262** |
+| Maximum imported visual-host travel per tick | 0.10748 | **0.06670** |
+| Striking left glove's horizontal travel at ACTIVE contact | 1.19146 | **1.18502** |
+| Point-blank jab chest screen separation | 94.91 px | **95.97 px** |
+
+At the same time, the gameplay root remained exactly stationary and the
+initial neutral-to-attack frame did not acquire a position teleport.
+The contact-camera audit still exceeds its **90 px** chest readability floor,
+and both cross and body blow retain their original presentation profiles.
+The final foot-IK correction remains bounded and unchanged; V3 reduces the
+need for that correction rather than applying a stronger constraint.
+
+The browser CI now rejects a reintroduced jab startup glide above **0.045**
+(left) / **0.025** (right), per-tick glide above **0.022** for either foot,
+imported-host travel above **0.085** per tick, loss of V3 contact-lane
+telemetry, or striking-hand contact travel below **1.15** world units.
+
+**Limits:** headless WebGL screenshots and bone coordinates establish
+the measured correction but do not substitute for landscape iPhone Safari
+60 fps input, long combo loops, or skinning stress tests. Main stays unchanged
+until explicitly reviewed and merged.

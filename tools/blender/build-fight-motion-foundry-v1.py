@@ -107,6 +107,13 @@ def find_source_action() -> bpy.types.Action:
     partial = next((action for action in actions if SOURCE_ACTION_HINT.lower() in action.name.lower()), None)
     if partial:
         return partial
+    # Newer glTF importers no longer append "_Armature" to the exact same
+    # source action. Preserve the anatomical source, not a guessed fallback.
+    if SOURCE_ACTION_HINT.endswith("_Armature"):
+        stem = SOURCE_ACTION_HINT[:-len("_Armature")]
+        alias = next((action for action in actions if action.name == stem), None)
+        if alias:
+            return alias
     raise RuntimeError(
         f"Source action {SOURCE_ACTION_HINT!r} missing. Available: {[action.name for action in actions]}"
     )

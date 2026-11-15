@@ -47,6 +47,23 @@ REQUIRED_BONES = (
 )
 
 
+def iter_action_fcurves(action):
+    """Yield F-Curves in legacy and layered Blender Actions.
+
+    Blender 4.4+ writes keyframes into Action layer/strip channelbags and
+    removes Action.fcurves in the newer API. The same curve smoothing must
+    support both old imported Actions and newly keyed layered Actions.
+    """
+    legacy_curves = getattr(action, "fcurves", None)
+    if legacy_curves is not None:
+        yield from legacy_curves
+        return
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            for channelbag in getattr(strip, "channelbags", ()):
+                yield from channelbag.fcurves
+
+
 def _argv_after_double_dash() -> List[str]:
     import sys
 
@@ -178,7 +195,7 @@ def key_pose_basis(
             pose_bone.keyframe_insert(data_path="location", frame=frame, group=pose_bone.name)
             pose_bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=pose_bone.name)
             pose_bone.keyframe_insert(data_path="scale", frame=frame, group=pose_bone.name)
-    for fcurve in action.fcurves:
+    for fcurve in iter_action_fcurves(action):
         for key in fcurve.keyframe_points:
             key.interpolation = "BEZIER"
             key.handle_left_type = "AUTO_CLAMPED"
@@ -237,7 +254,7 @@ def set_control_keys(
         control.location = local_to_world(armature, local_location)
         control.keyframe_insert(data_path="location", frame=frame)
     if control.animation_data and control.animation_data.action:
-        for fcurve in control.animation_data.action.fcurves:
+        for fcurve in iter_action_fcurves(control.animation_data.action):
             for key in fcurve.keyframe_points:
                 key.interpolation = "BEZIER"
                 key.handle_left_type = "AUTO_CLAMPED"

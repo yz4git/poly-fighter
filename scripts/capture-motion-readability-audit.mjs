@@ -1050,7 +1050,7 @@ try {
           || result.afterLink.comboLinkFrom !== "jab"
           || result.followupFootlockActiveTicks !== 0
           || result.afterLink.footlockWeight !== 0
-          || result.afterLink.bridgeVersion !== "CONFIRMED_COMBO_HOST_CONTINUITY_V1"
+          || result.afterLink.bridgeVersion !== "CONFIRMED_COMBO_HOST_CONTINUITY_V2"
           || result.afterLink.bridgeFactor < 0.99
           || result.atLinkStep.host > 0.04
           || result.atLinkStep.footL > 0.18
@@ -1240,6 +1240,11 @@ try {
         || result.followups?.length !== 2
         || result.followups.some((stage) => stage.invalidFootlockTicks !== 0
           || stage.bridgeAtContact !== 0)
+        || result.transitions.some((step) =>
+          step.host > 0.04 || step.gameplay > 1e-6
+            || step.footL > 0.28 || step.footR > 0.20
+            || step.pelvis > 0.23)
+        || result.followups.some((stage) => stage.bridgeAtEntry < 0.99)
         || !result.transitions.every((t) =>
           Number.isFinite(t.host) && Number.isFinite(t.footL)
           && Number.isFinite(t.footR) && Number.isFinite(t.pelvis))) {

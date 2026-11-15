@@ -156,6 +156,14 @@ jobs:
           test -s artifacts/tps-visual-audit/neutral-to-jab-continuity.json
           test -s artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png
           file artifacts/tps-visual-audit/tps-sakurai-jab-continuous-contact.png | grep -q "PNG image data"
+          # Actual clean-hit jab->straight / jab->bodyBlow link versus whiff.
+          # The WebGL script inspects live ankle/pelvis/hand motion and prevents
+          # the original idle foot-lock from leaking into linked attacks.
+          test -s artifacts/tps-visual-audit/tps-confirmed-combo-foot-continuity.json
+          for branch in straight bodyblow whiff; do
+            test -s "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png"
+            file "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png" | grep -q "PNG image data"
+          done
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

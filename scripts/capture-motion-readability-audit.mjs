@@ -1120,6 +1120,12 @@ try {
       game.__comboQueuedBranch = undefined;
       game.__comboQueuedSideSign = undefined;
       game.__neutralMashAttackCount = 0;
+      // A previous audit's neutral-mash phrase may survive resetRound.
+      // Reset the phrase so CLOSE_A/B test authored route continuity instead
+      // of selecting a legitimate but unrelated changing mash variation.
+      game.__neutralMashPhrase = -1;
+      game.__neutralMashLastBase = null;
+      game.__neutralMashLastOutcome = undefined;
       let time = performance.now() / 1000;
       const render = () => {
         time += 1/60;

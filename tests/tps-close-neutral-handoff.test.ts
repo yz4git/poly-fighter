@@ -33,18 +33,14 @@ test("combo starts and unrelated kicks do not introduce a new neutral lane", () 
 test("render-only stance-to-punch lanes do not add an overshoot at short distance", () => {
   const stanceLane = 0.062;
   const punchLane = 0.050;
-  const inPunch = (tick: number) => {
-    const u = Math.max(0, Math.min(1, (tick - 1) / 5));
-    return u * u * (3 - 2 * u);
-  };
   const samples = Array.from({ length: 6 }, (_, tick) =>
     stanceLane * tpsCloseNeutralPunchCarry("jab", tick, 5, true)
-      + punchLane * inPunch(tick));
+      + punchLane * tpsClosePunchLaneInFactor("jab", tick, 5));
   assert.equal(samples[0], stanceLane, "new punch begins from the same visible neutral location");
   assert.ok(samples.every((x) => x >= 0 && x <= stanceLane + 1e-8),
     "no double-applied sideways launch while lanes overlap");
-  assert.ok(Math.max(...samples.slice(1).map((x, i) => Math.abs(x - samples[i]))) < stanceLane * 0.35,
-    "camera-facing model moves in small, bounded increments instead of one full-lane snap");
+  assert.ok(Math.max(...samples.slice(1).map((x, i) => Math.abs(x - samples[i]))) < stanceLane * 0.13,
+    "V3 punch-lane overlap must reduce peak per-tick combined lateral motion");
 });
 
 test("all generated jab/cross/body-blow variants receive the same authored attack lane", () => {

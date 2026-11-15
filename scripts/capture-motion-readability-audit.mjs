@@ -948,7 +948,8 @@ try {
         return {
           index, moveId: game.p1.currentMove?.id ?? null,
           moveBase: game.p1.currentMove?.motionBase ?? game.p1.currentMove?.id ?? null,
-          moveTick: game.p1.moveTick, state: game.p1.state,
+          moveTick: game.p1.moveTick, moveStartup: game.p1.currentMove?.startup ?? null,
+          state: game.p1.state,
           gamePosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
           root: point(root), host: point(host), pelvis: bones?.pelvis ?? null,
           footL: bones?.footL ?? null, footR: bones?.footR ?? null,
@@ -1051,7 +1052,16 @@ try {
           || result.afterLink.footlockWeight !== 0
           || result.afterLink.bridgeVersion !== "CONFIRMED_COMBO_HOST_CONTINUITY_V1"
           || result.afterLink.bridgeFactor < 0.99
-          || result.atLinkStep.host > 0.12) {
+          || result.atLinkStep.host > 0.04
+          || result.atLinkStep.footL > 0.18
+          || result.atLinkStep.footR > 0.14
+          || result.atLinkStep.pelvis > 0.20
+          || result.atLinkStep.root > 1e-6
+          || result.followupPeakStep.footL > 0.20
+          || result.followupPeakStep.footR > 0.20
+          || result.frames.some((frame) =>
+            frame.moveBase === spec.expected && frame.moveTick >= frame.moveStartup
+              && frame.bridgeFactor > 1e-4)) {
         throw new Error(`Real confirmed ${spec.label} combo handoff lost or inherited planted jab anchors: ${JSON.stringify(result)}`);
       }
     } else if ((result.linkedAt >= 0 && result.linkedAt < result.total)

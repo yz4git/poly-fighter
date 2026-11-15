@@ -790,6 +790,7 @@ try {
         neutralFactor: Number(data.tpsCloseNeutralLane ?? 0),
         neutralX: Number(data.tpsCloseNeutralLaneX ?? 0),
         punchFactor: Number(data.tpsClosePunchLane ?? 0),
+        punchLaneVersion: data.tpsClosePunchLaneVersion ?? null,
         punchX: Number(data.tpsClosePunchLaneX ?? 0),
         attackAfterfeel: Number(data.tpsAttackAfterfeel ?? 0),
         footlockVersion: data.tpsPunchFootlockVersion ?? null,
@@ -871,19 +872,22 @@ try {
     neutralToJab.idle.leftHand, neutralToJab.atContact.leftHand);
   const groundedPunchFootlockQuality = {
     version: neutralToJab.samples[0].footlockVersion,
+    punchLaneVersion: neutralToJab.atContact.punchLaneVersion,
     correctedTicks: neutralToJab.correctedTicks,
     leftGlide: visibleLeftGlide,
     rightGlide: visibleRightGlide,
     strikeTravel: contactHandTravel,
   };
   if (groundedPunchFootlockQuality.version !== "CONTACT_FOOT_IK_V2"
+      || groundedPunchFootlockQuality.punchLaneVersion !== "SHOULDER_CONTACT_LANE_V3"
       || groundedPunchFootlockQuality.correctedTicks < neutralToJab.startupTicks
       || neutralToJab.totalAnkleImprovement < 0.45
-      || visibleLeftGlide > 0.11
-      || visibleRightGlide > 0.11
-      || neutralToJab.maxFootLStep > 0.085
-      || neutralToJab.maxFootRStep > 0.085
-      || contactHandTravel < 1.1) {
+      || visibleLeftGlide > 0.045
+      || visibleRightGlide > 0.025
+      || neutralToJab.maxFootLStep > 0.022
+      || neutralToJab.maxFootRStep > 0.022
+      || neutralToJab.maxHostStep > 0.085
+      || contactHandTravel < 1.15) {
     throw new Error(`Grounded jab foot IK did not reduce real screen-space foot skating: ${JSON.stringify({ groundedPunchFootlockQuality, neutralToJab })}`);
   }
   await screenshot(sessionId, `${outputDir}/tps-sakurai-jab-continuous-contact.png`);

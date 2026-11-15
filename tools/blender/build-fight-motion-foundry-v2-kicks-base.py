@@ -249,6 +249,13 @@ def _find_action_exact(name: str) -> bpy.types.Action:
     exact = next((action for action in bpy.data.actions if action.name == name), None)
     if exact is not None:
         return exact
+    # Blender 5.x glTF import can preserve the source action name rather
+    # than appending "_Armature". Only accept the exact unsuffixed name.
+    if name.endswith("_Armature"):
+        stem = name[:-len("_Armature")]
+        alias = next((action for action in bpy.data.actions if action.name == stem), None)
+        if alias is not None:
+            return alias
     raise RuntimeError(f"Required action {name!r} missing; available: {[a.name for a in bpy.data.actions]}")
 
 

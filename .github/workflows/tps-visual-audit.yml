@@ -171,6 +171,13 @@ jobs:
             test -s "artifacts/tps-visual-audit/tps-combo-triple-${route}.png"
             file "artifacts/tps-visual-audit/tps-combo-triple-${route}.png" | grep -q "PNG image data"
           done
+          # Real production hit geometry and health updates, without synthetic
+          # CLEAN or hitTargets seeding; passive dummy vs a range whiff.
+          test -s artifacts/tps-visual-audit/tps-real-contact-combos.json
+          for scenario in close-contact out-of-range; do
+            test -s "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png"
+            file "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png" | grep -q "PNG image data"
+          done
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

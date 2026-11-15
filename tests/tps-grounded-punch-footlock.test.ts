@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { tpsGroundedPunchFootlockWeight } from "../src/game/tps-grounded-punch-footlock";
+import {
+  tpsGroundedPunchFootlockWeight,
+  tpsPunchFootlockCorrectionCap,
+  tpsPunchFootlockLegWeight,
+} from "../src/game/tps-grounded-punch-footlock";
 
 test("close punches keep grounded feet planted through the authored contact beat", () => {
   for (const family of ["jab", "straight", "bodyBlow"]) {
@@ -41,4 +45,21 @@ test("invalid gameplay-tick values cannot apply a persistent foot IK correction"
   for (const tick of [NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
     assert.equal(tpsGroundedPunchFootlockWeight("jab", tick, 5, 3, 10, true), 0);
   }
+});
+
+test("V2 shifts only the lead jab IK envelope; all other attacks retain V1 limits", () => {
+  assert.equal(tpsPunchFootlockCorrectionCap("jab", "l"), .20);
+  assert.equal(tpsPunchFootlockLegWeight("jab", "l"), .90);
+  assert.equal(tpsPunchFootlockCorrectionCap("jab", "r"), .16);
+  assert.equal(tpsPunchFootlockLegWeight("jab", "r"), 1);
+  for (const move of ["straight", "bodyBlow"]) {
+    for (const side of ["l", "r"] as const) {
+      assert.equal(tpsPunchFootlockCorrectionCap(move, side), .16,
+        move + " must not inherit jab-only lead foot reach");
+    }
+  }
+  assert.equal(tpsPunchFootlockLegWeight("straight", "l"), 1);
+  assert.equal(tpsPunchFootlockLegWeight("straight", "r"), .76);
+  assert.equal(tpsPunchFootlockLegWeight("bodyBlow", "l"), .72);
+  assert.equal(tpsPunchFootlockLegWeight("bodyBlow", "r"), 1);
 });

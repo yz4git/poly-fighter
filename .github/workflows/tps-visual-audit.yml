@@ -178,6 +178,11 @@ jobs:
             test -s "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png"
             file "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png" | grep -q "PNG image data"
           done
+          # Full production 60Hz step with active rival CPU; neither fighter
+          # receives synthetic hit flags or forced attack/health outcomes.
+          test -s artifacts/tps-visual-audit/tps-live-cpu-exchange.json
+          test -s artifacts/tps-visual-audit/tps-live-cpu-exchange.png
+          file artifacts/tps-visual-audit/tps-live-cpu-exchange.png | grep -q "PNG image data"
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

@@ -174,7 +174,7 @@ jobs:
           # Real production hit geometry and health updates, without synthetic
           # CLEAN or hitTargets seeding; passive dummy vs a range whiff.
           test -s artifacts/tps-visual-audit/tps-real-contact-combos.json
-          for scenario in close-contact out-of-range; do
+          for scenario in close-contact guarded-contact out-of-range; do
             test -s "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png"
             file "artifacts/tps-visual-audit/tps-real-contact-${scenario}.png" | grep -q "PNG image data"
           done

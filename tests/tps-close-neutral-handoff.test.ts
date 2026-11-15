@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { tpsCloseNeutralPunchCarry } from "../src/game/tps-close-neutral-lane";
-import { tpsClosePunchFamily, tpsClosePunchProfile } from "../src/game/tps-close-punch-lane";
+import { tpsClosePunchFamily, tpsClosePunchProfile, tpsClosePunchLaneInFactor } from "../src/game/tps-close-punch-lane";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { expandMoveSet } from "../src/game/move-expansion";
 
@@ -65,4 +65,37 @@ test("all generated jab/cross/body-blow variants receive the same authored attac
     assert.equal(tpsClosePunchFamily(moves[base]), null, base + " remains outside punch lane");
   }
   assert.equal(tpsClosePunchFamily(null), null);
+});
+
+test("jab shoulder lane starts slightly earlier to bridge the unloading stance without jumping at first input", () => {
+  const startup = 5;
+  assert.equal(tpsClosePunchLaneInFactor("jab", 0, startup), 0);
+  assert.equal(tpsClosePunchLaneInFactor("straight", 0, startup), 0);
+  assert.equal(tpsClosePunchLaneInFactor("bodyBlow", 0, startup), 0);
+  for (const tick of [1, 2, 3, 4]) {
+    const jab = tpsClosePunchLaneInFactor("jab", tick, startup);
+    const old = tpsClosePunchLaneInFactor("straight", tick, startup);
+    assert.ok(jab > old, "earlier shoulder opening cushions the neutral stance lane at tick " + tick);
+  }
+  assert.ok(tpsClosePunchLaneInFactor("jab", startup, startup) > .90);
+  assert.ok(tpsClosePunchLaneInFactor("jab", startup, startup) < 1);
+  assert.equal(tpsClosePunchLaneInFactor("jab", startup + 1, startup), 1);
+  for (const family of ["jab", "straight", "bodyBlow"]) {
+    const samples = Array.from({ length: 9 }, (_, tick) =>
+      tpsClosePunchLaneInFactor(family, tick, startup));
+    assert.ok(samples.every((value, i) => value >= 0 && value <= 1
+      && (i === 0 || value >= samples[i - 1])),
+      family + ": no reversed punch-lane impulse");
+  }
+});
+
+test("all jab-derived startups receive an active punch lane before neutral release is complete", () => {
+  const moves = expandMoveSet(FIGHTER_DEFINITIONS.red.moves);
+  for (const name of ["jab", "jabSnap", "jabDrive", "jabPivot", "jabCrush"]) {
+    const move = moves[name];
+    const base = tpsClosePunchFamily(move);
+    assert.equal(base, "jab");
+    assert.equal(tpsClosePunchLaneInFactor(base, 0, move.startup), 0);
+    assert.ok(tpsClosePunchLaneInFactor(base, Math.max(1, move.startup - 2), move.startup) > .6);
+  }
 });

@@ -4,7 +4,7 @@ import { solveCombatLimb } from "./combat-motion-authoring";
 import { PresentationAnimationController } from "./presentation-animation";
 import { tpsClosePunchFamily } from "./tps-close-punch-lane";
 
-export const TPS_GROUNDED_PUNCH_FOOTLOCK_VERSION = "CONTACT_FOOT_IK_V1";
+export const TPS_GROUNDED_PUNCH_FOOTLOCK_VERSION = "CONTACT_FOOT_IK_V2";
 
 /**
  * The close-neutral/punch presentation lanes translate the imported model,
@@ -26,6 +26,23 @@ type FootlockState = {
 const states = new WeakMap<FighterRuntime, FootlockState>();
 let installed = false;
 const MAX_ANKLE_CORRECTION = 0.16; // world units, not character-local coordinates
+
+/**
+ * The jab's lead (left) boot is the only outlier in real 60 Hz WebGL traces:
+ * 0.127 world units of remaining neutral-to-contact glide vs 0.056 for its
+ * support boot. Its original 0.16 * 0.76 reach limit was saturated. Increase
+ * ONLY that leg's target envelope slightly. Keeping the support leg and
+ * other punches on V1 limits avoids changing their proven knee silhouettes.
+ */
+export function tpsPunchFootlockCorrectionCap(family: string, side: "l" | "r"): number {
+  return family === "jab" && side === "l" ? 0.20 : MAX_ANKLE_CORRECTION;
+}
+
+export function tpsPunchFootlockLegWeight(family: string, side: "l" | "r"): number {
+  if (family === "jab") return side === "l" ? 0.90 : 1;
+  if (family === "straight") return side === "l" ? 1 : 0.76;
+  return side === "r" ? 1 : 0.72;
+}
 const ELIGIBLE_STATES = new Set(["IDLE", "GUARD", "CROUCH"]);
 
 function smooth01(value: number): number {
@@ -145,10 +162,9 @@ function applyFootlock(fighter: FighterRuntime, state: FootlockState): void {
     const requested = error.length();
     if (requested < 1e-4) continue;
     // Keep the support leg firmer; allow the stepping leg some authored motion.
-    const sideWeight = base === "jab" ? (side === "r" ? 1 : 0.76)
-      : base === "straight" ? (side === "l" ? 1 : 0.76)
-      : side === "r" ? 1 : 0.72;
-    const amount = Math.min(requested, MAX_ANKLE_CORRECTION) * weight * sideWeight;
+    const sideWeight = tpsPunchFootlockLegWeight(base, side);
+    const maxCorrection = tpsPunchFootlockCorrectionCap(base, side);
+    const amount = Math.min(requested, maxCorrection) * weight * sideWeight;
     const target = current.addScaledVector(error, amount / requested);
     const preservedFootRotation = foot.getWorldQuaternion(new THREE.Quaternion());
     // Preserve the current knee's authored bend direction as the pole. A

@@ -164,6 +164,13 @@ jobs:
             test -s "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png"
             file "artifacts/tps-visual-audit/tps-combo-${branch}-followup.png" | grep -q "PNG image data"
           done
+          # Three-hit clean-confirmed routes: CROSS and BACKFIST each proceed
+          # into the actual stage-three authored strike, with no foot IK leak.
+          test -s artifacts/tps-visual-audit/tps-triple-combo-continuity.json
+          for route in close-a close-b; do
+            test -s "artifacts/tps-visual-audit/tps-combo-triple-${route}.png"
+            file "artifacts/tps-visual-audit/tps-combo-triple-${route}.png" | grep -q "PNG image data"
+          done
           test -s artifacts/tps-visual-audit/motion-readability.json
           test -s artifacts/tps-visual-audit/motion-intent.json
           test -s artifacts/tps-visual-audit/touch-input-safety.json

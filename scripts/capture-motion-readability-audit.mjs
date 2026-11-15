@@ -1271,8 +1271,9 @@ try {
   // NO hitTargets or clean-hit flags are written after initialization.
   const realHitCombos = {};
   for (const spec of [
-    { label: "close-contact", distance: 1.08, expectedHits: 1 },
-    { label: "out-of-range", distance: 3.2, expectedHits: 0 },
+    { label: "close-contact", distance: 1.08, guard: false, expectedHits: 3 },
+    { label: "guarded-contact", distance: 1.08, guard: true, expectedHits: 0 },
+    { label: "out-of-range", distance: 3.2, guard: false, expectedHits: 0 },
   ]) {
     const result = await execute(sessionId, `${gameLookup}${resetAndPose}
       const spec = arguments[0], game = findGame();
@@ -1289,6 +1290,7 @@ try {
       game.p2.position.set(0, 0, 0.74 - spec.distance);
       game.p1.facing = 1;
       game.p2.facing = -1;
+      if (spec.guard) game.p2.state = "GUARD";
       const pdata = game.p1.visual.root.userData;
       pdata.tpsCleanHitConfirmed = false;
       pdata.tpsComboLinkState = "NONE";
@@ -1314,7 +1316,7 @@ try {
       render();
       const neutral = { left:false,right:false,up:false,down:false,
         punch:false,kick:false,guard:false };
-      const hits = [], moves = [{frame:0,move:"jab"}], links = [];
+      const hits = [], blocks = [], moves = [{frame:0,move:"jab"}], links = [];
       let lastMove = "jab";
       let hitMoveId = null;
       let queuedFor = new Set();
@@ -1328,10 +1330,18 @@ try {
           && !queuedFor.has(moveBefore.id) && queuedFor.size < 2;
         if (press) queuedFor.add(moveBefore.id);
         const oldHealth = game.p2.health;
+        const oldGuardDamage = game.p2.guardDamage;
         game.updatePlayer({...neutral,punch:press});
         game.p2.updatePhysics(1/60);
-        // Full production engine's geometry and real damage handling.
-        game.resolveAttack(game.p1,game.p2,false);
+        // Full production engine's geometry, blocking and damage handling.
+        game.resolveAttack(game.p1,game.p2,game.p2.state === "GUARD");
+        if (game.p2.guardDamage > oldGuardDamage) {
+          blocks.push({frame,move:moveBefore?.id ?? null,
+            guardDamage:game.p2.guardDamage-oldGuardDamage,
+            defenderHitStop:game.p2.hitStop,
+            clean:pdata.tpsCleanHitConfirmed === true,
+            hitTargets:game.p1.hitTargets.has(game.p2.id)});
+        }
         const current = game.p1.currentMove;
         if (current && current.id !== lastMove) {
           moves.push({frame,move:current.id});
@@ -1351,6 +1361,8 @@ try {
             clean:pdata.tpsCleanHitConfirmed === true,
             committedRange:pdata.tpsStrikeReach ?? null,
             hitTargets:game.p1.hitTargets.has(game.p2.id),
+            attackerHitStop:game.p1.hitStop,
+            defenderHitStop:game.p2.hitStop,
             enemyState:game.p2.state,
             enemyDistance:Math.hypot(game.p1.position.x-game.p2.position.x,
               game.p1.position.z-game.p2.position.z),
@@ -1369,7 +1381,8 @@ try {
       game.updateCamera(1/60);
       game.updateLockOn();
       game.renderer.render(game.scene,game.camera);
-      return {spec,hits,moves,links,enemyFinalHealth:game.p2.health,
+      return {spec,hits,blocks,moves,links,
+        enemyFinalHealth:game.p2.health,enemyGuardDamage:game.p2.guardDamage,
         enemyFinalState:game.p2.state,enemyPosition:{
           x:game.p2.position.x,y:game.p2.position.y,z:game.p2.position.z,
         },queued:[...queuedFor],maxAttackTick,unexpectedClean,
@@ -1377,8 +1390,27 @@ try {
         clean:pdata.tpsCleanHitConfirmed===true};
     `, [spec]);
     if (result?.error || !Array.isArray(result.hits)
-        || !Number.isFinite(result.enemyFinalHealth)) {
-      throw new Error(`Real collision/damage telemetry missing ${spec.label}: ${JSON.stringify(result)}`);
+        || !Number.isFinite(result.enemyFinalHealth)
+        || result.unexpectedClean
+        || (spec.label === "close-contact" && (
+          result.hits.map((hit) => hit.move).join(",") !== "jab,straight,power"
+          || result.hits.length !== 3 || result.links.length !== 2
+          || result.links.some((link) => link.comboLink !== "LINKED")
+          || result.hits.some((hit) => !hit.clean || !hit.hitTargets
+            || !hit.contact || hit.damage <= 0 || hit.defenderHitStop <= 0)
+          || result.enemyFinalHealth > 70
+        ))
+        || (spec.label === "guarded-contact" && (
+          result.hits.length !== 0 || result.blocks.length < 1
+          || result.blocks.some((block) => block.clean || !block.hitTargets)
+          || result.links.some((link) => link.comboLink === "LINKED")
+          || result.enemyFinalHealth !== 100 || result.enemyGuardDamage <= 0
+        ))
+        || (spec.label === "out-of-range" && (
+          result.hits.length !== 0 || result.blocks.length !== 0
+          || result.links.length !== 0 || result.enemyFinalHealth !== 100
+        ))) {
+      throw new Error(`Real strike/guard/whiff combat contract failed ${spec.label}: ${JSON.stringify(result)}`);
     }
     console.log("TPS_REAL_CONTACT=" + JSON.stringify(result));
     realHitCombos[spec.label] = result;

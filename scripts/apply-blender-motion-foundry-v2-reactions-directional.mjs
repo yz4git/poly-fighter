@@ -16,6 +16,21 @@ function replaceOnce(source, before, after, label) {
   return source.replace(before, after);
 }
 
+// The modern combat runtime already includes the directional reaction
+// metadata, authored transition planner, and model-view coverage. This legacy
+// migration must NOT rewrite it back to older exact-text snippets.
+const [modernCombat, modernMotion, modernViewer] = await Promise.all([
+  readFile("src/game/combat.ts", "utf8"),
+  readFile("src/game/visual-quaternius-runtime.ts", "utf8"),
+  readFile("scripts/capture-model-view-audit.mjs", "utf8"),
+]);
+const alreadyIntegrated = modernCombat.includes("setHitReactionVisual(")
+  && modernCombat.includes("VISUAL_EDGE_X")
+  && modernMotion.includes("quaterniusDirectionalReactionMotionSource")
+  && modernMotion.includes("BF_EdgeStagger")
+  && modernViewer.includes("model-view-motion-blender-edge-stagger.png");
+
+if (!alreadyIntegrated) {
 await patch("src/game/fighter.ts", (input) => {
   let source = input;
   source = replaceOnce(
@@ -127,4 +142,7 @@ await patch("package.json", (input) => replaceOnce(
   "directional reaction test registration",
 ));
 
+} else {
+  console.log("Directional reaction runtime, collision metadata and viewer audit are already integrated; preserving their newer implementations");
+}
 console.log("Blender Motion Foundry v2 directional/counter reaction integration applied");

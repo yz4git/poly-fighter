@@ -74,6 +74,14 @@ const gameLookup = `
   }
 `;
 
+async function screenshot(sessionId, path) {
+  const encoded = await command(`/session/${sessionId}/screenshot`);
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length < 128 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a")
+    throw new Error(`Invalid PNG: ${path}`);
+  await writeFile(path, bytes);
+}
+
 async function readPadState(sessionId) {
   return execute(sessionId, `${gameLookup}
     const game = findGame();
@@ -192,7 +200,56 @@ try {
     throw new Error(`Virtual pad failed normal release after recovery: ${JSON.stringify(afterNormalRelease)}`);
   }
 
-  const diagnostics = { neutral, heldRight, afterBlur, heldLeft, afterNormalRelease };
+  // Two *real W3C pointer sources* imitate two simultaneous fingers, not
+  // direct game.input.press() calls or synthetic application events. One
+  // drags the left pad while the other holds the actual ATTACK button.
+  const attackRect = await execute(sessionId, `
+    const button = document.querySelector('button.tps-attack-action');
+    const rect = button?.getBoundingClientRect();
+    return rect ? {x:rect.x,y:rect.y,width:rect.width,height:rect.height} : null;
+  `);
+  if (!attackRect || attackRect.width < 20 || attackRect.height < 20)
+    throw new Error(`Visible ATTACK touch target absent: ${JSON.stringify(attackRect)}`);
+  const attackX = attackRect.x + attackRect.width / 2;
+  const attackY = attackRect.y + attackRect.height / 2;
+  await command(`/session/${sessionId}/actions`, "POST", {
+    actions: [
+      {
+        type: "pointer", id: "left-thumb", parameters: { pointerType: "touch" },
+        actions: [
+          { type: "pointerMove", duration: 0, x: Math.round(cx), y: Math.round(cy), origin: "viewport" },
+          { type: "pointerDown", button: 0 },
+          { type: "pointerMove", duration: 130, x: Math.round(cx + width * .34), y: Math.round(cy), origin: "viewport" },
+          { type: "pause", duration: 170 },
+        ],
+      },
+      {
+        type: "pointer", id: "right-thumb", parameters: { pointerType: "touch" },
+        actions: [
+          { type: "pause", duration: 130 },
+          { type: "pointerMove", duration: 0, x: Math.round(attackX), y: Math.round(attackY), origin: "viewport" },
+          { type: "pointerDown", button: 0 },
+          { type: "pause", duration: 170 },
+        ],
+      },
+    ],
+  });
+  const simultaneous = await readPadState(sessionId);
+  if (simultaneous?.direction !== "RIGHT" || !simultaneous?.frame?.right || !simultaneous?.frame?.punch) {
+    throw new Error(`Two-finger pad + ATTACK did not register simultaneously: ${JSON.stringify(simultaneous)}`);
+  }
+  await mkdir(outputDir, { recursive: true });
+  await screenshot(sessionId, `${outputDir}/tps-two-finger-pad-attack.png`);
+  await command(`/session/${sessionId}/actions`, "DELETE");
+  await delay(80);
+  const afterMultitouchRelease = await readPadState(sessionId);
+  if (afterMultitouchRelease?.direction !== "NEUTRAL"
+      || Object.values(afterMultitouchRelease?.frame ?? {}).some(Boolean)) {
+    throw new Error(`Two-finger input remained stuck after release: ${JSON.stringify(afterMultitouchRelease)}`);
+  }
+  const diagnostics = { neutral, heldRight, afterBlur, heldLeft, afterNormalRelease,
+    simultaneous, afterMultitouchRelease };
+
   await mkdir(outputDir, { recursive: true });
   await writeFile(`${outputDir}/touch-input-safety.json`, JSON.stringify(diagnostics, null, 2));
   console.log(JSON.stringify(diagnostics, null, 2));

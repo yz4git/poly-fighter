@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterRuntime } from "./fighter";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
-import type { FighterDefinition, FighterState } from "./types";
+import type { FighterDefinition, FighterState, VisualContactPoint } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { VIDEO_CHOREOGRAPHY_VERSION, VIDEO_STRIKE_CLIPS } from "./video-demo-choreography";
@@ -116,6 +116,29 @@ type QuaterniusRuntime = {
 
 const CONTINUOUS_WALK_CLIP = "CM_Move_BLEND";
 const runtimes = new WeakMap<THREE.Group, QuaterniusRuntime>();
+
+/** Presentation-only point on the *visible skinned GLB*, not the hidden
+ * fallback procedural skeleton. Combat collision/reach remains unchanged.
+ * No tree traversal or bone lookups are needed on an iPhone render frame.
+ */
+export function getSkinnedMotionContactPoint(
+  fighter: FighterRuntime,
+  contact: VisualContactPoint | undefined,
+): THREE.Vector3 | null {
+  const name = contact === "LEFT_FIST" ? "hand_l"
+    : contact === "RIGHT_FIST" ? "hand_r"
+      : contact === "LEFT_FOOT" ? "foot_l"
+        : contact === "RIGHT_FOOT" ? "foot_r"
+          : null;
+  if (!name || fighter.visual.root.userData.quaterniusModelState !== "ready") return null;
+  const runtime = runtimes.get(fighter.visual.root);
+  const bone = runtime?.bones.get(name);
+  if (!runtime || !bone || !bone.parent) return null;
+  runtime.model.updateMatrixWorld(true);
+  const point = bone.getWorldPosition(new THREE.Vector3());
+  return [point.x, point.y, point.z].every(Number.isFinite) ? point : null;
+}
+
 const installTokens = new WeakMap<THREE.Group, object>();
 const modelPromises = new Map<QuaterniusBodyType, Promise<THREE.Group>>();
 let motionPromise: Promise<MotionResources> | null = null;

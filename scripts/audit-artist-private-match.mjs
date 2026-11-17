@@ -55,6 +55,16 @@ const snapshot = () => run(`${lookup}
   const cpu = game?.p2?.visual?.root;
   const hero = root?.children?.find(o => o.name === 'sera-artist-local-test-runtime');
   const driver = root?.children?.find(o => o.name?.startsWith('quaternius-ubc-') && o.name?.endsWith('-runtime'));
+  const motionBones = {};
+  hero?.traverse(node => {
+    if (!node.isBone) return;
+    for (const name of ['LeftArm','RightArm','LeftForeArm','RightForeArm',
+                         'LeftUpLeg','RightUpLeg','Spine2']) {
+      if (!motionBones[name] && node.name.endsWith(name)) {
+        motionBones[name] = node.quaternion.toArray();
+      }
+    }
+  });
   return {
     panel: !!panel,
     panelState: panel?.dataset.artistCombatState ?? null,
@@ -68,6 +78,7 @@ const snapshot = () => run(`${lookup}
     mappedBones: root?.userData?.heroModelMappedBones ?? 0,
     triangles: root?.userData?.heroPbrTriangleCount ?? 0,
     texturedMaterials: root?.userData?.heroPbrTextureMaterials ?? 0,
+    motionBones,
     heroError: root?.userData?.heroModelError ?? null,
     p1Move: game?.p1?.currentMove?.id ?? null,
     p1State: game?.p1?.state ?? null,
@@ -82,6 +93,21 @@ const snapshot = () => run(`${lookup}
       || typeof value === 'string' && value.includes('blob:http')),
   };
 `);
+// A skinned actor must also CHANGE its authored joint rotations when the
+// actual fight move plays. Merely reporting ATTACK while showing an idle GLB
+// does not pass. Compare local bone quaternions, which ignore world dash drift.
+function maxPoseAngle(before, after) {
+  let maxAngle = 0;
+  let pairs = 0;
+  for (const [name, oldQ] of Object.entries(before ?? {})) {
+    const newQ = after?.[name];
+    if (!Array.isArray(oldQ) || !Array.isArray(newQ) || oldQ.length !== 4 || newQ.length !== 4) continue;
+    const dot = Math.abs(oldQ.reduce((sum, value, i) => sum + value * newQ[i], 0));
+    const angle = 2 * Math.acos(Math.min(1, Math.max(0, dot)));
+    if (Number.isFinite(angle)) { maxAngle = Math.max(maxAngle, angle); pairs++; }
+  }
+  return {maxAngle, pairs};
+}
 async function capture(label) {
   const bytes = Buffer.from(await request("/session/" + session + "/screenshot"), "base64");
   if (bytes.length < 2500 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a")
@@ -164,8 +190,12 @@ try {
     const sample = await snapshot();
     sampledMoves.push({state: sample.p1State, move: sample.p1Move, mappedBones: sample.mappedBones});
     if (sample.p1State === "ATTACK" && sample.p1Move) {
-      strike = sample;
-      await capture("02-private-sera-jab-with-artist-glb");
+      // The first tick can still look like neutral; capture a genuine
+      // authored pose partway through the move.
+      await delay(105);
+      const active = await snapshot();
+      strike = active.p1State === "ATTACK" && active.p1Move ? active : sample;
+      await capture("02-private-sera-active-move-with-artist-glb");
       break;
     }
     await delay(45);
@@ -178,6 +208,10 @@ try {
   if (!strike) throw new Error("Real imported SERA did not enter an ATTACK state: " + JSON.stringify(sampledMoves));
   if (strike.heroState !== "ready" || !strike.heroVisible || strike.mappedBones < 20)
     throw new Error("Artist hero disappeared during a real fighter move: " + JSON.stringify(strike));
+  const poseMotion = maxPoseAngle(ready.motionBones, strike.motionBones);
+  if (poseMotion.pairs < 4 || poseMotion.maxAngle < 0.045) {
+    throw new Error("Artist GLB remained in neutral pose during actual SERA ATTACK: " + JSON.stringify({poseMotion, ready: ready.motionBones, strike: strike.motionBones}));
+  }
 
   if (!await click("PRIVATE GLB QA")) throw new Error("In-battle QA telemetry cannot expand");
   const expanded = await run(
@@ -198,13 +232,13 @@ try {
     throw new Error("Private GLB leaked into normal game mode: " + JSON.stringify(exited));
   await capture("03-private-qa-exited-no-glb-persisted");
   await writeFile(output + "/qa-result.json", JSON.stringify({
-    ready, strike, sampledMoves, expanded, exited,
+    ready, strike, sampledMoves, poseMotion, expanded, exited,
     artApproval: "NOT_APPROVED",
     note: "Legacy V2 GLB is an unapproved technical CI fixture only. Never publish it as SERA.",
   }, null, 2));
   console.log("SERA_PRIVATE_LOCAL_ACTUAL_VERSUS_WEBGL_PASSED", JSON.stringify({
     mappedBones: ready.mappedBones, triangles: ready.triangles,
-    strike: strike.p1Move, p1Model: ready.p1Model, p2Model: ready.p2Model,
+    strike: strike.p1Move, poseAngle: poseMotion.maxAngle, p1Model: ready.p1Model, p2Model: ready.p2Model,
   }));
 } finally {
   if (session) await request("/session/" + session, "DELETE").catch(() => {});

@@ -143,6 +143,11 @@ export function ArtistCombatQaOverlay({
     top: "max(72px, env(safe-area-inset-top))",
     zIndex: 9,
     maxWidth: expanded ? "min(280px, 54vw)" : "min(185px, 40vw)",
+    // A 402–430px iPhone landscape viewport has attack buttons along the
+    // bottom. The QA panel must scroll internally, not cover those buttons.
+    maxHeight: "max(82px, calc(100dvh - 185px))",
+    overflowY: expanded ? "auto" : "hidden",
+    overscrollBehavior: "contain",
     color: "#e7f5ff",
     background: "rgba(3, 12, 24, .90)",
     border: "1px solid rgba(114, 203, 231, .70)",
@@ -150,7 +155,7 @@ export function ArtistCombatQaOverlay({
     fontSize: 10,
     padding: 8,
     lineHeight: 1.4,
-    touchAction: "manipulation",
+    touchAction: expanded ? "pan-y" : "manipulation",
   };
   const button: CSSProperties = {
     color: "inherit", background: "rgba(45,79,112,.75)",

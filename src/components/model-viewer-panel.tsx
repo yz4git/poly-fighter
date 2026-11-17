@@ -14,6 +14,7 @@ import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } 
 export interface ModelViewerPanelProps {
   quality: "LOW" | "NORMAL" | "HIGH";
   onBack: () => void;
+  onTestPrivateMatch: () => void;
 }
 
 const fighterIds = ["blue", "red"] as const;
@@ -41,7 +42,7 @@ const transportButtonStyle = {
   letterSpacing: ".08em",
 } as const;
 
-export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
+export function ModelViewerPanel({ quality, onBack, onTestPrivateMatch }: ModelViewerPanelProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<ModelViewer | null>(null);
   const [fighterId, setFighterId] = useState<(typeof fighterIds)[number]>("blue");
@@ -83,6 +84,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
   }, [artistLab, fighter, modelId, quality]);
 
   if (artistLab) return <ArtistAssetReviewPanel onBack={() => setArtistLab(false)}
+    onTestMatch={onTestPrivateMatch}
     onTestCombat={() => {
       setFighterId("blue"); // SERA: only this fighter is permitted for local art retarget QA.
       setModelId("SERA_ARTIST_PREVIEW");

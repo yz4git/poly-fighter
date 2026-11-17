@@ -6,6 +6,8 @@ import { ARTIST_PRIVATE_COMBAT_VERSION } from "../game/artist-private-combat";
 
 export interface ArtistCombatRuntimeSnapshot {
   state: string;
+  fighterState: string;
+  activeMove: string;
   mappedBones: number;
   triangles: number;
   texturedMaterials: number;
@@ -16,7 +18,7 @@ export interface ArtistCombatRuntimeSnapshot {
 }
 
 const empty: ArtistCombatRuntimeSnapshot = {
-  state: "loading", mappedBones: 0, triangles: 0,
+  state: "loading", fighterState: "IDLE", activeMove: "NONE", mappedBones: 0, triangles: 0,
   texturedMaterials: 0, error: null, renderFps: 0,
   drawCalls: 0, sceneTriangles: 0,
 };
@@ -51,6 +53,8 @@ export function ArtistCombatQaOverlay({
       previousTime = now;
       setInfo({
         state: String(data.heroModelState ?? "loading"),
+        fighterState: String(game.p1.state ?? "IDLE"),
+        activeMove: String(game.p1.currentMove?.id ?? "NONE"),
         mappedBones: Number(data.heroModelMappedBones ?? 0),
         triangles: Number(data.heroPbrTriangleCount ?? 0),
         texturedMaterials: Number(data.heroPbrTextureMaterials ?? 0),
@@ -113,6 +117,7 @@ export function ArtistCombatQaOverlay({
       {expanded && (
         <div style={{ display: "grid", gap: 5, paddingTop: 7 }}>
           <strong>UNAPPROVED MODEL · LOCAL ONLY</strong>
+          <span>Fight: {info.fighterState} · Move: {info.activeMove}</span>
           <span>Rig: {info.mappedBones} mapped bones · mesh: {info.triangles.toLocaleString()} tris</span>
           <span>Textured PBR materials: {info.texturedMaterials}</span>
           <span>Render frames/s: {info.renderFps.toFixed(1)} (estimated)</span>

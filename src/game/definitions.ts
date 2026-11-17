@@ -2,6 +2,7 @@ import type { FighterDefinition, MoveDefinition } from "./types";
 import { expandMoveSet } from "./move-expansion";
 import { addCinematicTechniques } from "./cinematic-techniques";
 import { addTpsRangeTechniques } from "./tps-range-attack";
+import { addSeraStreetFlowMoves } from "./sera-street-flow";
 
 function move(
   definition: Partial<MoveDefinition> &
@@ -510,7 +511,7 @@ export const FIGHTER_DEFINITIONS: Record<string, FighterDefinition> = {
       footScale: 1.02,
       longPanels: true,
     },
-    moves: addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(blueMoves), "SERA"), "SERA"),
+    moves: addSeraStreetFlowMoves(addTpsRangeTechniques(addCinematicTechniques(expandMoveSet(blueMoves), "SERA"), "SERA")),
   },
 };
 

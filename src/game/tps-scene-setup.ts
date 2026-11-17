@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createCircularArena, TPS_ARENA_RADIUS } from "./tps-arena-factory";
+import { TPS_CAMERA_DEFAULT_FOV } from "./tps-camera-profile";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import type { Quality } from "./settings";
 
@@ -41,7 +42,7 @@ export function createTpsSceneSetup(input: {
   scene.background = new THREE.Color(0x030b16);
   scene.fog = new THREE.FogExp2(0x030b16, 0.032);
 
-  const camera = new THREE.PerspectiveCamera(47, 1, 0.1, 80);
+  const camera = new THREE.PerspectiveCamera(TPS_CAMERA_DEFAULT_FOV, 1, 0.1, 80);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = false;
   renderer.domElement.setAttribute(

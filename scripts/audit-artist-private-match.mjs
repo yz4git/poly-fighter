@@ -68,6 +68,9 @@ const snapshot = () => run(`${lookup}
   return {
     panel: !!panel,
     panelState: panel?.dataset.artistCombatState ?? null,
+    localSourcesActive: Number(panel?.dataset.artistLocalActive ?? -1),
+    localSourcesLoaded: Number(panel?.dataset.artistLocalLoaded ?? -1),
+    localSourcesReleased: Number(panel?.dataset.artistLocalReleased ?? -1),
     player: game?.p1?.definition?.name ?? game?.p1?.name ?? null,
     opponent: game?.p2?.definition?.name ?? game?.p2?.name ?? null,
     p1Model: root?.userData?.modelSkin ?? null,
@@ -172,6 +175,15 @@ try {
       || !ready.driverPresent || !ready.canvas || ready.localGlbLeak) {
     throw new Error("Actual private SERA versus KAIRO model handoff failed: " + JSON.stringify(ready));
   }
+  // The in-game overlay samples GPU and source-lifetime data each second.
+  // Make sure a locally imported asset exists only while the actor is alive.
+  for (let i = 0; i < 18; i++) {
+    ready = await snapshot();
+    if (ready.localSourcesActive === 1 && ready.localSourcesLoaded >= 1) break;
+    await delay(120);
+  }
+  if (ready.localSourcesActive !== 1 || ready.localSourcesReleased !== 0)
+    throw new Error("Private artist asset source was not uniquely owned: " + JSON.stringify(ready));
   await capture("01-private-sera-vs-kairo-idle");
 
   // Use the same game.press()/game.release() entrypoints as the actual
@@ -231,8 +243,38 @@ try {
   if (!exited.title || exited.privateQa || exited.publicLocalChoice)
     throw new Error("Private GLB leaked into normal game mode: " + JSON.stringify(exited));
   await capture("03-private-qa-exited-no-glb-persisted");
+
+  // Import the very same GLB AGAIN in one browser session. The first source
+  // (including GPU textures) must already be released; the second MUST NOT
+  // come from a stale map of revoked Blob URLs.
+  if (!await click("MODEL VIEW")) throw new Error("Cannot reopen model viewer after private fight cleanup");
+  await delay(380);
+  if (!await click("ARTIST ASSET LAB / GLB")) throw new Error("Artist lab cannot reopen after cleanup");
+  await delay(280);
+  await uploadFixture();
+  if (!await click("TEST REAL MATCH")) throw new Error("Cannot start second local private fight");
+  let repeat = null;
+  for (let i = 0; i < 165; i++) {
+    repeat = await snapshot();
+    if (repeat.heroState === "failed")
+      throw new Error("Repeat artist import/retarget failed: " + JSON.stringify(repeat));
+    if (repeat.heroState === "ready" && repeat.heroVisible
+        && repeat.localSourcesActive === 1 && repeat.localSourcesLoaded >= 2
+        && repeat.localSourcesReleased >= 1) break;
+    await delay(170);
+  }
+  if (repeat?.heroState !== "ready" || !repeat.heroVisible
+      || repeat.localSourcesActive !== 1 || repeat.localSourcesLoaded < 2
+      || repeat.localSourcesReleased < 1 || repeat.p1Model !== "SERA_ARTIST_PREVIEW"
+      || repeat.p2Model !== "QUATERNIUS_UBC") {
+    throw new Error("Local GLB sources accumulated across private matches: " + JSON.stringify(repeat));
+  }
+  await capture("04-private-repeat-import-clean-lifetime");
+  if (!await click("PRIVATE GLB QA")) throw new Error("Second overlay missing");
+  if (!await click("END PRIVATE TEST")) throw new Error("Cannot finish repeated private match");
   await writeFile(output + "/qa-result.json", JSON.stringify({
-    ready, strike, sampledMoves, poseMotion, expanded, exited,
+    ready, strike, sampledMoves, poseMotion, expanded, exited, repeat,
+    artistResourceRule: "exactly one active local GLB and prior texture source released",
     artApproval: "NOT_APPROVED",
     note: "Legacy V2 GLB is an unapproved technical CI fixture only. Never publish it as SERA.",
   }, null, 2));

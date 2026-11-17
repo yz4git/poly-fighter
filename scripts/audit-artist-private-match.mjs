@@ -94,12 +94,12 @@ async function uploadFixture() {
   });
   const elementId = list?.[0]?.["element-6066-11e4-a52e-4f735466cecf"];
   if (!elementId) throw new Error("GLB input not available");
-  await run("const el=document.querySelector('section[aria-label=\\\"SERA Artist Asset Lab\\\"] input[type=file]');el.style.display='block';return true;");
+  await run("const el=document.querySelector('input[type=file]');if(!el)return false;el.style.display='block';return true;");
   await request("/session/" + session + "/element/" + elementId + "/value", "POST", {
     text: glbPath, value: [...glbPath],
   });
   for (let i = 0; i < 160; i++) {
-    const status = await run("return document.querySelector('section[aria-label=\\\"SERA Artist Asset Lab\\\"]')?.dataset.assetIntakeState || '';");
+    const status = await run("return document.querySelector('section[data-asset-intake-state]')?.dataset.assetIntakeState || '';");
     if (status === "tech-pass") return;
     if (status === "rejected") throw new Error("Bundled GLB failed technical fixture validation");
     await delay(175);

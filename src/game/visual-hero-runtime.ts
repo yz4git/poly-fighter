@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { FighterVisual } from "./visual";
 import { localArtistPreviewUrl } from "./local-artist-preview";
+import { leaseLocalArtistGlbSource } from "./artist-local-glb-lifetime";
 
 // Separate character asset, never a procedural overlay on the old model.
 // The UBC skeleton remains a hidden motion driver; this GLB owns its PBR skin,
@@ -54,6 +55,7 @@ type HeroRuntime = {
   materials: THREE.Material[];
   faceMeshes: THREE.SkinnedMesh[];
   assetUrl: string;
+  releaseLocalSource: (() => void) | null;
   tracks: BindTrack[];
   sourceHost: THREE.Object3D | null;
   sourceMeshes: THREE.Mesh[];
@@ -210,7 +212,16 @@ function prepareModel(source: THREE.Group, visual: FighterVisual, assetUrl: stri
     Boolean(mesh.morphTargetDictionary?.eyeBlinkLeft) ||
     mesh.morphTargetDictionary?.eyeBlinkLeft === 0,
   );
-  return { host, model, materials, faceMeshes, assetUrl, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
+  return { host, model, materials, faceMeshes, assetUrl, releaseLocalSource: null, tracks: [], sourceHost: null, sourceMeshes: [], ready: false };
+}
+
+function disposePreparedHero(runtime: HeroRuntime): void {
+  runtime.host.removeFromParent();
+  for (const material of runtime.materials) material.dispose();
+  // Private GLBs are parsed on every test and never cached. Only after
+  // unmounting the clone can its shared source geometries/textures be freed.
+  runtime.releaseLocalSource?.();
+  runtime.releaseLocalSource = null;
 }
 
 export function installSeraHeroModel(visual: FighterVisual, mode: "PBR" | "LOCAL" = "PBR"): void {
@@ -225,12 +236,29 @@ export function installSeraHeroModel(visual: FighterVisual, mode: "PBR" | "LOCAL
     root.userData.heroModelError = "Import an artist GLB in ARTIST ASSET LAB before selecting LOCAL ARTIST TEST.";
     return;
   }
-  void loadSource(assetUrl).then((source) => {
-    if (tokens.get(root) !== token) return;
-    const runtime = prepareModel(source, visual, assetUrl);
+  // Do not retain blob: scenes in the module-level source cache. Every
+  // temporary local source is owned by exactly one loaded fighter, and has a
+  // deterministic disposal path even when navigation interrupts loadAsync.
+  const local = mode === "LOCAL";
+  const pending = local
+    ? new GLTFLoader().loadAsync(assetUrl).then(gltf => gltf.scene)
+    : loadSource(assetUrl);
+  void pending.then((source) => {
+    const release = local ? leaseLocalArtistGlbSource(source) : null;
     if (tokens.get(root) !== token) {
-      runtime.host.removeFromParent();
-      for (const material of runtime.materials) material.dispose();
+      release?.();
+      return;
+    }
+    let runtime: HeroRuntime;
+    try {
+      runtime = prepareModel(source, visual, assetUrl);
+    } catch (error) {
+      release?.();
+      throw error;
+    }
+    runtime.releaseLocalSource = release;
+    if (tokens.get(root) !== token) {
+      disposePreparedHero(runtime);
       return;
     }
     runtimes.set(root, runtime);
@@ -263,9 +291,8 @@ export function updateSeraHeroPose(visual: FighterVisual): void {
     } catch (error) {
       root.userData.heroModelState = "failed";
       root.userData.heroModelError = error instanceof Error ? error.message : String(error);
-      runtime.host.removeFromParent();
+      disposePreparedHero(runtime);
       runtimes.delete(root);
-      for (const material of runtime.materials) material.dispose();
       return;
     }
   }
@@ -321,7 +348,6 @@ export function disposeSeraHeroModel(visual: FighterVisual): void {
   tokens.delete(root);
   const runtime = runtimes.get(root);
   if (!runtime) return;
-  runtime.host.removeFromParent();
-  for (const material of runtime.materials) material.dispose();
+  disposePreparedHero(runtime);
   runtimes.delete(root);
 }

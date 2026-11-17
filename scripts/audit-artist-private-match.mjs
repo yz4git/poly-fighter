@@ -68,6 +68,9 @@ const snapshot = () => run(`${lookup}
   return {
     panel: !!panel,
     panelState: panel?.dataset.artistCombatState ?? null,
+    localSourcesActive: Number(panel?.dataset.artistLocalActive ?? -1),
+    localSourcesLoaded: Number(panel?.dataset.artistLocalLoaded ?? -1),
+    localSourcesReleased: Number(panel?.dataset.artistLocalReleased ?? -1),
     player: game?.p1?.definition?.name ?? game?.p1?.name ?? null,
     opponent: game?.p2?.definition?.name ?? game?.p2?.name ?? null,
     p1Model: root?.userData?.modelSkin ?? null,
@@ -172,6 +175,15 @@ try {
       || !ready.driverPresent || !ready.canvas || ready.localGlbLeak) {
     throw new Error("Actual private SERA versus KAIRO model handoff failed: " + JSON.stringify(ready));
   }
+  // The in-game overlay samples GPU and source-lifetime data each second.
+  // Make sure a locally imported asset exists only while the actor is alive.
+  for (let i = 0; i < 18; i++) {
+    ready = await snapshot();
+    if (ready.localSourcesActive === 1 && ready.localSourcesLoaded >= 1) break;
+    await delay(120);
+  }
+  if (ready.localSourcesActive !== 1 || ready.localSourcesReleased !== 0)
+    throw new Error("Private artist asset source was not uniquely owned: " + JSON.stringify(ready));
   await capture("01-private-sera-vs-kairo-idle");
 
   // Use the same game.press()/game.release() entrypoints as the actual
@@ -231,8 +243,88 @@ try {
   if (!exited.title || exited.privateQa || exited.publicLocalChoice)
     throw new Error("Private GLB leaked into normal game mode: " + JSON.stringify(exited));
   await capture("03-private-qa-exited-no-glb-persisted");
+
+  // Import the very same GLB AGAIN in one browser session. The first source
+  // (including GPU textures) must already be released; the second MUST NOT
+  // come from a stale map of revoked Blob URLs.
+  if (!await click("MODEL VIEW")) throw new Error("Cannot reopen model viewer after private fight cleanup");
+  await delay(380);
+  if (!await click("ARTIST ASSET LAB / GLB")) throw new Error("Artist lab cannot reopen after cleanup");
+  await delay(280);
+  await uploadFixture();
+  if (!await click("TEST REAL MATCH")) throw new Error("Cannot start second local private fight");
+  let repeat = null;
+  for (let i = 0; i < 165; i++) {
+    repeat = await snapshot();
+    if (repeat.heroState === "failed")
+      throw new Error("Repeat artist import/retarget failed: " + JSON.stringify(repeat));
+    if (repeat.heroState === "ready" && repeat.heroVisible
+        && repeat.localSourcesActive === 1 && repeat.localSourcesLoaded >= 2
+        && repeat.localSourcesReleased >= 1) break;
+    await delay(170);
+  }
+  if (repeat?.heroState !== "ready" || !repeat.heroVisible
+      || repeat.localSourcesActive !== 1 || repeat.localSourcesLoaded < 2
+      || repeat.localSourcesReleased < 1 || repeat.p1Model !== "SERA_ARTIST_PREVIEW"
+      || repeat.p2Model !== "QUATERNIUS_UBC") {
+    throw new Error("Local GLB sources accumulated across private matches: " + JSON.stringify(repeat));
+  }
+  await capture("04-private-repeat-import-clean-lifetime");
+  // Real Chrome display size close to an iPhone landscape 874x402 CSS viewport.
+  // This is NOT a native iPhone device/FPS claim. The expanded review panel
+  // must remain scrollable and leave actual ATTACK/STEP buttons unobstructed.
+  const desktopWindow = await request("/session/" + session + "/window/rect");
+  let mobile = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const beforeSize = await run("return {ow:window.outerWidth,oh:window.outerHeight,iw:window.innerWidth,ih:window.innerHeight};");
+    await request("/session/" + session + "/window/rect", "POST", {
+      width: Math.round(874 + Math.max(0, beforeSize.ow - beforeSize.iw)),
+      height: Math.round(402 + Math.max(0, beforeSize.oh - beforeSize.ih)),
+    });
+    await run("window.dispatchEvent(new Event('resize'));return true;");
+    await delay(320);
+    mobile = await run("return {width:window.innerWidth,height:window.innerHeight};");
+    if (mobile.width >= 854 && mobile.width <= 895
+      && mobile.height >= 388 && mobile.height <= 420) break;
+  }
+  if (!mobile || mobile.width < 854 || mobile.width > 895
+      || mobile.height < 388 || mobile.height > 420)
+    throw new Error("Cannot establish phone-landscape CSS viewport: " + JSON.stringify(mobile));
+  if (!await click("PRIVATE GLB QA")) throw new Error("Second overlay missing");
+  const mobileQa = await run(`
+    const panel=document.querySelector('aside[data-artist-combat-qa]');
+    const attack=document.querySelector('.tps-attack-action');
+    const step=document.querySelector('.tps-step-action');
+    const pause=document.querySelector('.tps-pause-button');
+    if (!panel||!attack||!step||!pause) return null;
+    const a=attack.getBoundingClientRect(), s=step.getBoundingClientRect();
+    const p=panel.getBoundingClientRect(), q=pause.getBoundingClientRect();
+    return {
+      innerWidth:window.innerWidth, innerHeight:window.innerHeight,
+      panelTop:p.top, panelBottom:p.bottom, panelHeight:p.height,
+      pauseBottom:q.bottom, pauseVisible:q.width>15&&q.height>15,
+      panelScrollHeight:panel.scrollHeight, panelClientHeight:panel.clientHeight,
+      panelScrollY:getComputedStyle(panel).overflowY,
+      attackTop:a.top, attackVisible:a.width>32&&a.height>32,
+      stepVisible:s.width>32&&s.height>32,
+      capturesAvailable:!![...panel.querySelectorAll('button')].find(b=>b.textContent?.includes('SAVE PRIVATE QA METRICS')),
+    };
+  `);
+  if (!mobileQa || !mobileQa.attackVisible || !mobileQa.stepVisible
+      || mobileQa.panelScrollY !== "auto"
+      || !mobileQa.capturesAvailable
+      || !mobileQa.pauseVisible
+      || mobileQa.panelTop < mobileQa.pauseBottom + 3
+      || mobileQa.panelBottom > mobileQa.attackTop - 3)
+    throw new Error("Private QA obscures iPhone landscape controls: " + JSON.stringify(mobileQa));
+  await capture("05-private-iphone-landscape-qa-expanded");
+  await request("/session/" + session + "/window/rect", "POST", desktopWindow);
+  await run("window.dispatchEvent(new Event('resize'));return true;");
+  await delay(200);
+  if (!await click("END PRIVATE TEST")) throw new Error("Cannot finish repeated private match");
   await writeFile(output + "/qa-result.json", JSON.stringify({
-    ready, strike, sampledMoves, poseMotion, expanded, exited,
+    ready, strike, sampledMoves, poseMotion, expanded, exited, repeat, mobileQa,
+    artistResourceRule: "exactly one active local GLB and prior texture source released",
     artApproval: "NOT_APPROVED",
     note: "Legacy V2 GLB is an unapproved technical CI fixture only. Never publish it as SERA.",
   }, null, 2));

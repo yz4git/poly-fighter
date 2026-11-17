@@ -41,6 +41,60 @@ function torsoInfluence(
   return THREE.MathUtils.clamp(weight, 0, 1);
 }
 
+/** An authored collar/hem silhouette sampled in unposed garment coordinates.
+ * The shell is still real skinned geometry. Fragment clipping fixes the few
+ * jagged triangle-border pixels without detaching it from the body skeleton.
+ * These values are derived once from the licensed model's torso bounds.
+ */
+export type ConformalGarmentCut = Readonly<{
+  centerX: number;
+  centerZ: number;
+  halfWidth: number;
+  depth: number;
+  hem: number;
+  top: number;
+  frontDip: number;
+}>;
+
+export function patchConformalGarmentEdgeShader(
+  shader: { vertexShader: string; fragmentShader: string },
+  cut: ConformalGarmentCut,
+): void {
+  const vCommon = "#include <common>";
+  const vBegin = "#include <begin_vertex>";
+  const fCommon = "#include <common>";
+  const fColor = "#include <color_fragment>";
+  if (!shader.vertexShader.includes(vCommon)
+      || !shader.vertexShader.includes(vBegin)
+      || !shader.fragmentShader.includes(fCommon)
+      || !shader.fragmentShader.includes(fColor)) {
+    throw new Error("POLY_FIGHTER_CONFORMAL_CUT_SHADER_UNSUPPORTED");
+  }
+  const f = (n: number) => n.toFixed(7);
+  shader.vertexShader = shader.vertexShader
+    .replace(vCommon, vCommon + "\\nvarying vec3 vVestRestPosition;")
+    .replace(vBegin, vBegin + "\\nvVestRestPosition = position;");
+  shader.fragmentShader = shader.fragmentShader
+    .replace(fCommon, fCommon + "\\nvarying vec3 vVestRestPosition;")
+    .replace(fColor, fColor + `\n      float vestSide = clamp(abs(vVestRestPosition.x - ${f(cut.centerX)}) / ${f(Math.max(.00001, cut.halfWidth))}, 0.0, 1.0);\n      float vestFront = smoothstep(${f(cut.centerZ - cut.depth * .18)}, ${f(cut.centerZ + cut.depth * .28)}, vVestRestPosition.z);\n      float vestTop = ${f(cut.top)} - vestFront * (1.0 - vestSide) * ${f(cut.frontDip)};\n      if (vVestRestPosition.y < ${f(cut.hem)} || vVestRestPosition.y > vestTop) discard;\n    `);
+}
+
+function installConformalGarmentCut(
+  material: THREE.MeshStandardMaterial,
+  cut: ConformalGarmentCut,
+): void {
+  const oldCompile = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    oldCompile.call(material, shader, renderer);
+    patchConformalGarmentEdgeShader(shader, cut);
+  };
+  const oldKey = material.customProgramCacheKey();
+  material.customProgramCacheKey = () =>
+    `${oldKey}|${QUATERNIUS_CONFORMAL_GARMENT_ID}|${Object.values(cut).join(",")}`;
+  material.userData.quaterniusConformalCut = cut;
+  material.needsUpdate = true;
+}
+
 export type ConformalGarmentMetrics = Readonly<{
   vertices: number;
   triangles: number;
@@ -107,9 +161,11 @@ export function buildQuaterniusConformalGarment(
     const c = sourceIndex ? sourceIndex.getX(tri * 3 + 2) : tri * 3 + 2;
     if (a < 0 || b < 0 || c < 0
         || a >= positions.count || b >= positions.count || c >= positions.count) return null;
-    if ((torso[a] + torso[b] + torso[c]) / 3 < .38) continue;
+    if ((torso[a] + torso[b] + torso[c]) / 3 < .24) continue;
     const y = (positions.getY(a) + positions.getY(b) + positions.getY(c)) / 3;
-    if (y < hemLine || y > maxY - torsoHeight * .025) continue;
+    // Keep boundary triangles beyond the visible cloth trim, and clip their
+    // visible edge analytically in the shader to avoid triangle teeth.
+    if (y < hemLine - torsoHeight * .095 || y > maxY + torsoHeight * .025) continue;
     triangles.push(a, b, c);
   }
   const triangleCount = triangles.length / 3;
@@ -184,6 +240,15 @@ export function buildQuaterniusConformalGarment(
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
+  });
+  installConformalGarmentCut(material, {
+    centerX,
+    centerZ: (minZ + maxZ) * .5,
+    halfWidth: torsoWidth * .5,
+    depth: torsoDepth,
+    hem: hemLine,
+    top: maxY - torsoHeight * (isSera ? .035 : .018),
+    frontDip: torsoHeight * (isSera ? .19 : .12),
   });
   const garment = new THREE.SkinnedMesh(geometry, material);
   garment.name = "ubc-conformal-rigged-vest";

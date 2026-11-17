@@ -354,7 +354,7 @@ try {
       || neutral.architecture.bays !== 24
       || neutral.architecture.draws !== 7
       || neutral.architecture.pillars !== 24
-      || neutral.architecture.deck !== 40
+      || neutral.architecture.deck !== 32
       || neutral.architecture.lightCount !== 2) {
     throw new Error(`Rendered stadium / hero lighting contract failed: ${JSON.stringify(neutral.architecture)}`);
   }

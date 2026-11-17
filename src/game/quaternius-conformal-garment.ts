@@ -72,10 +72,10 @@ export function patchConformalGarmentEdgeShader(
   }
   const f = (n: number) => n.toFixed(7);
   shader.vertexShader = shader.vertexShader
-    .replace(vCommon, vCommon + "\\nvarying vec3 vVestRestPosition;")
-    .replace(vBegin, vBegin + "\\nvVestRestPosition = position;");
+    .replace(vCommon, vCommon + "\nvarying vec3 vVestRestPosition;")
+    .replace(vBegin, vBegin + "\nvVestRestPosition = position;");
   shader.fragmentShader = shader.fragmentShader
-    .replace(fCommon, fCommon + "\\nvarying vec3 vVestRestPosition;")
+    .replace(fCommon, fCommon + "\nvarying vec3 vVestRestPosition;")
     .replace(fColor, fColor + `\n      float vestSide = clamp(abs(vVestRestPosition.x - ${f(cut.centerX)}) / ${f(Math.max(.00001, cut.halfWidth))}, 0.0, 1.0);\n      float vestFront = smoothstep(${f(cut.centerZ - cut.depth * .18)}, ${f(cut.centerZ + cut.depth * .28)}, vVestRestPosition.z);\n      float vestTop = ${f(cut.top)} - vestFront * (1.0 - vestSide) * ${f(cut.frontDip)};\n      if (vVestRestPosition.y < ${f(cut.hem)} || vVestRestPosition.y > vestTop) discard;\n    `);
 }
 

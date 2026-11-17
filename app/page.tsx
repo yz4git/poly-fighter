@@ -299,8 +299,10 @@ export default function Home() {
     const activeDifficulty = artistPrivateMatch || screen === "TRAINING" ? "EASY" : circuitMatch ? circuitEncounter.difficulty : difficulty;
     const artistModels = resolveArtistPrivateCombatModels(artistPrivateMatch, localArtistPreviewUrl(), modelChoice);
     if (!artistModels.eligible) {
-      setFallback(artistModels.issue);
-      return undefined;
+      // Asynchronous, like the existing WebGL startup fallbacks; avoid
+      // cascading updates from within React's effect body.
+      const timeout = window.setTimeout(() => setFallback(artistModels.issue), 0);
+      return () => window.clearTimeout(timeout);
     }
     try {
       game = new TpsFightGame(mountRef.current, {

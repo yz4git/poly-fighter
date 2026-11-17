@@ -451,6 +451,14 @@ try {
         correctionPolicy: root.userData.motionCorrectionPolicy ?? null,
         contactMode: root.userData.motionExpansionContactMode ?? null,
         contact,
+        punchSilhouette: {
+          version: root.userData.tpsPunchSilhouetteVersion ?? null,
+          family: root.userData.tpsPunchSilhouetteFamily ?? null,
+          factor: Number(root.userData.tpsPunchSilhouetteFactor ?? 0),
+          yaw: Number(root.userData.tpsPunchSilhouetteYaw ?? 0),
+          pitch: Number(root.userData.tpsPunchSilhouettePitch ?? 0),
+          bones: Number(root.userData.tpsPunchSilhouetteBoneCount ?? 0),
+        },
         points,
         strikePoint,
         peakStrikeY: Number.isFinite(peakStrikeY) ? peakStrikeY : null,
@@ -477,6 +485,23 @@ try {
     if (!result) throw new Error(`Missing motion result for ${moveId}`);
     if (!result.activeReached || result.state !== "ATTACK") {
       throw new Error(`Motion ${moveId} was not captured during ACTIVE: ${JSON.stringify(result)}`);
+    }
+
+    // This is the actual skinned WebGL pose, not only a pure function test.
+    // Require distinct visible upper-body accent on all grounded base punches;
+    // kicks, throws and finishers retain their independently authored motion.
+    const silhouette = result.punchSilhouette;
+    if (["jab", "straight", "bodyBlow"].includes(moveId)) {
+      if (silhouette?.version !== "AUTHORED_UPPER_BODY_ARC_V1"
+        || silhouette.family !== moveId
+        || silhouette.factor < .8
+        || silhouette.bones !== 3
+        || Math.abs(silhouette.yaw) < .035
+        || Math.abs(silhouette.yaw) > .11) {
+        throw new Error(`Missing bounded live skinned punch silhouette for ${moveId}: ${JSON.stringify(silhouette)}`);
+      }
+    } else if (silhouette && silhouette.factor > 1e-6) {
+      throw new Error(`Punch-only skinned accent leaked into ${moveId}: ${JSON.stringify(silhouette)}`);
     }
 
     if (authoredMoves.has(moveId)) {

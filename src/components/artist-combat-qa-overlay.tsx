@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type CSSProperties, type RefObject } from "react";
 import type { TpsFightGame } from "../game/tps-game";
 import { ARTIST_PRIVATE_COMBAT_VERSION } from "../game/artist-private-combat";
 
@@ -81,7 +81,7 @@ export function ArtistCombatQaOverlay({
 
   const ready = info.state === "ready" && info.mappedBones >= 20;
   const stateColor = ready ? "#91f6b2" : info.state === "failed" ? "#ff9d9d" : "#ffe0a2";
-  const surface: React.CSSProperties = {
+  const surface: CSSProperties = {
     position: "absolute",
     right: "max(8px, env(safe-area-inset-right))",
     top: "max(72px, env(safe-area-inset-top))",
@@ -96,7 +96,7 @@ export function ArtistCombatQaOverlay({
     lineHeight: 1.4,
     touchAction: "manipulation",
   };
-  const button: React.CSSProperties = {
+  const button: CSSProperties = {
     color: "inherit", background: "rgba(45,79,112,.75)",
     border: "1px solid rgba(160,214,255,.56)",
     borderRadius: 4, padding: "7px 9px", fontSize: 10,

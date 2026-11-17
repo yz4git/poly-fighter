@@ -204,6 +204,7 @@ export function quaterniusSurfaceFinishForTag(tag: string): QuaterniusSurfaceFin
 }
 
 function prepareOutfitMaterial(mesh: THREE.Mesh, material: THREE.Material): boolean {
+  if (shouldKeepAuthoredMaterial(mesh, material)) return false;
   if (!(material instanceof THREE.MeshStandardMaterial)) return false;
   const finish = quaterniusSurfaceFinishForTag(authoredMaterialTag(mesh, material));
   if (finish.role === "AUTHORED") return false;

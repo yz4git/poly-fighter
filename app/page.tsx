@@ -6,6 +6,9 @@ import { FIGHTER_DEFINITIONS } from "@/src/game/definitions";
 import { TpsFightGame } from "@/src/game/tps-game";
 import { ReferenceReconstructionPanel } from "@/src/components/reference-reconstruction";
 import { ModelViewerPanel } from "@/src/components/model-viewer-panel";
+import { ArtistCombatQaOverlay } from "@/src/components/artist-combat-qa-overlay";
+import { localArtistPreviewUrl, releaseLocalArtistPreview } from "@/src/game/local-artist-preview";
+import { resolveArtistPrivateCombatModels } from "@/src/game/artist-private-combat";
 import type { CpuDifficulty } from "@/src/game/fighter";
 import type { HudSnapshot, InputAction } from "@/src/game/types";
 import { advanceTpsTrainingStage, EMPTY_TPS_TRAINING, TPS_TRAINING_STEPS, type TpsTrainingStage } from "@/src/game/tps-training";
@@ -240,6 +243,7 @@ export default function Home() {
   const [p1Choice, setP1Choice] = useState("red");
   const [p2Choice, setP2Choice] = useState("blue");
   const [modelChoice, setModelChoice] = useState<FighterModelId>(DEFAULT_FIGHTER_MODEL_ID);
+  const [artistPrivateMatch, setArtistPrivateMatch] = useState(false);
   const [difficulty, setDifficulty] = useState<CpuDifficulty>("NORMAL");
   const [hud, setHud] = useState<HudSnapshot | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
@@ -292,13 +296,20 @@ export default function Home() {
     let reportedFallback = false;
     const circuitMatch = screen === "CIRCUIT_MATCH";
     const opponentChoice = circuitMatch ? circuitOpponentChoice : p2Choice;
-    const activeDifficulty = screen === "TRAINING" ? "EASY" : circuitMatch ? circuitEncounter.difficulty : difficulty;
+    const activeDifficulty = artistPrivateMatch || screen === "TRAINING" ? "EASY" : circuitMatch ? circuitEncounter.difficulty : difficulty;
+    const artistModels = resolveArtistPrivateCombatModels(artistPrivateMatch, localArtistPreviewUrl(), modelChoice);
+    if (!artistModels.eligible) {
+      // Asynchronous, like the existing WebGL startup fallbacks; avoid
+      // cascading updates from within React's effect body.
+      const timeout = window.setTimeout(() => setFallback(artistModels.issue), 0);
+      return () => window.clearTimeout(timeout);
+    }
     try {
       game = new TpsFightGame(mountRef.current, {
         p1Definition: playableFighterDefinition(p1Choice, "red"),
         p2Definition: playableFighterDefinition(opponentChoice, "blue"),
-        p1Model: modelChoice,
-        p2Model: modelChoice,
+        p1Model: artistModels.p1Model,
+        p2Model: artistModels.p2Model,
         difficulty: activeDifficulty,
         training: screen === "TRAINING",
         onHud: (snapshot) => {
@@ -363,7 +374,7 @@ export default function Home() {
       gameRef.current = null;
       game.destroy();
     };
-  }, [circuitEncounter, circuitOpponentChoice, circuitProtocols, circuitStage, difficulty, modelChoice, p1Choice, p2Choice, screen]);
+  }, [artistPrivateMatch, circuitEncounter, circuitOpponentChoice, circuitProtocols, circuitStage, difficulty, modelChoice, p1Choice, p2Choice, screen]);
 
   const persistSettings = (patch: Partial<SettingsDraft>) => {
     const next = { ...settings, ...patch };
@@ -405,6 +416,22 @@ export default function Home() {
     setScreen("TPS_MATCH");
   };
 
+  const startPrivateArtistMatch = () => {
+    const candidate = resolveArtistPrivateCombatModels(true, localArtistPreviewUrl(), DEFAULT_FIGHTER_MODEL_ID);
+    if (!candidate.eligible) { setFallback(candidate.issue); return; }
+    requestLandscape();
+    setFallback(null);
+    setArtistPrivateMatch(true);
+    setModelChoice(DEFAULT_FIGHTER_MODEL_ID);
+    setP1Choice("blue"); // SERA: the single compatible private GLB test fighter.
+    setP2Choice("red");  // KAIRO: stable known-good UBC CPU opponent.
+    setMatchMode("VERSUS");
+    setHud(null);
+    hudRef.current = null;
+    setPaused(false);
+    setScreen("TPS_MATCH");
+  };
+
   const startCircuit = () => {
     requestLandscape();
     setMatchMode("CIRCUIT");
@@ -438,6 +465,9 @@ export default function Home() {
 
   const backToTitle = () => {
     requestLandscape();
+    setArtistPrivateMatch(false);
+    setModelChoice(DEFAULT_FIGHTER_MODEL_ID);
+    releaseLocalArtistPreview(); // No private GLB persists after leaving QA.
     setPaused(false);
     setMatchMode("VERSUS");
     setScreen("TITLE");
@@ -500,7 +530,7 @@ export default function Home() {
         </section>
       )}
 
-      {screen === "MODEL_VIEW" && <ModelViewerPanel quality={settings.quality} onBack={backToTitle} />}
+      {screen === "MODEL_VIEW" && <ModelViewerPanel quality={settings.quality} onBack={backToTitle} onTestPrivateMatch={startPrivateArtistMatch} />}
 
       {screen === "SELECT" && (
         <section className="select-screen screen-panel">
@@ -598,6 +628,7 @@ export default function Home() {
 
       {isPlayableSurface && (
         <>
+          {artistPrivateMatch && screen === "TPS_MATCH" && <ArtistCombatQaOverlay gameRef={gameRef} onExit={backToTitle} />}
           <section className={`fight-hud ${tpsFaceSafeMessage ? "tps-face-safe-active" : ""}`} aria-live="polite">
             <div className="hud-player left-player"><div className="hud-name"><span>PLAYER 1</span><strong>{hud?.p1Name ?? p1.name}</strong></div><HealthBar value={hud?.p1Health ?? 100} /><div className="win-pips"><i className={(hud?.p1Wins ?? 0) > 0 ? "won" : ""} /><i className={(hud?.p1Wins ?? 0) > 1 ? "won" : ""} /></div></div>
             <div className="round-readout"><span>ROUND {hud?.round ?? 1}</span><b>{String(hud?.timer ?? 60).padStart(2, "0")}</b><small>{hud?.message ?? "ROUND 1"}</small></div>

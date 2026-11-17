@@ -330,6 +330,8 @@ try {
       draws: vault?.userData?.tpsArchitectureDrawGroups ?? 0,
       pillars: pillars?.count ?? 0,
       deck: floor?.count ?? 0,
+      deckIsMatte: floor?.material?.isMeshBasicMaterial === true,
+      deckOpacity: floor?.material?.opacity ?? null,
       lightCount: game.scene.children.filter(o => o.isDirectionalLight).length,
     };
     const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
@@ -355,6 +357,8 @@ try {
       || neutral.architecture.draws !== 7
       || neutral.architecture.pillars !== 24
       || neutral.architecture.deck !== 32
+      || !neutral.architecture.deckIsMatte
+      || neutral.architecture.deckOpacity > 0.40
       || neutral.architecture.lightCount !== 2) {
     throw new Error(`Rendered stadium / hero lighting contract failed: ${JSON.stringify(neutral.architecture)}`);
   }

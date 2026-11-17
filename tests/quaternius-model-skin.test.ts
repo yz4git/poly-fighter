@@ -4,6 +4,8 @@ import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS } from "../src/game/model-skins";
 import {
   QUATERNIUS_OUTFIT_SKIN_ID,
+  QUATERNIUS_OUTFIT_SURFACE_ID,
+  quaterniusSurfaceFinishForTag,
   quaterniusOutfitToneForBoneName,
   quaterniusShouldTintScalp,
 } from "../src/game/quaternius-outfit-skin";
@@ -53,4 +55,25 @@ test("weighted UBC outfit skin keeps the face skin-coloured while tinting expose
   assert.equal(quaterniusOutfitToneForBoneName("calf_r", "SPEED"), "LIGHT");
   assert.equal(quaterniusOutfitToneForBoneName("foot_r", "SPEED"), "PRIMARY");
 
+});
+
+test("original UBC skin uses smooth PBR anatomy, matte cloth, hard trim and preserves authored eyes", () => {
+  assert.equal(QUATERNIUS_OUTFIT_SURFACE_ID, "UBC_SEMANTIC_SURFACE_V1");
+  const face = quaterniusSurfaceFinishForTag("UBC.Body Skin");
+  const cloth = quaterniusSurfaceFinishForTag("UBC.Fabric Jacket");
+  const hard = quaterniusSurfaceFinishForTag("UBC.armor metal");
+  const eye = quaterniusSurfaceFinishForTag("UBC.Head Eye_L");
+  const hair = quaterniusSurfaceFinishForTag("UBC Hair");
+  assert.equal(face.role, "SKIN");
+  assert.equal(face.flatShading, false, "no low-poly face normals");
+  assert.equal(face.metalness, 0, "skin must not have metallic highlights");
+  assert.equal(cloth.role, "FABRIC");
+  assert.equal(cloth.flatShading, false);
+  assert.ok(cloth.roughness >= .7);
+  assert.equal(hard.role, "HARDWARE");
+  assert.equal(hard.flatShading, true);
+  assert.ok(hard.metalness > cloth.metalness);
+  assert.equal(eye.role, "AUTHORED", "original eye material must not be repainted");
+  assert.equal(hair.role, "AUTHORED", "original groom must not be repainted");
+  assert.equal(quaterniusSurfaceFinishForTag("ubc_male"), quaterniusSurfaceFinishForTag("ubc_default"));
 });

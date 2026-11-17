@@ -886,9 +886,11 @@ prototype.resolveAttack = function resolveAttack(
   }
 
   const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  // Share the actual main-combat impact anchor with secondary hype effects.
-  // Previously the second burst appeared far below SERA's head-height kick.
-  impactPosition.y = tpsImpactHeightForMove(move);
+  // Match the first hit burst to SERA's authored strike contact.
+  // Preserve the original secondary FX height for every pre-existing move.
+  impactPosition.y = SERA_STREET_FLOW_MOVES.some(id => id === move.id)
+    ? tpsImpactHeightForMove(move)
+    : move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,

@@ -4,6 +4,20 @@ import { TPS_CAMERA_DEFAULT_FOV } from "./tps-camera-profile";
 import { TpsGraphicsDirector } from "./tps-graphics";
 import type { Quality } from "./settings";
 
+// One warm key / cool rim pair, not an extra light per decoration. Keeping
+// direct-light cost fixed protects iPhone Safari's GPU budget while reducing
+// the flat, blown-out whites seen in the last captured fight screenshots.
+export const TPS_HERO_LIGHTING_PROFILE = Object.freeze({
+  sky: 0xb6d9f2,
+  ground: 0x111c2c,
+  hemiIntensity: 1.92,
+  keyColor: 0xffe9dc,
+  keyIntensity: 3.12,
+  rimColor: 0x70d1ff,
+  rimIntensity: 2.66,
+  directLights: 2,
+});
+
 export type TpsSceneSetup = {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -53,10 +67,11 @@ export function createTpsSceneSetup(input: {
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tpsPixelRatioCap(input.quality)));
 
-  const hemi = new THREE.HemisphereLight(0xaedcff, 0x07101d, 2.35);
-  const key = new THREE.DirectionalLight(0xffffff, 3.8);
+  const light = TPS_HERO_LIGHTING_PROFILE;
+  const hemi = new THREE.HemisphereLight(light.sky, light.ground, light.hemiIntensity);
+  const key = new THREE.DirectionalLight(light.keyColor, light.keyIntensity);
   key.position.set(-4, 9, 5);
-  const rim = new THREE.DirectionalLight(0x42c9ff, 2.8);
+  const rim = new THREE.DirectionalLight(light.rimColor, light.rimIntensity);
   rim.position.set(5, 4, -6);
   scene.add(hemi, key, rim);
 

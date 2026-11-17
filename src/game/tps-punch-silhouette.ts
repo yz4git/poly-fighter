@@ -139,6 +139,8 @@ function apply(fighter: FighterRuntime, state: PoseState): void {
   data.tpsPunchSilhouetteVersion = TPS_PUNCH_SILHOUETTE_VERSION;
   data.tpsPunchSilhouetteFactor = 0;
   data.tpsPunchSilhouetteYaw = 0;
+  data.tpsPunchSilhouettePitch = 0;
+  data.tpsPunchSilhouetteBoneCount = 0;
   data.tpsPunchSilhouetteFamily = null;
   const move = fighter.currentMove;
   const family = tpsClosePunchFamily(move);

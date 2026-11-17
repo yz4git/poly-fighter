@@ -321,10 +321,22 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
+    const vault = game.scene.getObjectByName('tps-architectural-vault');
+    const pillars = vault?.getObjectByName('tps-vault-uprights');
+    const floor = vault?.getObjectByName('tps-vault-floor-facets');
+    const architecture = {
+      version: vault?.userData?.tpsArchitectureVersion ?? null,
+      bays: vault?.userData?.tpsArchitectureBays ?? 0,
+      draws: vault?.userData?.tpsArchitectureDrawGroups ?? 0,
+      pillars: pillars?.count ?? 0,
+      deck: floor?.count ?? 0,
+      lightCount: game.scene.children.filter(o => o.isDirectionalLight).length,
+    };
     const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
+      architecture,
       points: bonePoints(game.p1),
       gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
       visualRootPosition: point(game.p1.visual.root),
@@ -338,6 +350,14 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
   if (!neutral?.points) throw new Error(`Neutral imported arm points missing: ${JSON.stringify(neutral)}`);
+  if (neutral.architecture?.version !== "VAULTED_ARENA_STRUCTURE_V1"
+      || neutral.architecture.bays !== 24
+      || neutral.architecture.draws !== 7
+      || neutral.architecture.pillars !== 24
+      || neutral.architecture.deck !== 40
+      || neutral.architecture.lightCount !== 2) {
+    throw new Error(`Rendered stadium / hero lighting contract failed: ${JSON.stringify(neutral.architecture)}`);
+  }
   for (const side of ['L', 'R']) {
     const elbow = neutral.points[`elbow${side}`];
     const hand = neutral.points[`hand${side}`];

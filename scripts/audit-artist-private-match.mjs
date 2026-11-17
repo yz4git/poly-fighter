@@ -295,12 +295,14 @@ try {
     const panel=document.querySelector('aside[data-artist-combat-qa]');
     const attack=document.querySelector('.tps-attack-action');
     const step=document.querySelector('.tps-step-action');
-    if (!panel||!attack||!step) return null;
+    const pause=document.querySelector('.tps-pause-button');
+    if (!panel||!attack||!step||!pause) return null;
     const a=attack.getBoundingClientRect(), s=step.getBoundingClientRect();
-    const p=panel.getBoundingClientRect();
+    const p=panel.getBoundingClientRect(), q=pause.getBoundingClientRect();
     return {
       innerWidth:window.innerWidth, innerHeight:window.innerHeight,
-      panelBottom:p.bottom, panelHeight:p.height,
+      panelTop:p.top, panelBottom:p.bottom, panelHeight:p.height,
+      pauseBottom:q.bottom, pauseVisible:q.width>15&&q.height>15,
       panelScrollHeight:panel.scrollHeight, panelClientHeight:panel.clientHeight,
       panelScrollY:getComputedStyle(panel).overflowY,
       attackTop:a.top, attackVisible:a.width>32&&a.height>32,
@@ -311,6 +313,8 @@ try {
   if (!mobileQa || !mobileQa.attackVisible || !mobileQa.stepVisible
       || mobileQa.panelScrollY !== "auto"
       || !mobileQa.capturesAvailable
+      || !mobileQa.pauseVisible
+      || mobileQa.panelTop < mobileQa.pauseBottom + 3
       || mobileQa.panelBottom > mobileQa.attackTop - 3)
     throw new Error("Private QA obscures iPhone landscape controls: " + JSON.stringify(mobileQa));
   await capture("05-private-iphone-landscape-qa-expanded");

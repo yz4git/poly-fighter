@@ -220,6 +220,8 @@ try{
     throw new Error("The actual imported 3D rig is not visibly executing distinct GIF poses: "+JSON.stringify({guard,p}));
   if(p.streetFlowKick?.foot_r?.[1] <= p.streetFlowKick?.foot_l?.[1]+.25)
     throw new Error("SERA did not visibly raise the high side kick above the grounded support foot");
+  if(p.streetFlowKick?.hand_l?.[1] > p.streetFlowKick?.Head?.[1] + .34)
+    throw new Error("SERA high kick raised the off-hand above the head instead of guarding the face");
   await writeFile(dir+"/real-gif-combat.json",JSON.stringify({
     reference:"12-frame 110ms user-supplied action GIF",
     note:"Actual 60Hz SERA gameplay; real first/second clean hit required; not a new photoreal actor",

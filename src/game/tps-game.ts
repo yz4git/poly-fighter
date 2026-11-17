@@ -22,6 +22,7 @@ import {
   type TpsComboRoute,
 } from "./motion-profile";
 import { trackMotionFighter } from "./motion-reaction";
+import { tpsImpactHeightForMove } from "./tps-impact-resolution";
 import type { HitEvent, InputFrame } from "./types";
 import {
   TPS_HYPE_PROFILE,
@@ -885,7 +886,9 @@ prototype.resolveAttack = function resolveAttack(
   }
 
   const impactPosition = attacker.position.clone().lerp(defender.position, 0.55);
-  impactPosition.y = move.hitLevel === "LOW" ? 0.55 : move.reactionTarget === "HEAD" ? 1.85 : 1.35;
+  // Share the actual main-combat impact anchor with secondary hype effects.
+  // Previously the second burst appeared far below SERA's head-height kick.
+  impactPosition.y = tpsImpactHeightForMove(move);
   const event: HitEvent = {
     attacker: attacker.id,
     defender: defender.id,

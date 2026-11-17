@@ -60,7 +60,8 @@ export function buildQuaterniusConformalGarment(
   const boneIds = source.getAttribute("skinIndex");
   const boneWeights = source.getAttribute("skinWeight");
   if (!positions || !normals || !boneIds || !boneWeights
-      || positions.count < 30 || boneIds.count !== positions.count
+      || positions.count < 30 || normals.count !== positions.count
+      || boneIds.count !== positions.count
       || boneWeights.count !== positions.count || !body.skeleton?.bones.length) return null;
 
   // Determine the actual torso range from its skinning, rather than guessing
@@ -105,6 +106,8 @@ export function buildQuaterniusConformalGarment(
     const a = sourceIndex ? sourceIndex.getX(tri * 3) : tri * 3;
     const b = sourceIndex ? sourceIndex.getX(tri * 3 + 1) : tri * 3 + 1;
     const c = sourceIndex ? sourceIndex.getX(tri * 3 + 2) : tri * 3 + 2;
+    if (a < 0 || b < 0 || c < 0
+        || a >= positions.count || b >= positions.count || c >= positions.count) return null;
     if (Math.min(torso[a], torso[b], torso[c]) < .64) continue;
     const y = (positions.getY(a) + positions.getY(b) + positions.getY(c)) / 3;
     if (y < hemLine || y > maxY - torsoHeight * .055) continue;

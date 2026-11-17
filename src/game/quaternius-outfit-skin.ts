@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
+import { buildQuaterniusConformalGarment, QUATERNIUS_CONFORMAL_GARMENT_ID } from "./quaternius-conformal-garment";
 import {
   QUATERNIUS_SKIN_CLOTH_ATTRIBUTE,
   QUATERNIUS_SKIN_CLOTH_PBR_ID,
@@ -352,11 +353,14 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   let skinVertices = 0;
   let hairVertices = 0;
   let clothingVertices = 0;
+  let skinClothPbrMeshes = 0;
+  const processedBodies: THREE.SkinnedMesh[] = [];
   host.traverse((object) => {
     const mesh = object as THREE.SkinnedMesh;
     if (!mesh.isSkinnedMesh) return;
     const result = applyWeightedOutfitColors(mesh, definition);
     if (!result) return;
+    processedBodies.push(mesh);
     bodyMeshes += 1;
     if (mesh.userData.quaterniusSkinClothPbr === QUATERNIUS_SKIN_CLOTH_PBR_ID) skinClothPbrMeshes += 1;
     outfitMaterials += result.outfitMaterials;
@@ -367,6 +371,28 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   });
 
   if (bodyMeshes === 0 || outfitMaterials === 0 || recoloredVertices === 0) return false;
+  // Attach the sculpt-ready shell to the original GLB skinned mesh parent,
+  // not to the gameplay hitbox or procedural animation substitutes.
+  let garmentMeshes = 0;
+  let garmentTriangles = 0;
+  for (const body of processedBodies) {
+    const vest = buildQuaterniusConformalGarment(body, definition);
+    if (!vest || !body.parent) {
+      if (vest) {
+        vest.geometry.dispose();
+        (vest.material as THREE.Material).dispose();
+      }
+      continue;
+    }
+    body.parent.add(vest);
+    garmentMeshes += 1;
+    garmentTriangles += (vest.userData.quaterniusConformalMetrics?.triangles ?? 0) as number;
+  }
+  host.userData.quaterniusConformalGarment = garmentMeshes > 0 ? QUATERNIUS_CONFORMAL_GARMENT_ID : null;
+  visual.root.userData.quaterniusConformalGarmentVersion = host.userData.quaterniusConformalGarment;
+  visual.root.userData.quaterniusConformalGarmentMeshes = garmentMeshes;
+  visual.root.userData.quaterniusConformalGarmentTriangles = garmentTriangles;
+
   host.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkinBodyMeshes = bodyMeshes;

@@ -65,7 +65,7 @@ test("stadium architecture shares meshes, materials and bounds; does not occlude
     }
     // The instance groups are static; a renderer can draw all bays with 1 call
     // per material rather than adding dozens of per-frame draw submissions.
-    assert.equal(group.userData.tpsArchitectureDeckCount, 40);
+    assert.equal(group.userData.tpsArchitectureDeckCount, 32);
   } finally {
     result.geometries.forEach(x => x.dispose());
     result.materials.forEach(x => x.dispose());

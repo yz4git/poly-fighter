@@ -76,7 +76,7 @@ export function buildQuaterniusConformalGarment(
   for (let vertex = 0; vertex < positions.count; vertex += 1) {
     const influence = torsoInfluence(vertex, boneIds, boneWeights, body.skeleton.bones);
     torso[vertex] = influence;
-    if (influence < .64) continue;
+    if (influence < .36) continue;
     const x = positions.getX(vertex);
     const y = positions.getY(vertex);
     const z = positions.getZ(vertex);
@@ -92,13 +92,12 @@ export function buildQuaterniusConformalGarment(
   const torsoDepth = maxZ - minZ;
   if (![torsoHeight, torsoWidth, torsoDepth].every(x => Number.isFinite(x) && x > 1e-5)) return null;
 
-  // SERA's tailored cropped vest and KAIRO's longer jacket have different
-  // hemlines. Leave the center front open to reveal the original shirt.
+  // SERA's cropped vest and KAIRO's longer jacket have different hemlines.
+  // Keep the actual chest topology intact: cutting center triangles made the
+  // previous sample resemble disconnected plates over the face/body shader.
   const isSera = definition.archetype === "SPEED";
-  const hemLine = minY + torsoHeight * (isSera ? .22 : .08);
+  const hemLine = minY + torsoHeight * (isSera ? .14 : .05);
   const centerX = (minX + maxX) * .5;
-  const centerZ = (minZ + maxZ) * .5;
-  const frontGap = torsoWidth * (isSera ? .09 : .065);
   const sourceIndex = source.getIndex();
   const sourceTriangleCount = Math.floor((sourceIndex?.count ?? positions.count) / 3);
   const triangles: number[] = [];
@@ -108,12 +107,9 @@ export function buildQuaterniusConformalGarment(
     const c = sourceIndex ? sourceIndex.getX(tri * 3 + 2) : tri * 3 + 2;
     if (a < 0 || b < 0 || c < 0
         || a >= positions.count || b >= positions.count || c >= positions.count) return null;
-    if (Math.min(torso[a], torso[b], torso[c]) < .64) continue;
+    if ((torso[a] + torso[b] + torso[c]) / 3 < .38) continue;
     const y = (positions.getY(a) + positions.getY(b) + positions.getY(c)) / 3;
-    if (y < hemLine || y > maxY - torsoHeight * .055) continue;
-    const x = (positions.getX(a) + positions.getX(b) + positions.getX(c)) / 3;
-    const z = (positions.getZ(a) + positions.getZ(b) + positions.getZ(c)) / 3;
-    if (z > centerZ + torsoDepth * .035 && Math.abs(x - centerX) < frontGap) continue;
+    if (y < hemLine || y > maxY - torsoHeight * .025) continue;
     triangles.push(a, b, c);
   }
   const triangleCount = triangles.length / 3;
@@ -130,12 +126,12 @@ export function buildQuaterniusConformalGarment(
   const compactBoneWeights: number[] = [];
   const compactColors: number[] = [];
   const mappedIndices: number[] = [];
-  const offset = torsoHeight * .025;
+  const offset = torsoHeight * .022;
   const primary = new THREE.Color(definition.colors.primary);
   const deep = new THREE.Color(definition.colors.secondary);
   const color = new THREE.Color();
   const garmentColor = isSera
-    ? deep.clone().lerp(primary, .53)
+    ? deep.clone().lerp(primary, .40)
     : deep.clone().lerp(primary, .29);
 
   for (const vertex of triangles) {

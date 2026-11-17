@@ -148,15 +148,36 @@ try {
   }
   await capture("01-private-sera-vs-kairo-idle");
 
-  await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'j',bubbles:true}));return true;");
-  await delay(95);
-  const strike = await snapshot();
-  await capture("02-private-sera-jab-with-artist-glb");
-  await run("document.dispatchEvent(new KeyboardEvent('keyup',{key:'j',bubbles:true}));return true;");
-  if (!strike.inputPunch && strike.p1State !== "ATTACK" && !strike.p1Move)
-    throw new Error("Live private fight ignored player attack input: " + JSON.stringify(strike));
-  if (strike.heroState !== "ready" || !strike.heroVisible)
-    throw new Error("Artist hero disappeared during a real combat action: " + JSON.stringify(strike));
+  // Use the same game.press()/game.release() entrypoints as the actual
+  // iPhone touch-button. A mere input=true frame is NOT enough: the fighter
+  // must enter the real ATTACK move state before the screenshot can pass.
+  const pressed = await run(`${lookup}
+    const game = findGame();
+    if (!game) return false;
+    game.press('punch', 'qa-touch-attack');
+    return game.input.frame().punch === true;
+  `);
+  if (!pressed) throw new Error("The real touch attack input was not accepted");
+  let strike = null;
+  const sampledMoves = [];
+  for (let i = 0; i < 34; i++) {
+    const sample = await snapshot();
+    sampledMoves.push({state: sample.p1State, move: sample.p1Move, mappedBones: sample.mappedBones});
+    if (sample.p1State === "ATTACK" && sample.p1Move) {
+      strike = sample;
+      await capture("02-private-sera-jab-with-artist-glb");
+      break;
+    }
+    await delay(45);
+  }
+  await run(`${lookup}
+    const game = findGame();
+    if (game) game.release('punch', 'qa-touch-attack');
+    return true;
+  `);
+  if (!strike) throw new Error("Real imported SERA did not enter an ATTACK state: " + JSON.stringify(sampledMoves));
+  if (strike.heroState !== "ready" || !strike.heroVisible || strike.mappedBones < 20)
+    throw new Error("Artist hero disappeared during a real fighter move: " + JSON.stringify(strike));
 
   if (!await click("PRIVATE GLB QA")) throw new Error("In-battle QA telemetry cannot expand");
   const expanded = await run(
@@ -177,7 +198,7 @@ try {
     throw new Error("Private GLB leaked into normal game mode: " + JSON.stringify(exited));
   await capture("03-private-qa-exited-no-glb-persisted");
   await writeFile(output + "/qa-result.json", JSON.stringify({
-    ready, strike, expanded, exited,
+    ready, strike, sampledMoves, expanded, exited,
     artApproval: "NOT_APPROVED",
     note: "Legacy V2 GLB is an unapproved technical CI fixture only. Never publish it as SERA.",
   }, null, 2));

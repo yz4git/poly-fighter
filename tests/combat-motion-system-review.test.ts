@@ -42,7 +42,9 @@ test("SERA's real three-step combo hands off as attacks, not generic poses", () 
     ["BF_Power_R", "CM_Down", "RING_OUT", "REACTION_INTERRUPT"],
     ["CM_Down", "CM_Wakeup", "WAKEUP", "LANDING"],
     ["CM_Down", "CM_TechRise", "WAKEUP", "LANDING"],
-    ["CM_Down", "CM_QuickRise", "KNOCKDOWN", "REACTION_INTERRUPT"],
+    ["CM_Down", "CM_QuickRise", "KNOCKDOWN", "LANDING"],
+    ["CM_Down", "CM_TechRoll_L", "KNOCKDOWN", "LANDING"],
+    ["CM_Down", "CM_TechRoll_R", "KNOCKDOWN", "LANDING"],
     ["CM_Block", "CM_Guard", "GUARD", "BLOCK_RECOVERY"],
   ] as const;
   for (const [from, to, state, mode] of routes) {

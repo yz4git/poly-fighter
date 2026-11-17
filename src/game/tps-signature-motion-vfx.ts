@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { FighterRuntime } from "./fighter";
 import type { HitEvent, MoveDefinition } from "./types";
 import { getVisualContactPoint } from "./visual";
+import { getSkinnedMotionContactPoint } from "./visual-quaternius-runtime";
 
 const TRAIL_SAMPLES = 9;
 const METEOR_WAIT_SECONDS = 1.45;
@@ -270,7 +271,10 @@ export class TpsSignatureMotionVfx {
       trail.lastTick = fighter.moveTick;
       trail.width = signatureMotionTrailWidth(move.cinematicRole) * Math.min(1.2, fighter.visual.root.scale.x);
       trail.color = tintFor(fighter, move.cinematicRole);
-      this.appendSample(trail, getVisualContactPoint(fighter.visual, move.visualContact));
+      // The visible imported skeleton, not a hidden fallback, owns VFX limb paths.
+      this.appendSample(trail,
+        getSkinnedMotionContactPoint(fighter, move.visualContact)
+          ?? getVisualContactPoint(fighter.visual, move.visualContact));
     }
     if (!active) trail.release = Math.max(0, trail.release - delta);
     if (active && trail.release > 0) {

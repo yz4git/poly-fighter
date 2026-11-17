@@ -335,10 +335,29 @@ try {
       lightCount: game.scene.children.filter(o => o.isDirectionalLight).length,
     };
     const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+    const surfaces = {
+      version: 'UBC_SEMANTIC_SURFACE_V1', skinnedMeshes: 0,
+      preparedMaterials: 0, smoothMaterials: 0, hardwareMaterials: 0, staleFacetedBody: 0,
+    };
+    host?.traverse((object) => {
+      if (!object.isSkinnedMesh) return;
+      surfaces.skinnedMeshes += 1;
+      for (const material of (Array.isArray(object.material) ? object.material : [object.material])) {
+        const finished = material?.userData?.tpsOutfitSurface === surfaces.version;
+        if (!finished) continue;
+        surfaces.preparedMaterials += 1;
+        if (material.flatShading === false) surfaces.smoothMaterials += 1;
+        if (material.userData?.tpsOutfitSurfaceRole === 'HARDWARE') surfaces.hardwareMaterials += 1;
+        if (material.userData?.tpsOutfitSurfaceRole !== 'HARDWARE' && material.flatShading) {
+          surfaces.staleFacetedBody += 1;
+        }
+      }
+    });
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       architecture,
+      surfaces,
       points: bonePoints(game.p1),
       gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
       visualRootPosition: point(game.p1.visual.root),
@@ -352,6 +371,12 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
   if (!neutral?.points) throw new Error(`Neutral imported arm points missing: ${JSON.stringify(neutral)}`);
+  if ((neutral.surfaces?.skinnedMeshes ?? 0) < 1
+      || (neutral.surfaces?.preparedMaterials ?? 0) < 1
+      || (neutral.surfaces?.smoothMaterials ?? 0) < 1
+      || neutral.surfaces.staleFacetedBody !== 0) {
+    throw new Error(`Imported UBC smooth body material not applied to real skinned meshes: ${JSON.stringify(neutral.surfaces)}`);
+  }
   if (neutral.architecture?.version !== "VAULTED_ARENA_STRUCTURE_V1"
       || neutral.architecture.bays !== 24
       || neutral.architecture.draws !== 7

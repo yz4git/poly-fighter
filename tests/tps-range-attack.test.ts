@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
 import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters";
+import { SERA_STREET_FLOW_MOVES } from "../src/game/sera-street-flow";
 import { sampleCombatMotionTimeline } from "../src/game/combat-motion-timeline";
 import { isCombatAttackClip, planCombatMotionHandoff } from "../src/game/combat-motion-handoff";
 import {
@@ -33,7 +34,7 @@ test("ATTACK at actual out-of-range distance picks three distinct closers, not a
   assert.equal(choose(3, 0, true, false), null, "aerial juggle keeps its own move selection");
   assert.equal(TPS_RANGE_ATTACK_IDS.length, 3);
   for (const fighter of PLAYABLE_FIGHTERS) {
-    assert.equal(Object.keys(fighter.moves).length, 61);
+    assert.equal(Object.keys(fighter.moves).length, 61 + (fighter.name === "SERA" ? SERA_STREET_FLOW_MOVES.length : 0));
     const names = new Set<string>();
     for (const id of TPS_RANGE_ATTACK_IDS) {
       const move = fighter.moves[id];

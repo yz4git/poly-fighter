@@ -5,6 +5,7 @@ import { sampleCombatMotionTimeline, authoredMotionEvents } from "../src/game/co
 import { chooseSeraStreetFlowMove, SERA_STREET_FLOW_MOVES, SERA_STREET_FLOW_VERSION } from "../src/game/sera-street-flow";
 import { sampleSeraStreetFlowPose, SERA_STREET_FLOW_CLIPS, SERA_STREET_FLOW_POSE_VERSION } from "../src/game/sera-street-flow-choreography";
 import { tpsComboLinkWindow } from "../src/game/motion-profile";
+import { tpsImpactHeightForMove } from "../src/game/tps-impact-resolution";
 
 const sera=FIGHTER_DEFINITIONS.blue, kairo=FIGHTER_DEFINITIONS.red;
 const plan=(overrides: Partial<Parameters<typeof chooseSeraStreetFlowMove>[0]>={})=>
@@ -43,6 +44,10 @@ test("three deliberate inputs preserve each actual hitbox, contact and 60Hz clea
   assert.deepEqual(moves.map(m=>m.visualContact),["LEFT_FIST","RIGHT_FOOT","RIGHT_FIST"]);
   assert.deepEqual(moves.map(m=>m.hitLevel),["MID","HIGH","MID"]);
   assert.deepEqual(moves.map(m=>m.motionBase),["jab","kick","bodyBlow"]);
+  assert.deepEqual(moves.map(tpsImpactHeightForMove),[2.62,2.45,2.34],
+    "SERA-specific spark heights follow the authored head-kick/palm silhouettes");
+  assert.equal(tpsImpactHeightForMove(kairo.moves.kick),1.80,
+    "other fighters retain their original impact presentation");
   assert.ok(moves.every(m=>m.damage>0 && m.reach<2 && m.active>=3));
   assert.ok(moves.every(m=>m.cinematicRole===undefined),"do not hijack air-juggle damage contracts");
   for(let i=0;i<moves.length;i++){
@@ -81,6 +86,8 @@ test("one supplied 12-frame reference becomes three visibly different normalized
   assert.ok(jab.leftHand![2]>ready.leftHand![2]+.5,"guarded jab strikes forward");
   assert.ok(jab.rightHand![2]<.25,"opposite fist remains in guard");
   assert.ok(kick.rightFoot![1]>.80 && kick.rightFoot![2]>.60,"head-high foot is a real raised IK target");
+  assert.ok(kick.leftHand![1]<.70 && kick.rightHand![1]<.70,
+    "high kick keeps a compact protecting guard instead of lifting fists overhead");
   assert.equal(kick.leftFoot![1],0,"support foot stays grounded");
   assert.ok(duck.drop!<-.16,"low evasive stance genuinely lowers pelvis");
   assert.ok(duck.leftHand![1]<.35,"guard hand sweeps below waist at low pivot");

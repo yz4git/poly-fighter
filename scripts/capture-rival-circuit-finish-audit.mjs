@@ -148,138 +148,7 @@ const liveGameLookup = `
   function findGame() {
     const host = document.querySelector('main.poly-app');
     if (!host) return null;
-    const key = Object.keys(host).find(name => name.startsWith('__reactFiber
-let sessionId = null;
-try {
-  await waitForDriver();
-  const session = await command("/session", "POST", {
-    capabilities: {
-      alwaysMatch: {
-        browserName: "chrome",
-        "goog:chromeOptions": {
-          args: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars", "--window-size=932,430"],
-        },
-      },
-    },
-  });
-  sessionId = session.sessionId;
-  await command(`/session/${sessionId}/url`, "POST", { url });
-  await delay(500);
-  await resizeToCssViewport(sessionId, 932, 430);
-  await mkdir(outputDir, { recursive: true });
-
-  if (!await clickButton(sessionId, "RIVAL CIRCUIT")) throw new Error("Could not open Rival Circuit for FINISH audit");
-  await delay(220);
-  if (!await clickButton(sessionId, "ENTER CIRCUIT")) throw new Error("Could not enter Rival Circuit for FINISH audit");
-  await delay(750);
-
-  // Production users cannot reach this path: the runtime honors the health seed
-  // only while navigator.webdriver is true. It gives CI a deterministic critical
-  // health window without weakening the player-facing game.
-  await execute(sessionId, `
-    document.body.dataset.rivalCircuitFinishAuditHealth = '12';
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    return navigator.webdriver;
-  `);
-
-  let ready = null;
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    await delay(100);
-    ready = await finishState(sessionId);
-    if (ready.ready === '1') break;
-  }
-  await execute(sessionId, `
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    return true;
-  `);
-  if (!ready || ready.ready !== '1') throw new Error(`FINISH READY window did not open: ${JSON.stringify(ready)}`);
-  if (
-    !ready.canvas
-    || !ready.strip.includes('GLASSLINE')
-    || ready.policy !== 'CIRCUIT_FINISH_V1'
-    || ready.stage !== '1'
-    || ready.health !== 12
-    || ready.move !== 'power'
-    || ready.fallback
-    || ready.actions.length !== 2
-    || !ready.actions.some((action) => action.label === 'Attack')
-    || !ready.actions.some((action) => action.label === 'Step')
-  ) {
-    throw new Error(`FINISH READY runtime audit failed: ${JSON.stringify(ready)}`);
-  }
-  await screenshot(sessionId, `${outputDir}/rival-circuit-finish-ready-iphone.png`);
-
-  // Latch the synchronous runtime evidence before React can replace the match
-  // surface with the reward route. This observes diagnostics only; it does not
-  // pause, mutate, or otherwise change gameplay timing.
-  await installHitLatch(sessionId);
-  // The old 90 ms key hold could start while KAIRO was in real hitstun and
-  // finish before even one headless software-WebGL simulation step occurred.
-  // Require a genuine actionable frame and keep BOTH keyboard input owners
-  // held long enough for a 60 Hz input frame. Do NOT seed hitTargets or call
-  // the FINISH implementation directly; this is the same player key chord.
-  const attempts = [];
-  let hit = null;
-  for (let chordAttempt = 0; chordAttempt < 5; chordAttempt += 1) {
-    let action = null;
-    let readyNow = null;
-    for (let tick = 0; tick < 120; tick += 1) {
-      action = await finishPlayerActionable(sessionId);
-      readyNow = await finishState(sessionId);
-      if (action?.canAct && readyNow?.ready === '1') break;
-      if (!readyNow.canvas || action?.p1Health <= 0) break;
-      await delay(45);
-    }
-    if (!action?.canAct || readyNow?.ready !== '1') {
-      attempts.push({ chordAttempt, action, ready: readyNow });
-      break;
-    }
-    await execute(sessionId, `
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
-      return true;
-    `);
-    await delay(280);
-    await execute(sessionId, `
-      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true, cancelable: true }));
-      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'l', bubbles: true, cancelable: true }));
-      return true;
-    `);
-    const after = await finishState(sessionId);
-    hit = await latchedHitState(sessionId);
-    attempts.push({ chordAttempt, action, phase: after.phase, activations: after.activations, hit: Boolean(hit) });
-    // If committed, DO NOT send a second attack: wait for a genuine rendered
-    // collision from the currently playing power move.
-    if (hit || after.activations > 0 || after.phase === 'COMMIT') break;
-    await delay(90);
-  }
-
-  // KAIRO's authored power FINISH reaches contact after its real startup.
-  // Snapshot during the strike and let MutationObserver retain the HIT signal
-  // even if React changes to result route before this request returns.
-  await delay(195);
-  await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
-  for (let attempt = 0; attempt < 180 && !hit; attempt += 1) {
-    await delay(20);
-    hit = await latchedHitState(sessionId);
-  }
-  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify({ attempts, last: await finishState(sessionId) })}`);
-  if (
-    hit.policy !== 'CIRCUIT_FINISH_V1'
-    || hit.phase !== 'HIT'
-    || hit.move !== 'power'
-    || hit.activations < 1
-    || hit.health !== 0
-    || hit.fallback
-  ) {
-    throw new Error(`FINISH hit runtime audit failed: ${JSON.stringify(hit)}`);
-  }
-  await writeFile(`${outputDir}/rival-circuit-finish.json`, `${JSON.stringify({ ready, hit }, null, 2)}\n`);
-} finally {
-  if (sessionId) await command(`/session/${sessionId}`, "DELETE").catch(() => undefined);
-  driverProcess.kill("SIGTERM");
-}
-));
+    const key = Object.keys(host).find(name => name.startsWith('__reactFiber'));
     let fiber = key ? host[key] : null;
     const seen = new Set();
     while (fiber && !seen.has(fiber)) {
@@ -298,7 +167,7 @@ try {
 `;
 
 async function finishPlayerActionable(sessionId) {
-  return execute(sessionId, `${liveGameLookup}
+  return execute(sessionId, liveGameLookup + `
     const game = findGame();
     return game ? {
       canAct: game.p1.canAct(),
@@ -375,29 +244,51 @@ try {
   // surface with the reward route. This observes diagnostics only; it does not
   // pause, mutate, or otherwise change gameplay timing.
   await installHitLatch(sessionId);
-  await execute(sessionId, `
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
-    return true;
-  `);
-  await delay(90);
-  await execute(sessionId, `
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true, cancelable: true }));
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'l', bubbles: true, cancelable: true }));
-    return true;
-  `);
+  // A fixed 90 ms key tap is unreliable under headless SwiftShader: when the
+  // player is in hit-stun, no frame may accept the ATTACK+STEP chord. Sample
+  // the real fighter's canAct() state and issue the identical keyboard chord
+  // only when the FINISH window is ready. No seeded hit flags / direct moves.
+  const attempts = [];
+  let hit = null;
+  for (let chordAttempt = 0; chordAttempt < 5; chordAttempt += 1) {
+    let action = null;
+    let readyNow = null;
+    for (let tick = 0; tick < 120; tick += 1) {
+      action = await finishPlayerActionable(sessionId);
+      readyNow = await finishState(sessionId);
+      if (action?.canAct && readyNow?.ready === '1') break;
+      if (!readyNow.canvas || action?.p1Health <= 0) break;
+      await delay(45);
+    }
+    if (!action?.canAct || readyNow?.ready !== '1') {
+      attempts.push({ chordAttempt, action, ready: readyNow });
+      break;
+    }
+    await execute(sessionId, `
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
+      return true;
+    `);
+    await delay(280);
+    await execute(sessionId, `
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'l', bubbles: true, cancelable: true }));
+      return true;
+    `);
+    const after = await finishState(sessionId);
+    hit = await latchedHitState(sessionId);
+    attempts.push({ chordAttempt, action, phase: after.phase, activations: after.activations, hit: Boolean(hit) });
+    if (hit || after.activations > 0 || after.phase === 'COMMIT') break;
+    await delay(90);
+  }
 
-  // KAIRO's authored power FINISH becomes active around 17 simulation ticks.
-  // Capture at that real timing rather than waiting for the React result route.
   await delay(195);
   await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
-
-  let hit = await latchedHitState(sessionId);
-  for (let attempt = 0; attempt < 90 && !hit; attempt += 1) {
-    await delay(10);
+  for (let attempt = 0; attempt < 180 && !hit; attempt += 1) {
+    await delay(20);
     hit = await latchedHitState(sessionId);
   }
-  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify(await finishState(sessionId))}`);
+  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify({ attempts, last: await finishState(sessionId) })}`);
   if (
     hit.policy !== 'CIRCUIT_FINISH_V1'
     || hit.phase !== 'HIT'

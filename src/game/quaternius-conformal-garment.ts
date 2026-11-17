@@ -101,7 +101,6 @@ export function buildQuaterniusConformalGarment(
   const sourceIndex = source.getIndex();
   const sourceTriangleCount = Math.floor((sourceIndex?.count ?? positions.count) / 3);
   const triangles: number[] = [];
-  const used = new Set<number>();
   for (let tri = 0; tri < sourceTriangleCount; tri += 1) {
     const a = sourceIndex ? sourceIndex.getX(tri * 3) : tri * 3;
     const b = sourceIndex ? sourceIndex.getX(tri * 3 + 1) : tri * 3 + 1;
@@ -113,7 +112,6 @@ export function buildQuaterniusConformalGarment(
     const z = (positions.getZ(a) + positions.getZ(b) + positions.getZ(c)) / 3;
     if (z > centerZ + torsoDepth * .035 && Math.abs(x - centerX) < frontGap) continue;
     triangles.push(a, b, c);
-    used.add(a); used.add(b); used.add(c);
   }
   const triangleCount = triangles.length / 3;
   if (triangleCount < QUATERNIUS_GARMENT_MIN_TRIANGLES

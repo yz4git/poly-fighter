@@ -147,22 +147,40 @@ try{
   const evidence=[];
   for(let index=0;index<moves.length;index++){
     const target=moves[index];
+
+    // Pause at the fighter's real first-active skinned pose, and take an
+    // actual browser screenshot BEFORE simulating the rest of the combo.
+    // A later screenshot after linking would misleadingly show the NEXT move
+    // even if the JSON metadata correctly described this move.
+    const active=await run(`${lookup}${helpers}
+      const game=findGame();
+      const target=arguments[0];
+      let imagePose=null;
+      for(let i=0;i<120;i++){
+        const move=game.p1.currentMove;
+        if(!move||move.id!==target||game.p1.state!=='ATTACK')break;
+        if(game.p1.moveTick>=move.startup){
+          imagePose=visual(game);break;
+        }
+        advance(game,1);
+      }
+      advance(game,0);
+      return imagePose;
+    `,[target]);
+    if(!active || active.move!==target || active.clip!==clips[index])
+      throw new Error("Actual captured active frame does not show the requested authored SERA clip: "+JSON.stringify({index,target,active}));
+    await save("0"+(index+2)+"-sera-street-"+target);
+
+    // Resume real 60Hz combat. Button buffering is allowed ONLY after the
+    // actual hitTarget AND cleanHit flag, inside the recovery cancel window.
     const sample=await run(`${lookup}${helpers}
       const game=findGame();
       const target=arguments[0];
-      let active=null, linked=false, queued=false, last=null, clean=false;
+      let queued=false,linked=false,last=null,clean=false;
       const trace=[];
       for(let i=0;i<130;i++){
         const move=game.p1.currentMove;
-        if(!move)break;
-        if(move.id===target && game.p1.state==='ATTACK' && game.p1.moveTick>=move.startup && !active){
-          advance(game,1);
-          active=visual(game);
-          if(target==='streetFlowPalm')break;
-        }else if(move.id!==target){
-          linked=true;
-          break;
-        }
+        if(!move || move.id!==target) { linked=Boolean(move); break; }
         const hit=game.p1.hitTargets.has(game.p2.id);
         const confirmed=game.p1.visual.root.userData.tpsCleanHitConfirmed===true;
         if(hit&&confirmed)clean=true;
@@ -176,16 +194,13 @@ try{
         }else advance(game,1);
         last=visual(game);
         if(i%8===0)trace.push({i,move:last.move,state:last.state,tick:last.tick,hit:last.hit,clean:last.clean});
-        if(last.move!==target)break;
+        if(last.move!==target){linked=Boolean(last.move);break;}
       }
-      return {active,queued,clean,linked,last,trace};
+      return {queued,clean,linked,last,trace};
     `,[target]);
-    if(!sample.active || sample.active.clip!==clips[index])
-      throw new Error("Rendered move/clip mismatch: "+JSON.stringify({index,target,sample}));
     if(target!=="streetFlowPalm"&&!sample.clean)
       throw new Error("User GIF attack did not score a real clean hit: "+JSON.stringify({index,target,sample}));
-    evidence.push({move:target,expectedClip:clips[index],...sample});
-    await save("0"+(index+2)+"-sera-street-"+target);
+    evidence.push({move:target,expectedClip:clips[index],active,...sample});
     if(index<moves.length-1){
       const transition=await run(`${lookup}${helpers}
         const game=findGame();return {current:game.p1.currentMove?.id??null,visual:visual(game),

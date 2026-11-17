@@ -6,6 +6,7 @@ import {
   QUATERNIUS_CONFORMAL_GARMENT_ID,
   QUATERNIUS_GARMENT_MAX_TRIANGLES,
   buildQuaterniusConformalGarment,
+  patchConformalGarmentEdgeShader,
   disposeQuaterniusConformalGarments,
 } from "../src/game/quaternius-conformal-garment";
 
@@ -74,4 +75,24 @@ test("unskinned meshes fail closed rather than introduce floating stand-in panel
     (body.material as THREE.Material).dispose();
     root.clear();
   }
+});
+
+test("collar and hem shader trims a real rigged mesh with valid GLSL and no extra geometry", () => {
+  const cut = {
+    centerX: 0, centerZ: 0, halfWidth: .4, depth: .3,
+    hem: -.28, top: .43, frontDip: .12,
+  };
+  const shader = {
+    vertexShader: "#include <common>\n#include <begin_vertex>",
+    fragmentShader: "#include <common>\n#include <color_fragment>",
+  };
+  patchConformalGarmentEdgeShader(shader, cut);
+  assert.ok(shader.vertexShader.includes("\nvarying vec3 vVestRestPosition;"));
+  assert.ok(shader.vertexShader.includes("\nvVestRestPosition = position;"));
+  assert.ok(shader.fragmentShader.includes("smoothstep("));
+  assert.ok(shader.fragmentShader.includes("vestTop"));
+  assert.ok(shader.fragmentShader.includes("discard;"));
+  assert.ok(!shader.vertexShader.includes("\\n"), "GLSL must contain real line feeds, not literal backslashes");
+  assert.throws(() => patchConformalGarmentEdgeShader({ vertexShader: "", fragmentShader: "" }, cut),
+    /POLY_FIGHTER_CONFORMAL_CUT_SHADER_UNSUPPORTED/);
 });

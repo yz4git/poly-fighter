@@ -169,16 +169,57 @@ function shouldKeepAuthoredMaterial(mesh: THREE.Mesh, material: THREE.Material):
     || tag.includes("mouth");
 }
 
+/** Smooth base-anatomy normals instead of forcing flat faceting onto a
+ * skinned face. Keep intentional hard-surface outfit trim hard, and leave
+ * authored facial detail/hair entirely untouched. No new meshes or passes. */
+export const QUATERNIUS_OUTFIT_SURFACE_ID = "UBC_SEMANTIC_SURFACE_V1";
+export type QuaterniusSurfaceRole = "AUTHORED" | "SKIN" | "FABRIC" | "HARDWARE";
+export type QuaterniusSurfaceFinish = Readonly<{
+  role: QuaterniusSurfaceRole;
+  roughness: number;
+  metalness: number;
+  flatShading: boolean;
+  envMapIntensity: number;
+}>;
+
+const SURFACE_FINISH: Readonly<Record<QuaterniusSurfaceRole, QuaterniusSurfaceFinish>> = {
+  AUTHORED: { role: "AUTHORED", roughness: 0, metalness: 0, flatShading: false, envMapIntensity: 0 },
+  SKIN: { role: "SKIN", roughness: 0.74, metalness: 0.0, flatShading: false, envMapIntensity: 1.0 },
+  FABRIC: { role: "FABRIC", roughness: 0.78, metalness: 0.012, flatShading: false, envMapIntensity: 0.96 },
+  HARDWARE: { role: "HARDWARE", roughness: 0.40, metalness: 0.38, flatShading: true, envMapIntensity: 1.18 },
+};
+
+export function quaterniusSurfaceFinishForTag(tag: string): QuaterniusSurfaceFinish {
+  const normalized = tag.toLowerCase();
+  if (["hair", "eye", "iris", "brow", "lash", "teeth", "mouth"].some(word => normalized.includes(word))) {
+    return SURFACE_FINISH.AUTHORED;
+  }
+  if (["metal", "armor", "armour", "plating", "plate", "visor"].some(word => normalized.includes(word))) {
+    return SURFACE_FINISH.HARDWARE;
+  }
+  if (["skin", "face", "body", "head", "neck"].some(word => normalized.includes(word))) {
+    return SURFACE_FINISH.SKIN;
+  }
+  return SURFACE_FINISH.FABRIC;
+}
+
 function prepareOutfitMaterial(mesh: THREE.Mesh, material: THREE.Material): boolean {
-  if (shouldKeepAuthoredMaterial(mesh, material)) return false;
   if (!(material instanceof THREE.MeshStandardMaterial)) return false;
+  const finish = quaterniusSurfaceFinishForTag(authoredMaterialTag(mesh, material));
+  if (finish.role === "AUTHORED") return false;
+
+  // Retain the original skinned mesh, existing per-vertex costume palette and
+  // bone weights. The former universal flatShading=true made cheeks polygonal
+  // and cloth shine like hard plastic under the cinematic side lights.
   material.vertexColors = true;
   material.color.set(0xffffff);
-  material.flatShading = true;
-  material.roughness = 0.61;
-  material.metalness = 0.035;
-  material.envMapIntensity = 1.10;
+  material.flatShading = finish.flatShading;
+  material.roughness = finish.roughness;
+  material.metalness = finish.metalness;
+  material.envMapIntensity = finish.envMapIntensity;
   material.dithering = true;
+  material.userData.tpsOutfitSurface = QUATERNIUS_OUTFIT_SURFACE_ID;
+  material.userData.tpsOutfitSurfaceRole = finish.role;
   material.needsUpdate = true;
   return true;
 }

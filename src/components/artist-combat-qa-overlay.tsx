@@ -140,12 +140,12 @@ export function ArtistCombatQaOverlay({
   const surface: CSSProperties = {
     position: "absolute",
     right: "max(8px, env(safe-area-inset-right))",
-    top: "max(72px, env(safe-area-inset-top))",
+    top: "max(92px, env(safe-area-inset-top))",
     zIndex: 9,
     maxWidth: expanded ? "min(280px, 54vw)" : "min(185px, 40vw)",
     // A 402–430px iPhone landscape viewport has attack buttons along the
     // bottom. The QA panel must scroll internally, not cover those buttons.
-    maxHeight: "max(82px, calc(100dvh - 200px))",
+    maxHeight: "max(82px, calc(100dvh - 215px))",
     overflowY: expanded ? "auto" : "hidden",
     overscrollBehavior: "contain",
     color: "#e7f5ff",
@@ -183,7 +183,7 @@ export function ArtistCombatQaOverlay({
           <span>Render frames/s: {info.renderFps.toFixed(1)} (estimated)</span>
           <span>Frame P95: {info.p95FrameMs.toFixed(1)} ms · {info.slowFramesPercent.toFixed(0)}% over 20 ms ({info.frameSamples} samples)</span>
           <span>Draw calls: {info.drawCalls} · scene tris: {info.sceneTriangles.toLocaleString()}</span>
-          <span>GPU memory counts: {info.gpuGeometries} meshes / {info.gpuTextures} textures</span>
+          <span>GPU memory counts: {info.gpuGeometries} geometries / {info.gpuTextures} textures</span>
           <span>Local GLB sources: {info.localSourcesActive} active / {info.localSourcesReleased} released</span>
           {info.error && <span role="alert" style={{ color: "#ffb4b4", overflowWrap: "anywhere" }}>Fallback: {info.error}</span>}
           <span>Chrome/Safari render FPS is not GPU frame timing. Inspect on a real iPhone.</span>

@@ -62,6 +62,8 @@ const helpers=`
     return {clip, points:pts, hostReady:root.userData.quaterniusModelState==='ready',
       version:host?.userData.seraStreetFlowMotionVersion??null,
       move:game.p1.currentMove?.id??null, tick:game.p1.moveTick,state:game.p1.state,
+      handoff:root.userData.combatMotionHandoffMode??null,
+      handoffDuration:Number(root.userData.combatMotionHandoffDuration??0),
       clean:root.userData.tpsCleanHitConfirmed===true,
       hit:game.p1.hitTargets?.has(game.p2.id)??false,
       p2Health:game.p2.health, p2State:game.p2.state,
@@ -169,6 +171,10 @@ try{
     `,[target]);
     if(!active || active.move!==target || active.clip!==clips[index])
       throw new Error("Actual captured active frame does not show the requested authored SERA clip: "+JSON.stringify({index,target,active}));
+    const expectedHandoff=index===0?"ATTACK_ENTRY":"ATTACK_COMBO";
+    if(active.handoff!==expectedHandoff || !(active.handoffDuration>0 && active.handoffDuration<=.12))
+      throw new Error("Displayed SERA strike inherited the wrong live pose handoff: "
+        +JSON.stringify({index,target,expectedHandoff,active}));
     await save("0"+(index+2)+"-sera-street-"+target);
 
     // Resume real 60Hz combat. Button buffering is allowed ONLY after the

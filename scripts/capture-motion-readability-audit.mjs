@@ -367,11 +367,26 @@ try {
         }
       }
     });
+    const curatedFighter = (fighter) => {
+      const root = fighter.visual.root;
+      const details = root.children.filter(object => object.name?.startsWith('ubc-'));
+      const blocky = details.filter(object =>
+        /outfit-jacket|outfit-bodysuit|outfit-abdomen|outfit-left-boot|outfit-right-boot|shin-guard|chest-prism|chest-chevron|thigh-panel|toe-cap|shoulder-wing|shoulder-fin/.test(object.name));
+      return {
+        version: root.userData.quaterniusHeroCurationVersion ?? null,
+        detailCount: details.length,
+        detailNames: details.map(object => object.name),
+        blocky: blocky.map(object => object.name),
+        fists: details.filter(object => object.name.endsWith('-fist')).length,
+      };
+    };
+    const heroCuration = { player: curatedFighter(game.p1), opponent: curatedFighter(game.p2) };
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       architecture,
       surfaces,
+      heroCuration,
       points: bonePoints(game.p1),
       gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
       visualRootPosition: point(game.p1.visual.root),
@@ -385,6 +400,18 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
   if (!neutral?.points) throw new Error(`Neutral imported arm points missing: ${JSON.stringify(neutral)}`);
+  for (const [fighter, details] of Object.entries(neutral.heroCuration ?? {})) {
+    if (details.version !== 'SCULPT_READY_MINIMAL_SILHOUETTE_V1'
+        || details.detailCount < 5
+        || details.detailCount > 15
+        || details.fists !== 2
+        || details.blocky.length > 0) {
+      throw new Error(`A real skinned fighter retained floating geometry in ${fighter}: ${JSON.stringify(details)}`);
+    }
+  }
+  if (Object.keys(neutral.heroCuration ?? {}).length !== 2) {
+    throw new Error(`Both actual fighters must be visually curated: ${JSON.stringify(neutral.heroCuration)}`);
+  }
   if ((neutral.surfaces?.skinnedMeshes ?? 0) < 1
       || (neutral.surfaces?.preparedMaterials ?? 0) < 1
       || (neutral.surfaces?.smoothMaterials ?? 0) < 1

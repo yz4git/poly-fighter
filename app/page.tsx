@@ -577,6 +577,12 @@ export default function Home() {
           <div style={{ color: "#7894ae", fontSize: 8, letterSpacing: ".12em", margin: "5px 0 2px" }}>
             {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : "POLY FIGHTER CUSTOM VISUAL"}
           </div>
+          {p1.name === "SERA" && (
+            <div className="tps-defense-guide" role="note" data-sera-street-flow-guide="true">
+              <b>NEW · STREET FLOW</b>
+              <span>MOVE FORWARD + ATTACK UP CLOSE → GUARD JAB · CLEAN HIT + ATTACK → HIGH SIDE KICK · CLEAN HIT + ATTACK → LOW PIVOT PALM. MISS / GUARD / STEP ENDS THE CHAIN.</span>
+            </div>
+          )}
           <div className="tps-defense-guide" role="note">
             <b>NEW DEFENSE</b>
             <span>STEP TAP = EVADE · HOLD = GUARD · BACK+HOLD = LOW GUARD · GUARD+ATTACK = THROW · ATTACK vs THROW = BREAK · ON GROUND: STEP = QUICK RISE / SIDE OR BACK+STEP = ROLL</span>

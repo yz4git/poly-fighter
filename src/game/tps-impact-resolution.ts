@@ -23,6 +23,14 @@ export type TpsHitResolution = {
   counter: boolean;
 };
 
+/** Visual-only impact anchors for the three independently posed SERA strikes.
+ * Combat reach and hitbox geometry remain authoritative and unchanged. */
+const STREET_FLOW_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
+  streetFlowJab: 2.62,
+  streetFlowKick: 2.45,
+  streetFlowPalm: 2.34,
+});
+
 const TPS_IMPACT_HEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   jab: 2.62,
   straight: 2.60,
@@ -43,7 +51,9 @@ export function tpsImpactHeightForMove(move: MoveDefinition): number {
     cycloneSweep: 0.68, powerRush: 2.38,
   } as const;
   return move.cinematicRole ? cinematic[move.cinematicRole]
-    : TPS_IMPACT_HEIGHTS[move.motionBase ?? move.id] ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
+    : STREET_FLOW_IMPACT_HEIGHTS[move.id]
+      ?? TPS_IMPACT_HEIGHTS[move.motionBase ?? move.id]
+      ?? (move.hitLevel === "LOW" ? 0.55 : 1.35);
 }
 
 export function computeTpsHitResolution(input: {

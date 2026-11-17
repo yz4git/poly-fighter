@@ -9,6 +9,8 @@ import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
 import { authoredMotionEvents } from "./combat-motion-timeline";
 import { sampleHeroVideoChoreography, VIDEO_STRIKE_CLIPS, VIDEO_CHOREOGRAPHY_VERSION, type VideoStrike } from "./video-demo-choreography";
+import { sampleSeraStreetFlowPose, SERA_STREET_FLOW_CLIPS, SERA_STREET_FLOW_POSE_VERSION } from "./sera-street-flow-choreography";
+import { SERA_STREET_FLOW_MOVES } from "./sera-street-flow";
 
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
@@ -76,7 +78,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${SERA_STREET_FLOW_POSE_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -423,6 +425,28 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         rotate("foot_r", X, -.16 * extension);
       }
     }, move === "risingKick" ? 69 : 51);
+  }
+  // One original 12-frame action phrase, split into THREE actual playable
+  // clean-hit moves. Authored in existing UBC bone space and baked on load:
+  // no per-frame solver, no picture/card billboard, no unearned extra hit.
+  if (definition.name === "SERA") {
+    for (const moveId of SERA_STREET_FLOW_MOVES) {
+      const clipName = SERA_STREET_FLOW_CLIPS[moveId];
+      const duration = moveId === "streetFlowJab" ? .34
+        : moveId === "streetFlowKick" ? .48 : .59;
+      author(clipName, duration, u => {
+        const pose = sampleSeraStreetFlowPose(moveId, u, width);
+        body(pose);
+        if (moveId === "streetFlowPalm") {
+          const openPalm = Math.max(0, 1 - Math.abs(u - .55) / .17);
+          rotate("hand_r", X, -.54 * openPalm);
+        }
+        if (moveId === "streetFlowKick") {
+          const extension = Math.max(0, 1 - Math.abs(u - .55) / .20);
+          rotate("foot_r", X, -.17 * extension);
+        }
+      }, moveId === "streetFlowPalm" ? 61 : 49);
+    }
   }
   // Stable source marker for runtime and WebGL audit. Clip cache key includes
   // this version so any future choreography revisions invalidate cached clips.

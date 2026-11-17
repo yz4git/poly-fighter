@@ -144,6 +144,42 @@ async function latchedHitState(sessionId) {
   return execute(sessionId, `return window.__polyFighterFinishAuditHit ?? null;`);
 }
 
+const liveGameLookup = `
+  function findGame() {
+    const host = document.querySelector('main.poly-app');
+    if (!host) return null;
+    const key = Object.keys(host).find(name => name.startsWith('__reactFiber'));
+    let fiber = key ? host[key] : null;
+    const seen = new Set();
+    while (fiber && !seen.has(fiber)) {
+      seen.add(fiber);
+      let hook = fiber.memoizedState;
+      while (hook) {
+        const value = hook.memoizedState;
+        const current = value && typeof value === 'object' && 'current' in value ? value.current : null;
+        if (current?.p1 && current?.p2 && current?.scene && current?.renderer) return current;
+        hook = hook.next;
+      }
+      fiber = fiber.return;
+    }
+    return null;
+  }
+`;
+
+async function finishPlayerActionable(sessionId) {
+  return execute(sessionId, liveGameLookup + `
+    const game = findGame();
+    return game ? {
+      canAct: game.p1.canAct(),
+      p1State: game.p1.state,
+      p1HitStop: game.p1.hitStop,
+      p1Health: game.p1.health,
+      cpuHealth: game.p2.health,
+      simulationTicks: game.simulationTicks,
+    } : null;
+  `);
+}
+
 let sessionId = null;
 try {
   await waitForDriver();
@@ -208,29 +244,51 @@ try {
   // surface with the reward route. This observes diagnostics only; it does not
   // pause, mutate, or otherwise change gameplay timing.
   await installHitLatch(sessionId);
-  await execute(sessionId, `
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
-    return true;
-  `);
-  await delay(90);
-  await execute(sessionId, `
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true, cancelable: true }));
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'l', bubbles: true, cancelable: true }));
-    return true;
-  `);
+  // A fixed 90 ms key tap is unreliable under headless SwiftShader: when the
+  // player is in hit-stun, no frame may accept the ATTACK+STEP chord. Sample
+  // the real fighter's canAct() state and issue the identical keyboard chord
+  // only when the FINISH window is ready. No seeded hit flags / direct moves.
+  const attempts = [];
+  let hit = null;
+  for (let chordAttempt = 0; chordAttempt < 5; chordAttempt += 1) {
+    let action = null;
+    let readyNow = null;
+    for (let tick = 0; tick < 120; tick += 1) {
+      action = await finishPlayerActionable(sessionId);
+      readyNow = await finishState(sessionId);
+      if (action?.canAct && readyNow?.ready === '1') break;
+      if (!readyNow.canvas || action?.p1Health <= 0) break;
+      await delay(45);
+    }
+    if (!action?.canAct || readyNow?.ready !== '1') {
+      attempts.push({ chordAttempt, action, ready: readyNow });
+      break;
+    }
+    await execute(sessionId, `
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true }));
+      return true;
+    `);
+    await delay(280);
+    await execute(sessionId, `
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'l', bubbles: true, cancelable: true }));
+      return true;
+    `);
+    const after = await finishState(sessionId);
+    hit = await latchedHitState(sessionId);
+    attempts.push({ chordAttempt, action, phase: after.phase, activations: after.activations, hit: Boolean(hit) });
+    if (hit || after.activations > 0 || after.phase === 'COMMIT') break;
+    await delay(90);
+  }
 
-  // KAIRO's authored power FINISH becomes active around 17 simulation ticks.
-  // Capture at that real timing rather than waiting for the React result route.
   await delay(195);
   await screenshot(sessionId, `${outputDir}/rival-circuit-finish-hit-iphone.png`);
-
-  let hit = await latchedHitState(sessionId);
-  for (let attempt = 0; attempt < 90 && !hit; attempt += 1) {
-    await delay(10);
+  for (let attempt = 0; attempt < 180 && !hit; attempt += 1) {
+    await delay(20);
     hit = await latchedHitState(sessionId);
   }
-  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify(await finishState(sessionId))}`);
+  if (!hit) throw new Error(`FINISH chord did not produce latched hit evidence: ${JSON.stringify({ attempts, last: await finishState(sessionId) })}`);
   if (
     hit.policy !== 'CIRCUIT_FINISH_V1'
     || hit.phase !== 'HIT'

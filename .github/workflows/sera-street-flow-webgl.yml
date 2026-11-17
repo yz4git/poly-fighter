@@ -1,0 +1,66 @@
+name: SERA 12-frame Street Flow real WebGL action
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/game/sera-street-flow.ts
+      - src/game/sera-street-flow-choreography.ts
+      - src/game/definitions.ts
+      - src/game/combat-motion-authoring.ts
+      - src/game/combat-motion-timeline.ts
+      - src/game/visual-quaternius-runtime.ts
+      - src/game/tps-game.ts
+      - app/page.tsx
+      - scripts/audit-sera-street-flow-webgl.mjs
+      - .github/workflows/sera-street-flow-webgl.yml
+  push:
+    branches: [main]
+    paths:
+      - src/game/**
+      - app/page.tsx
+      - scripts/audit-sera-street-flow-webgl.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: street-flow-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-fight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Production build, same as game deployment
+        run: npm run build
+      - name: Serve actual PolyFighter
+        run: |
+          PORT=3000 npm start > /tmp/poly-fighter-sera-street-flow.log 2>&1 &
+          for i in $(seq 1 55); do
+            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/poly-fighter-sera-street-flow.log
+          exit 1
+      - name: Actual Chrome WebGL - 3 real-contact SERA actions and visual bone heights
+        run: |
+          DRIVER="$(command -v chromedriver || true)"
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL=http://127.0.0.1:3000/ \
+            STREET_AUDIT_DIR=artifacts/sera-street-flow \
+            node scripts/audit-sera-street-flow-webgl.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sera-street-flow-real-skinned-combat
+          path: artifacts/sera-street-flow/
+          if-no-files-found: warn

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
 import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters";
+import { SERA_STREET_FLOW_MOVES } from "../src/game/sera-street-flow";
 import {
   EXPANDED_MOVE_BASES,
   MOVE_VARIANTS,
@@ -20,13 +21,14 @@ import {
 import { authoredMotionEvents, sampleCombatMotionTimeline } from "../src/game/combat-motion-timeline";
 import { isCombatAttackClip, planCombatMotionHandoff } from "../src/game/combat-motion-handoff";
 
-test("all four characters have 61 unique available techniques and retain the original eleven", () => {
+test("four fighters keep 61 base techniques while SERA alone gains three Street Flow strikes", () => {
   const allIds = new Set<string>();
   assert.equal(PLAYABLE_FIGHTERS.length, 4);
   assert.equal(EXPANDED_MOVE_BASES.length, 10);
   for (const fighter of PLAYABLE_FIGHTERS) {
     const ids = Object.keys(fighter.moves);
-    assert.equal(ids.length, 61, `${fighter.name} must have 11 original + 40 expanded + 7 signature + 3 gap moves`);
+    assert.equal(ids.length, 61 + (fighter.name === "SERA" ? SERA_STREET_FLOW_MOVES.length : 0),
+      `${fighter.name} has 11 original + 40 expanded + 7 signature + 3 gap moves plus SERA-only GIF phrase`);
     for (const base of [...EXPANDED_MOVE_BASES, "throw"]) assert.ok(fighter.moves[base], base);
     for (const base of EXPANDED_MOVE_BASES) {
       for (const variant of MOVE_VARIANTS) {

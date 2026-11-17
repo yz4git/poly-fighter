@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as THREE from "three";
 import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters";
+import { SERA_STREET_FLOW_MOVES } from "../src/game/sera-street-flow";
 import {
   CINEMATIC_TECHNIQUES, addCinematicTechniques, chooseCinematicTechnique, cinematicAxesForBufferedTap,
 } from "../src/game/cinematic-techniques";
@@ -22,11 +23,11 @@ import { isCombatAttackClip } from "../src/game/combat-motion-handoff";
 import { sourceOfExpandedClip } from "../src/game/expanded-motion-library";
 import { tpsImpactHeightForMove } from "../src/game/tps-impact-resolution";
 
-test("four fighters retain 51 regular, seven signature and three distance techniques", () => {
+test("four fighters retain all base/signature/distance techniques and SERA gains its three GIF strikes", () => {
   assert.equal(PLAYABLE_FIGHTERS.length, 4);
   const allSpecials = new Set<string>();
   for (const fighter of PLAYABLE_FIGHTERS) {
-    assert.equal(Object.keys(fighter.moves).length, 61, fighter.name);
+    assert.equal(Object.keys(fighter.moves).length, 61 + (fighter.name === "SERA" ? SERA_STREET_FLOW_MOVES.length : 0), fighter.name);
     for (const id of CINEMATIC_TECHNIQUES) {
       const move = fighter.moves[id];
       assert.ok(move, `${fighter.name}: ${id}`);

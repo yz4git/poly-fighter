@@ -28,15 +28,20 @@ export type CombatMotionHandoff = Readonly<{
   velocityCarry: number;
 }>;
 
+/** Single attack-clip registry for inertial handoffs and the live model.
+ * Resolve VM_/FX_ wrappers first: a generated combo is still the same attack
+ * family as its authored source. Non-attack reactions never inherit momentum.
+ */
+const ATTACK_CLIP_PREFIXES = [
+  "BF_Jab", "BF_Cross", "BF_BodyBlow", "BF_Backfist", "BF_Power",
+  "BF_FrontKick", "BF_LowKick", "BF_RisingKick", "BF_DashKick",
+  "CM_Counter_", "CM_Video_", "CM_Range_", "CM_StreetFlow_",
+] as const;
+
 export function isCombatAttackClip(name: string): boolean {
-  name = sourceOfExpandedClip(name);
-  return name.startsWith("BF_Jab") || name.startsWith("BF_Cross")
-    || name.startsWith("BF_BodyBlow") || name.startsWith("BF_Backfist")
-    || name.startsWith("BF_Power") || name.startsWith("BF_FrontKick")
-    || name.startsWith("BF_LowKick") || name.startsWith("BF_RisingKick")
-    || name.startsWith("BF_DashKick") || name === "BF_Counter_R"
-    || name.startsWith("CM_Counter_") || name.startsWith("CM_Video_")
-    || name.startsWith("CM_Range_");
+  const source = sourceOfExpandedClip(name);
+  return source === "BF_Counter_R" || source === "CM_Throw"
+    || ATTACK_CLIP_PREFIXES.some(prefix => source.startsWith(prefix));
 }
 
 function isReactionClip(name: string): boolean {

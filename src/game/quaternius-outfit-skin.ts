@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
+import {
+  QUATERNIUS_SKIN_CLOTH_ATTRIBUTE,
+  QUATERNIUS_SKIN_CLOTH_PBR_ID,
+  installQuaterniusSkinClothPbr,
+  quaterniusSkinSurfaceWeight,
+} from "./quaternius-skin-cloth-pbr";
 
 /**
  * Outfit strategy for the production Quaternius UBC skin.
@@ -245,6 +251,7 @@ function applyWeightedOutfitColors(
   const palette = outfitPalette(definition);
   const colors = new Float32Array(position.count * 3);
   const headWeights = new Float32Array(position.count);
+  const surfaceWeights = new Float32Array(position.count);
   const blended = new THREE.Color();
   let headMinY = Number.POSITIVE_INFINITY;
   let headMaxY = Number.NEGATIVE_INFINITY;
@@ -299,6 +306,7 @@ function applyWeightedOutfitColors(
       definition.archetype,
     );
     if (scalpHair) blended.copy(palette.hair);
+    surfaceWeights[vertex] = quaterniusSkinSurfaceWeight(skinWeightTotal, scalpHair);
 
     const offset = vertex * 3;
     colors[offset] = blended.r;
@@ -310,6 +318,19 @@ function applyWeightedOutfitColors(
   }
 
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute(QUATERNIUS_SKIN_CLOTH_ATTRIBUTE,
+    new THREE.BufferAttribute(surfaceWeights, 1));
+  // Skin/cloth interpolation stays inside the same material/SkinnedMesh draw.
+  // Hardware retains its authored hard-surface roughness, while eyes/hair are
+  // exempt from prepareOutfitMaterial and retain their original shaders.
+  for (const material of materials) {
+    if (material instanceof THREE.MeshStandardMaterial
+        && material.userData.tpsOutfitSurface === QUATERNIUS_OUTFIT_SURFACE_ID
+        && material.userData.tpsOutfitSurfaceRole !== "HARDWARE") {
+      installQuaterniusSkinClothPbr(material);
+    }
+  }
+  mesh.userData.quaterniusSkinClothPbr = QUATERNIUS_SKIN_CLOTH_PBR_ID;
   geometry.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   mesh.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   mesh.userData.quaterniusOutfitMaterialCount = outfitMaterials;
@@ -337,6 +358,7 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
     const result = applyWeightedOutfitColors(mesh, definition);
     if (!result) return;
     bodyMeshes += 1;
+    if (mesh.userData.quaterniusSkinClothPbr === QUATERNIUS_SKIN_CLOTH_PBR_ID) skinClothPbrMeshes += 1;
     outfitMaterials += result.outfitMaterials;
     recoloredVertices += result.vertices;
     skinVertices += result.skinVertices;
@@ -348,6 +370,8 @@ function installOnPolishedHost(visual: FighterVisual, definition: FighterDefinit
   host.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkin = QUATERNIUS_OUTFIT_SKIN_ID;
   visual.root.userData.quaterniusOutfitSkinBodyMeshes = bodyMeshes;
+  visual.root.userData.quaterniusSkinClothPbrVersion = QUATERNIUS_SKIN_CLOTH_PBR_ID;
+  visual.root.userData.quaterniusSkinClothPbrMeshes = skinClothPbrMeshes;
   visual.root.userData.quaterniusOutfitSkinMaterialCount = outfitMaterials;
   visual.root.userData.quaterniusOutfitSkinVertices = recoloredVertices;
   visual.root.userData.quaterniusOutfitSkinCoverage = {

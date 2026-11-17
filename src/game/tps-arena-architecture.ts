@@ -11,7 +11,7 @@ export const TPS_ARCHITECTURE_PROFILE = Object.freeze({
   bays: 24,
   bayRadius: 11.70,
   crownHeight: 5.15,
-  deckPlateCount: 40,
+  deckPlateCount: 32,
   drawGroups: 7,
 });
 
@@ -171,13 +171,16 @@ export function createTpsArenaArchitecture(): MeshResources {
 
   // Floor facets make foreground depth legible in a moving shoulder camera,
   // but avoid the central combat circle and are only 2 cm above the floor.
-  const deckMaterial = new THREE.MeshStandardMaterial({
-    color: 0x142a3a, metalness: .38, roughness: .47,
-    emissive: 0x081c2c, emissiveIntensity: .40,
+  // A glossy PBR deck reflected the key light as an almost-solid WHITE
+  // ring in the actual iPhone-shaped screenshot. Use sparse, non-reflective
+  // dark panels so the combatants remain the brightest objects.
+  const deckMaterial = new THREE.MeshBasicMaterial({
+    color: 0x102839, transparent: true, opacity: .36,
+    depthWrite: false,
   });
   instanced(
     "tps-vault-floor-facets",
-    new THREE.BoxGeometry(.82, .012, 1.35),
+    new THREE.BoxGeometry(.62, .008, .86),
     deckMaterial,
     profile.deckPlateCount,
     (i, d) => {

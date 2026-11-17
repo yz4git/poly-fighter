@@ -65,6 +65,11 @@ export const AUTHORED_MOTION_EVENTS: Readonly<Record<string, AuthoredMotionEvent
   CM_Video_Palm: events(.50, "PUNCH"),
   CM_Video_SideKick: events(.50, "KICK"),
   CM_Video_SpinKick: events(.50, "HEAVY"),
+  // SERA's three independently earned 12-frame reference beats each have an
+  // explicit midpoint contact; no strike gains hit frames by visual blending.
+  CM_StreetFlow_Jab: events(.50, "LIGHT"),
+  CM_StreetFlow_HighKick: events(.50, "KICK"),
+  CM_StreetFlow_LowPalm: events(.50, "PUNCH"),
   // Travel is implemented in the authored approach clip, not by moving the
   // hitbox: range moves retain their actual 0.50-frame contact contract.
   CM_Range_rangeBlitz: events(.50, "PUNCH"),

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { tpsRecoveryClipPhase, TPS_THROW_BREAK_POSE_TICKS, TPS_UKEMI_POSE_TICKS } from "./tps-throw-ukemi";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { disposeQuaterniusConformalGarments } from "./quaternius-conformal-garment";
 import type { FighterRuntime } from "./fighter";
 import { motionCorrectionsEnabled } from "./motion-correction-state";
 import type { FighterDefinition, FighterState } from "./types";
@@ -1162,6 +1163,9 @@ export function disposeQuaterniusModelSkin(visual: FighterVisual): void {
   if (!runtime) return;
   runtime.mixer.stopAllAction();
   runtime.mixer.uncacheRoot(runtime.model);
+  // The cached source GLB must not own these per-fighter generated shell
+  // resources. Dispose before detaching the host from the gameplay root.
+  disposeQuaterniusConformalGarments(runtime.host);
   runtime.host.removeFromParent();
   runtime.ownedMaterials.forEach((material) => material.dispose());
   runtimes.delete(visual.root);

@@ -10,10 +10,10 @@ import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-auth
 import { VIDEO_CHOREOGRAPHY_VERSION, VIDEO_STRIKE_CLIPS } from "./video-demo-choreography";
 import { SERA_STREET_FLOW_CLIPS, SERA_STREET_FLOW_POSE_VERSION } from "./sera-street-flow-choreography";
 import { SERA_STREET_FLOW_MOVES } from "./sera-street-flow";
-import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
+import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading, stationaryTurnClip } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
-import { planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
+import { isCombatAttackClip, planCombatMotionHandoff, type CombatMotionHandoffMode } from "./combat-motion-handoff";
 import { applyKimodoMotionConditioning } from "./kimodo-motion-conditioning";
 import { MOTIONBRICKS_GOAL_BRIDGE_VERSION } from "./motionbricks-goal-bridge";
 import { MOTIONBRICKS_FULLBODY_FORCE_VERSION } from "./combat-force-transfer";
@@ -22,7 +22,7 @@ import { sampleAuthoredTargetWindow, TARGET_LOOKAHEAD_SECONDS } from "./motionbr
 import { cinematicClipName, createCinematicMotionLibrary, CINEMATIC_MOTION_VERSION } from "./cinematic-motion-library";
 import { isTpsRangeAttack } from "./tps-range-attack";
 import { createTpsRangeMotionLibrary, tpsRangeClipName, TPS_RANGE_CHOREOGRAPHY_VERSION } from "./tps-range-motion";
-import { buildExpandedMotionLibrary, selectExpandedClip, sourceOfExpandedClip, EXPANDED_MOTION_VERSION } from "./expanded-motion-library";
+import { buildExpandedMotionLibrary, selectExpandedClip, EXPANDED_MOTION_VERSION } from "./expanded-motion-library";
 import {
   applyInertialTransition,
   beginInertialTransition,
@@ -515,8 +515,9 @@ function observeMotion(runtime: QuaterniusRuntime, fighter: FighterRuntime, delt
       runtime.motionX = step.dot(right);
       runtime.motionZ = step.dot(forward);
       const stature = fighter.visual.root.scale.x;
-      const sector = LOCOMOTION_DIRECTIONS.indexOf(locomotionDirection(runtime.motionX, runtime.motionZ));
-      const stride = combatStride(fighter.definition.archetype === "SPEED", Math.sin(sector * Math.PI / 4));
+      // Gait speed must be continuous across eight-way clip sector boundaries.
+      const lateralShare = runtime.motionX / Math.max(1e-8, step.length());
+      const stride = combatStride(fighter.definition.archetype === "SPEED", lateralShare);
       runtime.gaitPhase = (runtime.gaitPhase + step.length() * .62 / Math.max(.1, stature * stride)) % 1;
     }
   }
@@ -618,29 +619,10 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
     case "WAKEUP": return { name: "CM_Wakeup", loop: false, speed: 1 };
     default:
       if (runtime.clock < runtime.landingEnd) return { name: "CM_Land", loop: false, speed: 1 };
-      if (Math.abs(runtime.turnRate) > .4) return { name: `CM_Turn_${runtime.turnRate < 0 ? "L" : "R"}`, loop: true, speed: Math.max(.6, Math.min(1.5, Math.abs(runtime.turnRate))) };
+      const turnClip = stationaryTurnClip(runtime.turnRate, runtime.currentClip);
+      if (turnClip !== "CM_Ready") return { name: turnClip, loop: true, speed: Math.max(.6, Math.min(1.5, Math.abs(runtime.turnRate))) };
       return { name: "CM_Ready", loop: true, speed: 1 };
   }
-}
-
-const AUTHORED_ATTACK_CLIP_PREFIXES = [
-  "BF_Jab",
-  "BF_Cross",
-  "BF_BodyBlow",
-  "BF_Backfist",
-  "BF_Power",
-  "BF_FrontKick",
-  "BF_LowKick",
-  "BF_RisingKick",
-  "BF_DashKick",
-  "BF_Counter_R",
-  "CM_StreetFlow_", // user-GIF grounded SERA strikes retain full-body momentum handoff
-  "CM_Video_", // baked video-reference attacks use the same inertial handoff contract
-  "CM_Range_", // dedicated physically travelling approach strike clips
-] as const;
-
-function isAuthoredAttackClip(name: string): boolean {
-  return AUTHORED_ATTACK_CLIP_PREFIXES.some((prefix) => sourceOfExpandedClip(name).startsWith(prefix));
 }
 
 function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed: number, restart = false, nextState: FighterState = "IDLE"): void {
@@ -675,7 +657,7 @@ function playClip(runtime: QuaterniusRuntime, name: string, loop: boolean, speed
   runtime.host.userData.kimodoInertialTransitionFrom = runtime.currentClip;
   runtime.host.userData.kimodoInertialTransitionTo = clip.name;
   runtime.host.userData.unimateMotionExpansionOverlap = (
-    isAuthoredAttackClip(runtime.currentClip) && isAuthoredAttackClip(clip.name)
+    isCombatAttackClip(runtime.currentClip) && isCombatAttackClip(clip.name)
   ) ? runtime.transitionDuration : 0;
   // Snapshot the rendered pose before stopping. Same-clip repeats and combo
   // interruptions cannot reset a live outgoing action or accumulate old weights.

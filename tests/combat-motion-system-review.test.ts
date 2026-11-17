@@ -36,6 +36,14 @@ test("SERA's real three-step combo hands off as attacks, not generic poses", () 
     ["VM_BF_FrontKick_R_DRIVE", "FX_BF_RisingKick_R_LIFT", "ATTACK", "ATTACK_COMBO"],
     ["CM_Range_rangeCrescent", "CM_Video_Palm", "ATTACK", "ATTACK_COMBO"],
     ["CM_Throw", "CM_Ready", "IDLE", "ATTACK_TO_READY"],
+    ["BF_Jab_L", "CM_Down", "KO", "REACTION_INTERRUPT"],
+    ["BF_Cross_R", "CM_Down", "KNOCKDOWN", "REACTION_INTERRUPT"],
+    ["BF_RisingKick_R", "CM_Thrown", "THROW", "REACTION_INTERRUPT"],
+    ["BF_Power_R", "CM_Down", "RING_OUT", "REACTION_INTERRUPT"],
+    ["CM_Down", "CM_Wakeup", "WAKEUP", "LANDING"],
+    ["CM_Down", "CM_TechRise", "WAKEUP", "LANDING"],
+    ["CM_Down", "CM_QuickRise", "KNOCKDOWN", "REACTION_INTERRUPT"],
+    ["CM_Block", "CM_Guard", "GUARD", "BLOCK_RECOVERY"],
   ] as const;
   for (const [from, to, state, mode] of routes) {
     const decision = planCombatMotionHandoff(from, to, state);

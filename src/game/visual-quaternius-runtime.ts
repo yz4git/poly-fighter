@@ -8,6 +8,8 @@ import type { FighterDefinition, FighterState } from "./types";
 import { getVisualContactPoint, type FighterVisual } from "./visual";
 import { createCombatMotionLibrary, solveCombatLimb } from "./combat-motion-authoring";
 import { VIDEO_CHOREOGRAPHY_VERSION, VIDEO_STRIKE_CLIPS } from "./video-demo-choreography";
+import { SERA_STREET_FLOW_CLIPS, SERA_STREET_FLOW_POSE_VERSION } from "./sera-street-flow-choreography";
+import { SERA_STREET_FLOW_MOVES } from "./sera-street-flow";
 import { COMBAT_MOTION_VERSION, combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, locomotionDirection, approachLocomotionHeading, locomotionBlendAtHeading } from "./combat-motion-clock";
 import { sampleCombatMotionTimeline } from "./combat-motion-timeline";
 import { REFERENCE_KICK_VERSION } from "./reference-kick-choreography";
@@ -539,6 +541,16 @@ function desiredClip(fighter: FighterRuntime, runtime: QuaterniusRuntime): { nam
   if (fighter.state === "ATTACK" && move) {
     const seconds = Math.max(1 / 60, (move.startup + move.active + move.recovery) / 60);
     const moveId = move.motionBase ?? move.id;
+    // Authoritative move ID selects the matching user-GIF 3D skeleton clip.
+    // This overrides only SERA's dedicated Street Flow actions, never other
+    // fighters' existing punches, kicks, animation packs or physics.
+    if ((SERA_STREET_FLOW_MOVES as readonly string[]).includes(move.id)) {
+      const gifClip = SERA_STREET_FLOW_CLIPS[move.id as keyof typeof SERA_STREET_FLOW_CLIPS];
+      if (runtime.clips.has(gifClip)) {
+        runtime.host.userData.seraStreetFlowMotionVersion = SERA_STREET_FLOW_POSE_VERSION;
+        return { name: gifClip, loop: false, speed: 1 / seconds };
+      }
+    }
     if (isTpsRangeAttack(move.id)) {
       const ranged = tpsRangeClipName(move.id);
       if (runtime.clips.has(ranged)) return { name: ranged, loop: false, speed: 1 / seconds };
@@ -622,6 +634,7 @@ const AUTHORED_ATTACK_CLIP_PREFIXES = [
   "BF_RisingKick",
   "BF_DashKick",
   "BF_Counter_R",
+  "CM_StreetFlow_", // user-GIF grounded SERA strikes retain full-body momentum handoff
   "CM_Video_", // baked video-reference attacks use the same inertial handoff contract
   "CM_Range_", // dedicated physically travelling approach strike clips
 ] as const;

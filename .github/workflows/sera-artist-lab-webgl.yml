@@ -16,6 +16,19 @@ on:
       - src/game/artist-glb-contract.ts
       - .github/workflows/sera-artist-lab-webgl.yml
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - app/page.tsx
+      - src/components/artist-asset-review-panel.tsx
+      - src/components/model-viewer-panel.tsx
+      - src/components/artist-combat-qa-overlay.tsx
+      - src/game/artist-private-combat.ts
+      - src/game/local-artist-preview.ts
+      - src/game/visual-hero-runtime.ts
+      - scripts/audit-artist-asset-lab.mjs
+      - scripts/audit-artist-private-match.mjs
+      - .github/workflows/sera-artist-lab-webgl.yml
 
 permissions:
   contents: read
@@ -60,10 +73,20 @@ jobs:
             echo "Cannot locate chromium chromedriver"; exit 1
           fi
           WEBDRIVER_BIN="$DRIVER" PREVIEW_URL="http://127.0.0.1:3000/"             ARTIST_LAB_AUDIT_DIR=artifacts/artist-lab-real-webgl             node scripts/audit-artist-asset-lab.mjs
+      - name: Verify private imported GLB in the ACTUAL TPS fight
+        run: |
+          set -euxo pipefail
+          DRIVER="$(command -v chromedriver || true)"
+          test -n "$DRIVER"
+          WEBDRIVER_BIN="$DRIVER" PREVIEW_URL="http://127.0.0.1:3000/" \
+            ARTIST_PRIVATE_AUDIT_DIR=artifacts/artist-private-combat \
+            node scripts/audit-artist-private-match.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: artist-lab-real-browser-glb-import-not-art-approval
-          path: artifacts/artist-lab-real-webgl/
+          path: |
+            artifacts/artist-lab-real-webgl/
+            artifacts/artist-private-combat/
           if-no-files-found: warn
           retention-days: 14

@@ -145,7 +145,7 @@ export function ArtistCombatQaOverlay({
     maxWidth: expanded ? "min(280px, 54vw)" : "min(185px, 40vw)",
     // A 402–430px iPhone landscape viewport has attack buttons along the
     // bottom. The QA panel must scroll internally, not cover those buttons.
-    maxHeight: "max(82px, calc(100dvh - 185px))",
+    maxHeight: "max(82px, calc(100dvh - 200px))",
     overflowY: expanded ? "auto" : "hidden",
     overscrollBehavior: "contain",
     color: "#e7f5ff",

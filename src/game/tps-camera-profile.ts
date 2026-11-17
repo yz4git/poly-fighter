@@ -8,10 +8,15 @@ export function tpsCameraAttackFamily(
   return move?.motionBase ?? move?.id ?? null;
 }
 
+// A modestly tighter, fixed FOV makes the skinned punch silhouette legible on
+// landscape phones without a dynamic lens snap at the first ACTIVE hit.
+// The existing camera-travel clamp and dolly smoothing still own transitions.
+export const TPS_CAMERA_DEFAULT_FOV = 45;
+
 // Camera-only TPS tuning. Keep this separate from deterministic gameplay tuning
 // so visual composition can be reviewed/refined without mixing it into combat rules.
-export const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.75;
-export const TPS_CAMERA_CLOSE_BACK_DELTA = -0.95;
+export const TPS_CAMERA_CLOSE_SHOULDER_BONUS = 3.48;
+export const TPS_CAMERA_CLOSE_BACK_DELTA = -1.02;
 export const TPS_CAMERA_CLOSE_ANCHOR_BLEND = 0.88;
 export const TPS_CAMERA_CLOSE_TARGET_MIDPOINT_BLEND = 0.42;
 export const TPS_CAMERA_CLOSE_TARGET_SIDE_SHIFT = 0.36;

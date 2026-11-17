@@ -12,6 +12,7 @@ import {
 import { maxTpsComboStage, type TpsAirCombo } from "./tps-air-combo";
 import { chooseTpsRangeAttack, isTpsRangeAttack, tpsRangeAdvance } from "./tps-range-attack";
 import { finalizeQuaterniusModelPose } from "./visual-quaternius-runtime";
+import { updateSeraHeroPose } from "./visual-hero-runtime";
 import { shouldTpsPlayerPunishFeint, tpsFeintPunishAdvance } from "./tps-feint-counterplay";
 import {
   chooseTpsComboContinuationRoute,
@@ -866,6 +867,7 @@ prototype.updateVisual = function updateVisual(
   const game = extended(this as unknown as TpsFightGame);
   if (fighter !== game.p2) {
     finalizeQuaterniusModelPose(fighter, time);
+    updateSeraHeroPose(fighter.visual);
     return;
   }
 
@@ -885,6 +887,7 @@ prototype.updateVisual = function updateVisual(
   fighter.visual.root.quaternion.setFromUnitVectors(MODEL_FORWARD, visualForward);
   fighter.visual.root.updateMatrixWorld(true);
   finalizeQuaterniusModelPose(fighter, time);
+  updateSeraHeroPose(fighter.visual);
 };
 
 prototype.updateCamera = function updateCamera(delta: number): void {

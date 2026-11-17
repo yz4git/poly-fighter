@@ -55,7 +55,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
     const host = hostRef.current;
     if (!host) return undefined;
     setFallback(null);
-    setMotionState(unavailableModelViewerMotionSnapshot(modelId === "QUATERNIUS_UBC"));
+    setMotionState(unavailableModelViewerMotionSnapshot(modelId === "QUATERNIUS_UBC" || modelId === "SERA_HERO_PBR"));
     let viewer: ModelViewer;
     try {
       viewer = new ModelViewer(host, {

@@ -575,7 +575,7 @@ export default function Home() {
             ))}
           </div>
           <div style={{ color: "#7894ae", fontSize: 8, letterSpacing: ".12em", margin: "5px 0 2px" }}>
-            {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : "POLY FIGHTER CUSTOM VISUAL"}
+            {modelChoice === "QUATERNIUS_UBC" ? "CC0 / UNIVERSAL RIG / MOTION READY" : modelChoice === "SERA_HERO_PBR" ? "EXPERIMENTAL PBR / SERA ONLY / OTHERS USE UBC" : "POLY FIGHTER CUSTOM VISUAL"}
           </div>
           <div className="tps-defense-guide" role="note">
             <b>NEW DEFENSE</b>

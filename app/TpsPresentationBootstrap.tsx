@@ -29,6 +29,7 @@ import { installTpsImpactLensPulsePresentation } from "@/src/game/tps-impact-len
 import { installTpsInterceptSilhouettePresentation } from "@/src/game/tps-intercept-silhouette";
 import { installTpsLatestImpactWavePresentation } from "@/src/game/tps-latest-impact-wave";
 import { installTpsPowerBodyDrivePresentation } from "@/src/game/tps-power-body-drive";
+import { installTpsPunchSilhouettePresentation } from "@/src/game/tps-punch-silhouette";
 import { installTpsPunishReadyPresentation } from "@/src/game/tps-punish-ready";
 import { installTpsQuickstepBodyPresentation } from "@/src/game/tps-quickstep-body";
 import { installTpsTelegraphHandoffPresentation } from "@/src/game/tps-telegraph-handoff";
@@ -81,6 +82,8 @@ const TPS_PRESENTATION_INSTALLERS = [
   installTpsAttackActionHandoffPresentation,
   // Bridge actual confirmed combo mesh lanes before the final planted-punch IK.
   installTpsComboLaneBridgePresentation,
+  // Upper-body strike poses: no host/root travel and no imported boot edits.
+  installTpsPunchSilhouettePresentation,
   // Final post-presentation leg IK: preserve the authored upper-body punch.
   installTpsGroundedPunchFootlockPresentation,
 ] as const;

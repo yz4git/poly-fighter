@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
+import { decideQuaterniusHeroDetail, QUATERNIUS_HERO_CURATION_VERSION } from "./quaternius-hero-curation";
 
 export const QUATERNIUS_CHARACTER_GRAPHICS_V2_ID = "QUATERNIUS_CHARACTER_GRAPHICS_V2_FACIAL_SILHOUETTE_LAYERING";
 
@@ -359,7 +360,14 @@ function buildKairoV2(visual: FighterVisual, host: THREE.Object3D, definition: F
     },
   ];
 
-  return specs.map((spec) => addFollower(visual, host, spec)).filter((value): value is THREE.Mesh => Boolean(value));
+  return specs.flatMap((spec) => {
+    if (decideQuaterniusHeroDetail(spec.name, definition.archetype, "V2") !== "KEEP") {
+      spec.geometry.dispose();
+      return [];
+    }
+    const mesh = addFollower(visual, host, spec);
+    return mesh ? [mesh] : [];
+  });
 }
 
 function buildSeraV2(visual: FighterVisual, host: THREE.Object3D, definition: FighterDefinition): THREE.Mesh[] {
@@ -534,7 +542,14 @@ function buildSeraV2(visual: FighterVisual, host: THREE.Object3D, definition: Fi
     },
   ];
 
-  return specs.map((spec) => addFollower(visual, host, spec)).filter((value): value is THREE.Mesh => Boolean(value));
+  return specs.flatMap((spec) => {
+    if (decideQuaterniusHeroDetail(spec.name, definition.archetype, "V2") !== "KEEP") {
+      spec.geometry.dispose();
+      return [];
+    }
+    const mesh = addFollower(visual, host, spec);
+    return mesh ? [mesh] : [];
+  });
 }
 
 function triangleCount(mesh: THREE.Mesh): number {
@@ -563,6 +578,7 @@ function installOnLoadedHost(visual: FighterVisual, definition: FighterDefinitio
   host.userData.characterGraphicsV2 = QUATERNIUS_CHARACTER_GRAPHICS_V2_ID;
   visual.root.userData.quaterniusCharacterGraphicsV2 = QUATERNIUS_CHARACTER_GRAPHICS_V2_ID;
   visual.root.userData.quaterniusCharacterGraphicsV2DetailCount = details.length;
+  visual.root.userData.quaterniusHeroCurationVersion = QUATERNIUS_HERO_CURATION_VERSION;
   visual.root.userData.quaterniusCharacterGraphicsV2FaceDetailCount = faceCount;
   visual.root.userData.quaterniusCharacterGraphicsV2HairDetailCount = hairCount;
   visual.root.userData.quaterniusCharacterGraphicsV2TriangleCount = triangleBudget;

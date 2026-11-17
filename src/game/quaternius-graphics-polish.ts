@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FighterDefinition } from "./types";
 import type { FighterVisual } from "./visual";
+import { decideQuaterniusHeroDetail, QUATERNIUS_HERO_CURATION_VERSION } from "./quaternius-hero-curation";
 
 export const QUATERNIUS_GRAPHICS_POLISH_ID = "QUATERNIUS_HERO_KIT_V5_FITTED_OUTFIT";
 
@@ -448,7 +449,14 @@ function buildKairoKit(visual: FighterVisual, host: THREE.Object3D, definition: 
       scale: [1.04, 0.68, 0.40],
     },
   ];
-  return specs.map((spec) => addBoneFollower(visual, host, spec)).filter((value): value is THREE.Mesh => Boolean(value));
+  return specs.flatMap((spec) => {
+    if (decideQuaterniusHeroDetail(spec.name, definition.archetype, "HERO_KIT") !== "KEEP") {
+      spec.geometry.dispose();
+      return [];
+    }
+    const mesh = addBoneFollower(visual, host, spec);
+    return mesh ? [mesh] : [];
+  });
 }
 
 function buildSeraKit(visual: FighterVisual, host: THREE.Object3D, definition: FighterDefinition): THREE.Mesh[] {
@@ -645,7 +653,14 @@ function buildSeraKit(visual: FighterVisual, host: THREE.Object3D, definition: F
       offset: [0, -0.011, 0.043],
     },
   ];
-  return specs.map((spec) => addBoneFollower(visual, host, spec)).filter((value): value is THREE.Mesh => Boolean(value));
+  return specs.flatMap((spec) => {
+    if (decideQuaterniusHeroDetail(spec.name, definition.archetype, "HERO_KIT") !== "KEEP") {
+      spec.geometry.dispose();
+      return [];
+    }
+    const mesh = addBoneFollower(visual, host, spec);
+    return mesh ? [mesh] : [];
+  });
 }
 
 function installOnLoadedHost(visual: FighterVisual, definition: FighterDefinition): boolean {
@@ -665,6 +680,7 @@ function installOnLoadedHost(visual: FighterVisual, definition: FighterDefinitio
   host.userData.characterGraphicsPolish = QUATERNIUS_GRAPHICS_POLISH_ID;
   visual.root.userData.quaterniusGraphicsPolish = QUATERNIUS_GRAPHICS_POLISH_ID;
   visual.root.userData.quaterniusHeroDetailCount = details.length;
+  visual.root.userData.quaterniusHeroCurationVersion = QUATERNIUS_HERO_CURATION_VERSION;
   visual.root.userData.quaterniusOutfitPartCount = outfitParts.length;
   visual.root.userData.quaterniusOutfitStyle = definition.archetype === "POWER"
     ? "KAIRO_FITTED_JACKET_TROUSERS_BOOTS"

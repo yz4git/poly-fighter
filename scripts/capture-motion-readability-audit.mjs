@@ -321,10 +321,72 @@ try {
     game.updateCamera(1 / 60);
     game.updateLockOn();
     game.renderer.render(game.scene, game.camera);
+    const vault = game.scene.getObjectByName('tps-architectural-vault');
+    const pillars = vault?.getObjectByName('tps-vault-uprights');
+    const floor = vault?.getObjectByName('tps-vault-floor-facets');
+    const architecture = {
+      version: vault?.userData?.tpsArchitectureVersion ?? null,
+      bays: vault?.userData?.tpsArchitectureBays ?? 0,
+      draws: vault?.userData?.tpsArchitectureDrawGroups ?? 0,
+      pillars: pillars?.count ?? 0,
+      deck: floor?.count ?? 0,
+      deckIsMatte: floor?.material?.isMeshBasicMaterial === true,
+      deckOpacity: floor?.material?.opacity ?? null,
+      lightCount: game.scene.children.filter(o => o.isDirectionalLight).length,
+    };
     const host = game.p1.visual.root.children.find((child) => child.name?.startsWith('quaternius-ubc-') && child.name?.endsWith('-runtime'));
+    const surfaces = {
+      version: 'UBC_SEMANTIC_SURFACE_V1', skinnedMeshes: 0,
+      preparedMaterials: 0, smoothMaterials: 0, hardwareMaterials: 0, staleFacetedBody: 0,
+      skinClothPbrMaterials: 0, skinnedAttributeMeshes: 0,
+      visibleSkinVertices: 0, visibleClothVertices: 0,
+    };
+    host?.traverse((object) => {
+      if (!object.isSkinnedMesh) return;
+      surfaces.skinnedMeshes += 1;
+      const channel = object.geometry?.getAttribute?.('tpsSkinSurface');
+      if (channel && channel.count > 0) {
+        surfaces.skinnedAttributeMeshes += 1;
+        for (let v = 0; v < channel.count; v += 1) {
+          const weight = channel.getX(v);
+          if (weight >= .85) surfaces.visibleSkinVertices += 1;
+          if (weight <= .15) surfaces.visibleClothVertices += 1;
+        }
+      }
+      for (const material of (Array.isArray(object.material) ? object.material : [object.material])) {
+        const finished = material?.userData?.tpsOutfitSurface === surfaces.version;
+        if (!finished) continue;
+        surfaces.preparedMaterials += 1;
+        if (material.userData?.tpsSkinClothPbr === 'UBC_SKIN_CLOTH_VERTEX_PBR_V1') {
+          surfaces.skinClothPbrMaterials += 1;
+        }
+        if (material.flatShading === false) surfaces.smoothMaterials += 1;
+        if (material.userData?.tpsOutfitSurfaceRole === 'HARDWARE') surfaces.hardwareMaterials += 1;
+        if (material.userData?.tpsOutfitSurfaceRole !== 'HARDWARE' && material.flatShading) {
+          surfaces.staleFacetedBody += 1;
+        }
+      }
+    });
+    const curatedFighter = (fighter) => {
+      const root = fighter.visual.root;
+      const details = root.children.filter(object => object.name?.startsWith('ubc-'));
+      const blocky = details.filter(object =>
+        /outfit-jacket|outfit-bodysuit|outfit-abdomen|outfit-left-boot|outfit-right-boot|shin-guard|chest-prism|chest-chevron|thigh-panel|toe-cap|shoulder-wing|shoulder-fin/.test(object.name));
+      return {
+        version: root.userData.quaterniusHeroCurationVersion ?? null,
+        detailCount: details.length,
+        detailNames: details.map(object => object.name),
+        blocky: blocky.map(object => object.name),
+        fists: details.filter(object => object.name.endsWith('-fist')).length,
+      };
+    };
+    const heroCuration = { player: curatedFighter(game.p1), opponent: curatedFighter(game.p2) };
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
+      architecture,
+      surfaces,
+      heroCuration,
       points: bonePoints(game.p1),
       gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
       visualRootPosition: point(game.p1.visual.root),
@@ -338,6 +400,38 @@ try {
   `);
   await screenshot(sessionId, `${outputDir}/tps-motion-neutral-arm.png`);
   if (!neutral?.points) throw new Error(`Neutral imported arm points missing: ${JSON.stringify(neutral)}`);
+  for (const [fighter, details] of Object.entries(neutral.heroCuration ?? {})) {
+    if (details.version !== 'SCULPT_READY_MINIMAL_SILHOUETTE_V1'
+        || details.detailCount < 5
+        || details.detailCount > 15
+        || details.fists !== 2
+        || details.blocky.length > 0) {
+      throw new Error(`A real skinned fighter retained floating geometry in ${fighter}: ${JSON.stringify(details)}`);
+    }
+  }
+  if (Object.keys(neutral.heroCuration ?? {}).length !== 2) {
+    throw new Error(`Both actual fighters must be visually curated: ${JSON.stringify(neutral.heroCuration)}`);
+  }
+  if ((neutral.surfaces?.skinnedMeshes ?? 0) < 1
+      || (neutral.surfaces?.preparedMaterials ?? 0) < 1
+      || (neutral.surfaces?.smoothMaterials ?? 0) < 1
+      || (neutral.surfaces?.skinClothPbrMaterials ?? 0) < 1
+      || (neutral.surfaces?.skinnedAttributeMeshes ?? 0) < 1
+      || (neutral.surfaces?.visibleSkinVertices ?? 0) < 10
+      || (neutral.surfaces?.visibleClothVertices ?? 0) < 10
+      || neutral.surfaces.staleFacetedBody !== 0) {
+    throw new Error(`Imported UBC smooth body material not applied to real skinned meshes: ${JSON.stringify(neutral.surfaces)}`);
+  }
+  if (neutral.architecture?.version !== "VAULTED_ARENA_STRUCTURE_V1"
+      || neutral.architecture.bays !== 24
+      || neutral.architecture.draws !== 7
+      || neutral.architecture.pillars !== 24
+      || neutral.architecture.deck !== 32
+      || !neutral.architecture.deckIsMatte
+      || neutral.architecture.deckOpacity > 0.40
+      || neutral.architecture.lightCount !== 2) {
+    throw new Error(`Rendered stadium / hero lighting contract failed: ${JSON.stringify(neutral.architecture)}`);
+  }
   for (const side of ['L', 'R']) {
     const elbow = neutral.points[`elbow${side}`];
     const hand = neutral.points[`hand${side}`];
@@ -451,6 +545,14 @@ try {
         correctionPolicy: root.userData.motionCorrectionPolicy ?? null,
         contactMode: root.userData.motionExpansionContactMode ?? null,
         contact,
+        punchSilhouette: {
+          version: root.userData.tpsPunchSilhouetteVersion ?? null,
+          family: root.userData.tpsPunchSilhouetteFamily ?? null,
+          factor: Number(root.userData.tpsPunchSilhouetteFactor ?? 0),
+          yaw: Number(root.userData.tpsPunchSilhouetteYaw ?? 0),
+          pitch: Number(root.userData.tpsPunchSilhouettePitch ?? 0),
+          bones: Number(root.userData.tpsPunchSilhouetteBoneCount ?? 0),
+        },
         points,
         strikePoint,
         peakStrikeY: Number.isFinite(peakStrikeY) ? peakStrikeY : null,
@@ -477,6 +579,23 @@ try {
     if (!result) throw new Error(`Missing motion result for ${moveId}`);
     if (!result.activeReached || result.state !== "ATTACK") {
       throw new Error(`Motion ${moveId} was not captured during ACTIVE: ${JSON.stringify(result)}`);
+    }
+
+    // This is the actual skinned WebGL pose, not only a pure function test.
+    // Require distinct visible upper-body accent on all grounded base punches;
+    // kicks, throws and finishers retain their independently authored motion.
+    const silhouette = result.punchSilhouette;
+    if (["jab", "straight", "bodyBlow"].includes(moveId)) {
+      if (silhouette?.version !== "AUTHORED_UPPER_BODY_ARC_V1"
+        || silhouette.family !== moveId
+        || silhouette.factor < .8
+        || silhouette.bones !== 3
+        || Math.abs(silhouette.yaw) < .035
+        || Math.abs(silhouette.yaw) > .11) {
+        throw new Error(`Missing bounded live skinned punch silhouette for ${moveId}: ${JSON.stringify(silhouette)}`);
+      }
+    } else if (silhouette && silhouette.factor > 1e-6) {
+      throw new Error(`Punch-only skinned accent leaked into ${moveId}: ${JSON.stringify(silhouette)}`);
     }
 
     if (authoredMoves.has(moveId)) {

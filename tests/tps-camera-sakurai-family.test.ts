@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FIGHTER_DEFINITIONS } from "../src/game/definitions";
 import { expandMoveSet } from "../src/game/move-expansion";
-import { computeTpsCameraFraming, tpsCameraAttackFamily } from "../src/game/tps-camera-profile";
+import { computeTpsCameraFraming, tpsCameraAttackFamily, TPS_CAMERA_DEFAULT_FOV, TPS_CAMERA_MAX_TRAVEL_SPEED } from "../src/game/tps-camera-profile";
 
 const moves = expandMoveSet(FIGHTER_DEFINITIONS.red.moves);
 
@@ -47,4 +47,21 @@ test("close punch and front-kick camera readability stay within bounded presenta
   assert.ok(kick.frontKickReadabilityFactor > 0);
   assert.equal(distant.closePunchDollyFactor, 0);
   assert.equal(distant.kickContactReadabilityFactor, 0);
+});
+
+test("tighter fixed lens keeps close contacts larger without changing camera travel policy", () => {
+  assert.equal(TPS_CAMERA_DEFAULT_FOV, 45);
+  assert.equal(TPS_CAMERA_MAX_TRAVEL_SPEED, 13.2);
+  const close = framing("jab");
+  const far = computeTpsCameraFraming({
+    fightDistance: 3.6, aspect: 2.18,
+    playerPerfectEvadeTicks: 0, playerFlankWindowTicks: 0,
+    playerFlankAttackTicks: 0, flankWindowTicks: 1, playerEvadeSign: 0,
+    maxHitStop: 0, attackMoveId: null, authoredContactWeight: 0,
+    dramaPhase: "", dramaIntensity: 0,
+  });
+  assert.ok(close.backDistance < far.backDistance);
+  assert.ok(close.shoulderOffset > far.shoulderOffset);
+  assert.ok(close.closePunchDollyFactor > 0 && close.closePunchDollyFactor <= .34);
+  assert.ok(close.targetSideShift > 0);
 });

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { TpsFightGame } from "./tps-game";
+import { createTpsArenaArchitecture } from "./tps-arena-architecture";
 
 type SpectacleState = {
   group: THREE.Group;
@@ -157,8 +158,16 @@ function makeSpectacle(): SpectacleState {
   geometries.push(haloGeometry);
   materials.push(haloMaterial);
 
+  // New outer architecture deliberately sits behind the existing ring and
+  // crowd. It shares the parent spectacle lifetime and disposes on rematch.
+  const architecture = createTpsArenaArchitecture();
+  group.add(architecture.group);
+  geometries.push(...architecture.geometries);
+  materials.push(...architecture.materials);
+
   group.userData.tpsArenaSpectacle = true;
-  group.userData.tpsArenaSpectacleDrawGroups = 8;
+  group.userData.tpsArenaSpectacleDrawGroups = 8 + architecture.group.userData.tpsArchitectureDrawGroups;
+  group.userData.tpsArenaSpectacleArchitectureVersion = architecture.group.userData.tpsArchitectureVersion;
   group.userData.tpsArenaSpectacleCrowdInstances = 48;
   group.userData.tpsArenaSpectaclePylonInstances = 16;
 

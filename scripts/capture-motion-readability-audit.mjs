@@ -338,14 +338,28 @@ try {
     const surfaces = {
       version: 'UBC_SEMANTIC_SURFACE_V1', skinnedMeshes: 0,
       preparedMaterials: 0, smoothMaterials: 0, hardwareMaterials: 0, staleFacetedBody: 0,
+      skinClothPbrMaterials: 0, skinnedAttributeMeshes: 0,
+      visibleSkinVertices: 0, visibleClothVertices: 0,
     };
     host?.traverse((object) => {
       if (!object.isSkinnedMesh) return;
       surfaces.skinnedMeshes += 1;
+      const channel = object.geometry?.getAttribute?.('tpsSkinSurface');
+      if (channel && channel.count > 0) {
+        surfaces.skinnedAttributeMeshes += 1;
+        for (let v = 0; v < channel.count; v += 1) {
+          const weight = channel.getX(v);
+          if (weight >= .85) surfaces.visibleSkinVertices += 1;
+          if (weight <= .15) surfaces.visibleClothVertices += 1;
+        }
+      }
       for (const material of (Array.isArray(object.material) ? object.material : [object.material])) {
         const finished = material?.userData?.tpsOutfitSurface === surfaces.version;
         if (!finished) continue;
         surfaces.preparedMaterials += 1;
+        if (material.userData?.tpsSkinClothPbr === 'UBC_SKIN_CLOTH_VERTEX_PBR_V1') {
+          surfaces.skinClothPbrMaterials += 1;
+        }
         if (material.flatShading === false) surfaces.smoothMaterials += 1;
         if (material.userData?.tpsOutfitSurfaceRole === 'HARDWARE') surfaces.hardwareMaterials += 1;
         if (material.userData?.tpsOutfitSurfaceRole !== 'HARDWARE' && material.flatShading) {
@@ -374,6 +388,10 @@ try {
   if ((neutral.surfaces?.skinnedMeshes ?? 0) < 1
       || (neutral.surfaces?.preparedMaterials ?? 0) < 1
       || (neutral.surfaces?.smoothMaterials ?? 0) < 1
+      || (neutral.surfaces?.skinClothPbrMaterials ?? 0) < 1
+      || (neutral.surfaces?.skinnedAttributeMeshes ?? 0) < 1
+      || (neutral.surfaces?.visibleSkinVertices ?? 0) < 10
+      || (neutral.surfaces?.visibleClothVertices ?? 0) < 10
       || neutral.surfaces.staleFacetedBody !== 0) {
     throw new Error(`Imported UBC smooth body material not applied to real skinned meshes: ${JSON.stringify(neutral.surfaces)}`);
   }

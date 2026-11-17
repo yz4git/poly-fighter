@@ -270,10 +270,56 @@ try {
     throw new Error("Local GLB sources accumulated across private matches: " + JSON.stringify(repeat));
   }
   await capture("04-private-repeat-import-clean-lifetime");
+  // Real Chrome display size close to an iPhone landscape 874x402 CSS viewport.
+  // This is NOT a native iPhone device/FPS claim. The expanded review panel
+  // must remain scrollable and leave actual ATTACK/STEP buttons unobstructed.
+  const desktopWindow = await request("/session/" + session + "/window/rect");
+  let mobile = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const beforeSize = await run("return {ow:window.outerWidth,oh:window.outerHeight,iw:window.innerWidth,ih:window.innerHeight};");
+    await request("/session/" + session + "/window/rect", "POST", {
+      width: Math.round(874 + Math.max(0, beforeSize.ow - beforeSize.iw)),
+      height: Math.round(402 + Math.max(0, beforeSize.oh - beforeSize.ih)),
+    });
+    await run("window.dispatchEvent(new Event('resize'));return true;");
+    await delay(320);
+    mobile = await run("return {width:window.innerWidth,height:window.innerHeight};");
+    if (mobile.width >= 854 && mobile.width <= 895
+      && mobile.height >= 388 && mobile.height <= 420) break;
+  }
+  if (!mobile || mobile.width < 854 || mobile.width > 895
+      || mobile.height < 388 || mobile.height > 420)
+    throw new Error("Cannot establish phone-landscape CSS viewport: " + JSON.stringify(mobile));
   if (!await click("PRIVATE GLB QA")) throw new Error("Second overlay missing");
+  const mobileQa = await run(`
+    const panel=document.querySelector('aside[data-artist-combat-qa]');
+    const attack=document.querySelector('.tps-attack-action');
+    const step=document.querySelector('.tps-step-action');
+    if (!panel||!attack||!step) return null;
+    const a=attack.getBoundingClientRect(), s=step.getBoundingClientRect();
+    const p=panel.getBoundingClientRect();
+    return {
+      innerWidth:window.innerWidth, innerHeight:window.innerHeight,
+      panelBottom:p.bottom, panelHeight:p.height,
+      panelScrollHeight:panel.scrollHeight, panelClientHeight:panel.clientHeight,
+      panelScrollY:getComputedStyle(panel).overflowY,
+      attackTop:a.top, attackVisible:a.width>32&&a.height>32,
+      stepVisible:s.width>32&&s.height>32,
+      capturesAvailable:!![...panel.querySelectorAll('button')].find(b=>b.textContent?.includes('SAVE PRIVATE QA METRICS')),
+    };
+  `);
+  if (!mobileQa || !mobileQa.attackVisible || !mobileQa.stepVisible
+      || mobileQa.panelScrollY !== "auto"
+      || !mobileQa.capturesAvailable
+      || mobileQa.panelBottom > mobileQa.attackTop - 3)
+    throw new Error("Private QA obscures iPhone landscape controls: " + JSON.stringify(mobileQa));
+  await capture("05-private-iphone-landscape-qa-expanded");
+  await request("/session/" + session + "/window/rect", "POST", desktopWindow);
+  await run("window.dispatchEvent(new Event('resize'));return true;");
+  await delay(200);
   if (!await click("END PRIVATE TEST")) throw new Error("Cannot finish repeated private match");
   await writeFile(output + "/qa-result.json", JSON.stringify({
-    ready, strike, sampledMoves, poseMotion, expanded, exited, repeat,
+    ready, strike, sampledMoves, poseMotion, expanded, exited, repeat, mobileQa,
     artistResourceRule: "exactly one active local GLB and prior texture source released",
     artApproval: "NOT_APPROVED",
     note: "Legacy V2 GLB is an unapproved technical CI fixture only. Never publish it as SERA.",

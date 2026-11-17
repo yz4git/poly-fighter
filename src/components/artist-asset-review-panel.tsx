@@ -79,9 +79,10 @@ function formatMiB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
-export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
+export function ArtistAssetReviewPanel({ onBack, onTestCombat, onTestMatch }: {
   onBack: () => void;
   onTestCombat: () => void;
+  onTestMatch: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer | null>(null);
@@ -307,6 +308,17 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
       setMessage(error instanceof Error ? error.message : String(error));
     }
   };
+  const launchPrivateMatch = () => {
+    if (!report?.combatRigCompatible || !eligibleFile.current) return;
+    try {
+      // A new short-lived object URL is transferred to the real TPS battle.
+      // This never uploads the user\'s source model to the repository.
+      registerLocalArtistPreview(eligibleFile.current);
+      onTestMatch();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
   const keyStatus = !report ? "NO SCULPT SELECTED"
     : report.combatRigCompatible ? "COMBAT TECH PASS / ART UNREVIEWED"
     : report.visualReviewEligible ? "SCULPT VISUAL REVIEW ONLY / ART UNREVIEWED"
@@ -392,7 +404,16 @@ export function ArtistAssetReviewPanel({ onBack, onTestCombat }: {
             TEST REAL PUNCH / KICK
           </button>
         )}
+        {report?.combatRigCompatible && (
+          <button type="button" onClick={launchPrivateMatch}
+            aria-label="Test local artist SERA in a real private fight"
+            style={{ ...button, color: "#0a1a25", background: "#9ee4ff",
+              borderColor: "#9ee4ff", fontSize: 9 }}>
+            TEST REAL MATCH · LOCAL GLB
+          </button>
+        )}
         <div style={{ fontSize: 8, lineHeight: 1.5, color: "#9dcfbb" }}>
+          未承認GLBは一般対戦や公開キャラ選択には追加されません。
           端末内のGLBを既存格闘モーションに一時接続します。
           実モデルの関節が合わない場合は旧キャラへ戻ります。製品採用はしません。
         </div>

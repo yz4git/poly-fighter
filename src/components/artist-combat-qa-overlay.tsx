@@ -113,6 +113,28 @@ export function ArtistCombatQaOverlay({
     }
   };
 
+  const exportQaReport = () => {
+    // Explicitly export metrics only. Never serialize the private blob URL,
+    // the GLB source, a file name, facial textures or game account data.
+    const report = {
+      schemaVersion: 1,
+      kind: "POLY_FIGHTER_LOCAL_ARTIST_COMBAT_TECHNICAL_QA",
+      artApproved: false,
+      generatedAt: new Date().toISOString(),
+      viewport: { width: window.innerWidth, height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio },
+      sample: info,
+      limitation: "Browser requestAnimationFrame cadence; not GPU timings, iPhone 60fps certification or artist approval",
+    };
+    const output = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const local = URL.createObjectURL(output);
+    const link = document.createElement("a");
+    link.href = local;
+    link.download = "sera-private-fight-technical-qa.json";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(local), 20_000);
+  };
+
   const ready = info.state === "ready" && info.mappedBones >= 20;
   const stateColor = ready ? "#91f6b2" : info.state === "failed" ? "#ff9d9d" : "#ffe0a2";
   const surface: CSSProperties = {
@@ -161,6 +183,7 @@ export function ArtistCombatQaOverlay({
           {info.error && <span role="alert" style={{ color: "#ffb4b4", overflowWrap: "anywhere" }}>Fallback: {info.error}</span>}
           <span>Chrome/Safari render FPS is not GPU frame timing. Inspect on a real iPhone.</span>
           <button type="button" style={button} onClick={captureFrame}>SAVE FIGHT SCREENSHOT</button>
+          <button type="button" style={button} onClick={exportQaReport}>SAVE PRIVATE QA METRICS</button>
           <button type="button" style={button} onClick={onExit}>END PRIVATE TEST</button>
         </div>
       )}

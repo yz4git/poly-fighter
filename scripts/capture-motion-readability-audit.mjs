@@ -381,12 +381,32 @@ try {
       };
     };
     const heroCuration = { player: curatedFighter(game.p1), opponent: curatedFighter(game.p2) };
+    const conformalGarment = (fighter) => {
+      const root = fighter.visual.root;
+      const vest = root.getObjectByName('ubc-conformal-rigged-vest');
+      const source = vest?.parent?.children.find(child =>
+        child.isSkinnedMesh && child !== vest && child.userData.quaterniusOutfitSkin);
+      return {
+        version: root.userData.quaterniusConformalGarmentVersion ?? null,
+        count: root.userData.quaterniusConformalGarmentMeshes ?? 0,
+        triangles: vest?.userData?.quaterniusConformalMetrics?.triangles ?? 0,
+        sourceTriangles: vest?.userData?.quaterniusConformalMetrics?.sourceTriangles ?? 0,
+        coverage: vest?.userData?.quaterniusConformalMetrics?.coverage ?? 0,
+        offset: vest?.userData?.quaterniusConformalMetrics?.offset ?? 0,
+        actualSkinnedMesh: vest?.isSkinnedMesh === true,
+        sharedSkeleton: Boolean(vest && source && vest.skeleton === source.skeleton),
+        materialIsPbr: vest?.material?.isMeshStandardMaterial === true,
+        attachedToOriginal: Boolean(vest && source && vest.parent === source.parent),
+      };
+    };
+    const garments = { player: conformalGarment(game.p1), opponent: conformalGarment(game.p2) };
     let fistMeshCount = 0;
     game.p1.visual.root.traverse((object) => { if (object.name?.endsWith('-fist')) fistMeshCount += 1; });
     return {
       architecture,
       surfaces,
       heroCuration,
+      garments,
       points: bonePoints(game.p1),
       gameplayPosition: { x: game.p1.position.x, y: game.p1.position.y, z: game.p1.position.z },
       visualRootPosition: point(game.p1.visual.root),
@@ -411,6 +431,21 @@ try {
   }
   if (Object.keys(neutral.heroCuration ?? {}).length !== 2) {
     throw new Error(`Both actual fighters must be visually curated: ${JSON.stringify(neutral.heroCuration)}`);
+  }
+  for (const [fighter, vest] of Object.entries(neutral.garments ?? {})) {
+    if (vest.version !== 'UBC_CONFORMAL_RIGGED_VEST_V1'
+        || vest.count !== 1
+        || vest.triangles < 42
+        || vest.triangles > 5500
+        || vest.coverage <= 0
+        || vest.coverage >= .50
+        || vest.offset <= 0
+        || !vest.actualSkinnedMesh
+        || !vest.sharedSkeleton
+        || !vest.materialIsPbr
+        || !vest.attachedToOriginal) {
+      throw new Error(`Real fighter ${fighter} has no valid deforming vest, or it exceeds mobile bounds: ${JSON.stringify(vest)}`);
+    }
   }
   if ((neutral.surfaces?.skinnedMeshes ?? 0) < 1
       || (neutral.surfaces?.preparedMaterials ?? 0) < 1

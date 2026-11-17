@@ -58,8 +58,16 @@ export function planCombatMotionHandoff(
   const fromAttack = isCombatAttackClip(previous);
   const toAttack = isCombatAttackClip(next);
 
-  // A live hit or blocked strike must take priority over an outgoing combo
-  // velocity. The incoming reaction's head, spine and guard become authoritative.
+  // A quick rise or tech roll can start while the gameplay state still
+  // says KNOCKDOWN. Classify the named recovery *before* the state-level hit
+  // interrupt, otherwise the rise inherits a second downed reaction instead.
+  // This changes only pose handoff, never grounded/ukemi combat timing.
+  if (nextState === "WAKEUP" || next === "CM_TechRise" || next === "CM_QuickRise"
+      || next.startsWith("CM_TechRoll_")) {
+    return { mode: "LANDING", duration: 0.052, velocityCarry: .26 };
+  }
+  // A live hit or blocked strike must take priority over outgoing combo
+  // velocity. Incoming reaction head/spine/guard are authoritative.
   if (nextState === "HIT" || nextState === "KNOCKDOWN"
       || nextState === "KO" || nextState === "RING_OUT"
       || nextState === "THROW" || isReactionClip(next)) {
@@ -67,12 +75,6 @@ export function planCombatMotionHandoff(
   }
   if (nextState === "BLOCK_STUN" || next === "CM_Block") {
     return { mode: "BLOCK_INTERRUPT", duration: 0.038, velocityCarry: .35 };
-  }
-  // Wakeup, tech-rise and foot contact are authored transitions, not neutral
-  // settling. Let their supporting limb pose take over promptly.
-  if (nextState === "WAKEUP" || next === "CM_TechRise" || next === "CM_QuickRise"
-      || next.startsWith("CM_TechRoll_")) {
-    return { mode: "LANDING", duration: 0.052, velocityCarry: .26 };
   }
   if (fromAttack && toAttack) {
     return { mode: "ATTACK_COMBO", duration: .069, velocityCarry: .72 };

@@ -46,7 +46,8 @@ export function isCombatAttackClip(name: string): boolean {
 
 function isReactionClip(name: string): boolean {
   return name.startsWith("BF_Hit") || name.startsWith("BF_CounterHit")
-    || name === "BF_EdgeStagger" || name === "CM_Launch";
+    || name === "BF_EdgeStagger" || name === "BF_GuardBreak"
+    || name === "CM_Launch" || name === "CM_Down" || name === "CM_Thrown";
 }
 
 export function planCombatMotionHandoff(
@@ -59,11 +60,19 @@ export function planCombatMotionHandoff(
 
   // A live hit or blocked strike must take priority over an outgoing combo
   // velocity. The incoming reaction's head, spine and guard become authoritative.
-  if (nextState === "HIT" || isReactionClip(next)) {
+  if (nextState === "HIT" || nextState === "KNOCKDOWN"
+      || nextState === "KO" || nextState === "RING_OUT"
+      || nextState === "THROW" || isReactionClip(next)) {
     return { mode: "REACTION_INTERRUPT", duration: 0.034, velocityCarry: .22 };
   }
   if (nextState === "BLOCK_STUN" || next === "CM_Block") {
     return { mode: "BLOCK_INTERRUPT", duration: 0.038, velocityCarry: .35 };
+  }
+  // Wakeup, tech-rise and foot contact are authored transitions, not neutral
+  // settling. Let their supporting limb pose take over promptly.
+  if (nextState === "WAKEUP" || next === "CM_TechRise" || next === "CM_QuickRise"
+      || next.startsWith("CM_TechRoll_")) {
+    return { mode: "LANDING", duration: 0.052, velocityCarry: .26 };
   }
   if (fromAttack && toAttack) {
     return { mode: "ATTACK_COMBO", duration: .069, velocityCarry: .72 };

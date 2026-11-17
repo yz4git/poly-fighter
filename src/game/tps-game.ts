@@ -4,6 +4,7 @@ import type { FighterRuntime } from "./fighter";
 import { resolveContextAttack, type FighterDna } from "./fighter-dna";
 import { chooseTpsOpeningStrike } from "./tps-fight-fundamentals";
 import { chooseCinematicTechnique, cinematicAxesForBufferedTap } from "./cinematic-techniques";
+import { chooseSeraStreetFlowMove, SERA_STREET_FLOW_LABELS, SERA_STREET_FLOW_MOVES, SERA_STREET_FLOW_VERSION } from "./sera-street-flow";
 import { expandedContextMove } from "./move-expansion";
 import {
   chooseTpsNeutralMashMove, tpsBufferedMashDirection, tpsMashContactOutcome,
@@ -80,6 +81,7 @@ type ExtendedTpsRuntime = CoreTpsFightGame & {
   __comboLinkSerial?: number;
   __comboQueuedBranch?: "FORWARD" | "BACK" | "SIDE" | "NEUTRAL";
   __comboQueuedSideSign?: number;
+  __streetFlowCompletedBeats?: number;
   __finalImpactSeconds?: number;
   __finalImpactContact?: THREE.Vector3;
   enemyFeintReadTicks: number;
@@ -338,6 +340,47 @@ prototype.beginContextAttack = function beginContextAttack(): boolean {
     }
     return true;
   }
+
+  // The user's 12-frame GIF is a three-input, three-hit SERA phrase:
+  // guarded jab → head-high kick → grounded low-to-palm finish.
+  // START: forward + ATTACK in range. Continue: ATTACK after a CLEAN hit.
+  // Existing 60 Hz hit tests, defender reactions, blocks and the authored
+  // link window remain authoritative; no special infinite hitbox is added.
+  if (game.playerComboStage === 0) game.__streetFlowCompletedBeats = 0;
+  const queued = game.__comboQueuedBranch;
+  const streetFlow = chooseSeraStreetFlowMove({
+    fighter: game.p1.definition.name,
+    comboStage: game.playerComboStage,
+    completedBeats: game.__streetFlowCompletedBeats ?? 0,
+    forward: queued ? queued === "FORWARD" : game.p1.input.up,
+    back: queued ? queued === "BACK" : game.p1.input.down,
+    side: queued ? queued === "SIDE" : game.p1.input.left || game.p1.input.right,
+    distance,
+    available: game.p1.definition.moves,
+  });
+  if (streetFlow) {
+    if (!game.p1.beginMove(streetFlow)) return false;
+    const beat = SERA_STREET_FLOW_MOVES.indexOf(streetFlow);
+    const nextBeat = beat + 1;
+    game.__streetFlowCompletedBeats = nextBeat;
+    game.__mashBufferTicks = 0;
+    game.__comboRoute = "CLOSE_A";
+    game.playerAttackQueued = false;
+    game.playerComboStage = nextBeat;
+    game.playerComboGraceTicks = 34;
+    attackData.tpsStreetFlowVersion = SERA_STREET_FLOW_VERSION;
+    attackData.tpsStreetFlowBeat = nextBeat;
+    attackData.tpsStreetFlowMove = streetFlow;
+    attackData.tpsComboMove = streetFlow;
+    attackData.tpsContextMove = streetFlow;
+    attackData.tpsComboRoute = "CLOSE_A";
+    attackData.tpsComboStage = nextBeat;
+    game.setCombatBeat(SERA_STREET_FLOW_LABELS[beat], 20);
+    return true;
+  }
+  // A whiff, a blocked hit, a deliberate side/back direction or a broken
+  // link exits the phrase. Previous input cannot auto-trigger later beats.
+  game.__streetFlowCompletedBeats = 0;
 
   // The TPS subclass owns the player action graph (the core method below is
   // overridden). Select and play the new moves HERE, so iPhone ATTACK taps

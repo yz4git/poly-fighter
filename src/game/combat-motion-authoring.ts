@@ -41,7 +41,11 @@ function worldRotation(bone: THREE.Object3D, rotation: THREE.Quaternion): void {
 }
 
 /** Anatomical bend planes, finite reach and no dependence on imported bone axes. */
-export function solveCombatLimb(root: THREE.Object3D, mid: THREE.Object3D, end: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3): void {
+export function solveCombatLimb(
+  root: THREE.Object3D, mid: THREE.Object3D, end: THREE.Object3D,
+  target: THREE.Vector3, pole: THREE.Vector3,
+  minimumJointAngleDeg = 0,
+): void {
   root.updateWorldMatrix(true, true);
   const a = root.getWorldPosition(new THREE.Vector3());
   const b = mid.getWorldPosition(new THREE.Vector3());
@@ -52,7 +56,20 @@ export function solveCombatLimb(root: THREE.Object3D, mid: THREE.Object3D, end: 
   const raw = direction.length();
   if (raw < 1e-7) return;
   direction.divideScalar(raw);
-  const distance = THREE.MathUtils.clamp(raw, Math.abs(upper - lower) + 1e-5, (upper + lower) * .985);
+  // Deep chamber/recovery poses may put the requested foot almost on the hip.
+  // A two-bone IK knee then folds to ~0 degrees, crossing its bend plane and
+  // causing large 120 Hz ankle jumps between adjacent quaternion keys. The
+  // anatomically safe limit is applied ONLY when a kick explicitly requests it;
+  // arms, planted support legs and historical ordinary poses stay unchanged.
+  const minAngle = THREE.MathUtils.degToRad(
+    THREE.MathUtils.clamp(minimumJointAngleDeg, 0, 90));
+  const safeReach = minAngle > 0
+    ? Math.sqrt(Math.max(0, upper * upper + lower * lower
+        - 2 * upper * lower * Math.cos(minAngle)))
+    : 0;
+  const distance = THREE.MathUtils.clamp(raw,
+    Math.max(Math.abs(upper - lower) + 1e-5, safeReach),
+    (upper + lower) * .985);
   const bend = pole.clone().sub(a);
   bend.addScaledVector(direction, -bend.dot(direction));
   if (bend.lengthSq() < 1e-9) bend.crossVectors(direction, Math.abs(direction.y) < .9 ? Y : Z);
@@ -135,8 +152,9 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const bone = nodes.get(name);
     if (bone && angle) worldRotation(bone, new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(bone.getWorldQuaternion(new THREE.Quaternion())));
   };
-  const limb = (suffix: "l" | "r", arm: boolean, goal: Point, pole: Point) => solveCombatLimb(
+  const limb = (suffix: "l" | "r", arm: boolean, goal: Point, pole: Point, minimumJointAngleDeg = 0) => solveCombatLimb(
     nodes.get(`${arm ? "upperarm" : "thigh"}_${suffix}`)!, nodes.get(`${arm ? "lowerarm" : "calf"}_${suffix}`)!, nodes.get(`${arm ? "hand" : "foot"}_${suffix}`)!, point(goal), point(pole),
+    minimumJointAngleDeg,
   );
   const stanceFeet: { l: Point; r: Point } = { l: [-width, 0, .065], r: [width, 0, -.070] };
   const guardHands: { l: Point; r: Point } = {
@@ -144,7 +162,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     r: [...stance.rightGuard] as Point,
   };
 
-  function body(pose: BodyPose = {}, breath = 0): void {
+  function body(
+    pose: BodyPose = {}, breath = 0, kickMinimumKneeAngleDeg = 0,
+    dedicatedStrikeLeg: "l" | "r" | null = null,
+  ): void {
     restore(nodes, neutral);
     rig.updateMatrixWorld(true);
     const pelvis = nodes.get("pelvis")!;
@@ -167,8 +188,15 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     for (const suffix of ["l", "r"] as const) {
       const sign = suffix === "l" ? -1 : 1;
       const foot = (suffix === "l" ? pose.leftFoot : pose.rightFoot) ?? stanceFeet[suffix];
-      limb(suffix, false, foot, [sign * (width + .02), .27, .22]);
-      worldRotation(nodes.get(`foot_${suffix}`)!, new THREE.Quaternion().setFromAxisAngle(Y, sign * handedness * .08).multiply(footQ[suffix]));
+      // The reference kick below has its own dedicated thigh/knee solve.
+      // Applying generic stance IK to that SAME striking leg beforehand
+      // creates two incompatible knee bend planes and near-180° quaternion
+      // keyframe transitions during the chamber→contact/recoil arc.
+      if (suffix !== dedicatedStrikeLeg) {
+        limb(suffix, false, foot, [sign * (width + .02), .27, .22],
+          kickMinimumKneeAngleDeg > 0 && foot[1] > .075 ? kickMinimumKneeAngleDeg : 0);
+        worldRotation(nodes.get(`foot_${suffix}`)!, new THREE.Quaternion().setFromAxisAngle(Y, sign * handedness * .08).multiply(footQ[suffix]));
+      }
       const hand = (suffix === "l" ? pose.leftHand : pose.rightHand) ?? guardHands[suffix];
       const handTarget: Point = [hand[0] * (1 - high * .18), hand[1] + high * .037, hand[2] + high * .025];
       rotate(`clavicle_${suffix}`, Y, -sign * .06);
@@ -449,7 +477,9 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         : moveId === "streetFlowKick" ? .48 : .59;
       author(clipName, duration, u => {
         const pose = sampleSeraStreetFlowPose(moveId, u, width);
-        body(pose);
+        // A large right-foot chamber and recoil must never fold the knee into
+        // a near-singular line; the left planted leg remains unconstrained.
+        body(pose, 0, moveId === "streetFlowKick" ? 42 : 0);
         if (moveId === "streetFlowPalm") {
           const openPalm = Math.max(0, 1 - Math.abs(u - .55) / .17);
           rotate("hand_r", X, -.54 * openPalm);
@@ -458,12 +488,16 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
           const extension = Math.max(0, 1 - Math.abs(u - .55) / .20);
           rotate("foot_r", X, -.17 * extension);
         }
-      }, moveId === "streetFlowPalm" ? 61 : 49);
+      }, moveId === "streetFlowPalm" ? 61 : moveId === "streetFlowKick" ? 121 : 49);
     }
   }
   // Stable source marker for runtime and WebGL audit. Clip cache key includes
   // this version so any future choreography revisions invalidate cached clips.
   const referenceAnkles = new Map<string, THREE.Quaternion>();
+  // The rising-kick knee crossed its original bend plane during recoil,
+  // producing a 30+ cm ankle snap between 120 Hz samples. Freeze the *plane*
+  // established at the real impact pose, not the knee joint or target foot.
+  const referenceKickBendPlanes = new Map<string, THREE.Vector3>();
   function placeReferenceKick(name: string, u: number) {
     const pose = sampleReferenceKickChoreography(name, u, width)!;
     const strike = pose.strike;
@@ -478,7 +512,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rightFoot: strike === "r" ? footTarget : undefined,
       leftHand: strike === "l" ? rearHand : guardHand,
       rightHand: strike === "r" ? rearHand : guardHand,
-    });
+    }, 0, 0, strike);
     // Counterbalance comes from the pelvis and thorax together, while the face
     // stays directed toward the opponent instead of spinning with the hips.
     rotate("Head", Y, -pose.yaw * .40 * handedness);
@@ -499,7 +533,19 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       const distance = THREE.MathUtils.lerp(direction.length(), length * .94, pose.extension);
       target.copy(hip).add(direction.setLength(Math.min(length * .975, distance)));
     }
-    solveCombatLimb(thigh, calf, foot, target, point([...pose.knee] as Point));
+    let kneePole = point([...pose.knee] as Point);
+    if (name === "BF_RisingKick_R") {
+      const impactPlane = referenceKickBendPlanes.get(name);
+      if (impactPlane && direction.lengthSq() > 1e-10) {
+        const reachDirection = target.clone().sub(hip).normalize();
+        const projected = impactPlane.clone()
+          .addScaledVector(reachDirection, -impactPlane.dot(reachDirection));
+        if (projected.lengthSq() > 1e-5) {
+          kneePole = hip.clone().addScaledVector(projected.normalize(), height * .32);
+        }
+      }
+    }
+    solveCombatLimb(thigh, calf, foot, target, kneePole, 42);
     rig.updateMatrixWorld(true);
     return { pose, strike, support, foot, calf, neutralAnkle };
   }
@@ -508,6 +554,15 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     let desiredAnkle = referenceAnkles.get(name);
     if (!desiredAnkle) {
       const { strike, foot, calf } = placeReferenceKick(name, authoredMotionEvents(name).contact);
+      if (name === "BF_RisingKick_R") {
+        const hip = nodes.get(`thigh_${strike}`)!.getWorldPosition(new THREE.Vector3());
+        const knee = calf.getWorldPosition(new THREE.Vector3());
+        const ankle = foot.getWorldPosition(new THREE.Vector3());
+        const reachDirection = ankle.clone().sub(hip).normalize();
+        const bend = knee.clone().sub(hip);
+        bend.addScaledVector(reachDirection, -bend.dot(reachDirection));
+        if (bend.lengthSq() > 1e-8) referenceKickBendPlanes.set(name, bend.normalize());
+      }
       // Build a complete ankle frame, not just a shin/toe angle. A one-vector
       // correction can satisfy that angle while rolling the boot onto its edge.
       const shin = foot.getWorldPosition(new THREE.Vector3())
@@ -558,11 +613,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     rotate("clavicle_r", Y, -force.shoulderYaw * handedness * .72);
     rotate("Head", Y, force.headCounterYaw * handedness);
     rig.updateMatrixWorld(true);
-    // Older kicks use a generic off-hand guard. Restore each character's
-    // authored guard on the edge poses, without *any* pelvis/leg edits:
-    // even a tiny pelvis blend moves the planted toe during the early pivot.
-    // Only the upper-body guard is cross-keyed; grounded ankle and contact
-    // paths remain exactly as their already-validated two-bone solver authored.
+    // The dedicated strike-leg solver must return to the *same* anatomical
+    // guard as the ready clip at first/last pose. Blend only the airborne
+    // striking leg (not the planted support leg, pelvis or gameplay root).
+    // The torso/guard handoff remains cross-keyed as before.
     const entry = 1 - smoothMotion(u / .12);
     const exit = smoothMotion((u - .88) / .12);
     const readyWeight = Math.max(entry, exit);
@@ -570,7 +624,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       for (const [boneName, reference] of ready) {
         if (!(boneName === "Head" || boneName.startsWith("spine_")
           || boneName.startsWith("clavicle_") || boneName.startsWith("upperarm_")
-          || boneName.startsWith("lowerarm_") || boneName.startsWith("hand_"))) continue;
+          || boneName.startsWith("lowerarm_") || boneName.startsWith("hand_")
+          || boneName === `thigh_${pose.strike}` || boneName === `calf_${pose.strike}`
+          || boneName === `foot_${pose.strike}` || boneName === `ball_${pose.strike}`
+          || boneName === `ball_leaf_${pose.strike}`)) continue;
         nodes.get(boneName)!.quaternion.slerp(reference.rotation, readyWeight);
       }
       rig.updateMatrixWorld(true);
@@ -694,7 +751,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
       bakePunchKinetics(name, u);
-    }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
+    }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 121 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
   // Mirror world-space bind deltas, not raw local Euler angles: UBC's left and
   // right bone frames differ. SERA's left backfist/right body blow now really

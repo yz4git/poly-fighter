@@ -162,7 +162,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     r: [...stance.rightGuard] as Point,
   };
 
-  function body(pose: BodyPose = {}, breath = 0, kickMinimumKneeAngleDeg = 0): void {
+  function body(
+    pose: BodyPose = {}, breath = 0, kickMinimumKneeAngleDeg = 0,
+    dedicatedStrikeLeg: "l" | "r" | null = null,
+  ): void {
     restore(nodes, neutral);
     rig.updateMatrixWorld(true);
     const pelvis = nodes.get("pelvis")!;
@@ -185,9 +188,15 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     for (const suffix of ["l", "r"] as const) {
       const sign = suffix === "l" ? -1 : 1;
       const foot = (suffix === "l" ? pose.leftFoot : pose.rightFoot) ?? stanceFeet[suffix];
-      limb(suffix, false, foot, [sign * (width + .02), .27, .22],
-        kickMinimumKneeAngleDeg > 0 && foot[1] > .075 ? kickMinimumKneeAngleDeg : 0);
-      worldRotation(nodes.get(`foot_${suffix}`)!, new THREE.Quaternion().setFromAxisAngle(Y, sign * handedness * .08).multiply(footQ[suffix]));
+      // The reference kick below has its own dedicated thigh/knee solve.
+      // Applying generic stance IK to that SAME striking leg beforehand
+      // creates two incompatible knee bend planes and near-180° quaternion
+      // keyframe transitions during the chamber→contact/recoil arc.
+      if (suffix !== dedicatedStrikeLeg) {
+        limb(suffix, false, foot, [sign * (width + .02), .27, .22],
+          kickMinimumKneeAngleDeg > 0 && foot[1] > .075 ? kickMinimumKneeAngleDeg : 0);
+        worldRotation(nodes.get(`foot_${suffix}`)!, new THREE.Quaternion().setFromAxisAngle(Y, sign * handedness * .08).multiply(footQ[suffix]));
+      }
       const hand = (suffix === "l" ? pose.leftHand : pose.rightHand) ?? guardHands[suffix];
       const handTarget: Point = [hand[0] * (1 - high * .18), hand[1] + high * .037, hand[2] + high * .025];
       rotate(`clavicle_${suffix}`, Y, -sign * .06);
@@ -499,7 +508,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       rightFoot: strike === "r" ? footTarget : undefined,
       leftHand: strike === "l" ? rearHand : guardHand,
       rightHand: strike === "r" ? rearHand : guardHand,
-    }, 0, 42);
+    }, 0, 0, strike);
     // Counterbalance comes from the pelvis and thorax together, while the face
     // stays directed toward the opponent instead of spinning with the hips.
     rotate("Head", Y, -pose.yaw * .40 * handedness);

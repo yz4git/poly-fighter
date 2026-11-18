@@ -1,0 +1,220 @@
+// AnyMachine-inspired *human-safe* joint/stance QA on the actual imported GLBs.
+// No external model/image service; no browser/runtime or shipping-game changes.
+// Run: node --import tsx scripts/audit-reference-first-motion.mjs
+// Output: artifacts/reference-first-motion/rig-sweep-report.json
+import assert from "node:assert/strict";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { PLAYABLE_FIGHTERS } from "../src/game/playable-fighters.ts";
+import { createCombatMotionLibrary } from "../src/game/combat-motion-authoring.ts";
+import { retargetMotionClips } from "../src/game/visual-quaternius-runtime.ts";
+import { authoredMotionEvents } from "../src/game/combat-motion-timeline.ts";
+import { combatCharacterStance } from "../src/game/combat-character-stance.ts";
+
+const OUT = process.env.REFERENCE_MOTION_QA_DIR ?? "artifacts/reference-first-motion";
+const BASE = new URL("../public/models/quaternius/", import.meta.url);
+const round = (n) => Math.round(n * 100000) / 100000;
+const JOINTS = [
+  "pelvis", "Head", "spine_02", "spine_03",
+  "upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r",
+  "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
+];
+const LIMBS = [
+  ["upperarm_l", "lowerarm_l"], ["lowerarm_l", "hand_l"],
+  ["upperarm_r", "lowerarm_r"], ["lowerarm_r", "hand_r"],
+  ["thigh_l", "calf_l"], ["calf_l", "foot_l"],
+  ["thigh_r", "calf_r"], ["calf_r", "foot_r"],
+];
+const SHARED_CLIPS = [
+  "CM_Ready", "CM_Guard", "CM_Move_F", "CM_Move_B", "CM_Move_L", "CM_Move_R",
+  "CM_Crouch", "CM_Wakeup", "BF_Jab_L", "BF_Cross_R",
+  "BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R",
+];
+const STREET_CLIPS = ["CM_StreetFlow_Jab", "CM_StreetFlow_HighKick", "CM_StreetFlow_LowPalm"];
+
+async function readGlb(file) {
+  const bytes = await readFile(new URL(file, BASE));
+  const raw = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return new GLTFLoader().parseAsync(raw, "");
+}
+
+function capture(nodes, names = JOINTS) {
+  const results = {};
+  for (const name of names) {
+    const point = nodes.get(name).getWorldPosition(new THREE.Vector3());
+    assert.ok([point.x, point.y, point.z].every(Number.isFinite), `nonfinite bone ${name}`);
+    results[name] = point;
+  }
+  return results;
+}
+
+function exactSegmentLengths(positions) {
+  return LIMBS.map(([a,b]) => positions[a].distanceTo(positions[b]));
+}
+
+function angularJoint(positions, a, pivot, b) {
+  const v = positions[a].clone().sub(positions[pivot]);
+  const w = positions[b].clone().sub(positions[pivot]);
+  const degrees = THREE.MathUtils.radToDeg(v.angleTo(w));
+  assert.ok(Number.isFinite(degrees), `invalid joint axis ${pivot}`);
+  return degrees;
+}
+
+function sampleClip(target, mixer, clip, steps, nodes) {
+  const samples = [];
+  mixer.stopAllAction();
+  const action = mixer.clipAction(clip).reset();
+  action.setLoop(THREE.LoopOnce, 1);
+  action.clampWhenFinished = true;
+  action.play();
+  for (let i = 0; i <= steps; i++) {
+    action.time = clip.duration * i / steps;
+    mixer.update(0);
+    target.updateMatrixWorld(true);
+    samples.push(capture(nodes));
+  }
+  mixer.stopAllAction();
+  return samples;
+}
+
+function inspectClip(name, clip, target, mixer, nodes, height, ready, violations, fighterName) {
+  const frames = Math.max(40, Math.ceil(clip.duration * 120));
+  const poses = sampleClip(target, mixer, clip, frames, nodes);
+  const first = poses[0], last = poses.at(-1);
+  const lengthBaseline = exactSegmentLengths(first);
+  const footLeft = "foot_l", footRight = "foot_r";
+  const isLoop = name === "CM_Ready" || name === "CM_Guard" || name.startsWith("CM_Move_");
+  const isIdle = name === "CM_Ready" || name === "CM_Guard";
+  let maxEndpointJump = 0, maxFootSlip = 0, maxLimbLengthError = 0;
+  let mostExtendedElbow = 0, mostExtendedKnee = 0;
+  for (let i = 0; i < poses.length; i++) {
+    const pose = poses[i];
+    const segmentLengths = exactSegmentLengths(pose);
+    for (let s = 0; s < segmentLengths.length; s++) {
+      maxLimbLengthError = Math.max(maxLimbLengthError, Math.abs(segmentLengths[s] - lengthBaseline[s]));
+    }
+    for (const side of ["l","r"]) {
+      mostExtendedElbow = Math.max(mostExtendedElbow,
+        angularJoint(pose, `upperarm_${side}`, `lowerarm_${side}`, `hand_${side}`));
+      mostExtendedKnee = Math.max(mostExtendedKnee,
+        angularJoint(pose, `thigh_${side}`, `calf_${side}`, `foot_${side}`));
+    }
+    if (i > 0) for (const bone of [footLeft, footRight, "hand_l", "hand_r", "Head"]) {
+      maxEndpointJump = Math.max(maxEndpointJump, pose[bone].distanceTo(poses[i-1][bone]));
+    }
+    if (isIdle) for (const bone of [footLeft, footRight]) {
+      maxFootSlip = Math.max(maxFootSlip, pose[bone].distanceTo(first[bone]));
+    }
+  }
+  let seam = 0;
+  if (isLoop) for (const bone of ["pelvis", "Head", footLeft, footRight, "hand_l", "hand_r"]) {
+    seam = Math.max(seam, first[bone].distanceTo(last[bone]));
+  }
+  const fail = (issue) => violations.push(`${fighterName}/${name}: ${issue}`);
+  if (maxLimbLengthError > height * .005) fail(`bone lengths change ${round(maxLimbLengthError)}m`);
+  if (maxEndpointJump > height * .35) fail(`pose teleport ${round(maxEndpointJump)}m per sampled frame`);
+  if (isLoop && seam > height * .02) fail(`visible loop seam ${round(seam)}m`);
+  if (isIdle && maxFootSlip > height * .035) fail(`feet drift while stationary ${round(maxFootSlip)}m`);
+
+  let contact = null;
+  if (name.startsWith("BF_") || name.startsWith("CM_StreetFlow_")) {
+    const when = authoredMotionEvents(name).contact;
+    const ix = Math.round(frames * when);
+    const pose = poses[ix];
+    let supportSide = null;
+    if (["BF_FrontKick_R", "BF_RisingKick_R", "BF_DashKick_R",
+      "CM_StreetFlow_HighKick"].includes(name)) supportSide = "l";
+    if (name === "BF_LowKick_L") supportSide = "r";
+    const toeDrift = supportSide
+      ? pose[`ball_${supportSide}`].distanceTo(ready[`ball_${supportSide}`]) : null;
+    if (toeDrift !== null && toeDrift > height * .105) {
+      fail(`support toe moved ${round(toeDrift)}m at authored contact`);
+    }
+    contact = { phase: round(when), supportFoot: supportSide,
+      supportToeDriftM: toeDrift === null ? null : round(toeDrift) };
+  }
+  return { frames: frames + 1, durationSeconds: round(clip.duration),
+    maxFrameEndpointJumpM: round(maxEndpointJump),
+    maxLimbLengthErrorM: round(maxLimbLengthError),
+    loopSeamM: isLoop ? round(seam) : null,
+    stationaryFootDriftM: isIdle ? round(maxFootSlip) : null,
+    maxElbowAngleDeg: round(mostExtendedElbow),
+    maxKneeAngleDeg: round(mostExtendedKnee), contact };
+}
+
+await mkdir(OUT, { recursive: true });
+const report = {
+  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V1",
+  inspiration: "apekshik/anymachine PIPELINE.md — reference, axes, pose sweep, recheck",
+  source: "real imported Quaternius target GLB + authored skinned motion clips",
+  limitation: "No human soft-tissue, clothing collision or physical iPhone fps certification",
+  fighters: {}, violations: [],
+};
+try {
+  const inputPacks = [
+    "ual-fight-core.glb", "blender-cross-core.glb", "blender-strikes-core.glb",
+    "blender-kicks-core.glb", "blender-reactions-core.glb",
+  ];
+  const packs = await Promise.all(inputPacks.map(readGlb));
+  const bodies = {
+    POWER: await readGlb("ubc-superhero-male-flat.glb"),
+    SPEED: await readGlb("ubc-superhero-female-flat.glb"),
+  };
+  for (const fighter of PLAYABLE_FIGHTERS) {
+    const target = bodies[fighter.archetype].scene;
+    const nodes = new Map();
+    target.traverse(obj => { if (obj.isBone && obj.name) nodes.set(obj.name, obj); });
+    for (const joint of JOINTS) assert.ok(nodes.has(joint), `${fighter.name}: ${joint} is missing`);
+    target.updateMatrixWorld(true);
+    const bbox = new THREE.Box3().setFromObject(target);
+    const height = bbox.getSize(new THREE.Vector3()).y;
+    assert.ok(Number.isFinite(height) && height > 1 && height < 5,
+      `${fighter.name}: invalid body scale ${height}`);
+    const sources = new Map(packs.flatMap(pack =>
+      [...retargetMotionClips(pack.scene, target, pack.animations)]));
+    const clips = createCombatMotionLibrary(target, sources, fighter);
+    assert.ok(clips.size >= 25, `${fighter.name}: motion library is unexpectedly sparse`);
+    const mixer = new THREE.AnimationMixer(target);
+    const readyClip = clips.get("CM_Ready");
+    assert.ok(readyClip, `${fighter.name}: no playable ready stance`);
+    const ready = sampleClip(target, mixer, readyClip, 1, nodes)[0];
+    const lengths = exactSegmentLengths(ready);
+    for (const length of lengths) assert.ok(length > height * .018 && length < height * .52,
+      `${fighter.name}: implausible arm or leg segment length ${length}`);
+    const inspections = {};
+    const suite = fighter.name === "SERA" ? [...SHARED_CLIPS, ...STREET_CLIPS] : SHARED_CLIPS;
+    for (const name of suite) {
+      const clip = clips.get(name);
+      assert.ok(clip, `${fighter.name}: missing ${name}`);
+      inspections[name] = inspectClip(name, clip, target, mixer, nodes, height,
+        ready, report.violations, fighter.name);
+    }
+    report.fighters[fighter.name] = {
+      skeletonSource: fighter.archetype === "SPEED" ? "female-flat" : "male-flat",
+      stance: combatCharacterStance(fighter.name, fighter.archetype).id,
+      measuredBodyHeightM: round(height), boneCount: nodes.size,
+      libraryClipCount: clips.size, auditedClipCount: suite.length,
+      limbLengthsM: lengths.map(round), clips: inspections,
+    };
+    mixer.stopAllAction();
+    mixer.uncacheRoot(target);
+  }
+  assert.equal(Object.keys(report.fighters).length, 4);
+  const stanceNames = Object.values(report.fighters).map(f => f.stance);
+  assert.equal(new Set(stanceNames).size, 4, "four distinct authored character poses");
+  assert.deepEqual(report.violations, [], report.violations.join("\n"));
+  report.status = "passed";
+  console.log(`REFERENCE_FIRST_RIG_SWEEP_PASSED ${JSON.stringify({
+    fighters: Object.keys(report.fighters),
+    clips: Object.values(report.fighters).reduce((n,f)=>n+f.auditedClipCount,0),
+    violations: report.violations.length,
+  })}`);
+} catch (error) {
+  report.status = "failed";
+  report.failure = String(error?.stack ?? error);
+  console.error("REFERENCE_FIRST_RIG_SWEEP_FAILED", report.failure);
+  process.exitCode = 1;
+} finally {
+  await writeFile(`${OUT}/rig-sweep-report.json`, JSON.stringify(report, null, 2) + "\n");
+}

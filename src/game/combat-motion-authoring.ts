@@ -559,8 +559,8 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         const knee = calf.getWorldPosition(new THREE.Vector3());
         const ankle = foot.getWorldPosition(new THREE.Vector3());
         const reachDirection = ankle.clone().sub(hip).normalize();
-        const bend = knee.sub(hip)
-          .addScaledVector(reachDirection, -knee.clone().sub(hip).dot(reachDirection));
+        const bend = knee.clone().sub(hip);
+        bend.addScaledVector(reachDirection, -bend.dot(reachDirection));
         if (bend.lengthSq() > 1e-8) referenceKickBendPlanes.set(name, bend.normalize());
       }
       // Build a complete ankle frame, not just a shin/toe angle. A one-vector

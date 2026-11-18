@@ -479,7 +479,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
           const extension = Math.max(0, 1 - Math.abs(u - .55) / .20);
           rotate("foot_r", X, -.17 * extension);
         }
-      }, moveId === "streetFlowPalm" ? 61 : 49);
+      }, moveId === "streetFlowPalm" ? 61 : moveId === "streetFlowKick" ? 121 : 49);
     }
   }
   // Stable source marker for runtime and WebGL audit. Clip cache key includes
@@ -715,7 +715,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         if (boneName === "pelvis") bone.position.lerp(reference.position, weight);
       }
       bakePunchKinetics(name, u);
-    }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 61 : Math.max(3, Math.round(source.duration * 60) + 1));
+    }, ["BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R"].includes(name) ? 121 : Math.max(3, Math.round(source.duration * 60) + 1));
   }
   // Mirror world-space bind deltas, not raw local Euler angles: UBC's left and
   // right bone frames differ. SERA's left backfist/right body blow now really

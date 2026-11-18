@@ -47,5 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: polyfighter-reference-first-rig-qa
-          path: artifacts/reference-first-motion/rig-sweep-report.json
+          path: |
+            artifacts/reference-first-motion/rig-sweep-report.json
+            artifacts/reference-first-motion/rig-sweep-summary.md
           if-no-files-found: warn

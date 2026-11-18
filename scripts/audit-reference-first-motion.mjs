@@ -32,6 +32,15 @@ const SHARED_CLIPS = [
   "BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R",
 ];
 const STREET_CLIPS = ["CM_StreetFlow_Jab", "CM_StreetFlow_HighKick", "CM_StreetFlow_LowPalm"];
+// These are the same corrected full-body strikes measured before/after the
+// reference-first IK stabilisation. Regression gate is a normalized movement
+// budget, not a blanket ban on future deliberately faster techniques.
+const STABLE_KICK_CLIPS = new Map([
+  ["BF_FrontKick_R", "r"], ["BF_LowKick_L", "l"],
+  ["BF_RisingKick_R", "r"], ["BF_DashKick_R", "r"],
+  ["CM_StreetFlow_HighKick", "r"],
+]);
+const KICK_MAX_ENDPOINT_STEP_BODY_HEIGHT = .13;
 
 async function readGlb(file) {
   const bytes = await readFile(new URL(file, BASE));
@@ -89,12 +98,16 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   let maxEndpointJump = 0, maxFootSlip = 0, maxLimbLengthError = 0;
   let maxJumpBone = null, maxJumpPhase = 0;
   let mostExtendedElbow = 0, mostExtendedKnee = 0;
+  const kickSide = STABLE_KICK_CLIPS.get(name) ?? null;
+  let minimumKickingKneeDeg = 180;
   for (let i = 0; i < poses.length; i++) {
     const pose = poses[i];
     const segmentLengths = exactSegmentLengths(pose);
     for (let s = 0; s < segmentLengths.length; s++) {
       maxLimbLengthError = Math.max(maxLimbLengthError, Math.abs(segmentLengths[s] - lengthBaseline[s]));
     }
+    if (kickSide) minimumKickingKneeDeg = Math.min(minimumKickingKneeDeg,
+      angularJoint(pose, `thigh_${kickSide}`, `calf_${kickSide}`, `foot_${kickSide}`));
     for (const side of ["l","r"]) {
       mostExtendedElbow = Math.max(mostExtendedElbow,
         angularJoint(pose, `upperarm_${side}`, `lowerarm_${side}`, `hand_${side}`));
@@ -120,6 +133,12 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   const fail = (issue) => violations.push(`${fighterName}/${name}: ${issue}`);
   if (maxLimbLengthError > height * .005) fail(`bone lengths change ${round(maxLimbLengthError)}m`);
   if (maxEndpointJump > height * .35) fail(`pose teleport ${round(maxEndpointJump)}m per sampled frame`);
+  // Promotion from diagnostic to regression gate: the *actual corrected*
+  // imported-GLB kick clips must not reintroduce the large ankle jumps
+  // measured before the knee-pole and dense-keyframe repair.
+  if (kickSide && maxEndpointJump > height * KICK_MAX_ENDPOINT_STEP_BODY_HEIGHT) {
+    fail(`kick discontinuity ${round(maxEndpointJump)}m in 1/120s on ${maxJumpBone} at phase ${round(maxJumpPhase)}`);
+  }
   // A fast kick can be intentional, but very large single-frame travel may
   // also betray an IK pole flip or a thigh/ankle quaternion discontinuity.
   // Preserve the surrounding *real evaluated* leg/foot world positions so
@@ -176,6 +195,7 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
     maxFrameEndpointJumpPhase: round(maxJumpPhase),
     hotspotFrameStrip,
     maxLimbLengthErrorM: round(maxLimbLengthError),
+    kickingKneeMinAngleDeg: kickSide ? round(minimumKickingKneeDeg) : null,
     loopSeamM: isLoop ? round(seam) : null,
     stationaryFootDriftM: isIdle ? round(maxFootSlip) : null,
     maxElbowAngleDeg: round(mostExtendedElbow),
@@ -184,7 +204,7 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
 
 await mkdir(OUT, { recursive: true });
 const report = {
-  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V1",
+  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V2_KICK_CONTINUITY",
   inspiration: "apekshik/anymachine PIPELINE.md — reference, axes, pose sweep, recheck",
   source: "real imported Quaternius target GLB + authored skinned motion clips",
   limitation: "No human soft-tissue, clothing collision or physical iPhone fps certification",

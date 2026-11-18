@@ -558,20 +558,20 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     rotate("clavicle_r", Y, -force.shoulderYaw * handedness * .72);
     rotate("Head", Y, force.headCounterYaw * handedness);
     rig.updateMatrixWorld(true);
-    // Each fighter now owns a genuinely different ready/guard silhouette.
-    // Older reference kicks start and end on the former generic guard, so
-    // without an authored seam their off-hand snaps on ATTACK_ENTRY/return.
-    // Retarget only the FIRST/LAST 12% of this already baked clip to that
-    // fighter's actual guard. The keyed contact, chamber, planted ball and
-    // attacking foot remain completely untouched at and around impact.
+    // Older kicks use a generic off-hand guard. Restore each character's
+    // authored guard on the edge poses, without *any* pelvis/leg edits:
+    // even a tiny pelvis blend moves the planted toe during the early pivot.
+    // Only the upper-body guard is cross-keyed; grounded ankle and contact
+    // paths remain exactly as their already-validated two-bone solver authored.
     const entry = 1 - smoothMotion(u / .12);
     const exit = smoothMotion((u - .88) / .12);
     const readyWeight = Math.max(entry, exit);
     if (readyWeight > 1e-6) {
       for (const [boneName, reference] of ready) {
-        const bone = nodes.get(boneName)!;
-        bone.quaternion.slerp(reference.rotation, readyWeight);
-        if (boneName === "pelvis") bone.position.lerp(reference.position, readyWeight);
+        if (!(boneName === "Head" || boneName.startsWith("spine_")
+          || boneName.startsWith("clavicle_") || boneName.startsWith("upperarm_")
+          || boneName.startsWith("lowerarm_") || boneName.startsWith("hand_"))) continue;
+        nodes.get(boneName)!.quaternion.slerp(reference.rotation, readyWeight);
       }
       rig.updateMatrixWorld(true);
     }

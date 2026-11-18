@@ -1,0 +1,51 @@
+name: POLY FIGHTER Reference-first rig QA (AnyMachine method)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/audit-reference-first-motion.mjs
+      - src/game/combat-motion-authoring.ts
+      - src/game/combat-character-stance.ts
+      - src/game/motion-profile.ts
+      - public/models/quaternius/**
+      - .github/workflows/reference-first-motion-qa.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/audit-reference-first-motion.mjs
+      - src/game/combat-motion-authoring.ts
+      - src/game/combat-character-stance.ts
+      - src/game/motion-profile.ts
+      - public/models/quaternius/**
+      - .github/workflows/reference-first-motion-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-rig-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-first-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Install existing dependencies (no paid services)
+        run: npm ci --no-audit --no-fund
+      - name: Real four-fighter imported-GLB bone/foot/contact sweep
+        run: node --import tsx scripts/audit-reference-first-motion.mjs
+      - name: Upload source-of-truth numerical QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polyfighter-reference-first-rig-qa
+          path: artifacts/reference-first-motion/rig-sweep-report.json
+          if-no-files-found: warn

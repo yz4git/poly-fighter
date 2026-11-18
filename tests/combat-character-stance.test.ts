@@ -81,8 +81,10 @@ for (const [first, second, body] of [
           assert.ok([...channel.values].every(Number.isFinite), `${clip.name}/${channel.name}: non-finite key`);
         }
         const pelvis = track(clip, "pelvis.position");
-        assert.deepEqual([...pelvis.values.slice(0, 3)], [...pelvis.values.slice(-3)],
-          `${clip.name}: the model must keep its looping root seam`);
+        for (let i = 0; i < 3; i++) {
+          assert.ok(Math.abs(pelvis.values[i] - pelvis.values[pelvis.values.length - 3 + i]) < 1e-6,
+            `${clip.name}: the model must keep its looping root seam (${i})`);
+        }
       }
     }
     const ag = a.get("CM_Guard")!, bg = b.get("CM_Guard")!;

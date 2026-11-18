@@ -162,12 +162,15 @@ try {
     "blender-airborne-core.glb", "blender-reactions-core.glb",
   ];
   const packs = await Promise.all(inputPacks.map(readGlb));
-  const bodies = {
-    POWER: await readGlb("ubc-superhero-male-flat.glb"),
-    SPEED: await readGlb("ubc-superhero-female-flat.glb"),
-  };
   for (const fighter of PLAYABLE_FIGHTERS) {
-    const target = bodies[fighter.archetype].scene;
+    // Retarget and sweep on a fresh, independent import. Reusing a model after
+    // one AnimationMixer has sampled it would treat its last animated pose as
+    // the next fighter's bind pose: AXION/VANTA could fail for false reasons.
+    const targetGlb = await readGlb(
+      fighter.archetype === "SPEED"
+        ? "ubc-superhero-female-flat.glb"
+        : "ubc-superhero-male-flat.glb");
+    const target = targetGlb.scene;
     const nodes = new Map();
     target.traverse(obj => { if (obj.isBone && obj.name) nodes.set(obj.name, obj); });
     for (const joint of JOINTS) assert.ok(nodes.has(joint), `${fighter.name}: ${joint} is missing`);

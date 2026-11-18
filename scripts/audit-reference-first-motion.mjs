@@ -152,9 +152,14 @@ const report = {
   fighters: {}, violations: [],
 };
 try {
+  // Match loadMotion() pack order in the real renderer, including the
+  // procedural fallback and base Blender packs. Omitting them silently makes
+  // BF_DashKick_R disappear even though the deployed game can play it.
   const inputPacks = [
-    "ual-fight-core.glb", "blender-cross-core.glb", "blender-strikes-core.glb",
-    "blender-kicks-core.glb", "blender-reactions-core.glb",
+    "ual-fight-core.glb", "procedural-fight-core.glb",
+    "blender-fight-core.glb", "blender-cross-core.glb",
+    "blender-strikes-core.glb", "blender-kicks-core.glb",
+    "blender-airborne-core.glb", "blender-reactions-core.glb",
   ];
   const packs = await Promise.all(inputPacks.map(readGlb));
   const bodies = {
@@ -171,8 +176,30 @@ try {
     const height = bbox.getSize(new THREE.Vector3()).y;
     assert.ok(Number.isFinite(height) && height > 1 && height < 5,
       `${fighter.name}: invalid body scale ${height}`);
-    const sources = new Map(packs.flatMap(pack =>
-      [...retargetMotionClips(pack.scene, target, pack.animations)]));
+    const retargetedPacks = packs.map(pack =>
+      retargetMotionClips(pack.scene, target, pack.animations));
+    const sources = new Map(retargetedPacks.flatMap(pack => [...pack]));
+    // Runtime aliases missing authored BF_* names to procedural PF_* clips.
+    // The offline audit must validate the *same* playable skeleton set rather
+    // than fail on a model clip that the actual game legitimately resolves.
+    const procedural = retargetedPacks[1];
+    const fallbacks = [
+      ["BF_Power_R", "PF_Power_R"], ["BF_Cross_R", "PF_Cross_R"],
+      ["BF_Jab_L", "PF_Jab_L"], ["BF_BodyBlow_L", "PF_BodyBlow_L"],
+      ["BF_Backfist_R", "PF_Backfist_R"],
+      ["BF_FrontKick_R", "PF_FrontKick_R"],
+      ["BF_LowKick_L", "PF_LowKick_L"],
+      ["BF_RisingKick_R", "PF_RisingKick_R"],
+      ["BF_DashKick_R", "PF_DashKick_R"],
+    ];
+    for (const [authored, alternate] of fallbacks) {
+      if (sources.has(authored)) continue;
+      const source = procedural.get(alternate);
+      if (!source) continue;
+      const alias = source.clone();
+      alias.name = authored;
+      sources.set(authored, alias);
+    }
     const clips = createCombatMotionLibrary(target, sources, fighter);
     assert.ok(clips.size >= 25, `${fighter.name}: motion library is unexpectedly sparse`);
     const mixer = new THREE.AnimationMixer(target);

@@ -91,6 +91,47 @@ creating new geometry. Keep non-deforming hard-surface outfit fittings as
 independent authorable pieces; *do not* make skin, knees, hands or faces into
 AnyMachine-style hinged rigid plates.
 
+## 2026-11-18 motion stabilisation checkpoint
+
+Measured from the **same four real imported UBC rigs**, same 59 skinned
+clips and identical approximately 120 Hz offline sweep, not inferred from
+screenshots:
+
+| Clip | Original worst 120 Hz foot travel | Corrected worst | Status |
+| --- | ---: | ---: | --- |
+| SERA Street Flow high kick | 0.48707 m | 0.12280 m | Under continuity budget |
+| KAIRO front kick | 0.40210 m | 0.161 m | Under budget |
+| SERA front kick | 0.40830 m | 0.156 m | Under budget |
+| KAIRO low kick | 0.31018 m | 0.163 m | Under budget |
+| SERA rising kick | 0.25267 m before first experiments; 0.333 m after the single-leg rewrite | 0.196 m | Under budget |
+
+Overall **14 → 0** clips above the audit's normalised `0.13 ×
+character-height` 120 Hz jump threshold.
+
+The fix is not a screen blur or artificial frame interpolation:
+- Include a constrained knee interior angle during the one-time authored
+  two-bone IK solve, preventing near-singular overfolding.
+- Solve the striking leg **once**, not once for general stance and again
+  for the reference kicking leg.
+- Retain the impact-time knee bend plane during the rising kick's retract arc,
+  preventing the knee from crossing to the opposite IK pole side in one frame.
+- Bake the 4 reference kicks and SERA's high kick with **121 pose keys per
+  authored clip** instead of 49–61, preserving contact time and planned foot
+  trajectories. This adds *bake-time* cost/clip data, not extra per-frame
+  gameplay IK.
+- At each clip's entry/recovery, blend only the striking leg/upper body toward
+  the character's authored guard, without re-solving or moving the planted foot.
+
+The reference-first QA now **fails CI** when any of these five corrected
+kicks exceeds the measured jump budget. The JSON includes each kick's minimum
+interpolated knee angle, actual maximum travel, joint identity, phase, and
+a 7-frame skeletal trace if a jump warrants visual review.
+
+**Limits of the evidence:** An accurate foot path is not enough to certify
+the artistic kick silhouette. There is still no approved reference-image
+versus exactly-matched camera contact sheet, no physical iPhone Safari
+60 fps run, and no complete soft-tissue / cloth / muscle-deformation audit.
+
 ## Provenance and licensing
 
 No AnyMachine project files or artwork are copied here, only the concept of

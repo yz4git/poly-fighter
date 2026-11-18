@@ -217,4 +217,25 @@ try {
   process.exitCode = 1;
 } finally {
   await writeFile(`${OUT}/rig-sweep-report.json`, JSON.stringify(report, null, 2) + "\n");
+  // The reviewer can inspect a concise human-readable pass/fail table
+  // alongside the machine-readable evidence without a Blender installation.
+  const summary = [
+    "# PolyFighter — reference-first anatomical rig sweep",
+    "",
+    `Status: **${(report.status ?? "unknown").toUpperCase()}**`,
+    "",
+    "| Fighter | Rig | Body height | Authored stance | Sampled clips |",
+    "| --- | --- | ---: | --- | ---: |",
+    ...Object.entries(report.fighters).map(([name, f]) =>
+      `| ${name} | ${f.skeletonSource} | ${f.measuredBodyHeightM} m | ${f.stance} | ${f.auditedClipCount} |`),
+    "",
+    `Detected structural violations: **${report.violations.length}**`,
+    ...report.violations.map(v => `- ${v}`),
+    "",
+    "**Not certified:** final anatomy or sculpt, cloth/skin self-intersections,",
+    "reference-vs-render artistic likeness, mobile Safari 60fps.",
+    "",
+    "The JSON report contains measured joint, stance, gait and contact values.",
+  ].join("\n");
+  await writeFile(`${OUT}/rig-sweep-summary.md`, summary + "\n");
 }

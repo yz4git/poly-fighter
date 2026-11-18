@@ -78,7 +78,7 @@ function sampleClip(target, mixer, clip, steps, nodes) {
   return samples;
 }
 
-function inspectClip(name, clip, target, mixer, nodes, height, ready, violations, fighterName) {
+function inspectClip(name, clip, target, mixer, nodes, height, ready, violations, reviewFlags, fighterName) {
   const frames = Math.max(40, Math.ceil(clip.duration * 120));
   const poses = sampleClip(target, mixer, clip, frames, nodes);
   const first = poses[0], last = poses.at(-1);
@@ -87,6 +87,7 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   const isLoop = name === "CM_Ready" || name === "CM_Guard" || name.startsWith("CM_Move_");
   const isIdle = name === "CM_Ready" || name === "CM_Guard";
   let maxEndpointJump = 0, maxFootSlip = 0, maxLimbLengthError = 0;
+  let maxJumpBone = null, maxJumpPhase = 0;
   let mostExtendedElbow = 0, mostExtendedKnee = 0;
   for (let i = 0; i < poses.length; i++) {
     const pose = poses[i];
@@ -101,7 +102,12 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
         angularJoint(pose, `thigh_${side}`, `calf_${side}`, `foot_${side}`));
     }
     if (i > 0) for (const bone of [footLeft, footRight, "hand_l", "hand_r", "Head"]) {
-      maxEndpointJump = Math.max(maxEndpointJump, pose[bone].distanceTo(poses[i-1][bone]));
+      const jump = pose[bone].distanceTo(poses[i-1][bone]);
+      if (jump > maxEndpointJump) {
+        maxEndpointJump = jump;
+        maxJumpBone = bone;
+        maxJumpPhase = i / frames;
+      }
     }
     if (isIdle) for (const bone of [footLeft, footRight]) {
       maxFootSlip = Math.max(maxFootSlip, pose[bone].distanceTo(first[bone]));
@@ -114,6 +120,15 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   const fail = (issue) => violations.push(`${fighterName}/${name}: ${issue}`);
   if (maxLimbLengthError > height * .005) fail(`bone lengths change ${round(maxLimbLengthError)}m`);
   if (maxEndpointJump > height * .35) fail(`pose teleport ${round(maxEndpointJump)}m per sampled frame`);
+  // A high-speed kick can move an ankle quickly without being anatomically
+  // invalid. Flag it for reference-frame inspection rather than declaring a
+  // false collision. The report records the exact moving end-effector & phase.
+  if (maxEndpointJump > height * .13) reviewFlags.push({
+    fighter: fighterName, clip: name, bone: maxJumpBone,
+    phase: round(maxJumpPhase), displacementM: round(maxEndpointJump),
+    bodyHeightFraction: round(maxEndpointJump / height),
+    reason: "Rapid 120 Hz endpoint movement — check the frame strip for a joint snap",
+  });
   if (isLoop && seam > height * .02) fail(`visible loop seam ${round(seam)}m`);
   if (isIdle && maxFootSlip > height * .035) fail(`feet drift while stationary ${round(maxFootSlip)}m`);
 
@@ -136,6 +151,8 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   }
   return { frames: frames + 1, durationSeconds: round(clip.duration),
     maxFrameEndpointJumpM: round(maxEndpointJump),
+    maxFrameEndpointJumpBone: maxJumpBone,
+    maxFrameEndpointJumpPhase: round(maxJumpPhase),
     maxLimbLengthErrorM: round(maxLimbLengthError),
     loopSeamM: isLoop ? round(seam) : null,
     stationaryFootDriftM: isIdle ? round(maxFootSlip) : null,
@@ -149,7 +166,7 @@ const report = {
   inspiration: "apekshik/anymachine PIPELINE.md — reference, axes, pose sweep, recheck",
   source: "real imported Quaternius target GLB + authored skinned motion clips",
   limitation: "No human soft-tissue, clothing collision or physical iPhone fps certification",
-  fighters: {}, violations: [],
+  fighters: {}, violations: [], reviewFlags: [],
 };
 try {
   // Match loadMotion() pack order in the real renderer, including the
@@ -218,7 +235,7 @@ try {
       const clip = clips.get(name);
       assert.ok(clip, `${fighter.name}: missing ${name}`);
       inspections[name] = inspectClip(name, clip, target, mixer, nodes, height,
-        ready, report.violations, fighter.name);
+        ready, report.violations, report.reviewFlags, fighter.name);
     }
     report.fighters[fighter.name] = {
       skeletonSource: fighter.archetype === "SPEED" ? "female-flat" : "male-flat",
@@ -234,11 +251,12 @@ try {
   const stanceNames = Object.values(report.fighters).map(f => f.stance);
   assert.equal(new Set(stanceNames).size, 4, "four distinct authored character poses");
   assert.deepEqual(report.violations, [], report.violations.join("\n"));
-  report.status = "passed";
+  report.status = report.reviewFlags.length ? "passed_with_visual_review_flags" : "passed";
   console.log(`REFERENCE_FIRST_RIG_SWEEP_PASSED ${JSON.stringify({
     fighters: Object.keys(report.fighters),
     clips: Object.values(report.fighters).reduce((n,f)=>n+f.auditedClipCount,0),
     violations: report.violations.length,
+    reviewFlags: report.reviewFlags.length,
   })}`);
 } catch (error) {
   report.status = "failed";
@@ -261,6 +279,10 @@ try {
     "",
     `Detected structural violations: **${report.violations.length}**`,
     ...report.violations.map(v => `- ${v}`),
+    "",
+    `Animation poses marked for visual review: **${report.reviewFlags.length}**`,
+    ...report.reviewFlags.map(v =>
+      `- ${v.fighter} / ${v.clip}: ${v.bone} moves ${v.displacementM} m at normalized phase ${v.phase} (1/120s sample)`),
     "",
     "**Not certified:** final anatomy or sculpt, cloth/skin self-intersections,",
     "reference-vs-render artistic likeness, mobile Safari 60fps.",

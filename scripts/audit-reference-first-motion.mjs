@@ -130,7 +130,9 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
     "pelvis", `thigh_${legSuffix}`, `calf_${legSuffix}`,
     `foot_${legSuffix}`, `ball_${legSuffix}`,
     `thigh_${legSuffix === "l" ? "r" : "l"}`,
+    `calf_${legSuffix === "l" ? "r" : "l"}`,
     `foot_${legSuffix === "l" ? "r" : "l"}`,
+    `ball_${legSuffix === "l" ? "r" : "l"}`,
   ];
   const hotspotFrameStrip = maxEndpointJump > height * .13
     ? poses.slice(Math.max(0, hotspotFrame - 3), Math.min(poses.length, hotspotFrame + 4))

@@ -120,14 +120,33 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   const fail = (issue) => violations.push(`${fighterName}/${name}: ${issue}`);
   if (maxLimbLengthError > height * .005) fail(`bone lengths change ${round(maxLimbLengthError)}m`);
   if (maxEndpointJump > height * .35) fail(`pose teleport ${round(maxEndpointJump)}m per sampled frame`);
-  // A high-speed kick can move an ankle quickly without being anatomically
-  // invalid. Flag it for reference-frame inspection rather than declaring a
-  // false collision. The report records the exact moving end-effector & phase.
-  if (maxEndpointJump > height * .13) reviewFlags.push({
+  // A fast kick can be intentional, but very large single-frame travel may
+  // also betray an IK pole flip or a thigh/ankle quaternion discontinuity.
+  // Preserve the surrounding *real evaluated* leg/foot world positions so
+  // reviewers can distinguish a moving ankle from a suddenly inverted knee.
+  const hotspotFrame = Math.round(maxJumpPhase * frames);
+  const legSuffix = maxJumpBone?.endsWith("_l") ? "l" : "r";
+  const diagnosticBones = [
+    "pelvis", `thigh_${legSuffix}`, `calf_${legSuffix}`,
+    `foot_${legSuffix}`, `ball_${legSuffix}`,
+    `thigh_${legSuffix === "l" ? "r" : "l"}`,
+    `foot_${legSuffix === "l" ? "r" : "l"}`,
+  ];
+  const hotspotFrameStrip = maxEndpointJump > height * .13
+    ? poses.slice(Math.max(0, hotspotFrame - 3), Math.min(poses.length, hotspotFrame + 4))
+      .map((pose, index) => ({
+        phase: round((Math.max(0, hotspotFrame - 3) + index) / frames),
+        bones: Object.fromEntries(diagnosticBones.map(b => [b,
+          pose[b].toArray().map(round)])),
+        kneeAngleDeg: round(angularJoint(pose,
+          `thigh_${legSuffix}`, `calf_${legSuffix}`, `foot_${legSuffix}`)),
+      }))
+    : null;
+  if (hotspotFrameStrip) reviewFlags.push({
     fighter: fighterName, clip: name, bone: maxJumpBone,
     phase: round(maxJumpPhase), displacementM: round(maxEndpointJump),
     bodyHeightFraction: round(maxEndpointJump / height),
-    reason: "Rapid 120 Hz endpoint movement — check the frame strip for a joint snap",
+    reason: "Rapid 120 Hz endpoint movement — check 7-frame trace for IK pole or knee discontinuity",
   });
   if (isLoop && seam > height * .02) fail(`visible loop seam ${round(seam)}m`);
   if (isIdle && maxFootSlip > height * .035) fail(`feet drift while stationary ${round(maxFootSlip)}m`);
@@ -153,6 +172,7 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
     maxFrameEndpointJumpM: round(maxEndpointJump),
     maxFrameEndpointJumpBone: maxJumpBone,
     maxFrameEndpointJumpPhase: round(maxJumpPhase),
+    hotspotFrameStrip,
     maxLimbLengthErrorM: round(maxLimbLengthError),
     loopSeamM: isLoop ? round(seam) : null,
     stationaryFootDriftM: isIdle ? round(maxFootSlip) : null,

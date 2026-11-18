@@ -4,6 +4,7 @@ import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } fr
 import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./combat-punch-kinetics";
 import { sampleKickKineticChain } from "./combat-kinetic-chain";
 import { motionDnaForFighter } from "./motion-profile";
+import { combatCharacterStance, COMBAT_CHARACTER_STANCE_VERSION } from "./combat-character-stance";
 import { ballAnchoredStancePivot, stylePunchKinetics, styleKickUpperBody, MOTIONBRICKS_FULLBODY_FORCE_VERSION } from "./combat-force-transfer";
 import type { FighterDefinition } from "./types";
 import { isReferenceKick, REFERENCE_KICK_VERSION, sampleReferenceKickChoreography } from "./reference-kick-choreography";
@@ -78,7 +79,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${SERA_STREET_FLOW_POSE_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${SERA_STREET_FLOW_POSE_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${COMBAT_CHARACTER_STANCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -125,7 +126,8 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   const centerZ = (footStart.l.z + footStart.r.z) / 2;
   const speed = definition.archetype === "SPEED";
   const motionDna = motionDnaForFighter(definition);
-  const width = speed ? .084 : .103;
+  const stance = combatCharacterStance(definition.name, definition.archetype);
+  const width = (speed ? .084 : .103) * stance.widthScale;
   mixer.stopAllAction();
 
   const point = ([x, y, z]: Point) => new THREE.Vector3(pelvisStart.x + x * height * handedness, floor + y * height, centerZ + z * height);
@@ -137,7 +139,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     nodes.get(`${arm ? "upperarm" : "thigh"}_${suffix}`)!, nodes.get(`${arm ? "lowerarm" : "calf"}_${suffix}`)!, nodes.get(`${arm ? "hand" : "foot"}_${suffix}`)!, point(goal), point(pole),
   );
   const stanceFeet: { l: Point; r: Point } = { l: [-width, 0, .065], r: [width, 0, -.070] };
-  const guardHands: { l: Point; r: Point } = { l: [-.088, .735, .172], r: [.083, .756, .125] };
+  const guardHands: { l: Point; r: Point } = {
+    l: [...stance.leftGuard] as Point,
+    r: [...stance.rightGuard] as Point,
+  };
 
   function body(pose: BodyPose = {}, breath = 0): void {
     restore(nodes, neutral);
@@ -146,7 +151,10 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     const desired = pelvisStart.clone().add(new THREE.Vector3(height * (pose.side ?? 0) * handedness, height * (-.027 + (pose.drop ?? 0) + breath), height * (pose.forward ?? 0)));
     pelvis.position.copy(pelvis.parent!.worldToLocal(desired));
     rig.updateMatrixWorld(true);
-    rotate("pelvis", Y, (.10 + (pose.yaw ?? 0)) * handedness);
+    // Four character-authored silhouettes. This is keyed into the actual
+    // skinned 3D clip, not layered on the rig at render time. Explicit strike
+    // yaw remains additive and each move's contact event is unchanged.
+    rotate("pelvis", Y, (.10 + stance.pelvisYaw + (pose.yaw ?? 0)) * handedness);
     rotate("pelvis", X, pose.pitch ?? .025);
     rotate("pelvis", Z, (pose.roll ?? 0) * handedness);
     rotate("spine_02", Y, (-.065 - (pose.yaw ?? 0) * .25) * handedness);
@@ -154,7 +162,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     rotate("spine_02", X, pose.chest ?? .035);
     rotate("spine_03", X, .025 + breath * 2);
     rotate("Head", X, .065);
-    rotate("Head", Y, -(pose.yaw ?? 0) * .2 * handedness);
+    rotate("Head", Y, -(stance.pelvisYaw + (pose.yaw ?? 0)) * .2 * handedness);
     const high = pose.highGuard ?? 0;
     for (const suffix of ["l", "r"] as const) {
       const sign = suffix === "l" ? -1 : 1;
@@ -198,8 +206,13 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
     result.set(name, new THREE.AnimationClip(name, duration, tracks).optimize());
   }
 
-  author("CM_Ready", speed ? 2.2 : 2.8, u => body({ yaw: Math.sin(u * Math.PI * 2) * .012 }, Math.sin(u * Math.PI * 2) * .0017));
-  author("CM_Guard", 2.1, u => body({ highGuard: 1, drop: -.008, chest: .05 }, Math.sin(u * Math.PI * 2) * .001));
+  author("CM_Ready", speed ? 2.2 : 2.8, u => body({
+    yaw: Math.sin(u * Math.PI * 2) * (stance.gaitTorsoSwing * .28),
+  }, Math.sin(u * Math.PI * 2) * stance.idleBreath));
+  author("CM_Guard", 2.1, u => body({
+    highGuard: 1, drop: -.008, chest: .05,
+    yaw: Math.sin(u * Math.PI * 2) * (stance.gaitTorsoSwing * .12),
+  }, Math.sin(u * Math.PI * 2) * stance.idleBreath * .60));
   author("CM_Crouch", 2.4, u => body({ highGuard: .7, drop: -.09, chest: .09, leftHand: [-.09, .66, .18], rightHand: [.08, .68, .14] }, Math.sin(u * Math.PI * 2) * .001));
   LOCOMOTION_DIRECTIONS.forEach((direction, i) => {
     const angle = i * Math.PI / 4, dx = Math.sin(angle) * handedness, dz = Math.cos(angle);
@@ -207,12 +220,12 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       const l = combatFootCycle(u), r = combatFootCycle(u + .5);
       const stride = combatStride(speed, dx);
       body({
-        drop: -.04 - .008 * Math.cos(u * Math.PI * 4),
+        drop: -.04 - stance.gaitBounce * Math.cos(u * Math.PI * 4),
         forward: dz * .005,
-        yaw: Math.sin(u * Math.PI * 2) * .045,
-        roll: -dx * .035,
-        leftFoot: [-width + dx * l.travel * stride, l.lift * .045, .065 + dz * l.travel * stride],
-        rightFoot: [width + dx * r.travel * stride, r.lift * .045, -.070 + dz * r.travel * stride],
+        yaw: Math.sin(u * Math.PI * 2) * stance.gaitTorsoSwing,
+        roll: -dx * stance.gaitSideLean,
+        leftFoot: [stanceFeet.l[0] + dx * l.travel * stride, l.lift * .045, stanceFeet.l[2] + dz * l.travel * stride],
+        rightFoot: [stanceFeet.r[0] + dx * r.travel * stride, r.lift * .045, stanceFeet.r[2] + dz * r.travel * stride],
       });
       rotate("foot_l", X, l.roll);
       rotate("foot_r", X, r.roll);

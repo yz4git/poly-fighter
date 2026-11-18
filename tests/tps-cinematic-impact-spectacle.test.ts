@@ -98,3 +98,38 @@ test("directional juggle and counter hero shots are bounded and do not trigger o
   }
   assert.equal(tpsCinematicCameraShot(undefined, true, false)?.name, "COUNTER");
 });
+
+
+test("Street Flow close contact effects never engulf the animated hand, foot or faces", () => {
+  const parent = new THREE.Group();
+  const spectacle = new TpsCinematicImpactSpectacle(parent);
+  const camera = new THREE.PerspectiveCamera(49, 1200 / 532, .1, 100);
+  camera.position.set(0, 3, 7);
+  camera.lookAt(0, 2, 0);
+  const ordinary = makeEvent({
+    move: { id: "bodyBlow", power: 1.5 } as MoveDefinition,
+  });
+  spectacle.hit(ordinary, camera, 2, 3);
+  const shards = spectacle.group.children.find(x => x.name === "tps-cinematic-shards-0") as THREE.Mesh;
+  const ordinaryScale = shards.scale.x;
+  const ordinaryOpacity = (shards.material as THREE.MeshBasicMaterial).opacity;
+  const streetMove = makeEvent({
+    move: { id: "streetFlowPalm", power: 1.5 } as MoveDefinition,
+  });
+  spectacle.hit(streetMove, camera, 2, 3);
+  assert.equal(spectacle.group.userData.tpsCinematicShardReadabilityScale, .58);
+  assert.ok(Math.abs(shards.scale.x / ordinaryScale - .58) < 1e-7,
+    "the third full-body strike should stay visible behind the contact graphic");
+  assert.ok((shards.material as THREE.MeshBasicMaterial).opacity < ordinaryOpacity * .75,
+    "close contact flash is lower-opacity than the long-range hero burst");
+  assert.equal(spectacle.group.userData.tpsCinematicLastMove, "streetFlowPalm");
+  spectacle.hit(makeEvent({ blocked: true, move: {
+    id: "streetFlowKick", power: 1.5,
+  } as MoveDefinition }), camera, 2, 0);
+  assert.equal(spectacle.group.userData.tpsCinematicShardReadabilityScale, .58,
+    "blocking a Street Flow move also keeps its guard and foot readable");
+  spectacle.hit(ordinary, camera, 2, 3);
+  assert.equal(spectacle.group.userData.tpsCinematicShardReadabilityScale, 1,
+    "all other fighters and existing attacks retain the original impact art");
+  spectacle.dispose();
+});

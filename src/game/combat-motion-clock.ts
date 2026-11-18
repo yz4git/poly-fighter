@@ -86,6 +86,26 @@ export function approachLocomotionHeading(
   return Math.atan2(Math.sin(next), Math.cos(next));
 }
 
+/** Two-threshold directional hold for idle turns. A single +/-0.4 rad/s
+ * threshold makes CM_Ready and CM_Turn alternate every time head tracking
+ * fluctuates at the boundary. Keep an ongoing turn until angular motion
+ * genuinely settles, but never play a turn in the wrong direction.
+ */
+export function stationaryTurnClip(
+  angularVelocity: number,
+  previousClip: string,
+): "CM_Ready" | "CM_Turn_L" | "CM_Turn_R" {
+  if (!Number.isFinite(angularVelocity)) return "CM_Ready";
+  const speed = Math.abs(angularVelocity);
+  const active = previousClip === "CM_Turn_L" || previousClip === "CM_Turn_R";
+  if (speed < (active ? 0.25 : 0.52)) return "CM_Ready";
+  const direction = angularVelocity < 0 ? "CM_Turn_L" : "CM_Turn_R";
+  // The sign of a noisy derivative may flip for one render frame.
+  // Drop to ready rather than briefly turning opposite against the fighter.
+  if (active && previousClip !== direction && speed < 0.80) return "CM_Ready";
+  return direction;
+}
+
 /** The stance part is linear: world travel exactly cancels the planted foot. */
 export function combatFootCycle(phase: number): { travel: number; lift: number; planted: boolean; roll: number } {
   const u = ((phase % 1) + 1) % 1;

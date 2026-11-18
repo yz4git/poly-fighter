@@ -4,6 +4,7 @@ import { PresentationAnimationController } from "./presentation-animation";
 import { TpsHypeDirector } from "./tps-hype";
 import type { HitEvent, MoveDefinition, ReactionKind } from "./types";
 import { getVisualContactPoint } from "./visual";
+import { getSkinnedMotionContactPoint } from "./visual-quaternius-runtime";
 
 export type MotionReactionState = {
   kind: ReactionKind;
@@ -592,13 +593,15 @@ TpsHypeDirector.prototype.hit = function hitAtMotionContact(
     return;
   }
 
-  const world = getVisualContactPoint(attacker.visual, contact);
+  // Read the visible GLB joint: the hidden procedural rig no longer tracks it.
+  const skinned = getSkinnedMotionContactPoint(attacker, contact);
+  const world = skinned ?? getVisualContactPoint(attacker.visual, contact);
   if (![world.x, world.y, world.z].every(Number.isFinite)) {
     baseHypeHit.call(this, event, camera);
     return;
   }
 
-  attacker.visual.root.userData.tpsHypeContactMode = "MOTION_CONTACT";
+  attacker.visual.root.userData.tpsHypeContactMode = skinned ? "VISIBLE_SKINNED_CONTACT" : "MOTION_CONTACT";
   attacker.visual.root.userData.tpsHypeContactHeight = world.y;
   attacker.visual.root.userData.tpsHypeContactPoint = { x: world.x, y: world.y, z: world.z };
   baseHypeHit.call(this, {

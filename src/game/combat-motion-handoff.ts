@@ -28,20 +28,26 @@ export type CombatMotionHandoff = Readonly<{
   velocityCarry: number;
 }>;
 
+/** Single attack-clip registry for inertial handoffs and the live model.
+ * Resolve VM_/FX_ wrappers first: a generated combo is still the same attack
+ * family as its authored source. Non-attack reactions never inherit momentum.
+ */
+const ATTACK_CLIP_PREFIXES = [
+  "BF_Jab", "BF_Cross", "BF_BodyBlow", "BF_Backfist", "BF_Power",
+  "BF_FrontKick", "BF_LowKick", "BF_RisingKick", "BF_DashKick",
+  "CM_Counter_", "CM_Video_", "CM_Range_", "CM_StreetFlow_",
+] as const;
+
 export function isCombatAttackClip(name: string): boolean {
-  name = sourceOfExpandedClip(name);
-  return name.startsWith("BF_Jab") || name.startsWith("BF_Cross")
-    || name.startsWith("BF_BodyBlow") || name.startsWith("BF_Backfist")
-    || name.startsWith("BF_Power") || name.startsWith("BF_FrontKick")
-    || name.startsWith("BF_LowKick") || name.startsWith("BF_RisingKick")
-    || name.startsWith("BF_DashKick") || name === "BF_Counter_R"
-    || name.startsWith("CM_Counter_") || name.startsWith("CM_Video_")
-    || name.startsWith("CM_Range_");
+  const source = sourceOfExpandedClip(name);
+  return source === "BF_Counter_R" || source === "CM_Throw"
+    || ATTACK_CLIP_PREFIXES.some(prefix => source.startsWith(prefix));
 }
 
 function isReactionClip(name: string): boolean {
   return name.startsWith("BF_Hit") || name.startsWith("BF_CounterHit")
-    || name === "BF_EdgeStagger" || name === "CM_Launch";
+    || name === "BF_EdgeStagger" || name === "BF_GuardBreak"
+    || name === "CM_Launch" || name === "CM_Down" || name === "CM_Thrown";
 }
 
 export function planCombatMotionHandoff(
@@ -52,9 +58,19 @@ export function planCombatMotionHandoff(
   const fromAttack = isCombatAttackClip(previous);
   const toAttack = isCombatAttackClip(next);
 
-  // A live hit or blocked strike must take priority over an outgoing combo
-  // velocity. The incoming reaction's head, spine and guard become authoritative.
-  if (nextState === "HIT" || isReactionClip(next)) {
+  // A quick rise or tech roll can start while the gameplay state still
+  // says KNOCKDOWN. Classify the named recovery *before* the state-level hit
+  // interrupt, otherwise the rise inherits a second downed reaction instead.
+  // This changes only pose handoff, never grounded/ukemi combat timing.
+  if (nextState === "WAKEUP" || next === "CM_TechRise" || next === "CM_QuickRise"
+      || next.startsWith("CM_TechRoll_")) {
+    return { mode: "LANDING", duration: 0.052, velocityCarry: .26 };
+  }
+  // A live hit or blocked strike must take priority over outgoing combo
+  // velocity. Incoming reaction head/spine/guard are authoritative.
+  if (nextState === "HIT" || nextState === "KNOCKDOWN"
+      || nextState === "KO" || nextState === "RING_OUT"
+      || nextState === "THROW" || isReactionClip(next)) {
     return { mode: "REACTION_INTERRUPT", duration: 0.034, velocityCarry: .22 };
   }
   if (nextState === "BLOCK_STUN" || next === "CM_Block") {

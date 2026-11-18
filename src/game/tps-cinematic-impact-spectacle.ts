@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { HitEvent } from "./types";
 import { tpsDecorativeHitLane } from "./tps-screen-readability";
+import { SERA_STREET_FLOW_MOVES } from "./sera-street-flow";
 
 /**
  * Presentation-only, pooled spectacle. No combat timers, collision volumes or
@@ -152,6 +153,13 @@ export class TpsCinematicImpactSpectacle {
     const finishing = camera.userData.tpsFinalImpactStage === "HOLD";
     const signature = Boolean(event.move.cinematicRole);
     const style = cinematicImpactStyle(tier, event.blocked, event.counter, signature, streak, finishing);
+    // These three close-range, individually authored actions are legibility
+    // tests for the actual skinned fists/foot. A generic long-range hero burst
+    // covered the guard and head during the live Palm capture on iPhone-sized
+    // framing; keep the contact flash, but shrink only its decorative shards.
+    const closeChoreography = (SERA_STREET_FLOW_MOVES as readonly string[]).includes(event.move.id);
+    const shardReadabilityScale = closeChoreography ? 0.58 : 1;
+    const shardReadabilityOpacity = closeChoreography ? 0.74 : 1;
     const color = event.blocked ? 0x61dfff
       : event.counter ? 0xffe681
       : signature ? 0xffa868
@@ -170,8 +178,8 @@ export class TpsCinematicImpactSpectacle {
       const shard = this.shards[index];
       shard.life = style.duration + index * 0.027;
       shard.duration = shard.life;
-      shard.scale = style.scale * (index === 0 ? 1 : 1.30);
-      shard.opacity = style.opacity * (index === 0 ? 1 : 0.53);
+      shard.scale = style.scale * shardReadabilityScale * (index === 0 ? 1 : 1.30);
+      shard.opacity = style.opacity * shardReadabilityOpacity * (index === 0 ? 1 : 0.53);
       shard.mesh.position.copy(point)
         .addScaledVector(cameraRight, decorativeLane)
         .addScaledVector(normal, finishing ? -0.23 : -0.14);
@@ -201,6 +209,7 @@ export class TpsCinematicImpactSpectacle {
     this.group.userData.tpsCinematicGroundWaves = style.groundWaves;
     this.group.userData.tpsCinematicFinishing = finishing;
     this.group.userData.tpsCinematicLastMove = event.move.id;
+    this.group.userData.tpsCinematicShardReadabilityScale = shardReadabilityScale;
     this.group.userData.tpsDecorativeImpactLane = decorativeLane;
   }
 

@@ -9,6 +9,7 @@ import {
   TpsSignatureMotionVfx,
 } from "../src/game/tps-signature-motion-vfx";
 import type { HitEvent } from "../src/game/types";
+import { getSkinnedMotionContactPoint } from "../src/game/visual-quaternius-runtime";
 
 function fighters(): [FighterRuntime, FighterRuntime] {
   const p1 = new FighterRuntime("p1", PLAYABLE_FIGHTERS[0]);
@@ -126,4 +127,13 @@ test("an unlanded meteor expires without a false floor fracture", () => {
   assert.equal(vfx.group.userData.tpsMeteorPending, false);
   assert.equal(vfx.group.userData.tpsMeteorLandingCount ?? 0, 0);
   vfx.dispose();
+});
+
+
+test("skinned FX contact falls back safely when no imported rig exists", () => {
+  const [fighter] = fighters();
+  assert.equal(getSkinnedMotionContactPoint(fighter, "RIGHT_FOOT"), null);
+  assert.equal(getSkinnedMotionContactPoint(fighter, "LEFT_FIST"), null);
+  assert.equal(getSkinnedMotionContactPoint(fighter, undefined), null);
+  assert.equal(getSkinnedMotionContactPoint(fighter, "BODY"), null);
 });

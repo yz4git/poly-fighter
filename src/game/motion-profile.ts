@@ -50,7 +50,7 @@ export type MotionTimingProfile = {
 };
 
 export type MotionDna = {
-  id: "KAIRO_POWER" | "SERA_SPEED";
+  id: "KAIRO_POWER" | "SERA_SPEED" | "VANTA_MIRROR" | "AXION_GRAVITY";
   hipLead: number;
   chestFollow: number;
   recoil: number;
@@ -74,9 +74,15 @@ const MOVE_TIMINGS: Readonly<Record<string, MotionTimingProfile>> = {
 
 // v4 exaggerates presentation identity only. Gameplay frame data remains in
 // definitions.ts; these values feed bounded COM/torso offsets in the visual rig.
-const MOTION_DNA: Readonly<Record<FighterDefinition["archetype"], MotionDna>> = {
-  POWER: { id: "KAIRO_POWER", hipLead: 1.30, chestFollow: 1.20, recoil: 1.28, lateral: 0.70, guardDiscipline: 1.06 },
-  SPEED: { id: "SERA_SPEED", hipLead: 0.96, chestFollow: 0.86, recoil: 0.68, lateral: 1.38, guardDiscipline: 0.88 },
+const MOTION_DNA: Readonly<Record<string, MotionDna>> = {
+  KAIRO: { id: "KAIRO_POWER", hipLead: 1.30, chestFollow: 1.20, recoil: 1.28, lateral: 0.70, guardDiscipline: 1.06 },
+  SERA: { id: "SERA_SPEED", hipLead: 0.96, chestFollow: 0.86, recoil: 0.68, lateral: 1.38, guardDiscipline: 0.88 },
+  // A feint-heavy mirror fighter: the hips stay compact, the shoulders rotate
+  // farther and the off-hand guard stays high through kinetic hand recovery.
+  VANTA: { id: "VANTA_MIRROR", hipLead: 0.91, chestFollow: 1.12, recoil: 0.82, lateral: 1.56, guardDiscipline: 1.18 },
+  // A heavy anchor fighter: stronger ground-up mass, much less sideways
+  // displacement and guarded follow-through instead of KAIRO's wide recoil.
+  AXION: { id: "AXION_GRAVITY", hipLead: 1.43, chestFollow: 1.08, recoil: 1.18, lateral: 0.52, guardDiscipline: 1.27 },
 };
 
 const MOVE_MOTIONS: Readonly<Record<string, MoveMotionSpec>> = {
@@ -169,7 +175,8 @@ export function motionPlantFootForMove(move: MoveDefinition): MoveMotionSpec["pl
 }
 
 export function motionDnaForFighter(definition: FighterDefinition): MotionDna {
-  return MOTION_DNA[definition.archetype];
+  return MOTION_DNA[definition.name.toUpperCase()]
+    ?? MOTION_DNA[definition.archetype === "SPEED" ? "SERA" : "KAIRO"];
 }
 
 export function motionClipForReaction(kind: ReactionKind): string {

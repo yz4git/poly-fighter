@@ -190,6 +190,12 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   if (isGait && maxGaitKneeFrameStep > height * .15) {
     fail(`walk knee snaps ${round(maxGaitKneeFrameStep)}m per 120 Hz sample`);
   }
+  // A substantial sideways knee protrusion was the visible weak spot in the
+  // previous 8-way walk. Keep this normalized anatomical corridor under CI,
+  // with a 1.8%-of-height tolerance for character-specific authored style.
+  if (isGait && maxGaitLateralKneeSplay > height * .018) {
+    fail(`knee exceeds lateral hip-ankle corridor ${round(maxGaitLateralKneeSplay)}m`);
+  }
 
   let contact = null;
   if (name.startsWith("BF_") || name.startsWith("CM_StreetFlow_")) {
@@ -233,7 +239,7 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
 
 await mkdir(OUT, { recursive: true });
 const report = {
-  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V3_EIGHT_WAY_GAIT_KNEE",
+  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V4_GAIT_LATERAL_CORRIDOR",
   inspiration: "apekshik/anymachine PIPELINE.md — reference, axes, pose sweep, recheck",
   source: "real imported Quaternius target GLB + authored skinned motion clips",
   limitation: "No human soft-tissue, clothing collision or physical iPhone fps certification",

@@ -9,7 +9,7 @@
  * Coordinates are measured in fighter-body-height units. The pole is a
  * directional IK hint, not a foot position or an authored knee position.
  */
-export const COMBAT_GAIT_KNEE_POLE_VERSION = "COMBAT_GAIT_KNEE_POLE_V1";
+export const COMBAT_GAIT_KNEE_POLE_VERSION = "COMBAT_GAIT_KNEE_POLE_V2_LATERAL_CORRIDOR";
 export type CombatGaitPoint = readonly [number, number, number];
 
 export function combatGaitKneePole(
@@ -19,10 +19,11 @@ export function combatGaitKneePole(
   stanceWidth: number,
 ): [number, number, number] {
   const sign = side === "l" ? -1 : 1;
+  // Track the hip-to-ankle corridor instead of biasing knees wide even at rest.
   // Even at the full half-stride, the pole retains the anatomical outward
   // bend direction instead of swinging across the body's sagittal plane.
-  const x = sign * (stanceWidth + .02)
-    + (movingFoot[0] - restFoot[0]) * .56;
-  const z = .22 + (movingFoot[2] - restFoot[2]) * .38;
+  const x = sign * (stanceWidth - .004)
+    + (movingFoot[0] - restFoot[0]) * .80;
+  const z = .22 + (movingFoot[2] - restFoot[2]) * .44;
   return [x, .27, z];
 }

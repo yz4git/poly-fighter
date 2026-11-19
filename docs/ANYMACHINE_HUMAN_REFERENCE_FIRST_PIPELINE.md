@@ -146,3 +146,65 @@ CI passing establishes **technical stability**, not commercial art quality.
 Merge only after someone inspects reference-vs-actual same-camera renders and
 real iPhone Safari behavior. Both main and Pages remain untouched by this
 working branch.
+
+
+## 2026-11-20 gait knee-plane experiment (draft PR, not published)
+
+This follows the **foot-plant plus knee-pole** approach from open-source
+three.js IK work without copying its renderer or adding a frame-by-frame IK pass.
+
+- New `combat-gait-knee-pole.ts` steers the knee's two-bone IK **pole**
+  toward each already authored step-foot path (56% of lateral displacement,
+  38% of forward displacement). The knee remains outward of the sagittal
+  centerline on both sides, including 8-way diagonals.
+- The new pole is **only** passed to the existing one-time `CM_Move_*`
+  skinned-clip bake. Guard, attacks, hits, reaction clips, foot targets,
+  deterministic 60Hz simulation, and contact/hitbox timings are unchanged.
+- The cache key includes the knee-pole version to prevent reusing the
+  previous gait after hot reload. Regression tests exercise both anatomical
+  stance widths, all eight directions, 120Hz-like sampling, loop boundaries,
+  pole finiteness and non-inversion.
+- The reference-first actual-GLB sweep now samples **all eight**
+  locomotion directions instead of only F/B/L/R. It reports maximum
+  per-sample knee travel and how far the knee moves laterally outside the
+  hip-to-ankle lane, as well as existing leg-length/loop/foot checks.
+  Gross knee teleports fail the gate; splay is recorded for **visual**
+  review, not mislabeled an objective proof of good art.
+
+Acceptance pending: CI, real same-camera gait filmstrips, and actual
+iPhone Safari legibility/60fps. Mechanical tests cannot establish that
+the new walk feels natural until a real render is compared.
+
+
+## 2026-11-20 gait knee corridor calibration — second iteration
+
+The original 8-way steering experiment steered the knee toward the foot but
+kept the generic pole 2 cm (in normalized world coordinates) outside the
+anatomical stance. A full imported-GLB trace still showed outward knee splay
+on long sidesteps, especially the wide-stance AXION. The second iteration
+uses a pole 0.004 normalized coordinates **inside** the stance foot, tracking
+80% of lateral swing and 44% of forward swing. All existing foot paths,
+60Hz gameplay roots, locomotion blend clock and hitboxes stay unchanged.
+
+Matched measurement from the *same four imported 65-bone rigs*, all eight
+directions, all 75 audited clips, using the same 120Hz sample sweep:
+
+| Fighter | First steering pass: max knee outside hip–ankle lane | Calibrated pass | Approx reduction |
+| --- | ---: | ---: | ---: |
+| KAIRO | 0.06609m | 0.00826m | 87.5% |
+| SERA | 0.04403m | 0.00070m | 98.4% |
+| VANTA | 0.05293m | 0.00339m | 93.6% |
+| AXION | 0.07859m | 0.01414m | 82.0% |
+
+[Candidate 2 GLB test run #44640209697](https://github.com/yz4git/poly-fighter/actions/runs/44640209697)
+completed successfully: zero structural violations, 75 audited clips and
+the existing 292 core-rule tests; reference-kick and contact checks remain.
+The worst per-120Hz-knee-step remains near 0.019m, not an abrupt pole flip.
+
+The reference-first gate now fails a return of lateral knee displacement
+beyond 1.8% of the model's measured height. A separate **front/profile
+skeleton projection contact sheet** records four gait phases for left,
+right and diagonal approaches from the actual imported GLB joints. It is
+NOT a skin render, a game screenshot, or a demonstration of actual iPhone
+Safari performance. Keep same-camera skinned WebGL and mobile QA as
+independent approval gates before merging.

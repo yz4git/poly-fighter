@@ -208,7 +208,15 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
     contact = { phase: round(when), supportFoot: supportSide,
       supportToeDriftM: toeDrift === null ? null : round(toeDrift) };
   }
-  return { frames: frames + 1, durationSeconds: round(clip.duration),
+  // The diagnostic contact sheet must be drawn from the same real imported
+  // skeleton poses used by the mechanical pass, not guessed from a 2D sprite.
+  const gaitPoseFrames = isGait ? [.08, .33, .58, .83].map(phase => ({
+    phase,
+    joints: Object.fromEntries(JOINTS.map(bone => [
+      bone, poses[Math.round(frames * phase)][bone].toArray().map(round),
+    ])),
+  })) : null;
+  return { gaitPoseFrames, frames: frames + 1, durationSeconds: round(clip.duration),
     maxFrameEndpointJumpM: round(maxEndpointJump),
     maxFrameEndpointJumpBone: maxJumpBone,
     maxFrameEndpointJumpPhase: round(maxJumpPhase),

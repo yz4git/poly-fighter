@@ -6,6 +6,7 @@ on:
     branches: [main, feature/anymachine-reference-first-motion-20261118]
     paths:
       - scripts/audit-reference-first-motion.mjs
+      - scripts/render-gait-knee-contact-sheets.mjs
       - src/game/combat-motion-authoring.ts
       - src/game/combat-gait-knee-pole.ts
       - tests/combat-gait-knee-pole.test.ts
@@ -17,6 +18,7 @@ on:
     branches: [main]
     paths:
       - scripts/audit-reference-first-motion.mjs
+      - scripts/render-gait-knee-contact-sheets.mjs
       - src/game/combat-motion-authoring.ts
       - src/game/combat-gait-knee-pole.ts
       - tests/combat-gait-knee-pole.test.ts
@@ -53,6 +55,8 @@ jobs:
           npm run build
       - name: Real four-fighter imported-GLB bone/foot/contact sweep
         run: node --import tsx scripts/audit-reference-first-motion.mjs
+      - name: Generate front/side GLB gait bone plates (not 3D screenshots)
+        run: node scripts/render-gait-knee-contact-sheets.mjs
       - name: Upload source-of-truth numerical QA evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,4 +65,5 @@ jobs:
           path: |
             artifacts/reference-first-motion/rig-sweep-report.json
             artifacts/reference-first-motion/rig-sweep-summary.md
+            artifacts/reference-first-motion/gait-pose-plates/**
           if-no-files-found: warn

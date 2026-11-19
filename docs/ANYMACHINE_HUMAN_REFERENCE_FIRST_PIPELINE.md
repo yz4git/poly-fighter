@@ -146,3 +146,31 @@ CI passing establishes **technical stability**, not commercial art quality.
 Merge only after someone inspects reference-vs-actual same-camera renders and
 real iPhone Safari behavior. Both main and Pages remain untouched by this
 working branch.
+
+
+## 2026-11-20 gait knee-plane experiment (draft PR, not published)
+
+This follows the **foot-plant plus knee-pole** approach from open-source
+three.js IK work without copying its renderer or adding a frame-by-frame IK pass.
+
+- New `combat-gait-knee-pole.ts` steers the knee's two-bone IK **pole**
+  toward each already authored step-foot path (56% of lateral displacement,
+  38% of forward displacement). The knee remains outward of the sagittal
+  centerline on both sides, including 8-way diagonals.
+- The new pole is **only** passed to the existing one-time `CM_Move_*`
+  skinned-clip bake. Guard, attacks, hits, reaction clips, foot targets,
+  deterministic 60Hz simulation, and contact/hitbox timings are unchanged.
+- The cache key includes the knee-pole version to prevent reusing the
+  previous gait after hot reload. Regression tests exercise both anatomical
+  stance widths, all eight directions, 120Hz-like sampling, loop boundaries,
+  pole finiteness and non-inversion.
+- The reference-first actual-GLB sweep now samples **all eight**
+  locomotion directions instead of only F/B/L/R. It reports maximum
+  per-sample knee travel and how far the knee moves laterally outside the
+  hip-to-ankle lane, as well as existing leg-length/loop/foot checks.
+  Gross knee teleports fail the gate; splay is recorded for **visual**
+  review, not mislabeled an objective proof of good art.
+
+Acceptance pending: CI, real same-camera gait filmstrips, and actual
+iPhone Safari legibility/60fps. Mechanical tests cannot establish that
+the new walk feels natural until a real render is compared.

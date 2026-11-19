@@ -8,12 +8,12 @@ import {
 } from "../src/game/combat-motion-clock";
 
 test("baked gait knee poles match the original guard geometry at rest", () => {
-  assert.equal(COMBAT_GAIT_KNEE_POLE_VERSION, "COMBAT_GAIT_KNEE_POLE_V1");
+  assert.equal(COMBAT_GAIT_KNEE_POLE_VERSION, "COMBAT_GAIT_KNEE_POLE_V2_LATERAL_CORRIDOR");
   for (const width of [.084 * .94, .084 * 1.11, .103, .103 * 1.13]) {
     assert.deepEqual(combatGaitKneePole("l", [-width, 0, .065], [-width, 0, .065], width),
-      [-width - .02, .27, .22]);
+      [-width + .004, .27, .22]);
     assert.deepEqual(combatGaitKneePole("r", [width, 0, -.070], [width, 0, -.070], width),
-      [width + .02, .27, .22]);
+      [width - .004, .27, .22]);
   }
 });
 

@@ -27,7 +27,8 @@ const LIMBS = [
   ["thigh_r", "calf_r"], ["calf_r", "foot_r"],
 ];
 const SHARED_CLIPS = [
-  "CM_Ready", "CM_Guard", "CM_Move_F", "CM_Move_B", "CM_Move_L", "CM_Move_R",
+  "CM_Ready", "CM_Guard", "CM_Move_F", "CM_Move_FR", "CM_Move_R", "CM_Move_BR",
+  "CM_Move_B", "CM_Move_BL", "CM_Move_L", "CM_Move_FL",
   "CM_Crouch", "CM_Wakeup", "BF_Jab_L", "BF_Cross_R",
   "BF_FrontKick_R", "BF_LowKick_L", "BF_RisingKick_R", "BF_DashKick_R",
 ];
@@ -95,9 +96,11 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   const footLeft = "foot_l", footRight = "foot_r";
   const isLoop = name === "CM_Ready" || name === "CM_Guard" || name.startsWith("CM_Move_");
   const isIdle = name === "CM_Ready" || name === "CM_Guard";
+  const isGait = name.startsWith("CM_Move_");
   let maxEndpointJump = 0, maxFootSlip = 0, maxLimbLengthError = 0;
   let maxJumpBone = null, maxJumpPhase = 0;
   let mostExtendedElbow = 0, mostExtendedKnee = 0;
+  let maxGaitKneeFrameStep = 0, maxGaitLateralKneeSplay = 0;
   const kickSide = STABLE_KICK_CLIPS.get(name) ?? null;
   let minimumKickingKneeDeg = 180;
   for (let i = 0; i < poses.length; i++) {
@@ -120,6 +123,19 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
         maxEndpointJump = jump;
         maxJumpBone = bone;
         maxJumpPhase = i / frames;
+      }
+    }
+    if (isGait) for (const side of ["l", "r"]) {
+      const hip = pose[`thigh_${side}`], knee = pose[`calf_${side}`];
+      const foot = pose[`foot_${side}`];
+      // Signed lateral distance outside the anatomical hip-to-ankle lane.
+      // Large values make side steps look bowlegged even when foot IK plants.
+      const low = Math.min(hip.x, foot.x), high = Math.max(hip.x, foot.x);
+      const splay = Math.max(0, low - knee.x, knee.x - high);
+      maxGaitLateralKneeSplay = Math.max(maxGaitLateralKneeSplay, splay);
+      if (i > 0) {
+        maxGaitKneeFrameStep = Math.max(maxGaitKneeFrameStep,
+          knee.distanceTo(poses[i - 1][`calf_${side}`]));
       }
     }
     if (isIdle) for (const bone of [footLeft, footRight]) {
@@ -171,6 +187,9 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
   });
   if (isLoop && seam > height * .02) fail(`visible loop seam ${round(seam)}m`);
   if (isIdle && maxFootSlip > height * .035) fail(`feet drift while stationary ${round(maxFootSlip)}m`);
+  if (isGait && maxGaitKneeFrameStep > height * .15) {
+    fail(`walk knee snaps ${round(maxGaitKneeFrameStep)}m per 120 Hz sample`);
+  }
 
   let contact = null;
   if (name.startsWith("BF_") || name.startsWith("CM_StreetFlow_")) {
@@ -198,13 +217,15 @@ function inspectClip(name, clip, target, mixer, nodes, height, ready, violations
     kickingKneeMinAngleDeg: kickSide ? round(minimumKickingKneeDeg) : null,
     loopSeamM: isLoop ? round(seam) : null,
     stationaryFootDriftM: isIdle ? round(maxFootSlip) : null,
+    gaitKneeStepMaxM: isGait ? round(maxGaitKneeFrameStep) : null,
+    gaitLateralKneeSplayMaxM: isGait ? round(maxGaitLateralKneeSplay) : null,
     maxElbowAngleDeg: round(mostExtendedElbow),
     maxKneeAngleDeg: round(mostExtendedKnee), contact };
 }
 
 await mkdir(OUT, { recursive: true });
 const report = {
-  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V2_KICK_CONTINUITY",
+  schema: "POLYFIGHTER_REFERENCE_FIRST_RIG_SWEEP_V3_EIGHT_WAY_GAIT_KNEE",
   inspiration: "apekshik/anymachine PIPELINE.md — reference, axes, pose sweep, recheck",
   source: "real imported Quaternius target GLB + authored skinned motion clips",
   limitation: "No human soft-tissue, clothing collision or physical iPhone fps certification",

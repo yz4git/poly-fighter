@@ -174,3 +174,37 @@ three.js IK work without copying its renderer or adding a frame-by-frame IK pass
 Acceptance pending: CI, real same-camera gait filmstrips, and actual
 iPhone Safari legibility/60fps. Mechanical tests cannot establish that
 the new walk feels natural until a real render is compared.
+
+
+## 2026-11-20 gait knee corridor calibration — second iteration
+
+The original 8-way steering experiment steered the knee toward the foot but
+kept the generic pole 2 cm (in normalized world coordinates) outside the
+anatomical stance. A full imported-GLB trace still showed outward knee splay
+on long sidesteps, especially the wide-stance AXION. The second iteration
+uses a pole 0.004 normalized coordinates **inside** the stance foot, tracking
+80% of lateral swing and 44% of forward swing. All existing foot paths,
+60Hz gameplay roots, locomotion blend clock and hitboxes stay unchanged.
+
+Matched measurement from the *same four imported 65-bone rigs*, all eight
+directions, all 75 audited clips, using the same 120Hz sample sweep:
+
+| Fighter | First steering pass: max knee outside hip–ankle lane | Calibrated pass | Approx reduction |
+| --- | ---: | ---: | ---: |
+| KAIRO | 0.06609m | 0.00826m | 87.5% |
+| SERA | 0.04403m | 0.00070m | 98.4% |
+| VANTA | 0.05293m | 0.00339m | 93.6% |
+| AXION | 0.07859m | 0.01414m | 82.0% |
+
+[Candidate 2 GLB test run #44640209697](https://github.com/yz4git/poly-fighter/actions/runs/44640209697)
+completed successfully: zero structural violations, 75 audited clips and
+the existing 292 core-rule tests; reference-kick and contact checks remain.
+The worst per-120Hz-knee-step remains near 0.019m, not an abrupt pole flip.
+
+The reference-first gate now fails a return of lateral knee displacement
+beyond 1.8% of the model's measured height. A separate **front/profile
+skeleton projection contact sheet** records four gait phases for left,
+right and diagonal approaches from the actual imported GLB joints. It is
+NOT a skin render, a game screenshot, or a demonstration of actual iPhone
+Safari performance. Keep same-camera skinned WebGL and mobile QA as
+independent approval gates before merging.

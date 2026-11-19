@@ -4,6 +4,7 @@ import { combatFootCycle, combatStride, LOCOMOTION_DIRECTIONS, smoothMotion } fr
 import { isKineticPunch, punchStrikeSide, samplePunchKineticChain } from "./combat-punch-kinetics";
 import { sampleKickKineticChain } from "./combat-kinetic-chain";
 import { motionDnaForFighter } from "./motion-profile";
+import { combatGaitKneePole, COMBAT_GAIT_KNEE_POLE_VERSION } from "./combat-gait-knee-pole";
 import { combatCharacterStance, COMBAT_CHARACTER_STANCE_VERSION } from "./combat-character-stance";
 import { ballAnchoredStancePivot, stylePunchKinetics, styleKickUpperBody, MOTIONBRICKS_FULLBODY_FORCE_VERSION } from "./combat-force-transfer";
 import type { FighterDefinition } from "./types";
@@ -16,7 +17,7 @@ import { SERA_STREET_FLOW_MOVES } from "./sera-street-flow";
 type Transform = { position: THREE.Vector3; rotation: THREE.Quaternion };
 type Pose = Map<string, Transform>;
 type Point = [number, number, number];
-type BodyPose = { side?: number; drop?: number; forward?: number; yaw?: number; pitch?: number; roll?: number; chest?: number; leftFoot?: Point; rightFoot?: Point; leftHand?: Point; rightHand?: Point; highGuard?: number };
+type BodyPose = { side?: number; drop?: number; forward?: number; yaw?: number; pitch?: number; roll?: number; chest?: number; leftFoot?: Point; rightFoot?: Point; leftHand?: Point; rightHand?: Point; highGuard?: number; walkKneePole?: boolean };
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -96,7 +97,7 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
   // imported punches/kicks after a later asset pack becomes available.
   const sourceSignature = [...sourceClips].map(([name, clip]) =>
     `${name}@${clip.duration.toFixed(4)}:${clip.tracks.length}`).sort().join("|");
-  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${SERA_STREET_FLOW_POSE_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${COMBAT_CHARACTER_STANCE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
+  const key = `${REFERENCE_KICK_VERSION}:${VIDEO_CHOREOGRAPHY_VERSION}:${SERA_STREET_FLOW_POSE_VERSION}:${MOTIONBRICKS_FULLBODY_FORCE_VERSION}:${COMBAT_CHARACTER_STANCE_VERSION}:${COMBAT_GAIT_KNEE_POLE_VERSION}:${definition.name}:${definition.archetype}:${sourceSignature}`;
   const cached = clipCache.get(key);
   if (cached) return new Map(cached);
   const rig = cloneSkeleton(target) as THREE.Group;
@@ -193,7 +194,13 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
       // creates two incompatible knee bend planes and near-180° quaternion
       // keyframe transitions during the chamber→contact/recoil arc.
       if (suffix !== dedicatedStrikeLeg) {
-        limb(suffix, false, foot, [sign * (width + .02), .27, .22],
+        // Only baked locomotion steers the knee plane with its walking foot.
+        // Static guard, every attack, support-foot locking, and recovery retain
+        // their existing anatomical solver and original targets.
+        const kneePole = pose.walkKneePole
+          ? combatGaitKneePole(suffix, foot, stanceFeet[suffix], width)
+          : [sign * (width + .02), .27, .22] as Point;
+        limb(suffix, false, foot, kneePole,
           kickMinimumKneeAngleDeg > 0 && foot[1] > .075 ? kickMinimumKneeAngleDeg : 0);
         worldRotation(nodes.get(`foot_${suffix}`)!, new THREE.Quaternion().setFromAxisAngle(Y, sign * handedness * .08).multiply(footQ[suffix]));
       }
@@ -252,6 +259,9 @@ export function createCombatMotionLibrary(target: THREE.Group, sourceClips: Map<
         forward: dz * .005,
         yaw: Math.sin(u * Math.PI * 2) * stance.gaitTorsoSwing,
         roll: -dx * stance.gaitSideLean,
+        // Follow the actual planted/swinging feet with their knee bend plane;
+        // neither world movement nor these already calibrated foot paths move.
+        walkKneePole: true,
         leftFoot: [stanceFeet.l[0] + dx * l.travel * stride, l.lift * .045, stanceFeet.l[2] + dz * l.travel * stride],
         rightFoot: [stanceFeet.r[0] + dx * r.travel * stride, r.lift * .045, stanceFeet.r[2] + dz * r.travel * stride],
       });

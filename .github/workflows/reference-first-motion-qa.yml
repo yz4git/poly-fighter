@@ -35,7 +35,7 @@ concurrency:
 jobs:
   reference-first-sweep:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +46,11 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Validate 8-way gait knee-pole phase continuity and fighter stances
         run: node --import tsx --test tests/combat-gait-knee-pole.test.ts tests/combat-character-stance.test.ts
+      - name: Full combat rules, lint, and verified production build
+        run: |
+          npm run test:rules
+          npm run lint
+          npm run build
       - name: Real four-fighter imported-GLB bone/foot/contact sweep
         run: node --import tsx scripts/audit-reference-first-motion.mjs
       - name: Upload source-of-truth numerical QA evidence

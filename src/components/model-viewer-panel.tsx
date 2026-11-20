@@ -9,6 +9,7 @@ import {
   type ModelViewerMotionSnapshot,
 } from "@/src/game/model-viewer-motion";
 import { DEFAULT_FIGHTER_MODEL_ID, FIGHTER_MODEL_OPTIONS, type FighterModelId } from "@/src/game/model-skins";
+import { CMU_MOCAP_PILOT_CLIPS } from "@/src/game/cmu-mocap-pilot";
 
 export interface ModelViewerPanelProps {
   quality: "LOW" | "NORMAL" | "HIGH";
@@ -24,7 +25,7 @@ function formatTime(seconds: number): string {
 }
 
 function motionClipLabel(clip: ModelViewerMotionClipInfo): string {
-  const source = clip.source === "BLENDER" ? "BLENDER" : clip.source === "PROCEDURAL" ? "PF" : "BASE";
+  const source = clip.source === "CMU" ? "CMU" : clip.source === "BLENDER" ? "BLENDER" : clip.source === "PROCEDURAL" ? "PF" : "BASE";
   return `${source} / ${clip.name}`;
 }
 
@@ -303,6 +304,44 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
             >
               {motionState.rotationMode === "WORLD" ? "WORLD ON" : "TRY WORLD"}
             </button>
+          </div>
+        )}
+        {motionReady && (
+          <div
+            aria-label="CMU motion-capture A/B pilot"
+            style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5, marginTop: 6 }}
+          >
+            <span style={{ flex: "0 0 auto", color: "#a3b8ca", fontSize: 8, fontWeight: 900 }}>CMU MOCAP</span>
+            {CMU_MOCAP_PILOT_CLIPS.map((clip) => (
+              <button
+                key={clip.id}
+                type="button"
+                disabled={motionState.cmuLoading}
+                aria-label={`Load ${clip.label} reference motion`}
+                title="Downloads skeleton motion on demand from the CMU mocap dataset; preview only."
+                onClick={() => void viewerRef.current?.loadCmuMotion(clip.id)}
+                style={{
+                  ...transportButtonStyle,
+                  minWidth: 70,
+                  minHeight: 32,
+                  padding: "6px 8px",
+                  fontSize: 8,
+                  opacity: motionState.cmuLoading ? .5 : 1,
+                  borderColor: motionState.clipName === `CMU_${clip.id}` ? "#5ce8ff" : "rgba(175,218,255,.28)",
+                  color: motionState.clipName === `CMU_${clip.id}` ? "#5ce8ff" : "#d8e8f7",
+                }}
+              >
+                {clip.label}
+              </button>
+            ))}
+            {motionState.cmuLoading && (
+              <span role="status" style={{ color: "#a3dcec", fontSize: 8 }}>DOWNLOADING / RETARGETING…</span>
+            )}
+          </div>
+        )}
+        {motionState.cmuError && (
+          <div role="alert" title={motionState.cmuError} style={{ marginTop: 4, fontSize: 9, color: "#ffb3a7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            CMU: {motionState.cmuError}
           </div>
         )}
         <div style={{ marginTop: 7, display: "grid", gridTemplateColumns: "48px minmax(80px, 1fr) 48px", alignItems: "center", gap: 8 }}>

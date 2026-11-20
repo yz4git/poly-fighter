@@ -4,6 +4,90 @@ import type { RetargetRotationMode } from "./motion-retarget";
 type Pair = { source: THREE.Object3D; target: THREE.Object3D };
 
 /**
+ * Offline hip-abduction correction in the character's current anatomical
+ * frame. It acts only if transferred ankles/knees cross the body's leg lane.
+ * The two thighs rotate equally in opposite directions around a horizontal
+ * axis; knee/ankle child rotations and contact timing remain untouched.
+ */
+function separateCrossedLegs(
+  target: THREE.Object3D,
+  rotations: Map<THREE.Object3D, Float32Array>,
+  index: number,
+  previousAngle: number,
+): number {
+  const thighL = target.getObjectByName("thigh_l");
+  const thighR = target.getObjectByName("thigh_r");
+  const calfL = target.getObjectByName("calf_l");
+  const calfR = target.getObjectByName("calf_r");
+  const footL = target.getObjectByName("foot_l");
+  const footR = target.getObjectByName("foot_r");
+  if (!thighL || !thighR || !calfL || !calfR || !footL || !footR ||
+      !rotations.has(thighL) || !rotations.has(thighR)) return 0;
+
+  target.updateWorldMatrix(true, true);
+  const pos = (node: THREE.Object3D) => node.getWorldPosition(new THREE.Vector3());
+  const hL = pos(thighL);
+  const hR = pos(thighR);
+  const kL = pos(calfL);
+  const kR = pos(calfR);
+  const fL = pos(footL);
+  const fR = pos(footR);
+  const side = hL.clone().sub(hR);
+  side.y = 0;
+  if (side.lengthSq() < 1e-8) return 0;
+  side.normalize();
+  const hipSep = hL.clone().sub(hR).dot(side);
+  const footSep = fL.clone().sub(fR).dot(side);
+  const kneeSep = kL.clone().sub(kR).dot(side);
+
+  // Rotating the upper legs out by +theta / -theta changes lateral distance:
+  // hipSep + (oldSep-hipSep)*cos(theta) + (dropL+dropR)*sin(theta)
+  // (one term from each upper-leg pivot). Solve the smallest safe angle.
+  const clearanceAngle = (sep: number, drop: number, minimum: number): number => {
+    if (sep >= minimum) return 0;
+    const estimate = (angle: number) =>
+      hipSep + (sep - hipSep) * Math.cos(angle) + drop * Math.sin(angle);
+    const maximum = 0.85;
+    if (estimate(maximum) < minimum) return maximum;
+    let low = 0;
+    let high = maximum;
+    for (let iteration = 0; iteration < 18; iteration++) {
+      const mid = (low + high) * 0.5;
+      if (estimate(mid) < minimum) low = mid;
+      else high = mid;
+    }
+    return high;
+  };
+  const angle = Math.max(
+    clearanceAngle(footSep, hL.y - fL.y + hR.y - fR.y, hipSep * 0.4),
+    clearanceAngle(kneeSep, hL.y - kL.y + hR.y - kR.y, hipSep * 0.36),
+    previousAngle * 0.84,
+  );
+  if (angle < 1e-5) return 0;
+
+  const axis = side.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
+  for (const [thigh, sign] of [[thighL, 1], [thighR, -1]] as const) {
+    const parent = thigh.parent;
+    if (!parent) continue;
+    const parentWorld = parent.getWorldQuaternion(new THREE.Quaternion());
+    const outside = new THREE.Quaternion().setFromAxisAngle(axis, sign * angle);
+    // Premultiply with a world-space abduction expressed in parent axes.
+    const localAdjustment = parentWorld.clone().invert()
+      .multiply(outside).multiply(parentWorld);
+    thigh.quaternion.premultiply(localAdjustment).normalize();
+    const values = rotations.get(thigh)!;
+    const offset = index * 4;
+    const q = thigh.quaternion.clone();
+    if (index > 0 && (
+      values[offset - 4] * q.x + values[offset - 3] * q.y +
+      values[offset - 2] * q.z + values[offset - 1] * q.w
+    ) < 0) q.set(-q.x, -q.y, -q.z, -q.w);
+    q.toArray(values, offset);
+  }
+  return angle;
+}
+
+/**
  * CMU's ASF rest skeleton has outward-slanted thighs whereas the Quaternius
  * UBC rest pose has nearly vertical legs. Copying source-rest deltas bends
  * UBC's narrow stance inward and *swaps the feet*. Pose-reference transfer
@@ -33,6 +117,9 @@ export function retargetCmuPoseReferenced(
       scale: node.scale.clone(),
     });
   });
+
+  const targetOriginal = new Map<THREE.Object3D, THREE.Quaternion>();
+  target.traverse((node) => targetOriginal.set(node, node.quaternion.clone()));
 
   const animated = new Set(clip.tracks.filter((track) =>
     THREE.PropertyBinding.parseTrackName(track.name).propertyName === "quaternion"
@@ -106,6 +193,7 @@ export function retargetCmuPoseReferenced(
     const delta = new THREE.Quaternion();
     const world = new THREE.Quaternion();
     const local = new THREE.Quaternion();
+    let lastLegCorrection = 0;
     for (let index = 0; index < times.length; index++) {
       mixer.setTime(times[index]);
       source.updateWorldMatrix(true, true);
@@ -133,7 +221,13 @@ export function retargetCmuPoseReferenced(
           local.set(-local.x, -local.y, -local.z, -local.w);
         }
         local.toArray(values, offset);
+        // Pose the actual UBC bones so the clearance audit can use real
+        // upper/lower-leg lengths, not angles guessed from ASF bone axes.
+        pair.target.quaternion.copy(local);
       }
+      lastLegCorrection = separateCrossedLegs(
+        target, rotations, index, lastLegCorrection,
+      );
     }
     const tracks = mapped.map((pair) =>
       new THREE.QuaternionKeyframeTrack(`${pair.target.name}.quaternion`, times,
@@ -151,5 +245,7 @@ export function retargetCmuPoseReferenced(
       node.scale.copy(pose.scale);
     });
     source.updateWorldMatrix(true, true);
+    targetOriginal.forEach((quaternion, node) => node.quaternion.copy(quaternion));
+    target.updateWorldMatrix(true, true);
   }
 }

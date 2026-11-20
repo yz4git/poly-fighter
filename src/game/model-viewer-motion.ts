@@ -368,6 +368,41 @@ export class ModelViewerMotionController {
   }
 
   snapshot(): ModelViewerMotionSnapshot {
+    // Enabled only for explicit WebGL audit runs. Read true posed skeleton
+    // coordinates from the rendered scene to catch skin/rig discrepancies
+    // that stand-alone GLB retarget math tests cannot detect.
+    if (typeof window !== "undefined" && window.location.search.includes("cmuAudit=1") &&
+        this.clipName.startsWith("CMU_")) {
+      this.target.updateWorldMatrix(true, true);
+      const names = ["pelvis", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+        "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
+        "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"];
+      const joints: Record<string, number[] | null> = {};
+      for (const name of names) {
+        const bone = this.target.getObjectByName(name);
+        joints[name] = bone
+          ? bone.getWorldPosition(new THREE.Vector3()).toArray().map((x) => Number(x.toFixed(5)))
+          : null;
+      }
+      const skinned: Array<{ mesh: string; upperarmBound: boolean; firstBone: string }> = [];
+      this.target.traverse((node) => {
+        const mesh = node as THREE.SkinnedMesh;
+        if (!mesh.isSkinnedMesh) return;
+        const upperarm = this.target.getObjectByName("upperarm_l");
+        skinned.push({
+          mesh: mesh.name,
+          upperarmBound: Boolean(upperarm && mesh.skeleton?.bones.includes(upperarm as THREE.Bone)),
+          firstBone: mesh.skeleton?.bones[0]?.name ?? "",
+        });
+      });
+      document.documentElement.dataset.cmuAuditPose = JSON.stringify({
+        clip: this.clipName, time: this.currentAction?.time ?? -1,
+        bodyType: this.visual.root.userData.quaterniusBodyType,
+        modelName: this.target.name,
+        activeRoot: this.mixer.getRoot().name,
+        joints, skinned,
+      });
+    }
     const duration = this.currentAction?.getClip().duration ?? 0;
     return {
       available: true,

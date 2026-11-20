@@ -203,7 +203,9 @@ function sampleContact(
  */
 function sliceClip(clip: THREE.AnimationClip, def: ExtractionWindow): THREE.AnimationClip {
   const duration = def.end - def.start;
-  const count = Math.max(3, Math.ceil(duration * 30) + 1);
+  // Short, fast punches need 120Hz slice keys to preserve the 30Hz
+  // anatomical source interpolant around sharp elbow turns on iPhone.
+  const count = Math.max(3, Math.ceil(duration * 120) + 1);
   const times = Float32Array.from({ length: count }, (_, i) =>
     duration * i / (count - 1));
   const tracks = clip.tracks.map((track) => {

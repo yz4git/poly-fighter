@@ -90,6 +90,45 @@ export function retargetCmuAnatomical(
   outputName: string,
   diagnostics?: CmuAnatomicalDiagnostics,
 ): THREE.AnimationClip {
+  // A live fighter is parented under a rescaled/possibly rotated visual host.
+  // Calibration must be invariant to that display transform. Temporarily
+  // evaluate the SAME local skeleton in canonical object space, then restore
+  // its exact scene placement. This changes no permanent game/model state.
+  const parent = target.parent;
+  const index = parent?.children.indexOf(target) ?? -1;
+  const position = target.position.clone();
+  const rotation = target.quaternion.clone();
+  const scale = target.scale.clone();
+  target.removeFromParent();
+  target.position.set(0, 0, 0);
+  target.quaternion.identity();
+  target.scale.set(1, 1, 1);
+  target.updateWorldMatrix(true, true);
+  try {
+    return retargetCanonical(source, target, motion, aliases, outputName, diagnostics);
+  } finally {
+    target.position.copy(position);
+    target.quaternion.copy(rotation);
+    target.scale.copy(scale);
+    if (parent) {
+      parent.add(target);
+      if (index >= 0 && index < parent.children.length - 1) {
+        parent.children.splice(parent.children.indexOf(target), 1);
+        parent.children.splice(index, 0, target);
+      }
+    }
+    target.updateWorldMatrix(true, true);
+  }
+}
+
+function retargetCanonical(
+  source: THREE.Object3D,
+  target: THREE.Object3D,
+  motion: THREE.AnimationClip,
+  aliases: Readonly<Record<string, string>>,
+  outputName: string,
+  diagnostics?: CmuAnatomicalDiagnostics,
+): THREE.AnimationClip {
   source.updateWorldMatrix(true, true);
   target.updateWorldMatrix(true, true);
   const sourceBefore = savePose(source);

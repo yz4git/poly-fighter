@@ -166,7 +166,7 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         `CMU ${entry.id} ${variant}: ankles cross/overlap (${worstFoot.separation.toFixed(3)}m at ${worstFoot.time.toFixed(2)}s)`);
       assert.ok(worstKnee.separation > 0.07,
         `CMU ${entry.id} ${variant}: knees cross (${worstKnee.separation.toFixed(3)}m at ${worstKnee.time.toFixed(2)}s)`);
-      assert.ok(minToeY > -0.035,
+      assert.ok(minToeY > -0.015,
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);

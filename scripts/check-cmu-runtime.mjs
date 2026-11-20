@@ -33,7 +33,8 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
     if (!response.ok) throw new Error(`CMU ${entry.id}: HTTP ${response.status}`);
     const gltf = await loader.parseAsync(await response.arrayBuffer(), "");
     for (const { variant, target } of targets) {
-      const clip = retargetCmuPilotClip(gltf.scene, target, gltf.animations, entry.id);
+      const diagnostics = { fitted: [], fallback: [], alignment: [] };
+      const clip = retargetCmuPilotClip(gltf.scene, target, gltf.animations, entry.id, "WORLD", diagnostics);
       const names = clip.tracks.map((track) => track.name);
       const jointCount = clip.tracks.filter((track) => track.name.endsWith(".quaternion")).length;
       assert.equal(new Set(names).size, names.length, "duplicate target animation track");
@@ -72,6 +73,67 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         minFootY = Math.min(minFootY, fL.y, fR.y);
         maxFootY = Math.max(maxFootY, fL.y, fR.y);
       }
+      // Source/target kinematic fidelity: compare actual segment directions
+      // in both played skeletons, not just animation track names. This
+      // detects the previous T-pose bug even when ankle clearance passes.
+      const comparison = [
+        ["lhumerus", "lradius", "upperarm_l", "lowerarm_l"],
+        ["lradius", "lwrist", "lowerarm_l", "hand_l"],
+        ["rhumerus", "rradius", "upperarm_r", "lowerarm_r"],
+        ["rradius", "rwrist", "lowerarm_r", "hand_r"],
+        ["lfemur", "ltibia", "thigh_l", "calf_l"],
+        ["ltibia", "lfoot", "calf_l", "foot_l"],
+        ["rfemur", "rtibia", "thigh_r", "calf_r"],
+        ["rtibia", "rfoot", "calf_r", "foot_r"],
+      ];
+      assert.equal(diagnostics.fitted.includes("upperarm_l"), true);
+      assert.equal(diagnostics.fitted.includes("lowerarm_l"), true);
+      const aligned = new THREE.Quaternion().fromArray(diagnostics.alignment);
+      const sourceMixer = new THREE.AnimationMixer(gltf.scene);
+      const sourceAction = sourceMixer.clipAction(gltf.animations[0]).play();
+      sourceAction.setLoop(THREE.LoopOnce, 1);
+      sourceAction.clampWhenFinished = true;
+      let maxAngularErrorDegrees = 0;
+      let totalAngularErrorDegrees = 0;
+      let measurements = 0;
+      let biggestError = null;
+      for (let sample = 0; sample <= 32; sample++) {
+        const time = clip.duration * sample / 32;
+        sourceMixer.setTime(time);
+        mixer.setTime(time);
+        gltf.scene.updateWorldMatrix(true, true);
+        target.updateWorldMatrix(true, true);
+        for (const [srcA, srcB, dstA, dstB] of comparison) {
+          const sourceA = gltf.scene.getObjectByName(srcA);
+          const sourceB = gltf.scene.getObjectByName(srcB);
+          const targetA = target.getObjectByName(dstA);
+          const targetB = target.getObjectByName(dstB);
+          assert.ok(sourceA && sourceB && targetA && targetB);
+          const sourceDirection = sourceB.getWorldPosition(new THREE.Vector3())
+            .sub(sourceA.getWorldPosition(new THREE.Vector3()))
+            .normalize().applyQuaternion(aligned);
+          const targetDirection = targetB.getWorldPosition(new THREE.Vector3())
+            .sub(targetA.getWorldPosition(new THREE.Vector3()))
+            .normalize();
+          const degrees = THREE.MathUtils.radToDeg(sourceDirection.angleTo(targetDirection));
+          measurements++;
+          totalAngularErrorDegrees += degrees;
+          if (degrees > maxAngularErrorDegrees) {
+            maxAngularErrorDegrees = degrees;
+            biggestError = { time, srcA, srcB, dstA, dstB };
+          }
+        }
+      }
+      sourceMixer.stopAllAction();
+      sourceMixer.uncacheRoot(gltf.scene);
+      console.log("CMU_ANATOMICAL_FIDELITY", JSON.stringify({
+        source: entry.file, target: variant,
+        trackedBones: diagnostics.fitted, fallback: diagnostics.fallback,
+        measurements, maxAngularErrorDegrees, meanAngularErrorDegrees: totalAngularErrorDegrees / measurements,
+        biggestError,
+      }));
+      assert.ok(maxAngularErrorDegrees < 15,
+        "CMU anatomical limb aim differs from source by " + maxAngularErrorDegrees.toFixed(2) + " deg");
       mixer.stopAllAction();
       mixer.uncacheRoot(target);
       // Later source clips must retarget against the original UBC bind pose.

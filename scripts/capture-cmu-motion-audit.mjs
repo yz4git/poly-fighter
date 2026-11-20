@@ -166,6 +166,108 @@
             records.frames.push({ fighter, motion: clip.id, camera, phase, file: `${file}.png`, state: validated });
           }
         }
+
+        if (clip.id === "BOXING") {
+          for (const strike of [
+            {name:"CMU_BOXING_RIGHT_STRAIGHT", label:"RIGHT STRAIGHT", key:"right-straight", hits:1},
+            {name:"CMU_BOXING_LEFT_RIGHT_COMBO", label:"LEFT → RIGHT COMBO", key:"left-right-combo", hits:2},
+          ]) {
+            const fired = await js(`
+              const b=document.querySelector('button[aria-label="Preview CMU '+arguments[0]+'"]');
+              b?.click(); return {clicked:!!b};
+            `,[strike.label]);
+            if (!fired.clicked) throw new Error("Missing punch preview "+strike.label);
+            await wait(()=>js(`
+              const sel=document.querySelector('select[aria-label="Motion clip"]');
+              return {ready:sel?.value===arguments[0],selected:sel?.value};
+            `,[strike.name]),"Select "+strike.name,100);
+            const meta=await js(`
+              return JSON.parse(document.documentElement.dataset.cmuAuditPose || "null")?.strike ?? null;
+            `);
+            if(!meta || meta.name!==strike.name || meta.contacts.length!==strike.hits) {
+              throw new Error("Bad source timing metadata "+JSON.stringify(meta));
+            }
+            const targets=[
+              {phase:0.04,poseName:"guard",hand:null},
+              ...meta.contacts.map((c,i)=>({phase:c.normalized,poseName:"contact-"+(i+1),hand:c.hand})),
+              {phase:0.96,poseName:"recovery",hand:null},
+            ];
+            for (const camera of ["front","side"]) {
+              if(camera==="side") {
+                const p=await js(`
+                  const r=document.querySelector('section[aria-label="Model View"] canvas')?.getBoundingClientRect();
+                  return r?{x:Math.round(r.left+r.width*.43),y:Math.round(r.top+r.height*.4)}:null;
+                `);
+                if(!p)throw new Error("CMU strike canvas missing");
+                await command("/session/"+session+"/actions","POST",{actions:[{
+                  type:"pointer",id:"mouse-strike",parameters:{pointerType:"mouse"},
+                  actions:[
+                    {type:"pointerMove",origin:"viewport",x:p.x,y:p.y,duration:0},
+                    {type:"pointerDown",button:0},
+                    {type:"pointerMove",origin:"viewport",x:p.x+175,y:p.y,duration:400},
+                    {type:"pointerUp",button:0},
+                  ],
+                }]});
+                await sleep(200);
+              }
+              const poses=[];
+              for(const targetPose of targets) {
+                await js(`
+                  document.querySelector('button[aria-label="Pause motion"]')?.click();
+                  const slider=document.querySelector('input[aria-label="Motion timeline"]');
+                  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")
+                    .set.call(slider,String(Math.round(arguments[0]*1000)));
+                  slider.dispatchEvent(new Event("input",{bubbles:true}));
+                  slider.dispatchEvent(new Event("change",{bubbles:true}));
+                  return slider.value;
+                `,[targetPose.phase]);
+                await sleep(270);
+                const state=await js(`
+                  return {
+                    selected:document.querySelector('select[aria-label="Motion clip"]')?.value,
+                    normalized:Number(document.querySelector('input[aria-label="Motion timeline"]')?.value)/1000,
+                    paused:!!document.querySelector('button[aria-label="Play motion"]'),
+                    pose:JSON.parse(document.documentElement.dataset.cmuAuditPose || "null"),
+                  };
+                `);
+                if(state.selected!==strike.name || !state.paused ||
+                   Math.abs(state.normalized-targetPose.phase)>0.008 ||
+                   state.pose?.strike?.name!==strike.name) {
+                  throw new Error("Incorrect strike screenshot frame "+JSON.stringify(state));
+                }
+                if(Object.values(state.pose.trackDeltaDegrees ?? {}).some(
+                    x=>typeof x==="number" && x>1)) {
+                  throw new Error("Strike scene bone disagrees with selected animation");
+                }
+                const file=fighter.toLowerCase()+"-cmu-"+strike.key+
+                  "-"+camera+"-"+targetPose.poseName;
+                await screenshot(file);
+                poses.push({...state,hand:targetPose.hand,poseName:targetPose.poseName});
+                records.frames.push({fighter,motion:strike.name,camera,
+                  phase:targetPose.phase,file:file+".png",state});
+              }
+              if(camera==="front") {
+                const reach=(sample,hand)=>{
+                  const suffix=hand==="LEFT"?"l":"r";
+                  const shoulder=sample.pose.joints["upperarm_"+suffix];
+                  const wrist=sample.pose.joints["hand_"+suffix];
+                  if(!shoulder||!wrist)throw Error("Missing real shoulder/wrist bone");
+                  return Math.hypot(...shoulder.map((v,i)=>wrist[i]-v));
+                };
+                const guard=poses[0],recovery=poses[poses.length-1];
+                for(const hit of poses.filter(p=>p.hand)){
+                  const before=reach(guard,hit.hand),during=reach(hit,hit.hand);
+                  const after=reach(recovery,hit.hand);
+                  if(during<before*1.12||after>during*.96) {
+                    throw new Error("Rendered strike lacks guard/extension/recovery "+
+                      JSON.stringify({fighter,strike:strike.name,hand:hit.hand,before,during,after}));
+                  }
+                }
+              }
+              await click("RESET VIEW");
+            }
+          }
+        }
         if (clip.id === "WALK" || clip.id === "KICK") {
           const toggle = await js(`
             const b=document.querySelector('button[aria-label="Compare CMU stance foot IK"]');

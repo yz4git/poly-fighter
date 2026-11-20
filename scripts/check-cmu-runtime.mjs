@@ -170,6 +170,48 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "WALK") {
+        // A real MODEL VIEW nests the same skeleton under a transformed host.
+        // This test rejects any retarget that changes merely because a
+        // fighter is rotated/positioned/scaled in the scene (KAIRO regression).
+        const host = new THREE.Group();
+        host.name = "in-game-model-view-host";
+        host.position.set(2.3, 0.1, -1.5);
+        host.rotation.set(0.41, -0.23, 0.18);
+        host.scale.setScalar(0.53);
+        host.add(target);
+        const mountedClip = retargetCmuPilotClip(
+          gltf.scene, target, gltf.animations, entry.id,
+        );
+        const reference = new Map(clip.tracks.map(t => [t.name, t]));
+        for (const track of mountedClip.tracks) {
+          const originalTrack = reference.get(track.name);
+          assert.ok(originalTrack, "Mounted target changed animated bone set");
+          for (const fraction of [0, 0.14, 0.35, 0.7, 1]) {
+            const a = new THREE.Quaternion();
+            const b = new THREE.Quaternion();
+            if (track.name.endsWith(".quaternion")) {
+              const index = Math.floor((track.times.length - 1) * fraction);
+              a.fromArray(originalTrack.values, index * 4);
+              b.fromArray(track.values, index * 4);
+              assert.ok(a.angleTo(b) < 0.015,
+                "Host placement changed " + track.name + " by " +
+                THREE.MathUtils.radToDeg(a.angleTo(b)).toFixed(2) + "°");
+            } else if (track.name === "pelvis.position") {
+              const index = Math.floor((track.times.length - 1) * fraction);
+              const delta = Math.max(...[0, 1, 2].map(offset =>
+                Math.abs(originalTrack.values[index * 3 + offset] -
+                  track.values[index * 3 + offset])));
+              assert.ok(delta < 0.015,
+                "Host placement changed planted-foot pelvis height");
+            }
+          }
+        }
+        assert.equal(target.parent, host, "Canonical calibration must restore live fighter parent");
+        assert.ok(target.position.distanceTo(new THREE.Vector3()) < 1e-5,
+          "Canonical calibration must restore model position");
+        host.remove(target);
+      }
       console.log(JSON.stringify({
         source: entry.file, target: variant, duration: clip.duration,
         transferredJointCount: jointCount, tracks: names,

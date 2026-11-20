@@ -154,6 +154,7 @@ export class ModelViewerMotionController {
   private speed = 1;
   private cmuLoading = false;
   private cmuError: string | null = null;
+  private cmuAuditAlignment: number[] = [];
   private destroyed = false;
 
   private constructor(target: THREE.Object3D, visual: FighterVisual) {
@@ -187,7 +188,11 @@ export class ModelViewerMotionController {
       bank = new Map();
       for (const pack of this.sourcePacks) {
         if (pack.source === "CMU" && pack.cmuId) {
-          const clip = retargetCmuPilotClip(pack.root, this.target, pack.clips, pack.cmuId, this.rotationMode);
+          const diagnostics = { fitted: [] as string[], fallback: [] as string[], alignment: [] as number[] };
+          const clip = retargetCmuPilotClip(
+            pack.root, this.target, pack.clips, pack.cmuId, this.rotationMode, diagnostics,
+          );
+          this.cmuAuditAlignment = diagnostics.alignment;
           bank.set(clip.name, { clip, source: "CMU" });
         } else {
           const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
@@ -395,8 +400,22 @@ export class ModelViewerMotionController {
           firstBone: mesh.skeleton?.bones[0]?.name ?? "",
         });
       });
+      const actionClip = this.currentAction?.getClip();
+      const trackDeltaDegrees: Record<string, number | null> = {};
+      for (const name of ["upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r",
+        "thigh_l", "calf_l", "thigh_r", "calf_r"]) {
+        const bone = this.target.getObjectByName(name);
+        const track = actionClip?.tracks.find((t) => t.name === name + ".quaternion");
+        if (!bone || !track) { trackDeltaDegrees[name] = null; continue; }
+        const time = THREE.MathUtils.clamp(this.currentAction?.time ?? 0, 0, actionClip!.duration);
+        const sampled = track.createInterpolant().evaluate(time);
+        trackDeltaDegrees[name] = Number(THREE.MathUtils.radToDeg(
+          bone.quaternion.angleTo(new THREE.Quaternion().fromArray(sampled)),
+        ).toFixed(3));
+      }
       document.documentElement.dataset.cmuAuditPose = JSON.stringify({
         clip: this.clipName, time: this.currentAction?.time ?? -1,
+        calibration: this.cmuAuditAlignment, trackDeltaDegrees,
         bodyType: this.visual.root.userData.quaterniusBodyType,
         modelName: this.target.name,
         activeRoot: this.mixer.getRoot().name,

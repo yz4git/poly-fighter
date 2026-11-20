@@ -40,6 +40,18 @@ Evidence from the first anatomical arm/leg bake **before contact-height adjustme
 
 The above validates **limb direction**, not surface twisting, punch timing, contact strength, hand guard semantics, knee hinge axes or usable fighting locomotion. Do not claim full-body anatomical perfection from this metric.
 
+## Cross-character runtime bug and its verified fix
+
+The anatomical GLB math passed independently on both UBC bodies but the November 21 browser review showed KAIRO entering a T-pose while SERA was correct. A live WebGL pose debugger compared the actual arm-bone quaternions with the selected clip. The skinning bone links were valid and playback tracks matched, but KAIRO's anatomical calibration array was empty, proving it was using the **legacy LOCAL clip**.
+
+**Root cause:** `loadMotionSources()` returns a globally cached array. SERA pushed optional CMU packs into that array, unintentionally sharing them with KAIRO's fresh controller. KAIRO saw CMU clips already present at startup, built them in LOCAL legacy mode and skipped the normal on-demand WORLD/anatomical selection on button tap.
+
+**Fix:** `ModelViewerMotionController.create` now uses `[...await loadMotionSources()]` so each character owns its source-pack list. Pressing a CMU button also restores WORLD/anatomical mode if that clip was already loaded. No external motion is added to the shared asset array.
+
+**Browser regression proof:** the 52-image audit with **SERA and KAIRO** now asserts (1) a real four-element anatomical calibration on every selected CMU motion, (2) live bone quaternions within one degree of evaluated clip tracks, and (3) both WALK upper arms visibly hang down instead of staying near-horizontal. On the previous version, KAIRO would fail these checks. The corrected run passed: https://github.com/yz4git/poly-fighter/actions/runs/44764213822
+
+This fix is separate from source-to-target skeletal calibration. Both are necessary for reliable conversion.
+
 ## Adoption policy
 
 Never silently promote these demonstrations into live combat, and never replace the protected player model. Adoption must additionally pass:

@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { buildCmuStanceLockedClip } from "../src/game/cmu-foot-lock.ts";
+import { extractCmuBoxingStrikes } from "../src/game/cmu-strike-extraction.ts";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
@@ -172,6 +173,56 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "BOXING") {
+        const sourceMotion = gltf.animations.reduce((best, next) =>
+          next.duration > best.duration ? next : best);
+        const candidates = extractCmuBoxingStrikes(gltf.scene, sourceMotion, clip);
+        assert.deepEqual(candidates.map(x => x.clip.name), [
+          "CMU_BOXING_RIGHT_STRAIGHT",
+          "CMU_BOXING_LEFT_RIGHT_COMBO",
+        ]);
+        assert.deepEqual(candidates.map(x => x.preview.contacts.length), [1, 2]);
+        for (const candidate of candidates) {
+          const {clip: trial, preview} = candidate;
+          assert.ok(trial.duration > 0.6 && trial.duration < 1.2);
+          assert.ok(preview.contacts.every(c => c.normalized > 0.18 &&
+            c.normalized < 0.80 && c.extensionGain >= 0.12 &&
+            c.recoveryGain >= 0.10 && c.peakApproachSpeed > 0.70));
+          const names = trial.tracks.map(t => t.name);
+          assert.equal(new Set(names).size, names.length);
+          assert.equal(names.length, clip.tracks.length,
+            "Sliced punch must preserve the complete anatomical skeleton");
+          for (const track of trial.tracks) {
+            assert.ok(track.times.length >= 3);
+            assert.ok(Math.abs(track.times[0]) < 1e-6);
+            assert.ok(Math.abs(track.times[track.times.length - 1] - trial.duration) < 1e-5);
+            assert.ok(Array.from(track.values).every(Number.isFinite));
+            const parent = clip.tracks.find(t => t.name === track.name);
+            assert.ok(parent);
+            const local = track.createInterpolant();
+            const original = parent.createInterpolant();
+            for (const t of [0, ...preview.contacts.map(c => c.time), trial.duration]) {
+              const a = Array.from(local.evaluate(t));
+              const b = Array.from(original.evaluate(preview.sourceStart + t));
+              if (track.name.endsWith(".quaternion")) {
+                const q1 = new THREE.Quaternion().fromArray(a);
+                const q2 = new THREE.Quaternion().fromArray(b);
+                assert.ok(q1.angleTo(q2) < THREE.MathUtils.degToRad(1.2),
+                  "Punch slicing changed " + track.name + " source animation");
+              } else {
+                assert.ok(Math.max(...a.map((value, i) => Math.abs(value-b[i]))) < 0.012,
+                  "Punch slicing changed " + track.name + " translation");
+              }
+            }
+          }
+          console.log("CMU_STRIKE_WINDOW_AUDIT", JSON.stringify({
+            target: variant, name: trial.name, duration: trial.duration,
+            sourceStart: preview.sourceStart, sourceEnd: preview.sourceEnd,
+            contacts: preview.contacts,
+            transferredTracks: trial.tracks.length,
+          }));
+        }
+      }
       if (entry.id === "WALK" || entry.id === "KICK") {
         const sourceMotion = gltf.animations.reduce((a,b) =>
           b.duration > a.duration ? b : a);

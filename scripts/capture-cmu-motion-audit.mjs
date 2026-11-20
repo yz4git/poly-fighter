@@ -130,6 +130,7 @@
                 selected:document.querySelector('select[aria-label="Motion clip"]')?.value,
                 normalized:Number(document.querySelector('input[aria-label="Motion timeline"]')?.value)/1000,
                 paused:!!document.querySelector('button[aria-label="Play motion"]'),
+                auditPose: JSON.parse(document.documentElement.dataset.cmuAuditPose || "null"),
               };
             `);
             if (validated.selected !== `CMU_${clip.id}` || !validated.paused || Math.abs(validated.normalized-phase) > 0.006) {

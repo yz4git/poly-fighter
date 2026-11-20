@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
   cmuMocapPilotUrl,
@@ -170,6 +171,44 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "WALK") {
+        // Reproduce the actual viewer's clone->normalize->Skeleton.pose flow,
+        // not only a raw GLTFLoader scene. Male shoulders previously remained
+        // T-posed in Chrome despite clean raw-scene math.
+        const cloneRig = cloneSkeleton(target);
+        cloneRig.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(cloneRig);
+        const center = box.getCenter(new THREE.Vector3());
+        const height = Math.max(1e-5, box.getSize(new THREE.Vector3()).y);
+        const normalizedHost = new THREE.Group();
+        normalizedHost.scale.setScalar(1 / height);
+        cloneRig.position.set(-center.x, -box.min.y, -center.z);
+        normalizedHost.add(cloneRig);
+        const restoredSkeletons = new Set();
+        cloneRig.traverse((node) => {
+          if (node.isSkinnedMesh && !restoredSkeletons.has(node.skeleton)) {
+            node.skeleton.pose();
+            restoredSkeletons.add(node.skeleton);
+          }
+        });
+        cloneRig.updateWorldMatrix(true, true);
+        const cloneClip = retargetCmuPilotClip(
+          gltf.scene, cloneRig, gltf.animations, entry.id,
+        );
+        for (const joint of ["upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r",
+            "thigh_l", "calf_l", "thigh_r", "calf_r"]) {
+          const original = clip.tracks.find(t => t.name === joint + ".quaternion");
+          const cloned = cloneClip.tracks.find(t => t.name === joint + ".quaternion");
+          assert.ok(original && cloned, "Cloned viewer model is missing " + joint);
+          const frame = Math.floor((original.times.length - 1) * 0.32);
+          const q1 = new THREE.Quaternion().fromArray(original.values, frame * 4);
+          const q2 = new THREE.Quaternion().fromArray(cloned.values, frame * 4);
+          const difference = THREE.MathUtils.radToDeg(q1.angleTo(q2));
+          console.log("CMU_CLONED_RIG_DIFF", JSON.stringify({variant, joint, difference}));
+          assert.ok(difference < 3, "Viewer clone/bind-pose changed " + joint +
+            " by " + difference.toFixed(1) + " degrees");
+        }
+      }
       if (entry.id === "WALK") {
         // A real MODEL VIEW nests the same skeleton under a transformed host.
         // This test rejects any retarget that changes merely because a

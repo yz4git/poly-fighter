@@ -22,20 +22,21 @@ The "kick" sample is **a soccer kick**, not a martial-arts side kick. The "boxin
 2. Wait for the existing Quaternius motion viewer to become ready.
 3. Tap **CMU WALK**, **CMU BOXING**, or **CMU KICK**. The selected source is downloaded from Hugging Face only on demand; no third-party footage is loaded during normal gameplay or initial viewer startup.
 4. Switch among **CMU**, **BLENDER**, **PF**, and **BASE** clips in the same selector. Pause at foot plants, punches and strikes; orbit the camera for silhouette and joint-twist inspection.
-5. Use **TRY WORLD / WORLD ON** to compare WORLD rest-basis quaternion transfer with LOCAL on the *same target character*. The selected CMU clip is retargeted once per basis change (not every frame).
+5. Use **ANATOMY ON / TRY ANATOMY** when a CMU clip is selected to compare absolute anatomical pose reconstruction with the original frame-zero legacy transfer. The selected clip is baked once per mode switch (not every frame).
 6. If network access, CORS, a missing GLB or incompatible bone naming fails, a CMU error is shown and the previous local clip is restored. No combat logic is affected.
 
 ## Integration mechanics and limitations
 
-- Source CMU bone aliases are mapped to the Quaternius UBC joint names; animation is calibrated to the **first recorded pose**, not CMU's much wider ASF bind stance. Animated helper bones are preserved through hierarchical **world-joint rotation reconstruction**.
-- A per-frame signed ankle/knee separation check introduces only the necessary outward upper-leg correction. The correction rotates both thigh bones in opposite directions, retaining original knee and foot animation and enforcing a reasonable leg lane.
+- **WORLD/ANATOMY is the corrected conversion:** CMU animated joint positions determine the absolute directions of the target's corresponding upper arms, forearms, thighs, calves, clavicles and spine. A fixed source/target anatomical frame aligns axes, followed by parent-world-to-local reconstruction. See `docs/CMU_ANATOMICAL_RETARGET_PROTOCOL.md`.
+- **LOCAL is now legacy-only:** frame-zero rotation deltas applied to a UBC T-pose were identified as the cause of outstretched arms in the previous screenshot review; do not use this mode in game.
+- In corrected mode, the animation is fitted from the source's actual skeletal limb directions, **without** the older forced outward thigh correction. Per-frame sign tests still guard against crossed knees and ankles.
 - Motion retargeting is baked once at a preview-only **30fps** sample rate and interpolated by Three.js. No runtime per-frame procedural retargeting is used in the live match.
-- The CMU source's hip/world translations are intentionally dropped for **in-place preview**. These previews do **not** simulate a real walk path, velocity or contact matching.
+- Horizontal root travel is intentionally dropped for **in-place preview**. A target-only **vertical pelvis translation** corrects plausible planted-foot height, but there is no full motion-path, stride-speed or stance-foot IK integration.
 - The viewer's bone-coverage gate refuses an obviously incompatible skeleton instead of silently playing an empty animation.
 - Skeleton-only GLBs are chosen instead of the compressed `objects`/`mobile` character files to avoid Meshopt/Basis texture decoder requirements and unnecessary geometry downloads. Despite this, external hosting and CORS must still be checked on a real device.
-- There is **no production foot-lock IK, motion segmentation, animation-compression bake, foot-contact annotation or hitbox integration** for these CMU clips yet.
+- There is **no production foot-lock IK, animation-to-hitbox integration, fighter-relative root-motion correction, gameplay motion segmentation or measured impact timing** for these CMU clips yet. Twist/roll around a bone's own direction also needs separate validation.
 - The existing gameplay and model-selection defaults are unchanged. CMU data is **not committed** to this repo and is not sold or redistributed.
-- Tests cover URL selection, synthetic bone mapping, actual upstream GLB conversion onto both UBC models, and quantitative full-clip ankle/knee clearance. Real-device WebGL visual sign-off and contact-quality review are still required before promoting anything to gameplay.
+- Tests cover URL selection, synthetic bone mapping, actual upstream GLB conversion onto both UBC models, quantified arm/leg source-to-target direction fidelity (peak under 5°, mean under 1°), toe-to-ground clearance and full-clip ankle/knee clearance. Real-device WebGL visual sign-off and contact-quality review are still required before promoting anything to gameplay.
 
 ## License and provenance
 

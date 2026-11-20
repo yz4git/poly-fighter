@@ -232,6 +232,15 @@ export function buildCmuStanceLockedClip(
           }
           seen[side]++;
           const current = worldPosition(chain.toe);
+          // A stationary source toe can be unreachable on the in-place
+          // target because root horizontal travel was deliberately removed.
+          // Release and re-anchor instead of pulling the knee across the
+          // body or snapping the ankle to an impossible world-space goal.
+          if (current.distanceTo(anchors[side]!) > 0.23) {
+            anchors[side] = current.clone();
+            seen[side] = 1;
+            stats.runs++;
+          }
           const drift = current.distanceTo(anchors[side]!);
           const fadeIn = THREE.MathUtils.smoothstep(seen[side], 1, 4);
           let tail = 0;
@@ -242,7 +251,7 @@ export function buildCmuStanceLockedClip(
           const fadeOut = THREE.MathUtils.smoothstep(tail, 0, 3);
           const weight = Math.min(fadeIn, fadeOut);
           const correction = anchors[side]!.clone().sub(current).multiplyScalar(weight);
-          if (correction.length() > 0.18) correction.setLength(0.18);
+          if (correction.length() > 0.16) correction.setLength(0.16);
           const targetToe = current.clone().add(correction);
           const before = chain.thigh.getWorldQuaternion(new THREE.Quaternion());
           solveToeTwoBoneIK(chain, targetToe);

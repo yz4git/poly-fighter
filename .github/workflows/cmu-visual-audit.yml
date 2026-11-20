@@ -43,7 +43,7 @@ jobs:
           DRIVER="$(command -v chromedriver || true)"
           if [ -z "$DRIVER" ] && [ -x "${CHROMEWEBDRIVER:-}/chromedriver" ]; then DRIVER="$CHROMEWEBDRIVER/chromedriver"; fi
           test -n "$DRIVER"
-          WEBDRIVER_BIN="$DRIVER" AUDIT_URL=http://127.0.0.1:3000/ CMU_AUDIT_DIR=artifacts/cmu-visual node scripts/capture-cmu-motion-audit.mjs
+          WEBDRIVER_BIN="$DRIVER" AUDIT_URL='http://127.0.0.1:3000/?cmuAudit=1' CMU_AUDIT_DIR=artifacts/cmu-visual node scripts/capture-cmu-motion-audit.mjs
       - name: Retain screens, report and server log
         if: always()
         run: |

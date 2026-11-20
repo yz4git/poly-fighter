@@ -8,6 +8,7 @@ import {
   type FighterVisualQuality,
 } from "./visual-entry";
 import { updateQuaterniusModelPreview } from "./visual-quaternius-runtime";
+import type { CmuMocapPilotId } from "./cmu-mocap-pilot";
 import {
   ModelViewerMotionController,
   unavailableModelViewerMotionSnapshot,
@@ -257,6 +258,18 @@ export class ModelViewer {
   setMotionClip(name: string): void {
     this.motionController?.setClip(name);
     this.emitMotionState(true);
+  }
+
+  async loadCmuMotion(id: CmuMocapPilotId): Promise<void> {
+    const controller = this.motionController;
+    if (!controller || this.destroyed) return;
+    const loading = controller.loadCmuMotion(id);
+    this.emitMotionState(true);
+    await loading;
+    if (!this.destroyed && this.motionController === controller) {
+      this.fitModel(false);
+      this.emitMotionState(true);
+    }
   }
 
   toggleMotionPlayback(): void {

@@ -42,3 +42,12 @@ Generated/modified POLY FIGHTER geometry that incorporates this CC0 source may b
 The runtime does not assume that matching joint names also imply identical local rest rotations. Animation quaternions are retargeted as a rest-pose delta (`targetRest × inverse(sourceRest) × sourceAnimated`) before playback, while target-authored joint positions and scales remain intact. POLY FIGHTER also keeps its canonical gameplay rig alive invisibly for deterministic hitboxes. Active attacks receive imported-limb contact correction, and GUARD synchronizes the imported fists to the canonical guard pose.
 
 POLY FIGHTER also evaluated Quaternius **Universal Animation Library 2** (CC0-1.0). The compatibility audit is retained at `docs/quaternius-ual2-model-report.json`. UAL2 is not loaded by the shipping runtime so the default iPhone payload stays smaller.
+
+
+## CMU Motion Capture Database (external preview only)
+
+- Source institution: Carnegie Mellon University — Motion Capture Database, https://mocap.cs.cmu.edu/
+- GLB conversion/hosting: CodePawl, https://huggingface.co/datasets/codepawl/cmu-mocap-glb
+- License status: dataset marked `other`; CMU source permits use in projects including commercial games, but **does not allow resale of the original or converted motion data**.
+- The CMU WALK, BOXING and KICK items are optional **on-demand external skeleton GLBs** in MODEL VIEW. No CMU data file is bundled in POLY FIGHTER, and the shipping fight runtime never loads it.
+- For exact clip identifiers, runtime paths and intended prototype restrictions, see `docs/CMU_MOCAP_PILOT.md`.

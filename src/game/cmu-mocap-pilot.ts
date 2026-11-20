@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RetargetRotationMode } from "./motion-retarget";
 import { retargetCmuPoseReferenced } from "./cmu-pose-retarget";
+import { retargetCmuAnatomical } from "./cmu-anatomical-retarget";
 
 /**
  * Opt-in MODEL VIEW experiment. Remote motion data is never fetched during a
@@ -97,9 +98,14 @@ export function retargetCmuPilotClip(
   // Captured-pose calibration avoids the original ASF wide-leg bind-pose
   // offset that made Quaternius' narrow stance cross both ankles.
   // Clip output stays in-place (no position tracks).
-  const output = retargetCmuPoseReferenced(
-    source, target, motion, buildCmuBoneMap(source, target), mode, motion.name,
-  );
+  const boneMap = buildCmuBoneMap(source, target);
+  // WORLD = anatomical joint-direction reconstruction, not rotation deltas.
+  // LOCAL retains the old 2026-11-20 trial for reversible screenshot A/B.
+  const hasCmuAsf = Boolean(source.getObjectByName("lfemur") &&
+    source.getObjectByName("rfemur") && source.getObjectByName("thorax"));
+  const output = mode === "WORLD" && hasCmuAsf
+    ? retargetCmuAnatomical(source, target, motion, boneMap, motion.name)
+    : retargetCmuPoseReferenced(source, target, motion, boneMap, mode, motion.name);
   const animatedJoints = output?.tracks.filter((track) => track.name.endsWith(".quaternion")).length ?? 0;
   // Prevent two ASF hierarchy joints (e.g. lhipjoint and lfemur) from
   // driving the exact same target track in AnimationMixer.

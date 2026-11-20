@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { RetargetRotationMode } from "./motion-retarget";
 import { retargetCmuPoseReferenced } from "./cmu-pose-retarget";
-import { retargetCmuAnatomical } from "./cmu-anatomical-retarget";
+import { retargetCmuAnatomical, type CmuAnatomicalDiagnostics } from "./cmu-anatomical-retarget";
 
 /**
  * Opt-in MODEL VIEW experiment. Remote motion data is never fetched during a
@@ -87,6 +87,7 @@ export function retargetCmuPilotClip(
   animations: readonly THREE.AnimationClip[],
   id: CmuMocapPilotId,
   mode: RetargetRotationMode = "WORLD",
+  diagnostics?: CmuAnatomicalDiagnostics,
 ): THREE.AnimationClip {
   const sourceClip = animations.reduce<THREE.AnimationClip | null>(
     (best, clip) => !best || clip.duration > best.duration ? clip : best,
@@ -104,7 +105,7 @@ export function retargetCmuPilotClip(
   const hasCmuAsf = Boolean(source.getObjectByName("lfemur") &&
     source.getObjectByName("rfemur") && source.getObjectByName("thorax"));
   const output = mode === "WORLD" && hasCmuAsf
-    ? retargetCmuAnatomical(source, target, motion, boneMap, motion.name)
+    ? retargetCmuAnatomical(source, target, motion, boneMap, motion.name, diagnostics)
     : retargetCmuPoseReferenced(source, target, motion, boneMap, mode, motion.name);
   const animatedJoints = output?.tracks.filter((track) => track.name.endsWith(".quaternion")).length ?? 0;
   // Prevent two ASF hierarchy joints (e.g. lhipjoint and lfemur) from

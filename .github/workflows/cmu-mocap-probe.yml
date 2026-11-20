@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/game/cmu-mocap-pilot.ts'
       - 'scripts/check-cmu-mocap.mjs'
+      - 'scripts/check-cmu-runtime.mjs'
       - '.github/workflows/cmu-mocap-probe.yml'
   workflow_dispatch:
 
@@ -22,4 +23,9 @@ jobs:
           node-version: '22'
       - name: Probe upstream skeleton-only GLB files
         run: node scripts/check-cmu-mocap.mjs
+        continue-on-error: true
+      - name: Install dependencies for full retarget smoke
+        run: npm ci --no-audit --no-fund
+      - name: Retarget actual CMU GLBs onto both UBC models
+        run: node --import tsx scripts/check-cmu-runtime.mjs
         continue-on-error: true

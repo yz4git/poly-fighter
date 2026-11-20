@@ -448,6 +448,7 @@ export class ModelViewerMotionController {
       document.documentElement.dataset.cmuAuditPose = JSON.stringify({
         clip: this.clipName, time: this.currentAction?.time ?? -1,
         calibration: this.cmuAuditAlignment, trackDeltaDegrees,
+        strike: this.clips.get(this.clipName)?.strike ?? null,
         bodyType: this.visual.root.userData.quaterniusBodyType,
         modelName: this.target.name,
         activeRoot: this.mixer.getRoot().name,

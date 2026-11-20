@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
+import { buildCmuStanceLockedClip } from "../src/game/cmu-foot-lock.ts";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
@@ -171,6 +172,32 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "WALK" || entry.id === "KICK") {
+        const sourceMotion = gltf.animations.reduce((a,b) =>
+          b.duration > a.duration ? b : a);
+        const contact = {
+          lockedFrames: 0, runs: 0, meanBaselineDrift: 0,
+          meanCorrectedDrift: 0, maxCorrectedDrift: 0,
+          maxLegRotationDegrees: 0,
+          sideRuns: {left: 0, right: 0},
+        };
+        const locked = buildCmuStanceLockedClip(
+          gltf.scene, target, sourceMotion, clip, contact,
+        );
+        assert.equal(locked.name, clip.name + "_STANCE");
+        assert.ok(contact.lockedFrames > 20,
+          "CMU stance IK did not recognize stable source feet");
+        assert.ok(contact.runs >= 2,
+          "CMU stance IK did not identify both feet");
+        assert.ok(locked.tracks.every(t =>
+          [...t.values].every(Number.isFinite)),
+          "CMU stance IK generated nonfinite keyframe samples");
+        console.log("CMU_FOOT_LOCK", JSON.stringify({
+          source: entry.file, target: variant, ...contact,
+          reduction: contact.meanBaselineDrift > 0
+            ? 1 - contact.meanCorrectedDrift / contact.meanBaselineDrift : 0,
+        }));
+      }
       if (entry.id === "WALK") {
         // Reproduce the actual viewer's clone->normalize->Skeleton.pose flow,
         // not only a raw GLTFLoader scene. Male shoulders previously remained

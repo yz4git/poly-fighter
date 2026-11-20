@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
+import { buildCmuStanceLockedClip } from "../src/game/cmu-foot-lock.ts";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
@@ -171,6 +172,70 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "WALK" || entry.id === "KICK") {
+        const sourceMotion = gltf.animations.reduce((a,b) =>
+          b.duration > a.duration ? b : a);
+        const contact = {
+          lockedFrames: 0, runs: 0, meanBaselineDrift: 0,
+          meanCorrectedDrift: 0, maxCorrectedDrift: 0,
+          maxLegRotationDegrees: 0,
+          sideRuns: {left: 0, right: 0},
+        };
+        const locked = buildCmuStanceLockedClip(
+          gltf.scene, target, sourceMotion, clip, contact,
+        );
+        assert.equal(locked.name, clip.name + "_STANCE");
+        assert.ok(contact.lockedFrames > 20,
+          "CMU stance IK did not recognize stable source feet");
+        assert.ok(contact.runs >= 2,
+          "CMU stance IK did not identify both feet");
+        assert.ok(locked.tracks.every(t =>
+          [...t.values].every(Number.isFinite)),
+          "CMU stance IK generated nonfinite keyframe samples");
+        const lockedMixer = new THREE.AnimationMixer(target);
+        const lockedAction = lockedMixer.clipAction(locked).play();
+        lockedAction.setLoop(THREE.LoopOnce, 1);
+        lockedAction.clampWhenFinished = true;
+        const lockAudit = {ankleSep:Infinity,kneeSep:Infinity,toeHeight:Infinity};
+        const frames = Math.ceil(locked.duration*30);
+        for(let i=0;i<=frames;i++) {
+          lockedMixer.setTime(locked.duration*i/frames);
+          target.updateWorldMatrix(true,true);
+          const p = (name)=>target.getObjectByName(name).getWorldPosition(new THREE.Vector3());
+          const side = p("thigh_l").sub(p("thigh_r")).normalize();
+          lockAudit.ankleSep = Math.min(lockAudit.ankleSep,
+            p("foot_l").sub(p("foot_r")).dot(side));
+          lockAudit.kneeSep = Math.min(lockAudit.kneeSep,
+            p("calf_l").sub(p("calf_r")).dot(side));
+          lockAudit.toeHeight = Math.min(lockAudit.toeHeight,p("ball_l").y,p("ball_r").y);
+        }
+        lockedMixer.stopAllAction();
+        lockedMixer.uncacheRoot(target);
+        target.traverse(node => {
+          if(node.isSkinnedMesh)node.skeleton.pose();
+        });
+        target.updateWorldMatrix(true,true);
+        console.log("CMU_FOOT_LOCK", JSON.stringify({
+          source: entry.file, target: variant, ...contact,
+          lockAudit,
+          reduction: contact.meanBaselineDrift > 0
+            ? 1 - contact.meanCorrectedDrift / contact.meanBaselineDrift : 0,
+        }));
+        assert.ok(lockAudit.ankleSep > 0.01,
+          "STANCE IK crossed fighter feet");
+        assert.ok(lockAudit.kneeSep > 0.025,
+          "STANCE IK inverted fighter knees");
+        assert.ok(lockAudit.toeHeight > -0.025,
+          "STANCE IK drove foot below floor");
+        assert.ok(contact.meanCorrectedDrift < contact.meanBaselineDrift * 0.45,
+          "STANCE IK did not materially reduce measured planted-toe drift");
+        assert.ok(contact.rejectedCorrections <= contact.lockedFrames * 0.1,
+          "STANCE IK is rejecting too many knee-unsafe stance frames");
+        assert.ok(contact.maxLegRotationDegrees < 30,
+          "STANCE IK generated implausibly large joint corrections");
+        assert.ok(contact.maxCorrectedDrift < 0.25,
+          "STANCE IK locked an unreachable foot rather than releasing it");
+      }
       if (entry.id === "WALK") {
         // Reproduce the actual viewer's clone->normalize->Skeleton.pose flow,
         // not only a raw GLTFLoader scene. Male shoulders previously remained

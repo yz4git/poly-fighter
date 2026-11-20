@@ -166,6 +166,46 @@
             records.frames.push({ fighter, motion: clip.id, camera, phase, file: `${file}.png`, state: validated });
           }
         }
+        if (clip.id === "WALK" || clip.id === "KICK") {
+          const toggle = await js(`
+            const b=document.querySelector('button[aria-label="Compare CMU stance foot IK"]');
+            b?.click(); return {ready:!!b};
+          `);
+          if (!toggle.ready) throw new Error("CMU " + clip.id + " stance IK toggle missing");
+          await wait(() => js(`
+            const selected=document.querySelector('select[aria-label="Motion clip"]')?.value;
+            return {ready:selected===arguments[0],selected};
+          `, ["CMU_" + clip.id + "_STANCE"]), "Stance IK switch " + clip.id, 90);
+          await click("RESET VIEW");
+          for (const phase of clip.id === "WALK" ? [0.32, 0.60] : [0.29, 0.42]) {
+            await js(`
+              document.querySelector('button[aria-label="Pause motion"]')?.click();
+              const slider=document.querySelector('input[aria-label="Motion timeline"]');
+              Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(slider,String(Math.round(arguments[0]*1000)));
+              slider.dispatchEvent(new Event('input',{bubbles:true}));
+              slider.dispatchEvent(new Event('change',{bubbles:true}));
+              return slider.value;
+            `, [phase]);
+            await sleep(270);
+            const selection = await js(`
+              return {
+                selected:document.querySelector('select[aria-label="Motion clip"]')?.value,
+                normalized:Number(document.querySelector('input[aria-label="Motion timeline"]')?.value)/1000,
+                paused:!!document.querySelector('button[aria-label="Play motion"]'),
+                pose:JSON.parse(document.documentElement.dataset.cmuAuditPose || "null"),
+              };
+            `);
+            if (selection.selected !== "CMU_" + clip.id + "_STANCE" ||
+                !selection.paused || Math.abs(selection.normalized - phase) > .006) {
+              throw new Error("Wrong stance IK pose " + JSON.stringify(selection));
+            }
+            const key = fighter.toLowerCase() + "-cmu-" + clip.id.toLowerCase() +
+              "-stance-front-" + Math.round(phase*100);
+            await screenshot(key);
+            records.frames.push({fighter,motion:clip.id+"_STANCE",camera:"front",phase,
+              file:key+".png",state:selection});
+          }
+        }
         await click("RESET VIEW");
       }
     }

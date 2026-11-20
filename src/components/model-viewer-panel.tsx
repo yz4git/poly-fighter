@@ -334,6 +334,34 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
                 {clip.label}
               </button>
             ))}
+            {(motionState.clipName.startsWith("CMU_WALK") ||
+              motionState.clipName.startsWith("CMU_KICK")) &&
+              motionState.clips.some((clip) =>
+                clip.name === motionState.clipName.replace(/_STANCE$/, "") + "_STANCE",
+              ) && (
+              <button
+                type="button"
+                aria-label="Compare CMU stance foot IK"
+                aria-pressed={motionState.clipName.endsWith("_STANCE")}
+                title="A/B compares the original anatomical mocap with source-detected planted-foot IK. Preview only."
+                onClick={() => {
+                  const raw = motionState.clipName.replace(/_STANCE$/, "");
+                  viewerRef.current?.setMotionClip(
+                    motionState.clipName.endsWith("_STANCE") ? raw : raw + "_STANCE",
+                  );
+                }}
+                style={{
+                  ...transportButtonStyle,
+                  minHeight: 32,
+                  padding: "6px 9px",
+                  fontSize: 8,
+                  borderColor: motionState.clipName.endsWith("_STANCE") ? "#5ce8ff" : "rgba(175,218,255,.28)",
+                  color: motionState.clipName.endsWith("_STANCE") ? "#5ce8ff" : "#d8e8f7",
+                }}
+              >
+                {motionState.clipName.endsWith("_STANCE") ? "STANCE IK ON" : "TRY STANCE IK"}
+              </button>
+            )}
             {motionState.cmuLoading && (
               <span role="status" style={{ color: "#a3dcec", fontSize: 8 }}>DOWNLOADING / RETARGETING…</span>
             )}

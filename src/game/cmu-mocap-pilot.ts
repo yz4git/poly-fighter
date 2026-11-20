@@ -43,19 +43,19 @@ const CMU_TO_UBC: Readonly<Record<string, string>> = {
   lowerback: "spine_01", spine: "spine_01", spine0: "spine_01",
   spine1: "spine_02", spine2: "spine_03", upperback: "spine_02",
   thorax: "spine_03", chest: "spine_03", neck: "neck_01",
-  neck1: "neck_01", head: "Head",
+  neck1: "neck_01", lowerneck: "neck_01", head: "Head",
   lclavicle: "clavicle_l", leftclavicle: "clavicle_l", leftshoulder: "clavicle_l",
   lhumerus: "upperarm_l", leftarm: "upperarm_l", leftupperarm: "upperarm_l",
   lradius: "lowerarm_l", leftforearm: "lowerarm_l", leftlowerarm: "lowerarm_l",
-  lwrist: "hand_l", lhand: "hand_l", lefthand: "hand_l",
-  lhipjoint: "thigh_l", lfemur: "thigh_l", leftupleg: "thigh_l", leftthigh: "thigh_l",
+  lwrist: "hand_l", lefthand: "hand_l",
+  lfemur: "thigh_l", leftupleg: "thigh_l", leftthigh: "thigh_l",
   ltibia: "calf_l", leftleg: "calf_l", leftcalf: "calf_l",
   lfoot: "foot_l", leftfoot: "foot_l", ltoes: "ball_l", lefttoebase: "ball_l",
   rclavicle: "clavicle_r", rightclavicle: "clavicle_r", rightshoulder: "clavicle_r",
   rhumerus: "upperarm_r", rightarm: "upperarm_r", rightupperarm: "upperarm_r",
   rradius: "lowerarm_r", rightforearm: "lowerarm_r", rightlowerarm: "lowerarm_r",
-  rwrist: "hand_r", rhand: "hand_r", righthand: "hand_r",
-  rhipjoint: "thigh_r", rfemur: "thigh_r", rightupleg: "thigh_r", rightthigh: "thigh_r",
+  rwrist: "hand_r", righthand: "hand_r",
+  rfemur: "thigh_r", rightupleg: "thigh_r", rightthigh: "thigh_r",
   rtibia: "calf_r", rightleg: "calf_r", rightcalf: "calf_r",
   rfoot: "foot_r", rightfoot: "foot_r", rtoes: "ball_r", righttoebase: "ball_r",
 };
@@ -102,6 +102,12 @@ export function retargetCmuPilotClip(
   });
   const output = clips.get(motion.name);
   const animatedJoints = output?.tracks.filter((track) => track.name.endsWith(".quaternion")).length ?? 0;
+  // Prevent two ASF hierarchy joints (e.g. lhipjoint and lfemur) from
+  // driving the exact same target track in AnimationMixer.
+  const names = output?.tracks.map((track) => track.name) ?? [];
+  if (new Set(names).size !== names.length) {
+    throw new Error("CMU retarget produced duplicate target bone tracks");
+  }
   if (!output || animatedJoints < 6) {
     throw new Error(`CMU skeleton mapping insufficient (${animatedJoints} rotation joints); source rig must be inspected before use`);
   }

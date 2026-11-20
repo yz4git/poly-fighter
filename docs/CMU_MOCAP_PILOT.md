@@ -12,9 +12,9 @@ Three verified dataset entries are exposed as on-demand choices:
 | --- | --- | --- | --- |
 | CMU WALK | `05_01-walk` | 4.983 s | `skeleton/05_01-walk/05_01-walk_skeleton.glb` |
 | CMU BOXING | `13_17-boxing` | 40.333 s | `skeleton/13_17-boxing/13_17-boxing_skeleton.glb` |
-| CMU KICK | `10_01-soccer-kick-ball` | 6.683 s | `skeleton/10_01-soccer-kick-ball/10_01-soccer-kick-ball_skeleton.glb` |
+| CMU KICK | `135_04-front-kick` | source GLB duration | `skeleton/135_04-front-kick/135_04-front-kick_skeleton.glb` |
 
-The "kick" sample is **a soccer kick**, not a martial-arts side kick. The "boxing" sample is one long performance; it has not been segmented into guaranteed single-hit game clips. These are reference motions for comparison, not approved production move timings.
+The "kick" sample is **a soccer kick**, not a martial-arts side kick. The "boxing" sample is one long performance; it has not been segmented into guaranteed single-hit game clips. These are reference motions for comparison, not approved production move timings. The initial 10_01 soccer-kick trial was replaced with CMU subject 135's martial-arts **Front Kick** after detecting pronounced late-clip ankle crossings.
 
 ## iPhone review procedure
 
@@ -27,13 +27,15 @@ The "kick" sample is **a soccer kick**, not a martial-arts side kick. The "boxin
 
 ## Integration mechanics and limitations
 
-- Source CMU bone aliases are mapped to the Quaternius UBC joint names; pose quaternions are rest-relative with WORLD parent-basis compensation by default.
+- Source CMU bone aliases are mapped to the Quaternius UBC joint names; animation is calibrated to the **first recorded pose**, not CMU's much wider ASF bind stance. Animated helper bones are preserved through hierarchical **world-joint rotation reconstruction**.
+- A per-frame signed ankle/knee separation check introduces only the necessary outward upper-leg correction. The correction rotates both thigh bones in opposite directions, retaining original knee and foot animation and enforcing a reasonable leg lane.
+- Motion retargeting is baked once at a preview-only **30fps** sample rate and interpolated by Three.js. No runtime per-frame procedural retargeting is used in the live match.
 - The CMU source's hip/world translations are intentionally dropped for **in-place preview**. These previews do **not** simulate a real walk path, velocity or contact matching.
 - The viewer's bone-coverage gate refuses an obviously incompatible skeleton instead of silently playing an empty animation.
 - Skeleton-only GLBs are chosen instead of the compressed `objects`/`mobile` character files to avoid Meshopt/Basis texture decoder requirements and unnecessary geometry downloads. Despite this, external hosting and CORS must still be checked on a real device.
 - There is **no production foot-lock IK, motion segmentation, animation-compression bake, foot-contact annotation or hitbox integration** for these CMU clips yet.
 - The existing gameplay and model-selection defaults are unchanged. CMU data is **not committed** to this repo and is not sold or redistributed.
-- Tests only cover URL selection, bone mapping and motion retarget data on synthetic rigs; a real-device WebGL visual sign-off and fetch test are required before promoting anything to gameplay.
+- Tests cover URL selection, synthetic bone mapping, actual upstream GLB conversion onto both UBC models, and quantitative full-clip ankle/knee clearance. Real-device WebGL visual sign-off and contact-quality review are still required before promoting anything to gameplay.
 
 ## License and provenance
 

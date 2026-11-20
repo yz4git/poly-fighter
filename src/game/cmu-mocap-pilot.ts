@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { retargetMotionClips, type RetargetRotationMode } from "./motion-retarget";
+import type { RetargetRotationMode } from "./motion-retarget";
+import { retargetCmuPoseReferenced } from "./cmu-pose-retarget";
 
 /**
  * Opt-in MODEL VIEW experiment. Remote motion data is never fetched during a
@@ -11,7 +12,7 @@ import { retargetMotionClips, type RetargetRotationMode } from "./motion-retarge
 export const CMU_MOCAP_PILOT_CLIPS = [
   { id: "WALK", label: "CMU WALK", file: "05_01-walk" },
   { id: "BOXING", label: "CMU BOXING", file: "13_17-boxing" },
-  { id: "KICK", label: "CMU KICK", file: "10_01-soccer-kick-ball" },
+  { id: "KICK", label: "CMU FRONT KICK", file: "135_04-front-kick" },
 ] as const;
 
 export type CmuMocapPilotId = (typeof CMU_MOCAP_PILOT_CLIPS)[number]["id"];
@@ -93,14 +94,12 @@ export function retargetCmuPilotClip(
   if (!sourceClip) throw new Error("CMU GLB did not contain animation tracks");
   const motion = sourceClip.clone();
   motion.name = cmuMocapClipName(id);
-  const clips = retargetMotionClips(source, target, [motion], {
-    rotationMode: mode,
-    boneNameMap: buildCmuBoneMap(source, target),
-    // Preview is in-place: do not let recorded world travel drag the fighter
-    // off the Model View platform (and do not change deterministic combat).
-    rootMotionBone: "__cmu_root_motion_disabled__",
-  });
-  const output = clips.get(motion.name);
+  // Captured-pose calibration avoids the original ASF wide-leg bind-pose
+  // offset that made Quaternius' narrow stance cross both ankles.
+  // Clip output stays in-place (no position tracks).
+  const output = retargetCmuPoseReferenced(
+    source, target, motion, buildCmuBoneMap(source, target), mode, motion.name,
+  );
   const animatedJoints = output?.tracks.filter((track) => track.name.endsWith(".quaternion")).length ?? 0;
   // Prevent two ASF hierarchy joints (e.g. lhipjoint and lfemur) from
   // driving the exact same target track in AnimationMixer.

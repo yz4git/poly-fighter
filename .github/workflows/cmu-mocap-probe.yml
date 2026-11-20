@@ -26,6 +26,5 @@ jobs:
         continue-on-error: true
       - name: Install dependencies for full retarget smoke
         run: npm ci --no-audit --no-fund
-      - name: Retarget actual CMU GLBs onto both UBC models
+      - name: Retarget actual CMU GLBs onto both UBC models and verify leg clearance
         run: node --import tsx scripts/check-cmu-runtime.mjs
-        continue-on-error: true

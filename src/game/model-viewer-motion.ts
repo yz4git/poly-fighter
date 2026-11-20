@@ -252,8 +252,8 @@ export class ModelViewerMotionController {
       this.mixer.stopAllAction();
       this.mixer.uncacheRoot(this.target);
       restoreBindPose(this.target);
-      retargetCmuPilotClip(gltf.scene, this.target, gltf.animations, id, "WORLD");
-
+      // Rebuilding the bank validates the clip once; avoid doing a full
+      // 30fps, 40-second boxing bake twice on an iPhone.
       this.sourcePacks.push({
         root: gltf.scene,
         clips: gltf.animations,

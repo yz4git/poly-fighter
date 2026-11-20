@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three";
 import {
   CMU_MOCAP_PILOT_CLIPS,
   cmuMocapPilotUrl,
@@ -41,6 +42,42 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         assert.ok([...track.values].every(Number.isFinite), `non-finite values in ${track.name}`);
         assert.ok(!track.name.endsWith(".position"), "CMU preview must be in-place");
       }
+      // Evaluate the resulting UBC skeleton, not just its track names.
+      // Crossed ankles have a *negative* signed projection onto the current
+      // left-to-right hip axis, independent of fighter turning/yaw.
+      const mixer = new THREE.AnimationMixer(target);
+      const action = mixer.clipAction(clip);
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.play();
+      let worstFoot = { separation: Infinity, time: 0 };
+      let worstKnee = { separation: Infinity, time: 0 };
+      let minFootY = Infinity;
+      let maxFootY = -Infinity;
+      const frames = Math.ceil(clip.duration * 30);
+      const P = (name) => target.getObjectByName(name).getWorldPosition(new THREE.Vector3());
+      for (let frame = 0; frame <= frames; frame++) {
+        const time = clip.duration * frame / Math.max(1, frames);
+        mixer.setTime(time);
+        target.updateWorldMatrix(true, true);
+        const side = P("thigh_l").sub(P("thigh_r")).normalize();
+        const fL = P("foot_l");
+        const fR = P("foot_r");
+        const kL = P("calf_l");
+        const kR = P("calf_r");
+        const footSep = fL.clone().sub(fR).dot(side);
+        const kneeSep = kL.sub(kR).dot(side);
+        if (footSep < worstFoot.separation) worstFoot = { separation: footSep, time };
+        if (kneeSep < worstKnee.separation) worstKnee = { separation: kneeSep, time };
+        minFootY = Math.min(minFootY, fL.y, fR.y);
+        maxFootY = Math.max(maxFootY, fL.y, fR.y);
+      }
+      mixer.stopAllAction();
+      mixer.uncacheRoot(target);
+      console.log("CMU_STANCE_AUDIT", JSON.stringify({
+        source: entry.file, target: variant, frames, worstFoot, worstKnee,
+        minFootY, maxFootY,
+      }));
       console.log(JSON.stringify({
         source: entry.file, target: variant, duration: clip.duration,
         transferredJointCount: jointCount, tracks: names,

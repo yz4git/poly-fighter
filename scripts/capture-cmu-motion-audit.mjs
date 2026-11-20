@@ -38,9 +38,17 @@
     if (!v.ready) throw new Error(`No button '${name}'`);
   };
   const screenshot = async (file) => {
-    const png = Buffer.from(await command(`/session/${session}/screenshot`), "base64");
-    if (png.length < 5000 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Screenshot PNG invalid");
-    await writeFile(`${out}/${file}.png`, png);
+    // Temporarily hide the bottom transport overlay so the viewer captures
+    // BOTH FEET and the ground contact plane. All controls are restored.
+    await js("const ui=document.querySelector('[aria-label=\\"Motion Viewer\\"]'); if(ui)ui.style.opacity='0'; return !!ui;");
+    await sleep(80);
+    try {
+      const png = Buffer.from(await command(`/session/${session}/screenshot`), "base64");
+      if (png.length < 5000 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Screenshot PNG invalid");
+      await writeFile(`${out}/${file}.png`, png);
+    } finally {
+      await js("const ui=document.querySelector('[aria-label=\\"Motion Viewer\\"]'); if(ui)ui.style.opacity=''; return !!ui;");
+    }
   };
   const clipDefs = [
     { id: "WALK", name: "CMU WALK", phases: [0.08, 0.32, 0.60, 0.87] },

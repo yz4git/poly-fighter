@@ -10,6 +10,7 @@ import {
   retargetCmuPilotClip,
   type CmuMocapPilotId,
 } from "./cmu-mocap-pilot";
+import { buildCmuStanceLockedClip } from "./cmu-foot-lock";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
@@ -198,6 +199,17 @@ export class ModelViewerMotionController {
           );
           this.cmuAuditAlignment = diagnostics.alignment;
           bank.set(clip.name, { clip, source: "CMU" });
+          // Source-guided stance IK is deliberately a SEPARATE preview clip:
+          // raw anatomical motion remains intact for visual A/B comparison.
+          if (this.rotationMode === "WORLD" &&
+              (pack.cmuId === "WALK" || pack.cmuId === "KICK")) {
+            const sourceClip = pack.clips.reduce((a, b) =>
+              b.duration > a.duration ? b : a);
+            const locked = buildCmuStanceLockedClip(
+              pack.root, this.target, sourceClip, clip,
+            );
+            bank.set(locked.name, { clip: locked, source: "CMU" });
+          }
         } else {
           const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
             rotationMode: this.rotationMode,

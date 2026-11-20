@@ -74,6 +74,11 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       }
       mixer.stopAllAction();
       mixer.uncacheRoot(target);
+      // Later source clips must retarget against the original UBC bind pose.
+      target.traverse((object) => {
+        if (object.isSkinnedMesh) object.skeleton.pose();
+      });
+      target.updateWorldMatrix(true, true);
       console.log("CMU_STANCE_AUDIT", JSON.stringify({
         source: entry.file, target: variant, frames, worstFoot, worstKnee,
         minFootY, maxFootY,

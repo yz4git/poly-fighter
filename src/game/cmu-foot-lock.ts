@@ -12,6 +12,7 @@ export type FootLockReport = {
   meanCorrectedDrift: number;
   maxCorrectedDrift: number;
   maxLegRotationDegrees: number;
+  rejectedCorrections: number;
   sideRuns: { left: number; right: number };
 };
 
@@ -215,7 +216,7 @@ export function buildCmuStanceLockedClip(
   action.clampWhenFinished = true;
   const anchors: Record<Side, THREE.Vector3 | null> = { l: null, r: null };
   const seen: Record<Side, number> = { l: 0, r: 0 };
-  const stats = { locked: 0, runs: 0, initial: 0, corrected: 0, worst: 0, maxAngle: 0 };
+  const stats = { locked: 0, runs: 0, initial: 0, corrected: 0, worst: 0, maxAngle: 0, rejected: 0 };
   try {
     const mask = sourceContacts(source, sourceMotion, times);
     const prevQuats = new Map<string, THREE.Quaternion>();
@@ -254,8 +255,26 @@ export function buildCmuStanceLockedClip(
           if (correction.length() > 0.16) correction.setLength(0.16);
           const targetToe = current.clone().add(correction);
           const before = chain.thigh.getWorldQuaternion(new THREE.Quaternion());
+          const savedLeg = [chain.thigh, chain.calf, chain.foot]
+            .map(node => ({node, rotation: node.quaternion.clone()}));
           solveToeTwoBoneIK(chain, targetToe);
           target.updateWorldMatrix(true, true);
+          // Anatomical left/right knee clearance is a hard constraint, not a
+          // soft foot-lock preference. If an attempted IK pull makes knees
+          // nearly overlap or ankles swap lanes, prefer the raw source pose.
+          const lateral = worldPosition(bones.l.thigh).sub(
+            worldPosition(bones.r.thigh)).normalize();
+          const kneeClearance = worldPosition(bones.l.calf)
+            .sub(worldPosition(bones.r.calf)).dot(lateral);
+          const ankleClearance = worldPosition(bones.l.foot)
+            .sub(worldPosition(bones.r.foot)).dot(lateral);
+          if (kneeClearance < 0.055 || ankleClearance < 0.045) {
+            savedLeg.forEach(saved => saved.node.quaternion.copy(saved.rotation));
+            target.updateWorldMatrix(true, true);
+            anchors[side] = worldPosition(chain.toe);
+            seen[side] = 0;
+            stats.rejected++;
+          }
           const after = worldPosition(chain.toe);
           const difference = chain.thigh.getWorldQuaternion(new THREE.Quaternion()).angleTo(before);
           stats.maxAngle = Math.max(stats.maxAngle, THREE.MathUtils.radToDeg(difference));
@@ -297,6 +316,7 @@ export function buildCmuStanceLockedClip(
       report.meanCorrectedDrift = stats.locked ? stats.corrected / stats.locked : 0;
       report.maxCorrectedDrift = stats.worst;
       report.maxLegRotationDegrees = stats.maxAngle;
+      report.rejectedCorrections = stats.rejected;
       report.sideRuns = {
         left: mask.l.filter((x,i)=>x && (i===0 || !mask.l[i-1])).length,
         right: mask.r.filter((x,i)=>x && (i===0 || !mask.r[i-1])).length,

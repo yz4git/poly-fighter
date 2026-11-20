@@ -41,7 +41,9 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       assert.ok(jointCount >= 20, `Expected >=20 compatible joints; got ${jointCount}`);
       for (const track of clip.tracks) {
         assert.ok([...track.values].every(Number.isFinite), `non-finite values in ${track.name}`);
-        assert.ok(!track.name.endsWith(".position"), "CMU preview must be in-place");
+        if (track.name.endsWith(".position")) {
+          assert.equal(track.name, "pelvis.position", "only vertical contact correction may move the root");
+        }
       }
       // Evaluate the resulting UBC skeleton, not just its track names.
       // Crossed ankles have a *negative* signed projection onto the current

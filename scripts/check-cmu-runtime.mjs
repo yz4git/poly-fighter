@@ -227,6 +227,10 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
           "STANCE IK inverted fighter knees");
         assert.ok(lockAudit.toeHeight > -0.025,
           "STANCE IK drove foot below floor");
+        assert.ok(contact.meanCorrectedDrift < contact.meanBaselineDrift * 0.45,
+          "STANCE IK did not materially reduce measured planted-toe drift");
+        assert.ok(contact.rejectedCorrections <= contact.lockedFrames * 0.1,
+          "STANCE IK is rejecting too many knee-unsafe stance frames");
         assert.ok(contact.maxLegRotationDegrees < 30,
           "STANCE IK generated implausibly large joint corrections");
         assert.ok(contact.maxCorrectedDrift < 0.25,

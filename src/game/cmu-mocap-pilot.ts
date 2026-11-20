@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RetargetRotationMode } from "./motion-retarget";
 import { retargetCmuPoseReferenced } from "./cmu-pose-retarget";
+import { retargetCmuAnatomical, type CmuAnatomicalDiagnostics } from "./cmu-anatomical-retarget";
 
 /**
  * Opt-in MODEL VIEW experiment. Remote motion data is never fetched during a
@@ -86,6 +87,7 @@ export function retargetCmuPilotClip(
   animations: readonly THREE.AnimationClip[],
   id: CmuMocapPilotId,
   mode: RetargetRotationMode = "WORLD",
+  diagnostics?: CmuAnatomicalDiagnostics,
 ): THREE.AnimationClip {
   const sourceClip = animations.reduce<THREE.AnimationClip | null>(
     (best, clip) => !best || clip.duration > best.duration ? clip : best,
@@ -96,10 +98,15 @@ export function retargetCmuPilotClip(
   motion.name = cmuMocapClipName(id);
   // Captured-pose calibration avoids the original ASF wide-leg bind-pose
   // offset that made Quaternius' narrow stance cross both ankles.
-  // Clip output stays in-place (no position tracks).
-  const output = retargetCmuPoseReferenced(
-    source, target, motion, buildCmuBoneMap(source, target), mode, motion.name,
-  );
+  // Horizontal travel remains in-place; optional pelvis vertical keys correct foot contact.
+  const boneMap = buildCmuBoneMap(source, target);
+  // WORLD = anatomical joint-direction reconstruction, not rotation deltas.
+  // LOCAL retains the old 2026-11-20 trial for reversible screenshot A/B.
+  const hasCmuAsf = Boolean(source.getObjectByName("lfemur") &&
+    source.getObjectByName("rfemur") && source.getObjectByName("thorax"));
+  const output = mode === "WORLD" && hasCmuAsf
+    ? retargetCmuAnatomical(source, target, motion, boneMap, motion.name, diagnostics)
+    : retargetCmuPoseReferenced(source, target, motion, boneMap, mode, motion.name);
   const animatedJoints = output?.tracks.filter((track) => track.name.endsWith(".quaternion")).length ?? 0;
   // Prevent two ASF hierarchy joints (e.g. lhipjoint and lfemur) from
   // driving the exact same target track in AnimationMixer.

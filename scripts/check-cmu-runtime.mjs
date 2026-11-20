@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
   cmuMocapPilotUrl,
@@ -33,14 +34,17 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
     if (!response.ok) throw new Error(`CMU ${entry.id}: HTTP ${response.status}`);
     const gltf = await loader.parseAsync(await response.arrayBuffer(), "");
     for (const { variant, target } of targets) {
-      const clip = retargetCmuPilotClip(gltf.scene, target, gltf.animations, entry.id);
+      const diagnostics = { fitted: [], fallback: [], alignment: [] };
+      const clip = retargetCmuPilotClip(gltf.scene, target, gltf.animations, entry.id, "WORLD", diagnostics);
       const names = clip.tracks.map((track) => track.name);
       const jointCount = clip.tracks.filter((track) => track.name.endsWith(".quaternion")).length;
       assert.equal(new Set(names).size, names.length, "duplicate target animation track");
       assert.ok(jointCount >= 20, `Expected >=20 compatible joints; got ${jointCount}`);
       for (const track of clip.tracks) {
         assert.ok([...track.values].every(Number.isFinite), `non-finite values in ${track.name}`);
-        assert.ok(!track.name.endsWith(".position"), "CMU preview must be in-place");
+        if (track.name.endsWith(".position")) {
+          assert.equal(track.name, "pelvis.position", "only vertical contact correction may move the root");
+        }
       }
       // Evaluate the resulting UBC skeleton, not just its track names.
       // Crossed ankles have a *negative* signed projection onto the current
@@ -54,6 +58,8 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       let worstKnee = { separation: Infinity, time: 0 };
       let minFootY = Infinity;
       let maxFootY = -Infinity;
+      let minToeY = Infinity;
+      let maxToeY = -Infinity;
       const frames = Math.ceil(clip.duration * 30);
       const P = (name) => target.getObjectByName(name).getWorldPosition(new THREE.Vector3());
       for (let frame = 0; frame <= frames; frame++) {
@@ -71,7 +77,78 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         if (kneeSep < worstKnee.separation) worstKnee = { separation: kneeSep, time };
         minFootY = Math.min(minFootY, fL.y, fR.y);
         maxFootY = Math.max(maxFootY, fL.y, fR.y);
+        const toeLeft = P("ball_l").y;
+        const toeRight = P("ball_r").y;
+        minToeY = Math.min(minToeY, toeLeft, toeRight);
+        maxToeY = Math.max(maxToeY, toeLeft, toeRight);
       }
+      // Source/target kinematic fidelity: compare actual segment directions
+      // in both played skeletons, not just animation track names. This
+      // detects the previous T-pose bug even when ankle clearance passes.
+      const comparison = [
+        ["lhumerus", "lradius", "upperarm_l", "lowerarm_l"],
+        ["lradius", "lwrist", "lowerarm_l", "hand_l"],
+        ["rhumerus", "rradius", "upperarm_r", "lowerarm_r"],
+        ["rradius", "rwrist", "lowerarm_r", "hand_r"],
+        ["lfemur", "ltibia", "thigh_l", "calf_l"],
+        ["ltibia", "lfoot", "calf_l", "foot_l"],
+        ["rfemur", "rtibia", "thigh_r", "calf_r"],
+        ["rtibia", "rfoot", "calf_r", "foot_r"],
+      ];
+      assert.equal(diagnostics.fitted.includes("upperarm_l"), true);
+      assert.equal(diagnostics.fitted.includes("lowerarm_l"), true);
+      const aligned = new THREE.Quaternion().fromArray(diagnostics.alignment);
+      // Re-arm the target action: the preceding full-clip stance audit leaves
+      // LoopOnce/clampWhenFinished paused at the end pose. Merely seeking the
+      // mixer again will otherwise compare a frozen final pose to live source.
+      action.reset().play();
+      const sourceMixer = new THREE.AnimationMixer(gltf.scene);
+      const sourceAction = sourceMixer.clipAction(gltf.animations[0]).play();
+      sourceAction.setLoop(THREE.LoopOnce, 1);
+      sourceAction.clampWhenFinished = true;
+      let maxAngularErrorDegrees = 0;
+      let totalAngularErrorDegrees = 0;
+      let measurements = 0;
+      let biggestError = null;
+      for (let sample = 0; sample <= 32; sample++) {
+        const time = clip.duration * sample / 32;
+        sourceMixer.setTime(time);
+        mixer.setTime(time);
+        gltf.scene.updateWorldMatrix(true, true);
+        target.updateWorldMatrix(true, true);
+        for (const [srcA, srcB, dstA, dstB] of comparison) {
+          const sourceA = gltf.scene.getObjectByName(srcA);
+          const sourceB = gltf.scene.getObjectByName(srcB);
+          const targetA = target.getObjectByName(dstA);
+          const targetB = target.getObjectByName(dstB);
+          assert.ok(sourceA && sourceB && targetA && targetB);
+          const sourceDirection = sourceB.getWorldPosition(new THREE.Vector3())
+            .sub(sourceA.getWorldPosition(new THREE.Vector3()))
+            .normalize().applyQuaternion(aligned);
+          const targetDirection = targetB.getWorldPosition(new THREE.Vector3())
+            .sub(targetA.getWorldPosition(new THREE.Vector3()))
+            .normalize();
+          const degrees = THREE.MathUtils.radToDeg(sourceDirection.angleTo(targetDirection));
+          measurements++;
+          totalAngularErrorDegrees += degrees;
+          if (degrees > maxAngularErrorDegrees) {
+            maxAngularErrorDegrees = degrees;
+            biggestError = { time, srcA, srcB, dstA, dstB };
+          }
+        }
+      }
+      assert.ok(totalAngularErrorDegrees / measurements < 1,
+        "CMU mean anatomical source/target direction error is too high");
+      sourceMixer.stopAllAction();
+      sourceMixer.uncacheRoot(gltf.scene);
+      console.log("CMU_ANATOMICAL_FIDELITY", JSON.stringify({
+        source: entry.file, target: variant,
+        trackedBones: diagnostics.fitted, fallback: diagnostics.fallback,
+        measurements, maxAngularErrorDegrees, meanAngularErrorDegrees: totalAngularErrorDegrees / measurements,
+        biggestError,
+      }));
+      assert.ok(maxAngularErrorDegrees < 5,
+        "CMU anatomical limb aim differs from source by " + maxAngularErrorDegrees.toFixed(2) + " deg");
       mixer.stopAllAction();
       mixer.uncacheRoot(target);
       // Later source clips must retarget against the original UBC bind pose.
@@ -81,7 +158,7 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       target.updateWorldMatrix(true, true);
       console.log("CMU_STANCE_AUDIT", JSON.stringify({
         source: entry.file, target: variant, frames, worstFoot, worstKnee,
-        minFootY, maxFootY,
+        minFootY, maxFootY, minToeY, maxToeY,
       }));
       // This quantitative gate caught the original release's swapped ankles.
       // Compare against an absolute, model-space lane rather than only
@@ -90,8 +167,90 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         `CMU ${entry.id} ${variant}: ankles cross/overlap (${worstFoot.separation.toFixed(3)}m at ${worstFoot.time.toFixed(2)}s)`);
       assert.ok(worstKnee.separation > 0.07,
         `CMU ${entry.id} ${variant}: knees cross (${worstKnee.separation.toFixed(3)}m at ${worstKnee.time.toFixed(2)}s)`);
+      assert.ok(minToeY > -0.015,
+        "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
+      if (entry.id === "WALK") {
+        // Reproduce the actual viewer's clone->normalize->Skeleton.pose flow,
+        // not only a raw GLTFLoader scene. Male shoulders previously remained
+        // T-posed in Chrome despite clean raw-scene math.
+        const cloneRig = cloneSkeleton(target);
+        cloneRig.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(cloneRig);
+        const center = box.getCenter(new THREE.Vector3());
+        const height = Math.max(1e-5, box.getSize(new THREE.Vector3()).y);
+        const normalizedHost = new THREE.Group();
+        normalizedHost.scale.setScalar(1 / height);
+        cloneRig.position.set(-center.x, -box.min.y, -center.z);
+        normalizedHost.add(cloneRig);
+        const restoredSkeletons = new Set();
+        cloneRig.traverse((node) => {
+          if (node.isSkinnedMesh && !restoredSkeletons.has(node.skeleton)) {
+            node.skeleton.pose();
+            restoredSkeletons.add(node.skeleton);
+          }
+        });
+        cloneRig.updateWorldMatrix(true, true);
+        const cloneClip = retargetCmuPilotClip(
+          gltf.scene, cloneRig, gltf.animations, entry.id,
+        );
+        for (const joint of ["upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r",
+            "thigh_l", "calf_l", "thigh_r", "calf_r"]) {
+          const original = clip.tracks.find(t => t.name === joint + ".quaternion");
+          const cloned = cloneClip.tracks.find(t => t.name === joint + ".quaternion");
+          assert.ok(original && cloned, "Cloned viewer model is missing " + joint);
+          const frame = Math.floor((original.times.length - 1) * 0.32);
+          const q1 = new THREE.Quaternion().fromArray(original.values, frame * 4);
+          const q2 = new THREE.Quaternion().fromArray(cloned.values, frame * 4);
+          const difference = THREE.MathUtils.radToDeg(q1.angleTo(q2));
+          console.log("CMU_CLONED_RIG_DIFF", JSON.stringify({variant, joint, difference}));
+          assert.ok(difference < 3, "Viewer clone/bind-pose changed " + joint +
+            " by " + difference.toFixed(1) + " degrees");
+        }
+      }
+      if (entry.id === "WALK") {
+        // A real MODEL VIEW nests the same skeleton under a transformed host.
+        // This test rejects any retarget that changes merely because a
+        // fighter is rotated/positioned/scaled in the scene (KAIRO regression).
+        const host = new THREE.Group();
+        host.name = "in-game-model-view-host";
+        host.position.set(2.3, 0.1, -1.5);
+        host.rotation.set(0.41, -0.23, 0.18);
+        host.scale.setScalar(0.53);
+        host.add(target);
+        const mountedClip = retargetCmuPilotClip(
+          gltf.scene, target, gltf.animations, entry.id,
+        );
+        const reference = new Map(clip.tracks.map(t => [t.name, t]));
+        for (const track of mountedClip.tracks) {
+          const originalTrack = reference.get(track.name);
+          assert.ok(originalTrack, "Mounted target changed animated bone set");
+          for (const fraction of [0, 0.14, 0.35, 0.7, 1]) {
+            const a = new THREE.Quaternion();
+            const b = new THREE.Quaternion();
+            if (track.name.endsWith(".quaternion")) {
+              const index = Math.floor((track.times.length - 1) * fraction);
+              a.fromArray(originalTrack.values, index * 4);
+              b.fromArray(track.values, index * 4);
+              assert.ok(a.angleTo(b) < 0.015,
+                "Host placement changed " + track.name + " by " +
+                THREE.MathUtils.radToDeg(a.angleTo(b)).toFixed(2) + "°");
+            } else if (track.name === "pelvis.position") {
+              const index = Math.floor((track.times.length - 1) * fraction);
+              const delta = Math.max(...[0, 1, 2].map(offset =>
+                Math.abs(originalTrack.values[index * 3 + offset] -
+                  track.values[index * 3 + offset])));
+              assert.ok(delta < 0.015,
+                "Host placement changed planted-foot pelvis height");
+            }
+          }
+        }
+        assert.equal(target.parent, host, "Canonical calibration must restore live fighter parent");
+        assert.ok(target.position.distanceTo(new THREE.Vector3()) < 1e-5,
+          "Canonical calibration must restore model position");
+        host.remove(target);
+      }
       console.log(JSON.stringify({
         source: entry.file, target: variant, duration: clip.duration,
         transferredJointCount: jointCount, tracks: names,

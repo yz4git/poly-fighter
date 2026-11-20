@@ -154,6 +154,7 @@ export class ModelViewerMotionController {
   private speed = 1;
   private cmuLoading = false;
   private cmuError: string | null = null;
+  private cmuAuditAlignment: number[] = [];
   private destroyed = false;
 
   private constructor(target: THREE.Object3D, visual: FighterVisual) {
@@ -166,7 +167,11 @@ export class ModelViewerMotionController {
     const target = findQuaterniusTarget(visual);
     if (!target) throw new Error("Quaternius Model View target is not ready");
     const controller = new ModelViewerMotionController(target, visual);
-    controller.sourcePacks = await loadMotionSources();
+    // loadMotionSources() caches BASE/BLENDER GLBs globally for speed.
+    // Never mutate that shared array: CMU is a per-viewer, opt-in pack.
+    // Previously SERA's .push(CMU) leaked into KAIRO, which started in
+    // LOCAL legacy mode and skipped the anatomy bake on "already loaded".
+    controller.sourcePacks = [...await loadMotionSources()];
     controller.rebuildClips();
     const initial = controller.clips.has("Idle_Loop") ? "Idle_Loop" : controller.clipInfos()[0]?.name;
     if (!initial) throw new Error("No compatible motion clips found for Model View");
@@ -187,7 +192,11 @@ export class ModelViewerMotionController {
       bank = new Map();
       for (const pack of this.sourcePacks) {
         if (pack.source === "CMU" && pack.cmuId) {
-          const clip = retargetCmuPilotClip(pack.root, this.target, pack.clips, pack.cmuId, this.rotationMode);
+          const diagnostics = { fitted: [] as string[], fallback: [] as string[], alignment: [] as number[] };
+          const clip = retargetCmuPilotClip(
+            pack.root, this.target, pack.clips, pack.cmuId, this.rotationMode, diagnostics,
+          );
+          this.cmuAuditAlignment = diagnostics.alignment;
           bank.set(clip.name, { clip, source: "CMU" });
         } else {
           const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
@@ -238,6 +247,9 @@ export class ModelViewerMotionController {
     const name = cmuMocapClipName(id);
     this.cmuError = null;
     if (this.clips.has(name)) {
+      // Clicking the explicit CMU trial always selects the corrected mode.
+      // A/B legacy clips remain reachable through the separate mode toggle.
+      if (this.rotationMode !== "WORLD") this.setRotationMode("WORLD");
       this.setClip(name, true);
       return;
     }
@@ -368,6 +380,55 @@ export class ModelViewerMotionController {
   }
 
   snapshot(): ModelViewerMotionSnapshot {
+    // Enabled only for explicit WebGL audit runs. Read true posed skeleton
+    // coordinates from the rendered scene to catch skin/rig discrepancies
+    // that stand-alone GLB retarget math tests cannot detect.
+    if (typeof window !== "undefined" && window.location.search.includes("cmuAudit=1") &&
+        this.clipName.startsWith("CMU_")) {
+      this.target.updateWorldMatrix(true, true);
+      const names = ["pelvis", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+        "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
+        "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"];
+      const joints: Record<string, number[] | null> = {};
+      for (const name of names) {
+        const bone = this.target.getObjectByName(name);
+        joints[name] = bone
+          ? bone.getWorldPosition(new THREE.Vector3()).toArray().map((x) => Number(x.toFixed(5)))
+          : null;
+      }
+      const skinned: Array<{ mesh: string; upperarmBound: boolean; firstBone: string }> = [];
+      this.target.traverse((node) => {
+        const mesh = node as THREE.SkinnedMesh;
+        if (!mesh.isSkinnedMesh) return;
+        const upperarm = this.target.getObjectByName("upperarm_l");
+        skinned.push({
+          mesh: mesh.name,
+          upperarmBound: Boolean(upperarm && mesh.skeleton?.bones.includes(upperarm as THREE.Bone)),
+          firstBone: mesh.skeleton?.bones[0]?.name ?? "",
+        });
+      });
+      const actionClip = this.currentAction?.getClip();
+      const trackDeltaDegrees: Record<string, number | null> = {};
+      for (const name of ["upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r",
+        "thigh_l", "calf_l", "thigh_r", "calf_r"]) {
+        const bone = this.target.getObjectByName(name);
+        const track = actionClip?.tracks.find((t) => t.name === name + ".quaternion");
+        if (!bone || !track) { trackDeltaDegrees[name] = null; continue; }
+        const time = THREE.MathUtils.clamp(this.currentAction?.time ?? 0, 0, actionClip!.duration);
+        const sampled = track.createInterpolant().evaluate(time);
+        trackDeltaDegrees[name] = Number(THREE.MathUtils.radToDeg(
+          bone.quaternion.angleTo(new THREE.Quaternion().fromArray(sampled)),
+        ).toFixed(3));
+      }
+      document.documentElement.dataset.cmuAuditPose = JSON.stringify({
+        clip: this.clipName, time: this.currentAction?.time ?? -1,
+        calibration: this.cmuAuditAlignment, trackDeltaDegrees,
+        bodyType: this.visual.root.userData.quaterniusBodyType,
+        modelName: this.target.name,
+        activeRoot: this.mixer.getRoot().name,
+        joints, skinned,
+      });
+    }
     const duration = this.currentAction?.getClip().duration ?? 0;
     return {
       available: true,

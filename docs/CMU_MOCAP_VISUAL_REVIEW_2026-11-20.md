@@ -43,3 +43,8 @@ Other issues to address before adopting: shared source/body coordinate conventio
 5. Regression tests still show no knee inversion or swapped ankles.
 
 This is **a rejected production adoption, not a rejection of CMU as reference motion data**. Keep it available for offline analysis/selected motion extraction only.
+
+
+## 2026-11-21 follow-up (new experiment, not a retroactive pass)
+
+The **frame-zero-delta importer evaluated here remains rejected**. A separate `cmu-anatomical-retarget.ts` now reconstructs the actual captured source limb directions instead. An additional per-controller source-pack isolation fix prevents SERA's CMU data from silently forcing KAIRO into the old LOCAL path. Source-direction fidelity, floor clearance and both characters' WebGL images pass the new prototype gates. See `docs/CMU_ANATOMICAL_RETARGET_PROTOCOL.md` and the [successful SERA + KAIRO 52-frame audit](https://github.com/yz4git/poly-fighter/actions/runs/44764213822). This **does not** imply approval for live combat: root-motion, fighter foot-IK, timings and 60fps iPhone playtesting remain separate gates.

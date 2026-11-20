@@ -38,9 +38,17 @@
     if (!v.ready) throw new Error(`No button '${name}'`);
   };
   const screenshot = async (file) => {
-    const png = Buffer.from(await command(`/session/${session}/screenshot`), "base64");
-    if (png.length < 5000 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Screenshot PNG invalid");
-    await writeFile(`${out}/${file}.png`, png);
+    // Temporarily hide the bottom transport overlay so the viewer captures
+    // BOTH FEET and the ground contact plane. All controls are restored.
+    await js("const ui=[...document.querySelectorAll('[aria-label]')].find(x=>x.getAttribute('aria-label')==='Motion Viewer'); if(ui)ui.style.opacity='0'; return !!ui;");
+    await sleep(80);
+    try {
+      const png = Buffer.from(await command(`/session/${session}/screenshot`), "base64");
+      if (png.length < 5000 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Screenshot PNG invalid");
+      await writeFile(`${out}/${file}.png`, png);
+    } finally {
+    await js("const ui=[...document.querySelectorAll('[aria-label]')].find(x=>x.getAttribute('aria-label')==='Motion Viewer'); if(ui)ui.style.opacity=''; return !!ui;");
+    }
   };
   const clipDefs = [
     { id: "WALK", name: "CMU WALK", phases: [0.08, 0.32, 0.60, 0.87] },
@@ -122,10 +130,36 @@
                 selected:document.querySelector('select[aria-label="Motion clip"]')?.value,
                 normalized:Number(document.querySelector('input[aria-label="Motion timeline"]')?.value)/1000,
                 paused:!!document.querySelector('button[aria-label="Play motion"]'),
+                auditPose: JSON.parse(document.documentElement.dataset.cmuAuditPose || "null"),
               };
             `);
             if (validated.selected !== `CMU_${clip.id}` || !validated.paused || Math.abs(validated.normalized-phase) > 0.006) {
               throw new Error(`Frame invalid ${fighter}/${clip.id}/${phase}: ${JSON.stringify(validated)}`);
+            }
+            if (!Array.isArray(validated.auditPose?.calibration) ||
+                validated.auditPose.calibration.length !== 4) {
+              throw new Error(`${fighter} ${clip.id}: returned to CMU legacy frame-zero/T-pose transfer`);
+            }
+            const errors = Object.values(validated.auditPose?.trackDeltaDegrees ?? {}).filter(
+              (value) => typeof value === "number",
+            );
+            if (errors.some(value => value > 1)) {
+              throw new Error(`${fighter} ${clip.id}: live bones disagree with selected CMU quaternion tracks`);
+            }
+            if (clip.id === "WALK" && camera === "front" && phase === 0.32) {
+              const joints = validated.auditPose.joints;
+              for (const side of ["l", "r"]) {
+                const upper = joints["upperarm_" + side];
+                const lower = joints["lowerarm_" + side];
+                if (!upper || !lower) throw new Error(`${fighter}: missing shoulder chain`);
+                const dx = lower[0] - upper[0];
+                const dy = lower[1] - upper[1];
+                const dz = lower[2] - upper[2];
+                const downwardRatio = -dy / Math.hypot(dx, dy, dz);
+                if (downwardRatio < 0.48) {
+                  throw new Error(`${fighter}: ${side} arm in T-pose during CMU WALK (downward ratio ${downwardRatio.toFixed(2)})`);
+                }
+              }
             }
             const file = `${fighter.toLowerCase()}-cmu-${clip.id.toLowerCase()}-${camera}-${Math.round(phase * 100).toString().padStart(2, "0")}`;
             await screenshot(file);

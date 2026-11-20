@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/game/cmu-mocap-pilot.ts'
+      - 'src/game/cmu-anatomical-retarget.ts'
+      - 'src/game/cmu-pose-retarget.ts'
       - 'scripts/check-cmu-mocap.mjs'
       - 'scripts/check-cmu-runtime.mjs'
       - '.github/workflows/cmu-mocap-probe.yml'

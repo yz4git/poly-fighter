@@ -11,6 +11,7 @@ import {
   type CmuMocapPilotId,
 } from "./cmu-mocap-pilot";
 import { buildCmuStanceLockedClip } from "./cmu-foot-lock";
+import { extractCmuBoxingStrikes, type CmuStrikePreview } from "./cmu-strike-extraction";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
@@ -36,6 +37,7 @@ export interface ModelViewerMotionSnapshot {
   rotationMode: RetargetRotationMode;
   cmuLoading: boolean;
   cmuError: string | null;
+  cmuStrike: CmuStrikePreview | null;
   clips: ModelViewerMotionClipInfo[];
   clipName: string;
   playing: boolean;
@@ -130,6 +132,7 @@ export function unavailableModelViewerMotionSnapshot(loading = false): ModelView
     rotationMode: "LOCAL",
     cmuLoading: false,
     cmuError: null,
+    cmuStrike: null,
     clips: [],
     clipName: "",
     playing: false,
@@ -146,8 +149,8 @@ export class ModelViewerMotionController {
   private readonly visual: FighterVisual;
   private sourcePacks: MotionSourcePack[] = [];
   private rotationMode: RetargetRotationMode = "LOCAL";
-  private readonly clipBanks = new Map<RetargetRotationMode, Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource }>>();
-  private readonly clips = new Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource }>();
+  private readonly clipBanks = new Map<RetargetRotationMode, Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource; strike?: CmuStrikePreview }>>();
+  private readonly clips = new Map<string, { clip: THREE.AnimationClip; source: ModelViewerMotionSource; strike?: CmuStrikePreview }>();
   private currentAction: THREE.AnimationAction | null = null;
   private clipName = "";
   private playing = true;
@@ -209,6 +212,15 @@ export class ModelViewerMotionController {
               pack.root, this.target, sourceClip, clip,
             );
             bank.set(locked.name, { clip: locked, source: "CMU" });
+          }
+          if (this.rotationMode === "WORLD" && pack.cmuId === "BOXING") {
+            const sourceMotion = pack.clips.reduce((best, next) =>
+              next.duration > best.duration ? next : best);
+            for (const strike of extractCmuBoxingStrikes(pack.root, sourceMotion, clip)) {
+              bank.set(strike.clip.name, {
+                clip: strike.clip, source: "CMU", strike: strike.preview,
+              });
+            }
           }
         } else {
           const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
@@ -331,6 +343,7 @@ export class ModelViewerMotionController {
     action.reset().play();
     this.currentAction = action;
     this.clipName = name;
+    if (entry.strike) this.loop = false;
     this.playing = true;
     this.applyActionSettings();
     this.mixer.update(0);
@@ -435,6 +448,7 @@ export class ModelViewerMotionController {
       document.documentElement.dataset.cmuAuditPose = JSON.stringify({
         clip: this.clipName, time: this.currentAction?.time ?? -1,
         calibration: this.cmuAuditAlignment, trackDeltaDegrees,
+        strike: this.clips.get(this.clipName)?.strike ?? null,
         bodyType: this.visual.root.userData.quaterniusBodyType,
         modelName: this.target.name,
         activeRoot: this.mixer.getRoot().name,
@@ -448,6 +462,7 @@ export class ModelViewerMotionController {
       rotationMode: this.rotationMode,
       cmuLoading: this.cmuLoading,
       cmuError: this.cmuError,
+      cmuStrike: this.clips.get(this.clipName)?.strike ?? null,
       clips: this.clipInfos(),
       clipName: this.clipName,
       playing: this.playing,

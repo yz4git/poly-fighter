@@ -6,10 +6,12 @@ on:
       - 'src/game/cmu-mocap-pilot.ts'
       - 'src/game/cmu-anatomical-retarget.ts'
       - 'src/game/cmu-foot-lock.ts'
+      - 'src/game/cmu-strike-extraction.ts'
       - 'src/game/cmu-pose-retarget.ts'
       - 'scripts/check-cmu-mocap.mjs'
       - 'scripts/check-cmu-runtime.mjs'
       - 'scripts/diagnose-cmu-foot-contacts.mjs'
+      - 'scripts/diagnose-cmu-punches.mjs'
       - '.github/workflows/cmu-mocap-probe.yml'
   workflow_dispatch:
 
@@ -34,3 +36,5 @@ jobs:
         run: node --import tsx scripts/check-cmu-runtime.mjs
       - name: Probe actual planted-foot intervals
         run: node --import tsx scripts/diagnose-cmu-foot-contacts.mjs
+      - name: Scan CMU boxing for candidate impact timing
+        run: node --import tsx scripts/diagnose-cmu-punches.mjs

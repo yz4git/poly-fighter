@@ -334,6 +334,29 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
                 {clip.label}
               </button>
             ))}
+            {[
+              { name: "CMU_BOXING_RIGHT_STRAIGHT", label: "RIGHT STRAIGHT" },
+              { name: "CMU_BOXING_LEFT_RIGHT_COMBO", label: "LEFT → RIGHT COMBO" },
+            ].filter((preview) => motionState.clips.some((clip) => clip.name === preview.name))
+              .map((preview) => (
+              <button
+                key={preview.name}
+                type="button"
+                aria-label={"Preview CMU " + preview.label}
+                title="Measured CMU boxing strike excerpt. Impact marker is a wrist extension peak, NOT a gameplay collision."
+                onClick={() => viewerRef.current?.setMotionClip(preview.name)}
+                style={{
+                  ...transportButtonStyle,
+                  minHeight: 32,
+                  padding: "6px 8px",
+                  fontSize: 8,
+                  borderColor: motionState.clipName === preview.name ? "#5ce8ff" : "rgba(175,218,255,.28)",
+                  color: motionState.clipName === preview.name ? "#5ce8ff" : "#d8e8f7",
+                }}
+              >
+                {preview.label}
+              </button>
+            ))}
             {(motionState.clipName.startsWith("CMU_WALK") ||
               motionState.clipName.startsWith("CMU_KICK")) &&
               motionState.clips.some((clip) =>
@@ -370,6 +393,36 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
         {motionState.cmuError && (
           <div role="alert" title={motionState.cmuError} style={{ marginTop: 4, fontSize: 9, color: "#ffb3a7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             CMU: {motionState.cmuError}
+          </div>
+        )}
+        {motionState.cmuStrike && (
+          <div
+            aria-label="Measured CMU strike extension markers"
+            style={{ marginTop: 6, padding: "4px 7px", fontSize: 9,
+              color: "#bfeaff", background: "rgba(8,34,54,.7)" }}
+          >
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              <strong>{motionState.cmuStrike.label}</strong>
+              {motionState.cmuStrike.contacts.map((contact) => (
+                <span key={contact.hand + contact.sourceTime}>
+                  {contact.hand} EXTENSION PEAK {formatTime(contact.time)}s
+                </span>
+              ))}
+              <span style={{ color: "#8ba8bf" }}>PREVIEW ONLY — NOT GAME HIT TIMING</span>
+            </div>
+            <div style={{
+              position: "relative", height: 5, marginTop: 5,
+              background: "rgba(175,218,255,.2)",
+            }}>
+              {motionState.cmuStrike.contacts.map((contact) => (
+                <span
+                  key={contact.hand + contact.sourceTime}
+                  title={contact.hand + " source wrist extension at " + formatTime(contact.time) + " seconds"}
+                  style={{ position: "absolute", left: (contact.normalized * 100) + "%",
+                    top: -3, width: 3, height: 11, background: "#5ce8ff" }}
+                />
+              ))}
+            </div>
           </div>
         )}
         <div style={{ marginTop: 7, display: "grid", gridTemplateColumns: "48px minmax(80px, 1fr) 48px", alignItems: "center", gap: 8 }}>

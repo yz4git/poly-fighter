@@ -12,7 +12,7 @@ import { retargetCmuPoseReferenced } from "./cmu-pose-retarget";
 export const CMU_MOCAP_PILOT_CLIPS = [
   { id: "WALK", label: "CMU WALK", file: "05_01-walk" },
   { id: "BOXING", label: "CMU BOXING", file: "13_17-boxing" },
-  { id: "KICK", label: "CMU KICK", file: "10_01-soccer-kick-ball" },
+  { id: "KICK", label: "CMU FRONT KICK", file: "135_04-front-kick" },
 ] as const;
 
 export type CmuMocapPilotId = (typeof CMU_MOCAP_PILOT_CLIPS)[number]["id"];

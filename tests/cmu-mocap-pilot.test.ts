@@ -52,6 +52,33 @@ test("CMU/Mixamo joint names resolve onto the actual Quaternius rig", () => {
   assert.equal(map["mixamorig:LeftHand"], "hand_l");
 });
 
+test("verified 31-joint CMU ASF hierarchy maps to unique UBC targets", () => {
+  // Captured from the actual upstream skeleton GLBs (walk / boxing / soccer).
+  const names = [
+    "root", "lhipjoint", "lfemur", "ltibia", "lfoot", "ltoes",
+    "rhipjoint", "rfemur", "rtibia", "rfoot", "rtoes",
+    "lowerback", "upperback", "thorax", "lowerneck", "upperneck", "head",
+    "lclavicle", "lhumerus", "lradius", "lwrist", "lhand", "lfingers", "lthumb",
+    "rclavicle", "rhumerus", "rradius", "rwrist", "rhand", "rfingers", "rthumb",
+  ];
+  const targetNames = [
+    "pelvis", "thigh_l", "calf_l", "foot_l", "ball_l",
+    "thigh_r", "calf_r", "foot_r", "ball_r",
+    "spine_01", "spine_02", "spine_03", "neck_01", "Head",
+    "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+    "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
+  ];
+  const map = buildCmuBoneMap(rig(names), rig(targetNames));
+  assert.equal(Object.keys(map).length, targetNames.length);
+  assert.equal(new Set(Object.values(map)).size, targetNames.length,
+    "one target bone must receive exactly one ASF animation track");
+  assert.equal(map["lfemur"], "thigh_l");
+  assert.equal(map["lradius"], "lowerarm_l");
+  assert.equal(map["lowerneck"], "neck_01");
+  assert.equal(map["lhipjoint"], undefined, "hip helper must not double-drive the femur");
+  assert.equal(map["lhand"], undefined, "hand end joint must not double-drive the wrist");
+});
+
 test("WORLD CMU pilot transfers rotations but never imports world translation", () => {
   const source = rig(mappedNames.map(([name]) => name));
   const target = rig(mappedNames.map(([, name]) => name));

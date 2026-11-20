@@ -168,6 +168,22 @@ export function retargetCmuAnatomical(
     const times = Float32Array.from({ length: count }, (_, i) => motion.duration * i / (count - 1));
     const values = new Map<THREE.Object3D, Float32Array>();
     for (const node of driven) values.set(node, new Float32Array(count * 4));
+    // Correct only vertical foot contact. Horizontal root travel belongs to
+    // the gameplay controller and is never imported into this in-place preview.
+    const pelvis = target.getObjectByName("pelvis");
+    const toeL = target.getObjectByName("ball_l");
+    const toeR = target.getObjectByName("ball_r");
+    const sourceToeL = source.getObjectByName("ltoes");
+    const sourceToeR = source.getObjectByName("rtoes");
+    const rootPositionTrack = pelvis && pelvis.parent && toeL && toeR && sourceToeL && sourceToeR
+      ? new Float32Array(count * 3) : null;
+    const pelvisRestLocal = pelvis ? targetBefore.get(pelvis)!.position.clone() : null;
+    const footRestHeight = toeL && toeR
+      ? Math.min(restPos.get(toeL)!.y, restPos.get(toeR)!.y) : 0;
+    const sourceRestHeight = sourceToeL && sourceToeR
+      ? Math.min(sourceToeL.getWorldPosition(new THREE.Vector3()).y,
+                 sourceToeR.getWorldPosition(new THREE.Vector3()).y) : 0;
+    let previousFootOffset = 0;
     const computedWorld = new Map<THREE.Object3D, THREE.Quaternion>();
     const local = new THREE.Quaternion();
     const wanted = new THREE.Quaternion();
@@ -180,6 +196,7 @@ export function retargetCmuAnatomical(
       mixer.setTime(times[frame]);
       source.updateWorldMatrix(true, true);
       computedWorld.clear();
+      if (pelvis && pelvisRestLocal) pelvis.position.copy(pelvisRestLocal);
       const currentBasis = torsoBasis(source, "lfemur", "rfemur", "thorax", "root");
       if (!currentBasis) throw new Error("CMU lost torso frame during sampling");
       const torsoDelta = align.clone().multiply(currentBasis)
@@ -224,9 +241,37 @@ export function retargetCmuAnatomical(
         node.quaternion.copy(local);
         computedWorld.set(node, wanted.clone());
       }
+      if (rootPositionTrack && pelvis && pelvisRestLocal && toeL && toeR && sourceToeL && sourceToeR) {
+        // Keep the planted toes at the original UBC sole height, without
+        // forcing genuinely airborne mocap frames down onto the platform.
+        target.updateWorldMatrix(true, true);
+        const currentToeHeight = Math.min(
+          toeL.getWorldPosition(new THREE.Vector3()).y,
+          toeR.getWorldPosition(new THREE.Vector3()).y,
+        );
+        const currentSourceToeHeight = Math.min(
+          sourceToeL.getWorldPosition(new THREE.Vector3()).y,
+          sourceToeR.getWorldPosition(new THREE.Vector3()).y,
+        );
+        const sourceRise = currentSourceToeHeight - sourceRestHeight;
+        const plantedWeight = 1 - THREE.MathUtils.smoothstep(sourceRise, 0.045, 0.16);
+        const desiredOffset = THREE.MathUtils.clamp(
+          footRestHeight - currentToeHeight, -0.18, 0.18,
+        ) * plantedWeight;
+        previousFootOffset = frame === 0
+          ? desiredOffset : THREE.MathUtils.lerp(previousFootOffset, desiredOffset, 0.45);
+        const parentQuatInv = pelvis.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+        const localUp = new THREE.Vector3(0, previousFootOffset, 0)
+          .applyQuaternion(parentQuatInv);
+        pelvis.position.copy(pelvisRestLocal).add(localUp);
+        pelvis.position.toArray(rootPositionTrack, frame * 3);
+      }
     }
-    const tracks = driven.map(node =>
+    const tracks: THREE.KeyframeTrack[] = driven.map(node =>
       new THREE.QuaternionKeyframeTrack(node.name + ".quaternion", times, values.get(node)!));
+    if (rootPositionTrack) {
+      tracks.push(new THREE.VectorKeyframeTrack("pelvis.position", times, rootPositionTrack));
+    }
     const output = new THREE.AnimationClip(outputName, motion.duration, tracks, motion.blendMode);
     output.optimize();
     return output;

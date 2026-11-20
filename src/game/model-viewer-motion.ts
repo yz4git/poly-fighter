@@ -5,6 +5,12 @@ import type { FighterVisual } from "./visual-entry";
 import { createCombatMotionLibrary } from "./combat-motion-authoring";
 import { FIGHTER_DEFINITIONS } from "./definitions";
 import {
+  cmuMocapClipName,
+  cmuMocapPilotUrl,
+  retargetCmuPilotClip,
+  type CmuMocapPilotId,
+} from "./cmu-mocap-pilot";
+import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
   QUATERNIUS_BLENDER_STRIKES_URL,
@@ -15,7 +21,7 @@ import {
   QUATERNIUS_UAL_CORE_URL,
 } from "./visual-quaternius-runtime";
 
-export type ModelViewerMotionSource = "BLENDER" | "PROCEDURAL" | "BASE";
+export type ModelViewerMotionSource = "BLENDER" | "PROCEDURAL" | "BASE" | "CMU";
 
 export interface ModelViewerMotionClipInfo {
   name: string;
@@ -27,6 +33,8 @@ export interface ModelViewerMotionSnapshot {
   available: boolean;
   loading: boolean;
   rotationMode: RetargetRotationMode;
+  cmuLoading: boolean;
+  cmuError: string | null;
   clips: ModelViewerMotionClipInfo[];
   clipName: string;
   playing: boolean;
@@ -40,6 +48,7 @@ type MotionSourcePack = {
   root: THREE.Group;
   clips: THREE.AnimationClip[];
   source: ModelViewerMotionSource;
+  cmuId?: CmuMocapPilotId;
 };
 
 let sourcePromise: Promise<MotionSourcePack[]> | null = null;
@@ -107,7 +116,7 @@ function clipSort(a: ModelViewerMotionClipInfo, b: ModelViewerMotionClipInfo): n
   if (a.name === "Idle_Loop") return -1;
   if (b.name === "Idle_Loop") return 1;
   if (a.source !== b.source) {
-    const priority: Record<ModelViewerMotionSource, number> = { BLENDER: 0, PROCEDURAL: 1, BASE: 2 };
+    const priority: Record<ModelViewerMotionSource, number> = { CMU: 0, BLENDER: 1, PROCEDURAL: 2, BASE: 3 };
     return priority[a.source] - priority[b.source];
   }
   return a.name.localeCompare(b.name);
@@ -118,6 +127,8 @@ export function unavailableModelViewerMotionSnapshot(loading = false): ModelView
     available: false,
     loading,
     rotationMode: "LOCAL",
+    cmuLoading: false,
+    cmuError: null,
     clips: [],
     clipName: "",
     playing: false,
@@ -141,6 +152,9 @@ export class ModelViewerMotionController {
   private playing = true;
   private loop = true;
   private speed = 1;
+  private cmuLoading = false;
+  private cmuError: string | null = null;
+  private destroyed = false;
 
   private constructor(target: THREE.Object3D, visual: FighterVisual) {
     this.target = target;
@@ -172,10 +186,15 @@ export class ModelViewerMotionController {
     if (!bank) {
       bank = new Map();
       for (const pack of this.sourcePacks) {
-        const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
-          rotationMode: this.rotationMode,
-        });
-        for (const [name, clip] of retargeted) bank.set(name, { clip, source: pack.source });
+        if (pack.source === "CMU" && pack.cmuId) {
+          const clip = retargetCmuPilotClip(pack.root, this.target, pack.clips, pack.cmuId, this.rotationMode);
+          bank.set(clip.name, { clip, source: "CMU" });
+        } else {
+          const retargeted = retargetMotionClips(pack.root, this.target, pack.clips, {
+            rotationMode: this.rotationMode,
+          });
+          for (const [name, clip] of retargeted) bank.set(name, { clip, source: pack.source });
+        }
       }
       const bodyDefinition = this.visual.root.userData.quaterniusBodyType === "FEMALE"
         ? FIGHTER_DEFINITIONS.blue : FIGHTER_DEFINITIONS.red;
@@ -208,6 +227,58 @@ export class ModelViewerMotionController {
       this.mixer.update(0);
     }
     this.setPlaying(wasPlaying);
+  }
+
+  /**
+   * On-demand only. The base game's motion packs remain local. The CMU GLB
+   * is never fetched from the fight renderer or during MODEL VIEW startup.
+   */
+  async loadCmuMotion(id: CmuMocapPilotId): Promise<void> {
+    if (this.destroyed || this.cmuLoading) return;
+    const name = cmuMocapClipName(id);
+    this.cmuError = null;
+    if (this.clips.has(name)) {
+      this.setClip(name, true);
+      return;
+    }
+
+    this.cmuLoading = true;
+    const previous = this.clipName;
+    const wasPlaying = this.playing;
+    try {
+      const gltf = await new GLTFLoader().loadAsync(cmuMocapPilotUrl(id));
+      if (this.destroyed) return;
+      // Retargeting must use bind/rest poses, not the animated screen pose.
+      this.mixer.stopAllAction();
+      this.mixer.uncacheRoot(this.target);
+      restoreBindPose(this.target);
+      retargetCmuPilotClip(gltf.scene, this.target, gltf.animations, id, "WORLD");
+
+      this.sourcePacks.push({
+        root: gltf.scene,
+        clips: gltf.animations,
+        source: "CMU",
+        cmuId: id,
+      });
+      this.rotationMode = "WORLD";
+      this.clipBanks.clear();
+      this.rebuildClips();
+      this.clipName = "";
+      this.setClip(name, true);
+    } catch (error) {
+      if (this.destroyed) return;
+      this.cmuError = error instanceof Error ? error.message : "CMU motion could not be loaded";
+      console.warn("[POLY FIGHTER] CMU mocap pilot failed:", error);
+      // Restore the locally authored clip if the network or skeleton fails.
+      this.sourcePacks = this.sourcePacks.filter((pack) => pack.cmuId !== id);
+      this.clipBanks.clear();
+      this.rebuildClips();
+      this.clipName = "";
+      this.setClip(this.clips.has(previous) ? previous : "Idle_Loop", true);
+      this.setPlaying(wasPlaying);
+    } finally {
+      this.cmuLoading = false;
+    }
   }
 
   private clipInfos(): ModelViewerMotionClipInfo[] {
@@ -302,6 +373,8 @@ export class ModelViewerMotionController {
       available: true,
       loading: false,
       rotationMode: this.rotationMode,
+      cmuLoading: this.cmuLoading,
+      cmuError: this.cmuError,
       clips: this.clipInfos(),
       clipName: this.clipName,
       playing: this.playing,
@@ -313,6 +386,7 @@ export class ModelViewerMotionController {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.target);
     this.currentAction = null;

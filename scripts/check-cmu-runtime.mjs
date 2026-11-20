@@ -83,6 +83,15 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         source: entry.file, target: variant, frames, worstFoot, worstKnee,
         minFootY, maxFootY,
       }));
+      // This quantitative gate caught the original release's swapped ankles.
+      // Compare against an absolute, model-space lane rather than only
+      // checking for duplicate bone tracks / finite GLB values.
+      assert.ok(worstFoot.separation > 0.035,
+        `CMU ${entry.id} ${variant}: ankles cross/overlap (${worstFoot.separation.toFixed(3)}m at ${worstFoot.time.toFixed(2)}s)`);
+      assert.ok(worstKnee.separation > 0.07,
+        `CMU ${entry.id} ${variant}: knees cross (${worstKnee.separation.toFixed(3)}m at ${worstKnee.time.toFixed(2)}s)`);
+      assert.ok(minFootY > 0.0,
+        `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
       console.log(JSON.stringify({
         source: entry.file, target: variant, duration: clip.duration,
         transferredJointCount: jointCount, tracks: names,

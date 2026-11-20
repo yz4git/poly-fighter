@@ -67,4 +67,17 @@ for(const hand of ["L","R"]){
    top
  }));
 }
+
+for(const center of [1.96,3.08,17.3,18.29,38.6]){
+  const frames=[];
+  for(let offset=-0.5;offset<=0.69;offset+=0.1){
+    const i=Math.round((center+offset)/dt);
+    if(i<0||i>=poses.length)continue;
+    frames.push({t:+(i*dt).toFixed(2),L:+stats.L[i].forward.toFixed(3),
+      R:+stats.R[i].forward.toFixed(3),
+      Lreach:+stats.L[i].reach.toFixed(3),Rreach:+stats.R[i].reach.toFixed(3),
+      Lbend:+stats.L[i].bend.toFixed(1),Rbend:+stats.R[i].bend.toFixed(1)});
+  }
+  console.log("CMU_BOXING_TIMELINE",JSON.stringify({center,frames}));
+}
 mixer.stopAllAction();mixer.uncacheRoot(root);

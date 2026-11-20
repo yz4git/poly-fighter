@@ -167,7 +167,11 @@ export class ModelViewerMotionController {
     const target = findQuaterniusTarget(visual);
     if (!target) throw new Error("Quaternius Model View target is not ready");
     const controller = new ModelViewerMotionController(target, visual);
-    controller.sourcePacks = await loadMotionSources();
+    // loadMotionSources() caches BASE/BLENDER GLBs globally for speed.
+    // Never mutate that shared array: CMU is a per-viewer, opt-in pack.
+    // Previously SERA's .push(CMU) leaked into KAIRO, which started in
+    // LOCAL legacy mode and skipped the anatomy bake on "already loaded".
+    controller.sourcePacks = [...await loadMotionSources()];
     controller.rebuildClips();
     const initial = controller.clips.has("Idle_Loop") ? "Idle_Loop" : controller.clipInfos()[0]?.name;
     if (!initial) throw new Error("No compatible motion clips found for Model View");
@@ -243,6 +247,9 @@ export class ModelViewerMotionController {
     const name = cmuMocapClipName(id);
     this.cmuError = null;
     if (this.clips.has(name)) {
+      // Clicking the explicit CMU trial always selects the corrected mode.
+      // A/B legacy clips remain reachable through the separate mode toggle.
+      if (this.rotationMode !== "WORLD") this.setRotationMode("WORLD");
       this.setClip(name, true);
       return;
     }

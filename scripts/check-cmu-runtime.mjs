@@ -89,6 +89,10 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       assert.equal(diagnostics.fitted.includes("upperarm_l"), true);
       assert.equal(diagnostics.fitted.includes("lowerarm_l"), true);
       const aligned = new THREE.Quaternion().fromArray(diagnostics.alignment);
+      // Re-arm the target action: the preceding full-clip stance audit leaves
+      // LoopOnce/clampWhenFinished paused at the end pose. Merely seeking the
+      // mixer again will otherwise compare a frozen final pose to live source.
+      action.reset().play();
       const sourceMixer = new THREE.AnimationMixer(gltf.scene);
       const sourceAction = sourceMixer.clipAction(gltf.animations[0]).play();
       sourceAction.setLoop(THREE.LoopOnce, 1);

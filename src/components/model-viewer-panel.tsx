@@ -285,13 +285,13 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
         {motionReady && (
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 5 }}>
             <span style={{ color: "#9bb3c8", fontSize: 9 }}>
-              BONE RETARGET: {motionState.rotationMode === "WORLD" ? "WORLD REST" : "LOCAL LEGACY"}
+              BONE RETARGET: {motionState.clipName.startsWith("CMU_") ? (motionState.rotationMode === "WORLD" ? "CMU ANATOMICAL" : "CMU LEGACY FRAME-0") : (motionState.rotationMode === "WORLD" ? "WORLD REST" : "LOCAL LEGACY")}
             </span>
             <button
               type="button"
               aria-label="Compare retarget rotation basis"
               aria-pressed={motionState.rotationMode === "WORLD"}
-              title="Compare the original local bone rotation transfer with world-rest-basis correction. Preview only."
+              title={motionState.clipName.startsWith("CMU_") ? "Compare source joint-direction fitting against legacy frame-zero transfer. Preview only." : "Compare local and world-rest retargeting. Preview only."}
               onClick={() => viewerRef.current?.setRetargetRotationMode(motionState.rotationMode === "LOCAL" ? "WORLD" : "LOCAL")}
               style={{
                 ...transportButtonStyle,
@@ -302,7 +302,7 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
                 borderColor: motionState.rotationMode === "WORLD" ? "rgba(92,232,255,.65)" : "rgba(175,218,255,.28)",
               }}
             >
-              {motionState.rotationMode === "WORLD" ? "WORLD ON" : "TRY WORLD"}
+              {motionState.clipName.startsWith("CMU_") ? (motionState.rotationMode === "WORLD" ? "ANATOMY ON" : "TRY ANATOMY") : (motionState.rotationMode === "WORLD" ? "WORLD ON" : "TRY WORLD")}
             </button>
           </div>
         )}

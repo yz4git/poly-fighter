@@ -97,6 +97,56 @@ test("WORLD CMU pilot transfers rotations but never imports world translation", 
   assert.equal(target.getObjectByName("pelvis")?.position.y, 0, "target bind pose must not change");
 });
 
+test("CMU transfer calibrates the first captured pose instead of a wide bind stance", () => {
+  const source = rig(mappedNames.map(([name]) => name));
+  const target = rig(mappedNames.map(([, name]) => name));
+  const lead = source.getObjectByName("LeftUpLeg")!;
+  const resting = lead.quaternion.clone();
+  const first = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.5);
+  const last = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.7);
+  const tracks = mappedNames.map(([name]) =>
+    new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, [0, 1],
+      name === "LeftUpLeg"
+        ? [...first.toArray(), ...last.toArray()]
+        : [0, 0, 0, 1, 0, 0, 0, 1]));
+  const output = retargetCmuPilotClip(
+    source, target, [new THREE.AnimationClip("source", 1, tracks)], "WALK",
+  );
+  const thigh = output.tracks.find((track) => track.name === "thigh_l.quaternion")!;
+  const atStart = new THREE.Quaternion().fromArray(thigh.values, 0);
+  const atEnd = new THREE.Quaternion().fromArray(thigh.values, thigh.values.length - 4);
+  assert.ok(atStart.angleTo(new THREE.Quaternion()) < 1e-5,
+    "the first captured frame must not bend the target's neutral thigh");
+  assert.ok(Math.abs(atEnd.angleTo(atStart) - 0.2) < 0.02,
+    "the next frame should transfer only the difference since frame 0");
+  assert.ok(lead.quaternion.angleTo(resting) < 1e-5,
+    "a source GLB must be left in its original bind pose for future mode switches");
+});
+
+test("CMU retarget preserves motion from ASF-only hip helper joints", () => {
+  const source = rig(mappedNames.map(([name]) => name));
+  const target = rig(mappedNames.map(([, name]) => name));
+  const hip = source.getObjectByName("Hips")!;
+  const femur = source.getObjectByName("LeftUpLeg")!;
+  const helper = new THREE.Bone();
+  helper.name = "lhipjoint";
+  hip.add(helper);
+  helper.add(femur);
+  const tip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.35);
+  const tracks = mappedNames.map(([name]) =>
+    new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1]));
+  tracks.push(new THREE.QuaternionKeyframeTrack("lhipjoint.quaternion", [0, 1],
+    [0, 0, 0, 1, ...tip.toArray()]));
+  const output = retargetCmuPilotClip(
+    source, target, [new THREE.AnimationClip("source", 1, tracks)], "KICK",
+  );
+  const thigh = output.tracks.find((track) => track.name === "thigh_l.quaternion")!;
+  const ending = new THREE.Quaternion().fromArray(thigh.values, thigh.values.length - 4);
+  assert.ok(ending.angleTo(new THREE.Quaternion()) > 0.30,
+    "helper-hip rotation must reach UBC thigh even without a target helper bone");
+});
+
 test("CMU pilot explicitly refuses an insufficient bone match", () => {
   const source = rig(["Head"]);
   const target = rig(["Head"]);

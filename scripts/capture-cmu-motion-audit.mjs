@@ -136,6 +136,31 @@
             if (validated.selected !== `CMU_${clip.id}` || !validated.paused || Math.abs(validated.normalized-phase) > 0.006) {
               throw new Error(`Frame invalid ${fighter}/${clip.id}/${phase}: ${JSON.stringify(validated)}`);
             }
+            if (!Array.isArray(validated.auditPose?.calibration) ||
+                validated.auditPose.calibration.length !== 4) {
+              throw new Error(`${fighter} ${clip.id}: returned to CMU legacy frame-zero/T-pose transfer`);
+            }
+            const errors = Object.values(validated.auditPose?.trackDeltaDegrees ?? {}).filter(
+              (value) => typeof value === "number",
+            );
+            if (errors.some(value => value > 1)) {
+              throw new Error(`${fighter} ${clip.id}: live bones disagree with selected CMU quaternion tracks`);
+            }
+            if (clip.id === "WALK" && camera === "front" && phase === 0.32) {
+              const joints = validated.auditPose.joints;
+              for (const side of ["l", "r"]) {
+                const upper = joints["upperarm_" + side];
+                const lower = joints["lowerarm_" + side];
+                if (!upper || !lower) throw new Error(`${fighter}: missing shoulder chain`);
+                const dx = lower[0] - upper[0];
+                const dy = lower[1] - upper[1];
+                const dz = lower[2] - upper[2];
+                const downwardRatio = -dy / Math.hypot(dx, dy, dz);
+                if (downwardRatio < 0.48) {
+                  throw new Error(`${fighter}: ${side} arm in T-pose during CMU WALK (downward ratio ${downwardRatio.toFixed(2)})`);
+                }
+              }
+            }
             const file = `${fighter.toLowerCase()}-cmu-${clip.id.toLowerCase()}-${camera}-${Math.round(phase * 100).toString().padStart(2, "0")}`;
             await screenshot(file);
             records.frames.push({ fighter, motion: clip.id, camera, phase, file: `${file}.png`, state: validated });

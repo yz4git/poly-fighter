@@ -55,6 +55,8 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       let worstKnee = { separation: Infinity, time: 0 };
       let minFootY = Infinity;
       let maxFootY = -Infinity;
+      let minToeY = Infinity;
+      let maxToeY = -Infinity;
       const frames = Math.ceil(clip.duration * 30);
       const P = (name) => target.getObjectByName(name).getWorldPosition(new THREE.Vector3());
       for (let frame = 0; frame <= frames; frame++) {
@@ -72,6 +74,10 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         if (kneeSep < worstKnee.separation) worstKnee = { separation: kneeSep, time };
         minFootY = Math.min(minFootY, fL.y, fR.y);
         maxFootY = Math.max(maxFootY, fL.y, fR.y);
+        const toeLeft = P("ball_l").y;
+        const toeRight = P("ball_r").y;
+        minToeY = Math.min(minToeY, toeLeft, toeRight);
+        maxToeY = Math.max(maxToeY, toeLeft, toeRight);
       }
       // Source/target kinematic fidelity: compare actual segment directions
       // in both played skeletons, not just animation track names. This
@@ -128,6 +134,8 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
           }
         }
       }
+      assert.ok(totalAngularErrorDegrees / measurements < 1,
+        "CMU mean anatomical source/target direction error is too high");
       sourceMixer.stopAllAction();
       sourceMixer.uncacheRoot(gltf.scene);
       console.log("CMU_ANATOMICAL_FIDELITY", JSON.stringify({
@@ -136,7 +144,7 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         measurements, maxAngularErrorDegrees, meanAngularErrorDegrees: totalAngularErrorDegrees / measurements,
         biggestError,
       }));
-      assert.ok(maxAngularErrorDegrees < 15,
+      assert.ok(maxAngularErrorDegrees < 5,
         "CMU anatomical limb aim differs from source by " + maxAngularErrorDegrees.toFixed(2) + " deg");
       mixer.stopAllAction();
       mixer.uncacheRoot(target);
@@ -147,7 +155,7 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
       target.updateWorldMatrix(true, true);
       console.log("CMU_STANCE_AUDIT", JSON.stringify({
         source: entry.file, target: variant, frames, worstFoot, worstKnee,
-        minFootY, maxFootY,
+        minFootY, maxFootY, minToeY, maxToeY,
       }));
       // This quantitative gate caught the original release's swapped ankles.
       // Compare against an absolute, model-space lane rather than only
@@ -156,6 +164,8 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
         `CMU ${entry.id} ${variant}: ankles cross/overlap (${worstFoot.separation.toFixed(3)}m at ${worstFoot.time.toFixed(2)}s)`);
       assert.ok(worstKnee.separation > 0.07,
         `CMU ${entry.id} ${variant}: knees cross (${worstKnee.separation.toFixed(3)}m at ${worstKnee.time.toFixed(2)}s)`);
+      assert.ok(minToeY > -0.035,
+        "CMU " + entry.id + " " + variant + ": toes penetrate floor (" + minToeY.toFixed(3) + "m)");
       assert.ok(minFootY > 0.0,
         `CMU ${entry.id} ${variant}: imported leg sinks beneath platform (${minFootY.toFixed(3)}m)`);
       console.log(JSON.stringify({

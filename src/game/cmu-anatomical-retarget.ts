@@ -260,6 +260,11 @@ export function retargetCmuAnatomical(
         ) * plantedWeight;
         previousFootOffset = frame === 0
           ? desiredOffset : THREE.MathUtils.lerp(previousFootOffset, desiredOffset, 0.45);
+        // The smoothing filter must never bury a planted toe. Enforce a
+        // small sole-height safety margin even during fast kick recovery.
+        previousFootOffset = Math.max(
+          previousFootOffset, footRestHeight - 0.008 - currentToeHeight,
+        );
         const parentQuatInv = pelvis.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
         const localUp = new THREE.Vector3(0, previousFootOffset, 0)
           .applyQuaternion(parentQuatInv);

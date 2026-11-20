@@ -7,6 +7,7 @@ on:
       - 'scripts/check-cmu-mocap.mjs'
       - 'scripts/check-cmu-runtime.mjs'
       - 'scripts/diagnose-cmu-legs.mjs'
+      - 'scripts/discover-cmu-kicks.mjs'
       - '.github/workflows/cmu-mocap-probe.yml'
   workflow_dispatch:
 
@@ -32,3 +33,5 @@ jobs:
         continue-on-error: true
       - name: Diagnose source and target hip/knee/ankle paths
         run: node --import tsx scripts/diagnose-cmu-legs.mjs
+      - name: Check martial arts kick alternatives (optional)
+        run: node scripts/discover-cmu-kicks.mjs

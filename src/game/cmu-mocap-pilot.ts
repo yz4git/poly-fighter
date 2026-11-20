@@ -98,7 +98,7 @@ export function retargetCmuPilotClip(
   motion.name = cmuMocapClipName(id);
   // Captured-pose calibration avoids the original ASF wide-leg bind-pose
   // offset that made Quaternius' narrow stance cross both ankles.
-  // Clip output stays in-place (no position tracks).
+  // Horizontal travel remains in-place; optional pelvis vertical keys correct foot contact.
   const boneMap = buildCmuBoneMap(source, target);
   // WORLD = anatomical joint-direction reconstruction, not rotation deltas.
   // LOCAL retains the old 2026-11-20 trial for reversible screenshot A/B.

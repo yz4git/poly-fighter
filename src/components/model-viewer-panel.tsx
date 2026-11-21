@@ -357,6 +357,33 @@ export function ModelViewerPanel({ quality, onBack }: ModelViewerPanelProps) {
                 {preview.label}
               </button>
             ))}
+            {motionState.cmuStrike &&
+              motionState.clips.some(clip =>
+                clip.name === motionState.clipName.replace(/_FIST$/, "") + "_FIST",
+              ) && (
+              <button
+                type="button"
+                aria-label="Compare CMU boxing fist pose"
+                aria-pressed={motionState.clipName.endsWith("_FIST")}
+                title="Compare unchanged CMU boxing source hands with rig-calibrated closed fists. Preview only."
+                onClick={() => {
+                  const base = motionState.clipName.replace(/_FIST$/, "");
+                  viewerRef.current?.setMotionClip(
+                    motionState.clipName.endsWith("_FIST") ? base : base + "_FIST",
+                  );
+                }}
+                style={{
+                  ...transportButtonStyle,
+                  minHeight: 32,
+                  padding: "6px 9px",
+                  fontSize: 8,
+                  borderColor: motionState.clipName.endsWith("_FIST") ? "#5ce8ff" : "rgba(175,218,255,.28)",
+                  color: motionState.clipName.endsWith("_FIST") ? "#5ce8ff" : "#d8e8f7",
+                }}
+              >
+                {motionState.clipName.endsWith("_FIST") ? "FIST POSE ON" : "TRY FIST POSE"}
+              </button>
+            )}
             {(motionState.clipName.startsWith("CMU_WALK") ||
               motionState.clipName.startsWith("CMU_KICK")) &&
               motionState.clips.some((clip) =>

@@ -7,6 +7,7 @@ on:
       - 'src/game/cmu-anatomical-retarget.ts'
       - 'src/game/cmu-foot-lock.ts'
       - 'src/game/cmu-strike-extraction.ts'
+      - 'src/game/cmu-boxing-fist.ts'
       - 'src/game/cmu-pose-retarget.ts'
       - 'scripts/check-cmu-mocap.mjs'
       - 'scripts/check-cmu-runtime.mjs'

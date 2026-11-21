@@ -12,6 +12,7 @@ import {
 } from "./cmu-mocap-pilot";
 import { buildCmuStanceLockedClip } from "./cmu-foot-lock";
 import { extractCmuBoxingStrikes, type CmuStrikePreview } from "./cmu-strike-extraction";
+import { buildCmuBoxingFistClip } from "./cmu-boxing-fist";
 import {
   QUATERNIUS_BLENDER_CORE_URL,
   QUATERNIUS_BLENDER_CROSS_URL,
@@ -220,6 +221,16 @@ export class ModelViewerMotionController {
               bank.set(strike.clip.name, {
                 clip: strike.clip, source: "CMU", strike: strike.preview,
               });
+              const fist = buildCmuBoxingFistClip(
+                this.target, strike.clip, strike.preview.contacts,
+              );
+              bank.set(fist.name, {
+                clip: fist, source: "CMU",
+                strike: {
+                  ...strike.preview, name: fist.name,
+                  label: strike.preview.label + " / FIST",
+                },
+              });
             }
           }
         } else {
@@ -413,7 +424,11 @@ export class ModelViewerMotionController {
       this.target.updateWorldMatrix(true, true);
       const names = ["pelvis", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
         "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r",
-        "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"];
+        "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r",
+        ...(["l", "r"] as const).flatMap(side => [
+          ...(["index", "middle", "ring", "pinky", "thumb"] as const)
+            .map(digit => digit + "_04_leaf_" + side),
+        ])];
       const joints: Record<string, number[] | null> = {};
       for (const name of names) {
         const bone = this.target.getObjectByName(name);
@@ -435,7 +450,11 @@ export class ModelViewerMotionController {
       const actionClip = this.currentAction?.getClip();
       const trackDeltaDegrees: Record<string, number | null> = {};
       for (const name of ["upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r",
-        "thigh_l", "calf_l", "thigh_r", "calf_r"]) {
+        "thigh_l", "calf_l", "thigh_r", "calf_r",
+        ...(["l", "r"] as const).flatMap(side =>
+          (["index", "middle", "ring", "pinky", "thumb"] as const)
+            .flatMap(digit => [1, 2, 3].map(level =>
+              digit + "_0" + level + "_" + side)))]) {
         const bone = this.target.getObjectByName(name);
         const track = actionClip?.tracks.find((t) => t.name === name + ".quaternion");
         if (!bone || !track) { trackDeltaDegrees[name] = null; continue; }

@@ -9,6 +9,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { buildCmuStanceLockedClip } from "../src/game/cmu-foot-lock.ts";
 import { extractCmuBoxingStrikes } from "../src/game/cmu-strike-extraction.ts";
+import { buildCmuBoxingFistClip } from "../src/game/cmu-boxing-fist.ts";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   CMU_MOCAP_PILOT_CLIPS,
@@ -215,6 +216,88 @@ for (const entry of CMU_MOCAP_PILOT_CLIPS) {
               }
             }
           }
+          const fistReport = {
+            joints: 0, leftJoints: 0, rightJoints: 0,
+            minStrength: 0, maxStrength: 0,
+          };
+          const fistClip = buildCmuBoxingFistClip(
+            target, trial, preview.contacts, fistReport,
+          );
+          assert.equal(fistClip.name, trial.name + "_FIST");
+          assert.equal(fistReport.joints, 30);
+          assert.equal(fistReport.leftJoints, 15);
+          assert.equal(fistReport.rightJoints, 15);
+          assert.ok(fistReport.minStrength >= 0.89 && fistReport.maxStrength > 0.98);
+          assert.equal(fistClip.tracks.length, trial.tracks.length + 30);
+          const originalTracks = new Set(trial.tracks.map(t => t.name));
+          for (const track of fistClip.tracks) {
+            assert.ok([...track.values].every(Number.isFinite),
+              "Fist keyframe has nonfinite values " + track.name);
+            if (originalTracks.has(track.name)) {
+              const original = trial.tracks.find(t => t.name === track.name);
+              assert.deepEqual(Array.from(track.values), Array.from(original.values),
+                "Fist bake must not alter any body/arm/wrist/leg keys");
+            }
+          }
+          const sampleFingers = (animation, t) => {
+            target.traverse(node=>{
+              if(node.isSkinnedMesh)node.skeleton.pose();
+            });
+            const m = new THREE.AnimationMixer(target);
+            const a = m.clipAction(animation).play();
+            a.setLoop(THREE.LoopOnce, 1);
+            a.clampWhenFinished = true;
+            m.setTime(t);
+            target.updateWorldMatrix(true, true);
+            const records = {};
+            for(const side of ["l","r"]) {
+              records[side] = {};
+              const hand = target.getObjectByName("hand_"+side);
+              for (const digit of ["index","middle","ring","pinky","thumb"]) {
+                const root = target.getObjectByName(digit+"_01_"+side);
+                const tip = target.getObjectByName(digit+"_04_leaf_"+side);
+                assert.ok(root && tip && hand);
+                records[side][digit] = {
+                  knuckleToTip: root.getWorldPosition(new THREE.Vector3())
+                    .distanceTo(tip.getWorldPosition(new THREE.Vector3())),
+                  handToTip: hand.getWorldPosition(new THREE.Vector3())
+                    .distanceTo(tip.getWorldPosition(new THREE.Vector3())),
+                };
+              }
+            }
+            m.stopAllAction();
+            m.uncacheRoot(target);
+            return records;
+          };
+          const at = preview.contacts[0].time;
+          const open = sampleFingers(trial, at);
+          const closed = sampleFingers(fistClip, at);
+          const reductions=[];
+          for(const side of ["l","r"]) {
+            for(const digit of ["index","middle","ring","pinky"]) {
+              const baseline = open[side][digit].knuckleToTip;
+              const flexed = closed[side][digit].knuckleToTip;
+              assert.ok(flexed < baseline * 0.82,
+                "Fist bone geometry not closing: "+side+" "+digit+
+                  " baseline="+baseline.toFixed(3)+" flexed="+flexed.toFixed(3));
+              reductions.push(1-flexed/baseline);
+            }
+          }
+          console.log("CMU_FIST_BONE_AUDIT", JSON.stringify({
+            variant, clip: fistClip.name, report:fistReport,
+            minDigitCurlReduction:Math.min(...reductions),
+            meanDigitCurlReduction:reductions.reduce((a,b)=>a+b,0)/reductions.length,
+            thumbBaseline: {
+              left: open.l.thumb.handToTip, right:open.r.thumb.handToTip,
+            },
+            thumbFlexed: {
+              left:closed.l.thumb.handToTip,right:closed.r.thumb.handToTip,
+            },
+          }));
+          target.traverse(node=>{
+            if(node.isSkinnedMesh)node.skeleton.pose();
+          });
+          target.updateWorldMatrix(true,true);
           console.log("CMU_STRIKE_WINDOW_AUDIT", JSON.stringify({
             target: variant, name: trial.name, duration: trial.duration,
             sourceStart: preview.sourceStart, sourceEnd: preview.sourceEnd,

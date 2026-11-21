@@ -7,11 +7,13 @@ on:
       - 'src/game/cmu-anatomical-retarget.ts'
       - 'src/game/cmu-foot-lock.ts'
       - 'src/game/cmu-strike-extraction.ts'
+      - 'src/game/cmu-boxing-fist.ts'
       - 'src/game/cmu-pose-retarget.ts'
       - 'scripts/check-cmu-mocap.mjs'
       - 'scripts/check-cmu-runtime.mjs'
       - 'scripts/diagnose-cmu-foot-contacts.mjs'
       - 'scripts/diagnose-cmu-punches.mjs'
+      - 'scripts/inspect-cmu-finger-rigs.mjs'
       - '.github/workflows/cmu-mocap-probe.yml'
   workflow_dispatch:
 
@@ -32,6 +34,8 @@ jobs:
         continue-on-error: true
       - name: Install dependencies for full retarget smoke
         run: npm ci --no-audit --no-fund
+      - name: Inspect actual finger rigs and bone skin weights
+        run: node scripts/inspect-cmu-finger-rigs.mjs
       - name: Retarget actual CMU GLBs onto both UBC models and verify leg clearance
         run: node --import tsx scripts/check-cmu-runtime.mjs
       - name: Probe actual planted-foot intervals

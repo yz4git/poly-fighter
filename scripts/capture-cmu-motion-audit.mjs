@@ -192,6 +192,7 @@
               ...meta.contacts.map((c,i)=>({phase:c.normalized,poseName:"contact-"+(i+1),hand:c.hand})),
               {phase:0.96,poseName:"recovery",hand:null},
             ];
+            let rawContactSnapshots = [];
             for (const camera of ["front","side"]) {
               if(camera==="side") {
                 const p=await js(`
@@ -263,6 +264,99 @@
                       JSON.stringify({fighter,strike:strike.name,hand:hit.hand,before,during,after}));
                   }
                 }
+              }
+              if (camera === "front") rawContactSnapshots = poses;
+              await click("RESET VIEW");
+            }
+            // A/B: same measured source frames, unchanged body bones,
+            // actual closed fingertip geometry in SERA and KAIRO.
+            const firedFist = await js(`
+              const b=document.querySelector('button[aria-label="Compare CMU boxing fist pose"]');
+              b?.click();
+              return {clicked:!!b};
+            `);
+            if(!firedFist.clicked)throw Error("FIST comparison control missing for "+strike.name);
+            await wait(()=>js(`
+              const value=document.querySelector('select[aria-label="Motion clip"]')?.value;
+              return {ready:value===arguments[0],value};
+            `,[strike.name+"_FIST"]),"Load "+strike.name+"_FIST",100);
+            for (const camera of ["front","side"]) {
+              if(camera==="side") {
+                const p=await js(`
+                  const r=document.querySelector('section[aria-label="Model View"] canvas')?.getBoundingClientRect();
+                  return r?{x:Math.round(r.left+r.width*.43),y:Math.round(r.top+r.height*.4)}:null;
+                `);
+                if(!p)throw Error("Missing fighter canvas for FIST review");
+                await command("/session/"+session+"/actions","POST",{actions:[{
+                  type:"pointer",id:"mouse-fist",parameters:{pointerType:"mouse"},
+                  actions:[
+                    {type:"pointerMove",origin:"viewport",x:p.x,y:p.y,duration:0},
+                    {type:"pointerDown",button:0},
+                    {type:"pointerMove",origin:"viewport",x:p.x+175,y:p.y,duration:400},
+                    {type:"pointerUp",button:0},
+                  ],
+                }]});
+                await sleep(200);
+              }
+              for(const targetPose of targets) {
+                await js(`
+                  document.querySelector('button[aria-label="Pause motion"]')?.click();
+                  const slider=document.querySelector('input[aria-label="Motion timeline"]');
+                  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")
+                    .set.call(slider,String(Math.round(arguments[0]*1000)));
+                  slider.dispatchEvent(new Event("input",{bubbles:true}));
+                  slider.dispatchEvent(new Event("change",{bubbles:true}));
+                  return slider.value;
+                `,[targetPose.phase]);
+                await sleep(270);
+                const state=await js(`
+                  return {
+                    selected:document.querySelector('select[aria-label="Motion clip"]')?.value,
+                    normalized:Number(document.querySelector('input[aria-label="Motion timeline"]')?.value)/1000,
+                    paused:!!document.querySelector('button[aria-label="Play motion"]'),
+                    pose:JSON.parse(document.documentElement.dataset.cmuAuditPose || "null"),
+                  };
+                `);
+                if (state.selected!==strike.name+"_FIST"||!state.paused||
+                    Math.abs(state.normalized-targetPose.phase)>0.008||
+                    state.pose?.strike?.name!==strike.name+"_FIST") {
+                  throw Error("Bad rendered FIST state "+JSON.stringify(state));
+                }
+                if(Object.values(state.pose.trackDeltaDegrees??{}).some(
+                    x=>typeof x==="number" && x>1)){
+                  throw Error("Real finger or body bone not following FIST tracks");
+                }
+                if(camera==="front") {
+                  const original=rawContactSnapshots.find(x=>x.poseName===targetPose.poseName);
+                  if(!original)throw Error("Original CMU boxing frame missing");
+                  const measure=(pose,side,digit)=>{
+                    const a=pose.joints[digit+"_01_"+side];
+                    const b=pose.joints[digit+"_04_leaf_"+side];
+                    if(!a||!b)throw Error("Missing actual played finger pose");
+                    return Math.hypot(...a.map((v,i)=>b[i]-v));
+                  };
+                  for(const side of ["l","r"]) {
+                    for(const digit of ["index","middle","ring","pinky"]) {
+                      const open=measure(original.pose,side,digit);
+                      const curled=measure(state.pose,side,digit);
+                      if (curled>=open*.84)throw Error("Live FIST finger failed to bend "+JSON.stringify({
+                        fighter,strike:strike.name,side,digit,open,curled,
+                      }));
+                    }
+                    for(const bone of ["upperarm_"+side,"lowerarm_"+side,"hand_"+side]) {
+                      const before=original.pose.joints[bone];
+                      const after=state.pose.joints[bone];
+                      if(!before||!after||Math.hypot(...before.map((v,i)=>after[i]-v))>.015) {
+                        throw Error("FIST altered original fighter attack body motion "+bone);
+                      }
+                    }
+                  }
+                }
+                const file=fighter.toLowerCase()+"-cmu-"+strike.key+
+                  "-fist-"+camera+"-"+targetPose.poseName;
+                await screenshot(file);
+                records.frames.push({fighter,motion:strike.name+"_FIST",
+                  camera,phase:targetPose.phase,file:file+".png",state});
               }
               await click("RESET VIEW");
             }

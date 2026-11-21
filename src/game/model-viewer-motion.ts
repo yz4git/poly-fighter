@@ -427,7 +427,7 @@ export class ModelViewerMotionController {
         "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r",
         ...(["l", "r"] as const).flatMap(side => [
           ...(["index", "middle", "ring", "pinky", "thumb"] as const)
-            .map(digit => digit + "_04_leaf_" + side),
+            .flatMap(digit => [digit + "_01_" + side, digit + "_04_leaf_" + side]),
         ])];
       const joints: Record<string, number[] | null> = {};
       for (const name of names) {

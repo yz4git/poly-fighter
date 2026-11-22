@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>POLY FIGHTER · FAB Motion Lab</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif}*{box-sizing:border-box}
+    body{margin:0;background:#090f1d;color:#e8efff;overflow:hidden;touch-action:none}
+    main{height:100dvh;display:flex;flex-direction:column;padding:env(safe-area-inset-top) max(12px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px,env(safe-area-inset-left));gap:5px}
+    header{display:flex;align-items:center;gap:12px;min-height:35px;flex-wrap:wrap}
+    h1{font-size:15px;margin:0;letter-spacing:1px}small{font-size:11px;color:#9caccb}
+    .tag{background:#203650;border:1px solid #38577a;border-radius:6px;padding:4px 7px;font-size:10px}
+    #stage{position:relative;flex:1;min-height:100px;background:radial-gradient(ellipse at 50% 40%,#1a2b42,#0a1324);border:1px solid #293955;border-radius:12px;overflow:hidden;touch-action:none}
+    #stage canvas{display:block;width:100%;height:100%;touch-action:none}#hint{position:absolute;top:10px;left:12px;font-size:11px;color:#91abc7;pointer-events:none}
+    #stats{position:absolute;top:10px;right:12px;padding:8px 9px;border-radius:7px;background:#09101ba8;font:11px/1.7 ui-monospace,monospace;pointer-events:none;white-space:pre}
+    footer{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:58px;padding:5px 0}
+    button,.file{border:1px solid #476789;background:#19314c;border-radius:7px;color:white;font-size:12px;font-weight:650;padding:9px 10px;cursor:pointer;white-space:nowrap}
+    button:active,.file:active{background:#315d85}input[type=file]{display:none}#scrub{min-width:105px;flex:1;accent-color:#68cfff;height:25px;touch-action:pan-x}
+    #message{font-size:10px;color:#a8bfd5;flex-basis:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    @media (max-height:410px){header{min-height:25px}footer{min-height:42px}button,.file{padding:7px 8px}}
+  </style>
+</head>
+<body>
+<main>
+  <header><h1>FAB / MOTION LAB</h1><span class="tag" id="sourceLabel">SYNTHETIC TEST · NOT FAB</span><small>SMPL24 · 3D playback · iPhone</small></header>
+  <section id="stage" aria-label="3D skeleton preview"><div id="hint">ドラッグ：視点回転 / ファイル選択：FAB出力を読込</div><div id="stats">読み込み中…</div></section>
+  <footer>
+    <label class="file" for="motionFile">FAB JSON 読込</label><input id="motionFile" type="file" accept=".json,application/json" />
+    <button id="play" type="button">一時停止</button>
+    <button id="view" type="button">正面</button>
+    <button id="reset" type="button">デモに戻す</button>
+    <input id="scrub" aria-label="フレーム位置" type="range" min="0" max="1000" value="0" />
+    <small id="count">0/0</small>
+    <span id="message" role="status">この内蔵デモは手作りのテストモーションです。FAB推論結果ではありません。</span>
+  </footer>
+</main>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js';
+const NAMES = ['pelvis','left_hip','right_hip','spine1','left_knee','right_knee','spine2','left_ankle','right_ankle','spine3','left_foot','right_foot','neck','left_collar','right_collar','head','left_shoulder','right_shoulder','left_elbow','right_elbow','left_wrist','right_wrist','left_hand','right_hand'];
+const BONES = [[0,1],[0,2],[0,3],[3,6],[6,9],[9,12],[12,15],[1,4],[4,7],[7,10],[2,5],[5,8],[8,11],[12,13],[13,16],[16,18],[18,20],[20,22],[12,14],[14,17],[17,19],[19,21],[21,23]];
+const $ = id => document.getElementById(id);
+const stage=$('stage'), scene=new THREE.Scene(); scene.background = new THREE.Color('#0b1729');
+const camera=new THREE.PerspectiveCamera(45,1,.1,100);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;stage.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xe4f6ff,0x254161,2.4));
+const sun=new THREE.DirectionalLight(0xffffff,2.3);sun.position.set(3,7,5);scene.add(sun);
+const floor=new THREE.GridHelper(9,18,0x386c7d,0x264055);floor.position.y=-.012;scene.add(floor);
+const mR=new THREE.MeshStandardMaterial({color:0xffa872,metalness:.18,roughness:.35});
+const mL=new THREE.MeshStandardMaterial({color:0x7ad2fb,metalness:.18,roughness:.35});
+const mMid=new THREE.MeshStandardMaterial({color:0xe0e8f5,metalness:.18,roughness:.35});
+const mInvalid=new THREE.MeshStandardMaterial({color:0x737a88,roughness:.7});
+const sphereGeo=new THREE.SphereGeometry(1,12,9);
+const boneGeo=new THREE.CylinderGeometry(.035,.05,1,10,1);
+const mats=i=>[1,4,7,10,13,16,18,20,22].includes(i)?mL:[2,5,8,11,14,17,19,21,23].includes(i)?mR:mMid;
+const dots=NAMES.map((_,i)=>{const o=new THREE.Mesh(sphereGeo,mats(i));o.scale.setScalar(i===0?.095:.065);scene.add(o);return o});
+const lines=BONES.map(([a,b])=>{const o=new THREE.Mesh(boneGeo,mats(b));scene.add(o);return o});
+const vec=new THREE.Vector3(), up=new THREE.Vector3(0,1,0);
+let data, current=0, playing=true, yaw=0.20, pitch=.14, dist=4.5, last=performance.now(), cache=null;
+function validate(doc){
+ if(doc?.format!=='fab-smpl24-joints-v1' || !Array.isArray(doc.frames)||!doc.frames.length||doc.frames.length>30000)throw Error('FAB SMPL24 JSON 形式ではありません');
+ if(!Array.isArray(doc.jointNames)||doc.jointNames.length!==24 || doc.jointNames.some((x,i)=>x!==NAMES[i]))throw Error('SMPL24関節の順序が一致しません');
+ if(!Number.isFinite(doc.fps)||doc.fps<=0||doc.fps>500)throw Error('fps が不正です');
+ for(const f of doc.frames){if(!Array.isArray(f.j)||f.j.length!==24||!f.j.every(p=>Array.isArray(p)&&p.length===3&&p.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<10000)))throw Error('関節座標が不正です')}
+ return doc;
+}
+function load(doc,label){data=validate(doc);current=0;playing=true;$('play').textContent='一時停止';$('sourceLabel').textContent=label;cache={};
+ const a=data.frames[0].j;cache.cx=a[0][0];cache.cy=a[0][1];
+ // The feet often extend below the ankle; use both feet during initial frames.
+ const initial=data.frames.slice(0,Math.min(15,data.frames.length));
+ cache.floor=Math.min(...initial.flatMap(f=>[f.j[10][2],f.j[11][2]]));
+ $('message').textContent=`${data.frames.length} frames / ${data.fps}fps · RGB: 左=青、右=橙 · 青色=左半身`;
+ redraw();
+}
+function xyz(p){return vec.set(p[0]-cache.cx,p[2]-cache.floor,-(p[1]-cache.cy))}
+function redraw(){if(!data)return;let f=data.frames[Math.floor(current)];const points=f.j.map(v=>xyz(v).clone());
+ dots.forEach((o,i)=>{o.position.copy(points[i]);o.material=f.valid===false?mInvalid:mats(i)});
+ lines.forEach((o,k)=>{const [a,b]=BONES[k],v=points[b].clone().sub(points[a]);const d=v.length();o.position.copy(points[a]).addScaledVector(v,.5);o.quaternion.setFromUnitVectors(up,v.normalize());o.scale.set(1,d,1);o.material=f.valid===false?mInvalid:mats(b)});
+ const contacts=f.c||{};const tag=k=>Number(contacts[k])>=.5?'●':'○';
+ $('stats').textContent=`FRAME ${Math.floor(current)+1} / ${data.frames.length}\nTIME ${((f.time??(current/data.fps))).toFixed(2)} s\nLEFT FOOT  ${tag('lfoot')}\nRIGHT FOOT ${tag('rfoot')}\nPREDICTION ${f.valid===false?'INVALID (HELD)':'VALID'}`;
+ $('count').textContent=`${Math.floor(current)+1}/${data.frames.length}`;$('scrub').value=String(Math.round(current/Math.max(data.frames.length-1,1)*1000));
+}
+function cameraUpdate(){pitch=THREE.MathUtils.clamp(pitch,-.48,1.15);dist=THREE.MathUtils.clamp(dist,2.1,10);let focusY=1.05;
+ camera.position.set(Math.sin(yaw)*Math.cos(pitch)*dist,focusY+Math.sin(pitch)*dist,Math.cos(yaw)*Math.cos(pitch)*dist);camera.lookAt(0,focusY,0)}
+function fit(){const w=Math.max(stage.clientWidth,1),h=Math.max(stage.clientHeight,1);renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=h<300?58:45;camera.updateProjectionMatrix()}
+new ResizeObserver(fit).observe(stage);cameraUpdate();fit();
+function tick(now){const dt=Math.min((now-last)/1000,.08);last=now;if(playing&&data){current=(current+dt*data.fps)%data.frames.length;redraw()}renderer.render(scene,camera);requestAnimationFrame(tick)}requestAnimationFrame(tick);
+let pointer=null;
+stage.addEventListener('pointerdown',e=>{pointer={id:e.pointerId,x:e.clientX,y:e.clientY};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(!pointer||pointer.id!==e.pointerId)return;yaw-=(e.clientX-pointer.x)*.009;pitch+=(e.clientY-pointer.y)*.006;pointer.x=e.clientX;pointer.y=e.clientY;cameraUpdate()});
+for(const evt of ['pointerup','pointercancel'])stage.addEventListener(evt,()=>pointer=null);
+stage.addEventListener('wheel',e=>{e.preventDefault();dist+=Math.sign(e.deltaY)*.25;cameraUpdate()},{passive:false});
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'一時停止':'再生'};
+$('scrub').oninput=e=>{playing=false;$('play').textContent='再生';current=Number(e.target.value)/1000*Math.max(0,data.frames.length-1);redraw()};
+$('view').onclick=()=>{yaw=0;pitch=.1;dist=4.5;cameraUpdate()};
+$('reset').onclick=()=>load(synthetic(),'SYNTHETIC TEST · NOT FAB');
+$('motionFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>35e6)throw Error('35 MB以上は読み込めません');const data=JSON.parse(await file.text());load(data,'EXTERNAL JSON · UNVERIFIED')}catch(err){$('message').textContent='読込エラー: '+err.message}finally{e.target.value=''}};
+function synthetic(){
+ const base=[
+ [0,0,1.02],[-.15,0,.94],[.15,0,.94],[0,0,1.18],[-.17,0,.52],[.17,0,.52],[0,0,1.35],[-.18,0,.12],[.18,0,.12],[0,0,1.51],[-.17,-.08,.04],[.17,-.08,.04],
+ [0,0,1.66],[-.12,0,1.65],[.12,0,1.65],[0,0,1.88],[-.27,0,1.61],[.27,0,1.61],[-.44,-.05,1.36],[.44,-.05,1.36],[-.40,-.26,1.37],[.40,-.26,1.37],[-.37,-.30,1.36],[.37,-.30,1.36]
+ ];
+ let frames=[];for(let i=0;i<150;i++){let t=i/30, j=base.map(v=>v.slice()),ph=(t%2.5)/2.5, punch=Math.max(0,1-Math.abs(ph-.28)/.21),kick=Math.max(0,1-Math.abs(ph-.72)/.20);
+ let s=Math.sin(t*2*Math.PI/2.5), bob=Math.max(0,Math.sin(t*Math.PI*2/2.5))*.018;
+ j.forEach(p=>{p[2]+=bob;p[0]+=.08*Math.sin(t*.6)});
+ for(const k of [19,21,23]){j[k][1]-=.63*punch;j[k][2]+=.05*punch}
+ for(const k of [5,8,11]){j[k][1]-=.54*kick;j[k][2]+=(k===5?.22:k===8?.43:.47)*kick;j[k][0]+=.08*kick}
+ frames.push({time:+t.toFixed(4),j,valid:true,c:{lfoot:1,rfoot:kick>.38?0:1}})}
+ return {format:'fab-smpl24-joints-v1',coordinateSystem:'world-z-up',units:'meters',fps:30,jointNames:NAMES,frames};
+}
+load(synthetic(),'SYNTHETIC TEST · NOT FAB');
+</script>
+</body>
+</html>
